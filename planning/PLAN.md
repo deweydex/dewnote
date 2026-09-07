@@ -493,18 +493,39 @@ project; if they are not delightful, nothing after them will rescue it.
    focused block; a fence has no rendered state at all and is always a
    live, language-highlighted editor, several at once where a document
    has several cells (decision 15 — the bug this uncovered and how the
-   fix works). One add control per gap inserts a paragraph; a per-block
-   delete control removes one. The single-file build exists and a real
-   dewlab tutorial round-trips byte for byte through the mounted DOM, not
-   only through `blocks.ts` directly (`tests/e2e/surface.spec.ts`).
-   Still open: the add menu offers only a paragraph, not a cell, a hint or
-   an image; there is no drag reorder or keyboard-driven reorder; there is
-   no whole-file source view (Cmd+/) yet; there is no settings/texture
-   rail, so the page renders in dewlab's own fixed look with nothing
-   user-tunable yet; a fence shows its full raw text, fence markers
-   included, rather than the site's bordered cell chrome with the fence
-   syntax hidden — the live-preview decoration work §5.1 already named as
-   the upgrade path, not a new gap.
+   fix works). The single-file build exists and a real dewlab tutorial
+   round-trips byte for byte through the mounted DOM, not only through
+   `blocks.ts` directly (`tests/e2e/surface.spec.ts`).
+
+   **Second slice built**: the add control is a real menu (paragraph,
+   code cell, math, hint), each with a cursor or selection placed
+   somewhere sensible to start typing rather than at offset zero — a
+   fresh cell's cursor on its blank body line, a fresh paragraph or hint
+   with its own placeholder words selected so the first keystroke
+   replaces them. Move up, move down and delete apply to every block
+   kind, fences included, not only the ones with a rendered state to
+   click into. Front matter never gets these controls and nothing can be
+   moved above it. Found while testing this, not designed for in advance:
+   a fence or a front-matter block does not own a trailing blank line the
+   way a prose block does (`blocks.ts`'s own rule), so a blank line
+   sitting right after either becomes its own orphan prose block —
+   harmless for round-tripping, since it is still exactly the bytes it
+   always was, but it renders as nothing at all and so is invisible and
+   unreachable by clicking. `tests/e2e/surface.spec.ts` names two real
+   cases of it directly rather than working around them quietly.
+
+   Still open: no image in the add menu; no drag reorder or
+   keyboard-driven reorder (only the move buttons); no whole-file source
+   view (Cmd+/) yet; no settings/texture rail, so the page renders in
+   dewlab's own fixed look with nothing user-tunable yet; the add menu is
+   the same four kinds regardless of dialect, not yet reading dewstack's
+   five cell forms or knowing it has no maths, which decision 3 already
+   promises a dialect module rather than this; a fence shows its full raw
+   text, fence markers included, rather than the site's bordered cell
+   chrome with the fence syntax hidden — the live-preview decoration work
+   §5.1 already named as the upgrade path, not a new gap; an orphan blank
+   block, once one exists, has no way to be reached or cleaned up through
+   the UI.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as

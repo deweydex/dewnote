@@ -31,7 +31,7 @@
 // to patch in place.
 
 import { EditorView, keymap } from "@codemirror/view";
-import { EditorState, type Extension } from "@codemirror/state";
+import { EditorSelection, EditorState, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { parseDocument, serialize, type Block, type Document } from "./blocks.ts";
 import { detectDialect } from "./dialect.ts";
@@ -47,6 +47,14 @@ export interface MountedDocument {
 }
 
 const BASE_EXTENSIONS: Extension[] = [history(), keymap.of([...defaultKeymap, ...historyKeymap])];
+
+type AddKind = "paragraph" | "cell" | "math" | "hint";
+const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
+  { kind: "paragraph", label: "Paragraph" },
+  { kind: "cell", label: "Code cell" },
+  { kind: "math", label: "Math" },
+  { kind: "hint", label: "Hint" },
+];
 
 /** Same block count, same kind at every position — the condition under
  * which a change can be patched at one index rather than requiring a full
@@ -104,18 +112,98 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     blockElements[changedIndex] = newWrapper;
   }
 
-  function insertAfter(afterIndex: number | null, text: string) {
+  /** A new block's starting text and where the cursor should land, by
+   * kind offered from the add menu — a selection spanning real
+   * placeholder words (`paragraph`, `hint`) so the first keystroke
+   * replaces it outright, or a bare cursor on an empty line (`cell`,
+   * `math`) where there is nothing to replace, only somewhere to start
+   * typing. Not yet dialect-aware — decision 3 already promises a
+   * dialect its own add-menu content (dewstack has no maths and five
+   * cell forms, not dewlab's one), and this is the same universal set
+   * regardless of the open document's dialect until that per-dialect
+   * module exists. */
+  const NEW_BLOCK_SPEC: Record<AddKind, () => { text: string; anchor: number; head: number }> = {
+    paragraph: () => ({ text: "New paragraph.\n\n", anchor: 0, head: "New paragraph.".length }),
+    cell: () => {
+      const text = `\`\`\`python exec\nid: ${generateCellId()}\n\n\`\`\`\n\n`;
+      const at = text.indexOf("\n\n") + 1;
+      return { text, anchor: at, head: at };
+    },
+    math: () => {
+      const text = "$$\n\n$$\n\n";
+      const at = text.indexOf("\n\n") + 1;
+      return { text, anchor: at, head: at };
+    },
+    hint: () => {
+      const text = '<details class="dl-hint"><summary>hint</summary>\n\nHint text.\n\n</details>\n\n';
+      const at = text.indexOf("Hint text.");
+      return { text, anchor: at, head: at + "Hint text.".length };
+    },
+  };
+
+  /** `new-cell-1`, `new-cell-2`, ... — the first not already used as a
+   * dewlab `id:` line anywhere in the document, since that id is a
+   * contract (DIALECTS.md §1) and two cells must never collide. */
+  function generateCellId(): string {
+    const existing = new Set<string>();
+    for (const block of doc.blocks) {
+      if (block.kind !== "fence") continue;
+      const match = /^id:\s*(.+)$/m.exec(block.text);
+      if (match) existing.add(match[1]!.trim());
+    }
+    let n = 1;
+    while (existing.has(`new-cell-${n}`)) n++;
+    return `new-cell-${n}`;
+  }
+
+  function insertAfter(afterIndex: number | null, kind: AddKind) {
+    const spec = NEW_BLOCK_SPEC[kind]();
     const parts = blockTexts();
-    parts.splice(afterIndex === null ? 0 : afterIndex + 1, 0, text);
+    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
+    parts.splice(newIndex, 0, spec.text);
+    source = parts.join("");
+    teardownLiveViews();
+    doc = parseDocument(source);
+    render();
+    // A fence is already live the moment it renders; anything else needs
+    // enterEdit to swap it into its source view — either way, a block
+    // just created from a placeholder is exactly when a reader wants to
+    // start typing immediately, not clicking a second time to get there.
+    const newBlock = doc.blocks[newIndex];
+    if (newBlock?.kind === "fence") liveViews.get(newIndex)?.focus();
+    else if (newBlock) enterEdit(newIndex);
+    // enterEdit's own focus (renderBlockWrapper's queueMicrotask) queues
+    // first when it applies; queuing this one after it, rather than
+    // setting the selection synchronously here, is what makes it land
+    // after that focus instead of being clobbered by it.
+    queueMicrotask(() => {
+      liveViews.get(newIndex)?.dispatch({ selection: EditorSelection.single(spec.anchor, spec.head) });
+    });
+  }
+
+  function deleteBlock(index: number) {
+    const parts = blockTexts();
+    parts.splice(index, 1);
     source = parts.join("");
     teardownLiveViews();
     doc = parseDocument(source);
     render();
   }
 
-  function deleteBlock(index: number) {
+  function canMoveUp(index: number): boolean {
+    if (doc.blocks[index]!.kind === "frontmatter") return false;
+    const target = index - 1;
+    return target >= 0 && doc.blocks[target]!.kind !== "frontmatter";
+  }
+
+  function canMoveDown(index: number): boolean {
+    return doc.blocks[index]!.kind !== "frontmatter" && index < doc.blocks.length - 1;
+  }
+
+  function moveBlock(index: number, delta: -1 | 1) {
     const parts = blockTexts();
-    parts.splice(index, 1);
+    const [moved] = parts.splice(index, 1);
+    parts.splice(index + delta, 0, moved!);
     source = parts.join("");
     teardownLiveViews();
     doc = parseDocument(source);
@@ -151,23 +239,99 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     blockElements[index] = newWrapper;
   }
 
+  function closeOpenAddMenus() {
+    for (const menu of container.querySelectorAll(".dn-add-menu.is-open")) menu.classList.remove("is-open");
+  }
+
   function addGap(afterIndex: number | null): HTMLElement {
     const gap = document.createElement("div");
     gap.className = "dn-add-gap";
+
     const button = document.createElement("button");
     button.className = "dn-add-btn";
     button.type = "button";
-    button.setAttribute("aria-label", "Add a paragraph here");
+    button.setAttribute("aria-label", "Add a block here");
     button.textContent = "+";
-    button.addEventListener("click", () => insertAfter(afterIndex, "New paragraph.\n\n"));
+
+    const menu = document.createElement("div");
+    menu.className = "dn-add-menu";
+    for (const { kind, label } of ADD_MENU_ITEMS) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.textContent = label;
+      item.addEventListener("click", () => {
+        closeOpenAddMenus();
+        insertAfter(afterIndex, kind);
+      });
+      menu.appendChild(item);
+    }
+
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const wasOpen = menu.classList.contains("is-open");
+      closeOpenAddMenus();
+      if (!wasOpen) menu.classList.add("is-open");
+    });
+
     gap.appendChild(button);
+    gap.appendChild(menu);
     return gap;
+  }
+
+  /** Move and delete apply to every block kind, fences included — a code
+   * cell is as reorderable and removable as a paragraph, even though it
+   * has no rendered state to click into the way the others do. */
+  function buildToolbar(index: number): HTMLElement {
+    const toolbar = document.createElement("div");
+    toolbar.className = "dn-block-toolbar";
+
+    const moveUp = document.createElement("button");
+    moveUp.type = "button";
+    moveUp.className = "dn-block-move";
+    moveUp.setAttribute("aria-label", "Move this block up");
+    moveUp.textContent = "▲";
+    moveUp.disabled = !canMoveUp(index);
+    moveUp.addEventListener("click", (event) => {
+      event.stopPropagation();
+      moveBlock(index, -1);
+    });
+
+    const moveDown = document.createElement("button");
+    moveDown.type = "button";
+    moveDown.className = "dn-block-move";
+    moveDown.setAttribute("aria-label", "Move this block down");
+    moveDown.textContent = "▼";
+    moveDown.disabled = !canMoveDown(index);
+    moveDown.addEventListener("click", (event) => {
+      event.stopPropagation();
+      moveBlock(index, 1);
+    });
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "dn-block-delete";
+    deleteButton.setAttribute("aria-label", "Delete this block");
+    deleteButton.textContent = "×";
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteBlock(index);
+    });
+
+    toolbar.append(moveUp, moveDown, deleteButton);
+    return toolbar;
   }
 
   function renderBlockWrapper(block: Block, index: number): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = `dn-block dn-block-${block.kind}`;
     wrapper.dataset["index"] = String(index);
+
+    if (block.kind === "frontmatter") {
+      // Front matter always stays first — no move controls at all, per
+      // canMoveUp/canMoveDown, so it never gets a toolbar either.
+    } else {
+      wrapper.appendChild(buildToolbar(index));
+    }
 
     if (block.kind === "fence") {
       const host = document.createElement("div");
@@ -195,21 +359,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       if (event.key === "Enter") enterEdit(index);
     });
 
-    const toolbar = document.createElement("div");
-    toolbar.className = "dn-block-toolbar";
-    const deleteButton = document.createElement("button");
-    deleteButton.type = "button";
-    deleteButton.className = "dn-block-delete";
-    deleteButton.setAttribute("aria-label", "Delete this block");
-    deleteButton.textContent = "×";
-    deleteButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      deleteBlock(index);
-    });
-    toolbar.appendChild(deleteButton);
-
     wrapper.appendChild(rendered);
-    wrapper.appendChild(toolbar);
     return wrapper;
   }
 
@@ -227,9 +377,15 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
   render();
 
+  // A click anywhere outside an open add menu closes it — each menu
+  // button already stops its own click from reaching here, so this only
+  // ever fires for a click genuinely elsewhere.
+  document.addEventListener("click", closeOpenAddMenus);
+
   return {
     getSource: currentSource,
     destroy() {
+      document.removeEventListener("click", closeOpenAddMenus);
       teardownLiveViews();
       container.innerHTML = "";
     },

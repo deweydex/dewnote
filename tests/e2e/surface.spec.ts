@@ -105,11 +105,79 @@ test("delete removes exactly the targeted block", async ({ page }) => {
   expect(finalSource).toBe("One.\n\nThree.\n");
 });
 
+test("a fence can be deleted like any other block, not just a prose one", async ({ page }) => {
+  // A fence doesn't own a trailing blank line the way a prose block does
+  // (blocks.ts), so the blank line between it and "Three." is its own
+  // separate block — deleting only the fence correctly leaves that
+  // blank-line block behind rather than collapsing the gap. Byte-precise
+  // deletion, checked directly rather than assumed: three newlines
+  // between "One." and "Three." after this, not two.
+  await mount(page, "One.\n\n```python exec\nid: a\n1\n```\n\nThree.\n");
+  const fenceBlock = page.locator(".dn-block-fence");
+  await fenceBlock.hover();
+  await fenceBlock.locator(".dn-block-delete").click();
+
+  const finalSource = await getSource(page);
+  expect(finalSource).toBe("One.\n\n\nThree.\n");
+});
+
+test("move up and move down reorder blocks, and are disabled at the ends", async ({ page }) => {
+  await mount(page, "One.\n\nTwo.\n\nThree.\n");
+  const blocks = page.locator(".dn-block");
+
+  await expect(blocks.nth(0).locator(".dn-block-move[aria-label='Move this block up']")).toBeDisabled();
+  await expect(blocks.nth(2).locator(".dn-block-move[aria-label='Move this block down']")).toBeDisabled();
+
+  await blocks.nth(1).hover();
+  await blocks.nth(1).locator(".dn-block-move[aria-label='Move this block up']").click();
+  expect(await getSource(page)).toBe("Two.\n\nOne.\n\nThree.\n");
+
+  await blocks.nth(0).hover();
+  await blocks.nth(0).locator(".dn-block-move[aria-label='Move this block down']").click();
+  expect(await getSource(page)).toBe("One.\n\nTwo.\n\nThree.\n");
+});
+
+test("front matter never gets move controls, and nothing can be moved above it", async ({ page }) => {
+  // No blank line between the closing "---" and "One." — with one there,
+  // extractFrontMatter's own trailing blank line and the gap's own blank
+  // line would be two different things, and the gap would parse as its
+  // own orphan prose block sitting between front matter and "One."
+  // (checked directly; a fence leaves the same kind of orphan behind
+  // when it isn't followed immediately by more content — see the delete
+  // test above). That would make "One." adjacent to the orphan block,
+  // not to front matter, and moving it up would swap two ordinary
+  // blocks rather than test the constraint this test is actually for.
+  await mount(page, "---\ntitle: A doc\n---\nOne.\n\nTwo.\n");
+  const frontMatterBlock = page.locator(".dn-block-frontmatter");
+  await expect(frontMatterBlock.locator(".dn-block-toolbar")).toHaveCount(0);
+
+  const firstProse = page.locator(".dn-block-prose", { hasText: "One." });
+  await firstProse.hover();
+  await expect(firstProse.locator(".dn-block-move[aria-label='Move this block up']")).toBeDisabled();
+});
+
+test("the add control offers more than a paragraph — a code cell is live and focused as soon as it's added", async ({
+  page,
+}) => {
+  await mount(page, "One.\n\nTwo.\n");
+  const gap = page.locator(".dn-add-gap").nth(1);
+  await gap.hover();
+  await gap.locator(".dn-add-btn").click();
+  await gap.locator(".dn-add-menu button", { hasText: "Code cell" }).click();
+
+  const finalSource = await getSource(page);
+  expect(finalSource).toContain("```python exec\nid: new-cell-1\n");
+  // The new cell is a live editor already focused, not a second click away.
+  await page.keyboard.type("42");
+  expect(await getSource(page)).toContain("id: new-cell-1\n42\n");
+});
+
 test("the add control inserts a new paragraph between the two blocks it sits between", async ({ page }) => {
   await mount(page, "One.\n\nThree.\n");
   const gap = page.locator(".dn-add-gap").nth(1);
   await gap.hover(); // the button is opacity:0/pointer-events:none until its gap is hovered
   await gap.locator(".dn-add-btn").click();
+  await gap.locator(".dn-add-menu button", { hasText: "Paragraph" }).click();
 
   const finalSource = await getSource(page);
   expect(finalSource).toBe("One.\n\nNew paragraph.\n\nThree.\n");
