@@ -6,6 +6,7 @@ import {
   parseCellSource,
   parseCellSourceFromFenceText,
   parseSqlCellInfo,
+  sqlPersistStorageKey,
   sqlScriptFromFenceText,
 } from "./cell.ts";
 
@@ -84,7 +85,7 @@ describe("declaredPackages", () => {
 
 describe("parseSqlCellInfo", () => {
   test("reads the database name a cell=name fence shares", () => {
-    expect(parseSqlCellInfo("sql cell=products")).toEqual({ name: "products" });
+    expect(parseSqlCellInfo("sql cell=products")).toEqual({ name: "products", persist: false });
   });
 
   test("is null for a plain sql fence with no cell=", () => {
@@ -100,11 +101,21 @@ describe("parseSqlCellInfo", () => {
   });
 
   test("tolerates trailing whitespace", () => {
-    expect(parseSqlCellInfo("sql cell=totals  ")).toEqual({ name: "totals" });
+    expect(parseSqlCellInfo("sql cell=totals  ")).toEqual({ name: "totals", persist: false });
   });
 
-  test("accepts persist syntactically, without changing the name it reads", () => {
-    expect(parseSqlCellInfo("sql cell=totals persist")).toEqual({ name: "totals" });
+  test("reads persist as a real flag, not just tolerated syntax", () => {
+    expect(parseSqlCellInfo("sql cell=totals persist")).toEqual({ name: "totals", persist: true });
+  });
+});
+
+describe("sqlPersistStorageKey", () => {
+  test("namespaces the key so it can't collide with anything else in localStorage", () => {
+    expect(sqlPersistStorageKey("totals")).toBe("dewnote-sql:totals");
+  });
+
+  test("two different cell names get two different keys", () => {
+    expect(sqlPersistStorageKey("a")).not.toBe(sqlPersistStorageKey("b"));
   });
 });
 

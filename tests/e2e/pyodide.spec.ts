@@ -165,4 +165,24 @@ test("a real exec cell runs in a real browser: output, errors, and shared state"
     await expect(output).toContainText("Mug");
     await expect(output).toContainText("Notebook");
   });
+
+  await test.step("Run saves a persist cell's script, and Reset clears it", async () => {
+    // The banner itself (shown/hidden, and what clicking it does to the
+    // editor) is pure DOM/localStorage and covered without any Pyodide
+    // dependency in tests/e2e/surface.spec.ts. This step only covers the
+    // two things that do touch the interpreter: Run writing the saved
+    // entry, and Reset clearing it.
+    await page.evaluate(() => localStorage.removeItem("dewnote-sql:persisted"));
+    await mount(page, "```sql cell=persisted persist\nCREATE TABLE t (x INTEGER);\n```\n");
+
+    await page.locator(".dn-sql-run").click();
+    await expect(page.locator(".dn-sql-output")).toContainText("0 row(s) affected", { timeout: COLD_BOOT_TIMEOUT });
+    expect(await page.evaluate(() => localStorage.getItem("dewnote-sql:persisted"))).toBe(
+      "CREATE TABLE t (x INTEGER);",
+    );
+
+    await page.locator(".dn-sql-reset").click();
+    await expect(page.locator(".dn-sql-output")).toBeEmpty();
+    expect(await page.evaluate(() => localStorage.getItem("dewnote-sql:persisted"))).toBeNull();
+  });
 });
