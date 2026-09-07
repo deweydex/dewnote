@@ -1,0 +1,156 @@
+/* dewnote's own chrome, layered on the vendored tokens in
+ * src/theme/dewlab-tokens.css (decision 7: "imported not copied"). Nothing
+ * here invents a colour or a font that isn't already one of dewlab's
+ * variables — a document previewed here should look like the site because
+ * it is dressed the same way (plan §5.3).
+ */
+
+html,
+body {
+  margin: 0;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+}
+
+.dn-page {
+  max-width: var(--dl-line-width);
+  margin: 0 auto;
+  padding: 3rem 1.25rem 8rem;
+  font-family: var(--dl-font-family);
+  font-size: var(--dl-font-size);
+  line-height: 1.62;
+}
+
+/* ---------------------------------------------------------------- blocks */
+
+.dn-block {
+  position: relative;
+}
+
+.dn-block-render {
+  cursor: text;
+  border-radius: 4px;
+  outline: none;
+}
+.dn-block-render:hover,
+.dn-block-render:focus-visible {
+  background: var(--dl-cell-bg);
+}
+
+.dn-block-source {
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-cell-bg);
+}
+.dn-block-fence .dn-block-source {
+  margin: 0.9rem 0;
+}
+.dn-block-source .cm-editor {
+  font-family: var(--dl-mono);
+  font-size: 0.85em;
+}
+.dn-block-source .cm-editor.cm-focused {
+  outline: none;
+}
+
+.dn-frontmatter-summary {
+  color: var(--dl-muted);
+  font-family: var(--dl-mono);
+  font-size: 0.78em;
+}
+
+/* A fold's own disclosure keeps its native look; only its accent colour
+ * (dl-hint vs dl-answer) borrows the cell-type hues dewlab already uses
+ * for the same two classes. */
+.dn-block-fold details {
+  border-left: 3px solid var(--dl-cell-border);
+  padding-left: 0.8rem;
+}
+.dn-block-fold details.dl-hint {
+  border-left-color: var(--dl-orange);
+}
+.dn-block-fold details.dl-answer {
+  border-left-color: var(--dl-pass-fg);
+}
+.dn-block-fold summary {
+  cursor: pointer;
+  color: var(--dl-muted);
+  font-family: var(--dl-mono);
+  font-size: 0.85em;
+}
+
+/* Hover-revealed, never display:none — stays in the tab order and comes
+ * back for a keyboard user on :focus-within, dewlab's own rule for this
+ * (plan §5.3). */
+.dn-block-toolbar {
+  position: absolute;
+  top: 0.2rem;
+  right: -1.9rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
+}
+.dn-block:hover .dn-block-toolbar,
+.dn-block:focus-within .dn-block-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+.dn-block-delete {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--dl-cell-border);
+  background: var(--dl-panel-bg);
+  color: var(--dl-muted);
+  cursor: pointer;
+  font-family: var(--dl-mono);
+  line-height: 1;
+}
+.dn-block-delete:hover {
+  color: var(--dl-error-fg);
+  border-color: var(--dl-error-fg);
+}
+
+/* ------------------------------------------------------------- add gaps */
+
+.dn-add-gap {
+  position: relative;
+  height: 1.2rem;
+}
+.dn-add-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  border: 1px solid var(--dl-cell-border);
+  background: var(--dl-bg);
+  color: var(--dl-muted);
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+  font-family: var(--dl-mono);
+  line-height: 1;
+  transition: opacity 0.1s, color 0.1s, border-color 0.1s;
+}
+.dn-add-gap:hover .dn-add-btn,
+.dn-add-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.dn-add-btn:hover,
+.dn-add-btn:focus-visible {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+  outline: none;
+}
+
+@media (hover: none) {
+  .dn-block-toolbar,
+  .dn-add-btn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

@@ -6,6 +6,12 @@
 # beside this repo and skips itself here, same as it does for anyone
 # who clones dewnote alone; the fixtures/ round trip is what actually
 # runs in CI.
+#
+# The Playwright suite (tests/e2e/) stays local and manual for the same
+# reason dewlab's own tests.yml keeps its e2e suite out of CI: it needs a
+# real build and a real browser, and would dominate this workflow for a
+# suite that guards the surface, not the block model — see dewlab
+# DECISIONS_LOG 0.17, 0.20 for the same call made there.
 name: tests
 
 on:
@@ -31,7 +37,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run tests
-        run: bun test
+        run: bun run test
 
       - name: Typecheck
         run: bun run typecheck
