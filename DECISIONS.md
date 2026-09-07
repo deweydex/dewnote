@@ -490,3 +490,25 @@ decision 17 itself set for its own approach.
 could still be added later without touching this one, if dewnote ever
 grows dewstack's per-name Python-cell concept — they would coexist,
 not conflict.*
+
+**23 — A hint/answer fold's own code stays illustrative, deliberately,
+never a live Run button.** Put to Josh directly rather than assumed: a
+fold's quoted code could plausibly become its own runnable cell,
+matching an exec fence anywhere else in the document. His call was no —
+a reader adapting a hint's code by hand, retyping it to look like their
+own attempt, is the better pedagogical experience than clicking Run on
+someone else's answer. Nothing needed building for this: `render-block.ts`'s
+`renderFold` already runs a second markdown-it pass over a fold's body,
+and a quoted fence already renders as a real `<pre><code class="language-x">`
+block there (`render-block.test.ts` already checked this). `blocks.ts`'s
+own header comment had gone stale, still describing this as an unsolved
+"future editor UI" problem well after `render-block.ts` solved the
+rendering half of it — fixed alongside this decision, per `CONTRIBUTING.md`'s
+own rule that a stale comment is worse than none. The one real, small
+gap that remains: entering edit on a fold still shows its whole body,
+any quoted fence included, as one flat markdown-source block, not a
+live per-language CodeMirror instance for the fence specifically — minor
+editing polish, not a rendering or pedagogical problem.
+*Cost to change: none; nothing here forecloses ever adding a live cell
+inside a fold later, if a future need for it turns up — it would be new
+work, not an undo.*

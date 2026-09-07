@@ -606,13 +606,25 @@ project; if they are not delightful, nothing after them will rescue it.
    an `import` line — is invisible to `loadPackagesFromImports`; a real
    heuristic, not exact static analysis, and documented as such.
 
+   A hint/answer fold's own code, if it has any, was already covered
+   before this section was written: `render-block.ts`'s `renderFold` runs
+   markdown-it over a fold's body independently, and a quoted fence
+   already renders as a real, correctly-labelled `<pre><code>` block —
+   `render-block.test.ts` has checked this directly for a while.
+   Deliberately **not** wired to run, on Josh's own call: a reader
+   adapting a hint's code by hand, rather than clicking Run on someone
+   else's answer, is the better pedagogical experience. (`blocks.ts`'s own
+   header comment used to claim this was still unsolved; it wasn't, and
+   the comment was simply stale — fixed alongside this entry.)
+
    Still open: `site=`/`app=` cells (dewstack's iframe-based web and
    full-stack tracks) are unbuilt — they need consecutive-fence grouping
    dewnote's block model doesn't have yet, a materially different piece
-   of work than a single-fence cell kind, deliberately left for its own
-   slice rather than folded into this one; `sql-check` is named above; a
-   hint/answer fold's own code, if it has any, is not yet wired to run;
-   the persisted-script localStorage key is name-only like dewstack's,
+   of work than a single-fence cell kind, deliberately put on hold rather
+   than folded into this one (Josh's own call — the design isn't settled
+   yet); `sql-check` is deliberately skipped too, on the same call, rather
+   than inventing a check registry no other part of dewnote uses yet.
+   The persisted-script localStorage key is name-only like dewstack's,
    with no per-document identity yet to fold in, so two differently-named
    documents each using the same `cell=name persist` would offer each
    other's saved script for restore — harmless given restore is a

@@ -12,13 +12,21 @@
 // (or several) inside a prose block, edited as markdown source the same
 // as any paragraph.
 //
-// Known limitation, deliberately not solved here: a fold's content is
-// swallowed whole rather than parsed further, so a code fence quoted
-// inside an answer fold (real and common in dewlab's practice pages) is
-// not recognised as its own fence block. That is fine for round-tripping
-// — the fold's raw text still reproduces byte for byte — but it means a
-// future editor UI that wants syntax highlighting inside a fold will need
-// to parse that block's text a second time, recursively.
+// A fold's content is swallowed whole here rather than parsed into its
+// own child blocks — a code fence quoted inside an answer fold (real and
+// common in dewlab's practice pages) is not a fence Block in this file's
+// own sense, and is never a live, runnable cell (a deliberate choice, not
+// a gap: a reader adapting a hint's code by hand, rather than clicking
+// Run on it, is the better pedagogical experience). render-block.ts's
+// `renderFold` runs a second, independent markdown-it pass over a fold's
+// body text for its own rendered (blurred) state, and markdown-it's own
+// fence rule already turns a quoted fence into a plain, correctly
+// highlighted `<pre><code class="language-x">` there — verified directly
+// in render-block.test.ts, not merely assumed. What that second pass does
+// not give a fold is a *live* CodeMirror instance while the fold itself is
+// focused for editing: entering edit on a fold still shows its whole body,
+// fence and all, as one flat markdown-source block (`sourceLanguageExtension`,
+// app.ts) — real, minor editing-polish room, not a rendering gap.
 
 import { extractFrontMatter, type FrontMatter } from "./frontmatter.ts";
 import { isBlank, splitLines, type Line } from "./lines.ts";
