@@ -414,6 +414,37 @@ does not have.
   were found only that way, and a headless assertion against the DOM
   cannot stand in for actually clicking.
 
+### 5.10 Front matter: which fields, and which values already exist
+
+Two different questions hide inside "how do I know what to fill in".
+Which *fields* a dialect needs is a fixed, known list — `DIALECTS.md` has
+it, and because decision 3 already makes a dialect a data module rather
+than code spread through the editor, the front-matter form is
+generated directly from that same data. A field added to a dialect's
+description in `DIALECTS.md` appears in the form without the form itself
+changing. Which *values* already exist — module names, series titles,
+slugs, version numbers — is not answered by knowing the schema at all; it
+needs the editor to have actually looked at the other files already
+there, so a new tutorial reuses `computational-methods` rather than
+quietly creating `computational_methods` as an unrelated fourth module.
+
+So opening a folder, or a GitHub repository, builds a small in-memory
+index: one pass over every markdown file's front matter (front matter
+alone, not the whole file, so this stays fast even on a large folder),
+refreshed on save. The form's `module`, `series`, and
+`practice_for`/`practice_across` fields are then a picker drawn from that
+index, with a plain "new" option for a value that genuinely doesn't exist
+yet, rather than free text a typo can silently fork. `version` defaults to
+today's date with the next sequence number unused for that day, computed
+from the index rather than typed by hand. An empty folder just gets an
+empty picker and free text — the same as today, and no worse.
+
+This is a real cost, not a free improvement: the index has to exist
+before the form can offer anything, so opening a large folder does real
+work up front rather than at the first keystroke. Worth it, since the
+alternative is a human tracking module and series names by memory across
+however many tutorials exist by then.
+
 ## 6. The order of work
 
 Each step ends with a test that says it is done. Steps 1 and 2 are the

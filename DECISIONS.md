@@ -114,3 +114,16 @@ neither the TypeScript nor the source layout is Bun-specific, so that
 fallback is a day's work, not a rewrite. Tauri does not care which of the
 two produced its `dist/` folder.
 *Cost to change: a day, by design — see above.*
+
+**11 — Opening a folder builds a front-matter index, and the module and
+series fields are a picker over it, not free text.** Knowing a dialect's
+field list (decision 3) doesn't tell an author what values already exist
+— `computational-methods` versus a typo'd `computational_methods` as a
+new, unrelated module is exactly the failure a fixed field list can't
+catch. One pass over every markdown file's front matter, on open and
+refreshed on save, builds that index; `module`, `series`, and
+`practice_for`/`practice_across` draw from it with a "new" escape hatch,
+and `version` defaults to today's date plus the next unused sequence
+number. See the plan §5.10.
+*Cost to change: small; an empty index just leaves the form as free text,
+which is where it started.*
