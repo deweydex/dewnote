@@ -13,7 +13,18 @@
 
 import { buildWorkerSource, DEFAULT_PACKAGES } from "./worker-source.ts";
 
-const PYODIDE_BASE = "https://cdn.jsdelivr.net/pyodide/v0.28.3/full/";
+const DEFAULT_PYODIDE_BASE = "https://cdn.jsdelivr.net/pyodide/v0.28.3/full/";
+let pyodideBaseOverride: string | null = null;
+
+/** A settings-panel override for where Pyodide loads from (plan §5.9's
+ * own "loaded from jsDelivr by default with a self-host setting", never
+ * built until now). Only takes effect on the *next* `ensureBooted()` — a
+ * worker already running keeps using whatever base it booted with, which
+ * is exactly why the settings panel pairs this with `restartInterpreter`
+ * rather than trying to hot-swap a running interpreter's own source. */
+export function setPyodideBase(base: string | null): void {
+  pyodideBaseOverride = base && base.trim() ? base : null;
+}
 
 export interface OutputEvent {
   kind: "stream" | "append" | "clear";
@@ -70,7 +81,7 @@ export function ensureBooted(packages: string[] = DEFAULT_PACKAGES): Promise<voi
   if (bootPromise) return bootPromise;
   worker = createWorker();
   bootPromise = (async () => {
-    await request("boot", { pyodideBase: PYODIDE_BASE, packages });
+    await request("boot", { pyodideBase: pyodideBaseOverride ?? DEFAULT_PYODIDE_BASE, packages });
     if (typeof SharedArrayBuffer !== "undefined" && (globalThis as unknown as { crossOriginIsolated?: boolean }).crossOriginIsolated) {
       interruptBuffer = new SharedArrayBuffer(4);
       worker!.postMessage({ type: "set-interrupt-buffer", buffer: interruptBuffer });
@@ -136,11 +147,26 @@ export function requestStop(): void {
     new Int32Array(interruptBuffer)[0] = 2;
     return;
   }
+  terminateWorker("Stopped: the interpreter was restarted");
+}
+
+function terminateWorker(reason: string): void {
   if (!worker) return;
   worker.terminate();
   worker = null;
   bootPromise = null;
   interruptBuffer = null;
-  for (const pending of pendingRequests.values()) pending.reject(new Error("Stopped: the interpreter was restarted"));
+  for (const pending of pendingRequests.values()) pending.reject(new Error(reason));
   pendingRequests.clear();
+}
+
+/** The settings panel's own "Restart Python interpreter" — unlike
+ * `requestStop`, this always terminates, even when an interrupt buffer
+ * would let it interrupt in place, since restarting is the whole point
+ * (a fresh interpreter, e.g. to pick up a changed Pyodide base URL, or
+ * simply to clear a shared namespace that has gotten into a state a
+ * reader wants to abandon rather than debug). A no-op if nothing has
+ * booted yet — there is nothing to restart. */
+export function restartInterpreter(): void {
+  terminateWorker("Stopped: the interpreter was restarted");
 }

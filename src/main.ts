@@ -2,6 +2,13 @@ import "katex/dist/katex.min.css";
 import "./theme/dewlab-tokens.css";
 import "./app.css";
 import { mountDocument, type MountedDocument } from "./app.ts";
+import { applySettings, loadSettings } from "./settings.ts";
+import { mountSettingsPanel } from "./settings-panel.ts";
+
+// Applied before the document mounts, not after, so there is never a
+// flash of default texture before a returning reader's own saved
+// choice takes effect (decision 7, dewstack's own "FAQ's way").
+applySettings(loadSettings());
 
 const STARTER_DOCUMENT = `---
 title: Untitled
@@ -29,6 +36,7 @@ const page = document.querySelector<HTMLDivElement>("#dn-page");
 if (!page) throw new Error("index.html is missing #dn-page");
 
 let current: MountedDocument = mountDocument(page, STARTER_DOCUMENT);
+mountSettingsPanel();
 
 // Playwright (tests/e2e/) drives this same built page directly rather than
 // a second harness entry point, remounting whatever source a test needs

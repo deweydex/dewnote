@@ -514,10 +514,36 @@ project; if they are not delightful, nothing after them will rescue it.
    unreachable by clicking. `tests/e2e/surface.spec.ts` names two real
    cases of it directly rather than working around them quietly.
 
+   **Third slice built**: a settings panel (`src/settings.ts`,
+   `src/settings-panel.ts`) — decision 7's own "every one of those values
+   is a user setting" made real: theme (system/light/dark, over dewlab's
+   own existing light/dark token pairs — nothing new to design there),
+   body font, text size, measure, margins, and cell tint, applied to
+   `<html>` before first paint the way dewstack's own `settings.js` does
+   it, localStorage-backed with the same "a default value removes the
+   property, not sets it" rule so the stylesheet's own default (media
+   queries included) stays authoritative rather than getting pinned.
+   Closed until asked (plan §3's own rule), a real dialog rather than a
+   hover reveal, since adjusting several settings in a row needs it to
+   stay open between changes. Also seeded here rather than invented from
+   nothing: a "Running Python" section (the Pyodide source URL §5.9
+   already named as a self-host setting, and a "Restart Python
+   interpreter" action — `pyodide-engine.ts`'s own terminate-and-restart
+   mechanism, decision 19, given a button of its own rather than only
+   ever firing as Stop's fallback).
+
+   Deliberately not built: the mockup's three named aesthetic presets
+   (`workshop`/`manuscript`/`chalkboard`) — that sketch is exploratory,
+   not a ratified decision the way decision 7 is, and choosing new
+   palettes and type pairings is real art direction Josh may want to do
+   directly, not something to invent solo. `--dl-cell-bg`/`--dl-output-bg`
+   are layered behind `--dn-cell-bg`/`--dn-output-bg` in `app.css`
+   specifically so a later preset system has one place to hang colour
+   choices, not five.
+
    Still open: no image in the add menu; no drag reorder or
    keyboard-driven reorder (only the move buttons); no whole-file source
-   view (Cmd+/) yet; no settings/texture rail, so the page renders in
-   dewlab's own fixed look with nothing user-tunable yet; the add menu is
+   view (Cmd+/) yet; named aesthetic presets, as above; the add menu is
    the same four kinds regardless of dialect, not yet reading dewstack's
    five cell forms or knowing it has no maths, which decision 3 already
    promises a dialect module rather than this; a fence shows its full raw
@@ -525,7 +551,14 @@ project; if they are not delightful, nothing after them will rescue it.
    chrome with the fence syntax hidden — the live-preview decoration work
    §5.1 already named as the upgrade path, not a new gap; an orphan blank
    block, once one exists, has no way to be reached or cleaned up through
-   the UI.
+   the UI; the front-matter form (decision 11) is still the flat one-line
+   summary and raw-YAML editing this section originally shipped with —
+   the per-field form with dialect-aware fields and an index-backed
+   module/series picker needs step 4's multi-file folder concept to be
+   more than free text, and is its own slice, not folded into this one;
+   `tutorial:` links round-trip and render fine as ordinary markdown
+   links already, but the link picker (step 8) has the same multi-file
+   dependency as the front-matter picker and waits on the same thing.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as
