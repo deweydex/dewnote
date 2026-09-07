@@ -1,12 +1,15 @@
-// Runs real Python, in a real browser, through the actual single-file
-// build's Worker + Blob-URL + CDN-loaded Pyodide chain — decision 9's
-// reasoning applies at full force here: nothing before this test (not
-// typecheck, not a unit test stubbing pyodide.code under plain CPython)
-// has exercised any of the Worker/Blob-URL/real-Pyodide machinery this
-// feature actually depends on. A cold Pyodide boot plus whatever a given
-// cell's own imports need (numpy, pandas, matplotlib — loaded on demand
-// by loadPackagesFromImports, not eagerly at boot, see worker-source.ts)
-// takes real seconds over a real network, hence the generous timeouts.
+// Runs real Python (and real SQL, via Pyodide's own sqlite3), in a real
+// browser, through the actual single-file build's Worker + Blob-URL +
+// CDN-loaded Pyodide chain — decision 9's reasoning applies at full
+// force here: nothing before this test (not typecheck, not a unit test
+// stubbing pyodide.code — or, for SQL, running dewnote_sql_tools.py
+// directly under plain CPython's own sqlite3) has exercised any of the
+// Worker/Blob-URL/real-Pyodide machinery this feature actually depends
+// on. A cold Pyodide boot plus whatever a given cell's own imports need
+// (numpy, pandas, matplotlib — loaded on demand by loadPackagesFromImports;
+// sqlite3, loaded on demand by the first SQL cell — neither eagerly at
+// boot, see worker-source.ts) takes real seconds over a real network,
+// hence the generous timeouts.
 //
 // One test, one page, one cold boot: mounting a second document into an
 // already-loaded page (this file's `mount`, same as surface.spec.ts's)
@@ -98,5 +101,48 @@ test("a real exec cell runs in a real browser: output, errors, and shared state"
     await mount(page, '```python exec\nid: after\nprint("back")\n```\n');
     await page.locator(".dn-block-fence .dn-cell-run").click();
     await expect(page.locator(".dn-cell-output")).toContainText("back", { timeout: COLD_BOOT_TIMEOUT });
+  });
+
+  await test.step("a SQL cell creates a table, a second cell sharing its name queries it, and Reset drops it", async () => {
+    await mount(
+      page,
+      "```sql cell=products\nCREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT);\nINSERT INTO products (name) VALUES ('Mug'), ('Notebook');\n```\n\n```sql cell=products\nSELECT name FROM products ORDER BY name;\n```\n",
+    );
+    const cells = page.locator(".dn-block-fence");
+
+    await cells.nth(0).locator(".dn-sql-run").click();
+    // sqlite3 loads on this cold path too (its own loadPackage call,
+    // separate from loadPackagesFromImports), so the same generous
+    // timeout applies even though the interpreter itself is already booted.
+    await expect(cells.nth(0).locator(".dn-sql-output")).toContainText("2 row(s) affected", {
+      timeout: COLD_BOOT_TIMEOUT,
+    });
+
+    await cells.nth(1).locator(".dn-sql-run").click();
+    const secondOutput = cells.nth(1).locator(".dn-sql-output");
+    await expect(secondOutput.locator("table")).toBeVisible();
+    await expect(secondOutput).toContainText("Mug");
+    await expect(secondOutput).toContainText("Notebook");
+
+    await cells.nth(0).locator(".dn-sql-reset").click();
+    await expect(cells.nth(0).locator(".dn-sql-output")).toBeEmpty();
+
+    await cells.nth(1).locator(".dn-sql-run").click();
+    await expect(cells.nth(1).locator(".dn-sql-output .dn-error")).toContainText("no such table");
+  });
+
+  await test.step("a SQL error renders as dn-error, and NULL/HTML values are handled safely", async () => {
+    await mount(page, "```sql cell=bad\nSELECT * FROM nope;\n```\n");
+    await page.locator(".dn-block-fence .dn-sql-run").click();
+    await expect(page.locator(".dn-sql-output .dn-error")).toContainText("no such table");
+
+    await mount(
+      page,
+      "```sql cell=escaping\nCREATE TABLE t (label TEXT, note TEXT);\nINSERT INTO t VALUES ('<b>hi</b>', NULL);\nSELECT label, note FROM t;\n```\n",
+    );
+    await page.locator(".dn-block-fence .dn-sql-run").click();
+    const output = page.locator(".dn-sql-output");
+    await expect(output.locator("td").first()).toHaveText("<b>hi</b>");
+    await expect(output.locator("b")).toHaveCount(0); // escaped, never rendered as a real tag
   });
 });

@@ -62,6 +62,45 @@ export function isRunnableFence(info: string): boolean {
   return info.split(/\s+/).includes("exec");
 }
 
+export interface SqlCellInfo {
+  /** The database this cell's script runs against — dewstack's own
+   * sharing key (DIALECTS.md §2): every `sql cell=name` fence on the
+   * page with the same name runs against the same in-memory SQLite
+   * connection, in the order they're run, not the order they appear. */
+  name: string;
+}
+
+const SQL_CELL_RE = /^sql\s+cell=([a-z0-9-]+)(?:\s+persist)?\s*$/;
+
+/** Parses a dewstack SQL cell's info string (` ```sql cell=name `, or
+ * ` ```sql cell=name persist `). Unlike a dewlab exec cell, there are no
+ * header lines — the info string carries everything, and the fence body
+ * is the SQL script itself, verbatim. `null` for anything else, fence
+ * body included: a fence not shaped like this is not a SQL cell,
+ * whatever language its info string names.
+ *
+ * `persist` (keeping a cell's script in localStorage across visits) is
+ * accepted here so such a fence still runs as an ordinary shared-by-name
+ * cell, but not yet honoured behaviourally — see DECISIONS.md for why a
+ * dewnote fence's body being the document's own saved text, unlike
+ * dewstack's static built page, makes porting dewstack's exact mechanism
+ * (silently overwriting the visible editor with a restored script)
+ * unsafe to do without deciding what "the document" means for a restored
+ * session first. */
+export function parseSqlCellInfo(info: string): SqlCellInfo | null {
+  const match = SQL_CELL_RE.exec(info.trim());
+  return match ? { name: match[1]! } : null;
+}
+
+/** A SQL cell's whole fence body, verbatim — there are no header lines
+ * to peel off the way an exec cell has, so this is the same extraction
+ * `parseCellSourceFromFenceText` does internally, exported under its own
+ * name for a SQL cell's Run to call directly against the fence's live
+ * text. */
+export function sqlScriptFromFenceText(fenceText: string): string {
+  return fenceBody(fenceText);
+}
+
 /** dewlab's `packages:` front-matter field (DIALECTS.md §1) — a document
  * declaring a package `loadPackagesFromImports` can't infer from a cell's
  * own `import` lines (a different import name than the package's own, or

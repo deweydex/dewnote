@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { parseDocument } from "./blocks.ts";
-import { declaredPackages, isRunnableFence, parseCellSource, parseCellSourceFromFenceText } from "./cell.ts";
+import {
+  declaredPackages,
+  isRunnableFence,
+  parseCellSource,
+  parseCellSourceFromFenceText,
+  parseSqlCellInfo,
+  sqlScriptFromFenceText,
+} from "./cell.ts";
 
 function fenceBlock(source: string) {
   const doc = parseDocument(source);
@@ -72,6 +79,43 @@ describe("declaredPackages", () => {
 
   test("drops non-string entries from an otherwise valid list", () => {
     expect(declaredPackages({ packages: ["sympy", 5, null] })).toEqual(["sympy"]);
+  });
+});
+
+describe("parseSqlCellInfo", () => {
+  test("reads the database name a cell=name fence shares", () => {
+    expect(parseSqlCellInfo("sql cell=products")).toEqual({ name: "products" });
+  });
+
+  test("is null for a plain sql fence with no cell=", () => {
+    expect(parseSqlCellInfo("sql")).toBeNull();
+  });
+
+  test("is null for a python exec fence", () => {
+    expect(parseSqlCellInfo("python exec")).toBeNull();
+  });
+
+  test("is null for an empty info string", () => {
+    expect(parseSqlCellInfo("")).toBeNull();
+  });
+
+  test("tolerates trailing whitespace", () => {
+    expect(parseSqlCellInfo("sql cell=totals  ")).toEqual({ name: "totals" });
+  });
+
+  test("accepts persist syntactically, without changing the name it reads", () => {
+    expect(parseSqlCellInfo("sql cell=totals persist")).toEqual({ name: "totals" });
+  });
+});
+
+describe("sqlScriptFromFenceText", () => {
+  test("returns the whole body, no header lines to peel off", () => {
+    const text = "```sql cell=products\nCREATE TABLE products (id INTEGER);\nSELECT * FROM products;\n```\n";
+    expect(sqlScriptFromFenceText(text)).toBe("CREATE TABLE products (id INTEGER);\nSELECT * FROM products;");
+  });
+
+  test("works against a live editor's text with no trailing newline", () => {
+    expect(sqlScriptFromFenceText("```sql cell=c\nSELECT 1;\n```")).toBe("SELECT 1;");
   });
 });
 

@@ -126,16 +126,20 @@ body {
 
 /* -------------------------------------------------------- runnable cells */
 
-.dn-cell-panel {
+.dn-cell-panel,
+.dn-sql-panel {
   margin: 0 0 0.9rem;
 }
-.dn-cell-runner {
+.dn-cell-runner,
+.dn-sql-runner {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 0.4rem;
 }
 .dn-cell-run,
-.dn-cell-stop {
+.dn-cell-stop,
+.dn-sql-run,
+.dn-sql-reset {
   border: 1px solid var(--dl-cell-border);
   border-radius: 4px;
   background: var(--dl-panel-bg);
@@ -145,30 +149,37 @@ body {
   padding: 0.25rem 0.7rem;
   cursor: pointer;
 }
-.dn-cell-run:hover:not(:disabled) {
+.dn-cell-run:hover:not(:disabled),
+.dn-sql-run:hover:not(:disabled) {
   color: var(--dl-orange);
   border-color: var(--dl-orange);
 }
-.dn-cell-stop:hover:not(:disabled) {
+.dn-cell-stop:hover:not(:disabled),
+.dn-sql-reset:hover:not(:disabled) {
   color: var(--dl-error-fg);
   border-color: var(--dl-error-fg);
 }
 .dn-cell-run:disabled,
-.dn-cell-stop:disabled {
+.dn-cell-stop:disabled,
+.dn-sql-run:disabled,
+.dn-sql-reset:disabled {
   opacity: 0.4;
   cursor: default;
 }
-.dn-cell-output:empty {
+.dn-cell-output:empty,
+.dn-sql-output:empty {
   display: none;
 }
-.dn-cell-output {
+.dn-cell-output,
+.dn-sql-output {
   border-radius: 4px;
   background: var(--dl-output-bg);
   padding: 0.6rem 0.8rem;
   font-family: var(--dl-mono);
   font-size: 0.82em;
 }
-.dn-cell-output pre {
+.dn-cell-output pre,
+.dn-sql-output pre {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
@@ -179,7 +190,8 @@ body {
 .dn-cell-output .dn-stdout {
   color: var(--dl-fg);
 }
-.dn-cell-output .dn-error {
+.dn-cell-output .dn-error,
+.dn-sql-output .dn-error {
   color: var(--dl-error-fg);
   background: var(--dl-error-bg);
   padding: 0.4rem 0.5rem;
@@ -191,6 +203,30 @@ body {
 .dn-cell-output .dn-figure img {
   max-width: 100%;
   border-radius: 4px;
+}
+
+/* A pandas DataFrame's own table (an exec cell's trailing-expression
+ * render) and a SQL cell's result table share this — dewnote_tools.py
+ * and dewnote_sql_tools.py both just emit a bare &lt;table&gt;, with no
+ * class of its own to hang styling off other than the output area
+ * around it. */
+.dn-cell-output table,
+.dn-sql-output table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.dn-cell-output th,
+.dn-cell-output td,
+.dn-sql-output th,
+.dn-sql-output td {
+  text-align: left;
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--dl-cell-border);
+}
+.dn-sql-output .dn-sql-note {
+  margin: 0;
+  color: var(--dl-muted);
 }
 
 /* ------------------------------------------------------------- add gaps */

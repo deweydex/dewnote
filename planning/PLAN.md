@@ -567,17 +567,46 @@ project; if they are not delightful, nothing after them will rescue it.
    an oversight, since only one boot ever happens regardless of how many
    cells asked for it.
 
-   Still open: SQL and HTML/CSS/JS cells are unbuilt; a hint/answer
-   fold's own code, if it has any, is not yet wired to run. Verification gap specific to this
-   environment, not to the feature: the sandbox this slice was built in
-   blocks outbound access to `cdn.jsdelivr.net`, so `tests/e2e/pyodide.spec.ts`
-   could not be run to a real pass from inside it — confirmed as a
-   network-policy block, not an application bug, with a standalone script
-   that reached the same dynamic `import()` call and watched it fail on
-   the tunnel, not on anything before it. `.github/workflows/e2e-pyodide.yml`
+   **Second slice built**: dewstack's SQL cells (` ```sql cell=name `,
+   DIALECTS.md §2 — researched directly against dewstack's own
+   `assets/sql-cell.js` and `assets/sql_tools.py`, not guessed from the
+   dialect summary alone). `parseSqlCellInfo`/`sqlScriptFromFenceText`
+   (`src/cell.ts`) read the fence; `dewnote_sql_tools.py` (a trimmed
+   `sql_tools.py`) keeps one in-memory sqlite3 connection per `cell=`
+   name, shared by every fence using that name anywhere on the page, in
+   the same Pyodide interpreter the exec cells already share rather than
+   a second one. Run and Reset (`runSql`/`resetSql`, `pyodide-engine.ts`)
+   reuse the request/response envelope the exec-cell worker already has;
+   sqlite3 itself loads lazily, on a page's first SQL cell run, the same
+   "pay for what's used" discipline as `loadPackagesFromImports`.
+   `persist` (`cell=name persist`, dewstack's own localStorage-backed
+   session restore) parses without error but isn't honoured — see
+   DECISIONS.md 21 for why porting it as-is isn't safe in an editable
+   document the way it is on dewstack's static built pages. Also
+   deliberately not ported: `sql-check` (a hardcoded, single-tutorial quiz
+   convention with no dewnote equivalent yet) and `read_sql`/`py cell=`'s
+   bridge into a SQL connection (dewnote's exec cells share one namespace
+   for the whole page already, not per-name subsets the way dewstack's
+   `py cell=` does, so the bridge doesn't carry over unchanged either).
+
+   Still open: `site=`/`app=` cells (dewstack's iframe-based web and
+   full-stack tracks) are unbuilt — they need consecutive-fence grouping
+   dewnote's block model doesn't have yet, a materially different piece
+   of work than a single-fence cell kind, deliberately left for its own
+   slice rather than folded into this one; `sql-check`, `py cell=`'s
+   `read_sql` bridge, and `persist` are named above; a hint/answer fold's
+   own code, if it has any, is not yet wired to run. Verification gap
+   specific to this environment, not to the feature (both slices of this
+   step share it): the sandbox this work was built in blocks outbound
+   access to `cdn.jsdelivr.net`, so `tests/e2e/pyodide.spec.ts` could not
+   be run to a real pass from inside it — confirmed as a network-policy
+   block, not an application bug, with a standalone script that reached
+   the same dynamic `import()` call (and, for the SQL cells, the same
+   click-to-run wiring) and watched it fail on the tunnel, not on
+   anything before it. `.github/workflows/e2e-pyodide.yml`
    (`workflow_dispatch` only, kept out of the push/PR gate the same way
    `tests.yml` already keeps the rest of the e2e suite out of it) exists
-   so the same test can actually run somewhere with real network access.
+   so the same tests can actually run somewhere with real network access.
 4. **Files.** The store interface, the browser store with OPFS and folder
    mounting, the files rail, the series view from `order.yaml`, new
    tutorial from a template, new series. *Done when* a module folder from
