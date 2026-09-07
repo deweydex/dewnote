@@ -342,7 +342,14 @@ reason `tests.yml`'s own comment already gives for keeping the rest of
 the e2e suite out of that gate) exists so this one test can actually run
 somewhere with a real network — a GitHub-hosted runner — rather than
 staying permanently unverified because of where it happened to be
-written.
+written. One more thing this surfaced, also confirmed directly rather
+than assumed: GitHub's `workflow_dispatch` API only recognises a
+workflow file that already exists on the repository's default branch —
+dispatching it from the branch that introduces it fails with a plain
+404, not a permissions error. So this workflow's own first real run
+happens only after the pull request that adds it merges to `main`, not
+before; the honest state at review time is "written, and confirmed to
+fail for the right reason locally," not "passing in CI."
 *Cost to change: none; the workflow is additive and off by default. If
 Bun or Playwright ever ship a first-class way to vendor Pyodide for
 tests without a live CDN fetch, this workflow becomes redundant rather
