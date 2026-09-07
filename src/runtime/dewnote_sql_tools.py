@@ -1,14 +1,14 @@
 # The Python half of a dewstack-style SQL cell (` ```sql cell=name `,
 # DIALECTS.md §2) — a trimmed adaptation of dewstack's sql_tools.py. Kept:
 # one in-memory sqlite3 connection per cell name, shared by every cell on
-# the page using that name, and run_sql's own contract — a script (not one
+# the page using that name, run_sql's own contract — a script (not one
 # statement), comments stripped, run as a script, the last statement's
 # result rendered as an HTML table if it has one, an affected-row count
-# otherwise. Dropped: get_connection (dewnote has no py-cell/read_sql
-# bridge yet — a real gap, not an oversight, see DECISIONS.md) and the
-# five sql-check functions (sql-check is dewstack's own quiz-grading
-# convention, hardcoded to one tutorial there; dewnote has no equivalent
-# concept yet).
+# otherwise — and get_connection, the public door dewnote_tools.py's own
+# read_sql uses to reach a SQL cell's connection from an exec cell.
+# Dropped: the five sql-check functions (sql-check is dewstack's own
+# quiz-grading convention, hardcoded to one tutorial there; dewnote has
+# no equivalent concept yet).
 #
 # Written directly against what the worker (src/runtime/worker-source.ts)
 # needs: run_sql(db_name, script) -> str, a complete HTML fragment, the
@@ -26,6 +26,16 @@ def _connection(db_name: str) -> sqlite3.Connection:
     if db_name not in _connections:
         _connections[db_name] = sqlite3.connect(":memory:")
     return _connections[db_name]
+
+
+def get_connection(db_name: str) -> sqlite3.Connection:
+    """The public door onto a SQL cell's own connection — dewnote_tools.py's
+    read_sql is the only caller today, matching dewstack's own
+    get_connection/read_sql pair. Creates the connection (empty) if
+    nothing has run against this name yet, the same as any other call
+    that touches `db_name` — read_sql before any SQL cell has run gets an
+    empty database, not an error."""
+    return _connection(db_name)
 
 
 def reset(db_name: str) -> None:

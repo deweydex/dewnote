@@ -79,6 +79,19 @@ async function runCell(msg) {
     await pyodide.runPythonAsync("import matplotlib; matplotlib.use('AGG')");
     matplotlibConfigured = true;
   }
+  // A cell reading a SQL cell's table (dewnote_tools.py's read_sql,
+  // pre-seeded into every exec cell's namespace) isn't a Python import
+  // line loadPackagesFromImports can see — the literal substring check
+  // is a plain heuristic standing in for it, same limitation dewstack's
+  // own build-time "a py cell= on this page always gets sqlite3" rule
+  // has, just applied per cell instead of per page.
+  if (msg.code.indexOf("read_sql(") !== -1) {
+    await ensureSqlTools();
+    if (!pyodide.loadedPackages || !pyodide.loadedPackages["pandas"]) {
+      post({ type: "status", text: "Loading pandas…" });
+      await pyodide.loadPackage(["pandas"]);
+    }
+  }
   post({ type: "status", text: "" });
   const emit = (kind, cssClass, text, markup) =>
     post({ type: "output", cellId: msg.cellId, kind, cssClass, text, markup });

@@ -584,22 +584,33 @@ project; if they are not delightful, nothing after them will rescue it.
    DECISIONS.md 21 for why porting it as-is isn't safe in an editable
    document the way it is on dewstack's static built pages. Also
    deliberately not ported: `sql-check` (a hardcoded, single-tutorial quiz
-   convention with no dewnote equivalent yet) and `read_sql`/`py cell=`'s
-   bridge into a SQL connection (dewnote's exec cells share one namespace
-   for the whole page already, not per-name subsets the way dewstack's
-   `py cell=` does, so the bridge doesn't carry over unchanged either).
+   convention with no dewnote equivalent yet).
+
+   **`read_sql` bridge built**, in dewnote's own shape rather than
+   dewstack's: `read_sql(db_name, query)` is pre-seeded into the one
+   shared exec-cell namespace every cell already has (`dewnote_tools.py`),
+   not a per-name `py cell=` namespace the way dewstack's own bridge is,
+   since dewnote's exec cells don't have per-name namespaces to bridge
+   between in the first place — any exec cell can read any SQL cell's
+   table, not just ones sharing a name with it. `dewnote_sql_tools.py`
+   gained `get_connection`, the public door dewstack's own `read_sql`
+   uses too. Loading sqlite3 and pandas for a cell that calls `read_sql`
+   is triggered by a plain substring check on the cell's own code (the
+   literal text `read_sql(`) run before it, since a function call — unlike
+   an `import` line — is invisible to `loadPackagesFromImports`; a real
+   heuristic, not exact static analysis, and documented as such.
 
    Still open: `site=`/`app=` cells (dewstack's iframe-based web and
    full-stack tracks) are unbuilt — they need consecutive-fence grouping
    dewnote's block model doesn't have yet, a materially different piece
    of work than a single-fence cell kind, deliberately left for its own
-   slice rather than folded into this one; `sql-check`, `py cell=`'s
-   `read_sql` bridge, and `persist` are named above; a hint/answer fold's
-   own code, if it has any, is not yet wired to run. Verification gap
-   specific to this environment, not to the feature (both slices of this
-   step share it): the sandbox this work was built in blocks outbound
-   access to `cdn.jsdelivr.net`, so `tests/e2e/pyodide.spec.ts` could not
-   be run to a real pass from inside it — confirmed as a network-policy
+   slice rather than folded into this one; `sql-check` and `persist` are
+   named above; a hint/answer fold's own code, if it has any, is not yet
+   wired to run. Verification gap specific to this environment, not to
+   the feature (every slice of this step shares it): the sandbox this
+   work was built in blocks outbound access to `cdn.jsdelivr.net`, so
+   `tests/e2e/pyodide.spec.ts` could not be run to a real pass from
+   inside it — confirmed as a network-policy
    block, not an application bug, with a standalone script that reached
    the same dynamic `import()` call (and, for the SQL cells, the same
    click-to-run wiring) and watched it fail on the tunnel, not on
