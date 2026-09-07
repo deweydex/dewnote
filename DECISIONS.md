@@ -357,3 +357,28 @@ fail for the right reason locally," not "passing in CI."
 Bun or Playwright ever ship a first-class way to vendor Pyodide for
 tests without a live CDN fetch, this workflow becomes redundant rather
 than wrong.*
+
+**19 — `requestStop` terminates the worker outright when there's no
+SharedArrayBuffer to interrupt, rather than leaving Stop a dead button.**
+§5.4 already named this as the baseline for a page without cross-origin
+isolation; the first version of this slice built the SharedArrayBuffer
+path and left the fallback as a silent no-op, which is worse than
+looking unfinished — a Stop button that sometimes does nothing, with no
+way for a reader to tell which time they're in, is a trap disguised as
+a feature. Every hosting mode this step actually ships on today (a
+single HTML file opened from disk, GitHub Pages with no
+`coi-serviceworker` yet) lacks the isolation headers, so this fallback
+is not an edge case here — it is currently the *only* path a reader
+ever exercises. `canStop()` changed meaning to match: "a worker exists
+to stop" rather than "an interrupt buffer exists," since both of
+`requestStop`'s branches are real once a worker does. Terminating
+rejects whatever `run-cell` request was in flight, which is why
+`app.ts`'s Run handler now has a `catch` around `runCell`, not only its
+existing `finally` — an unhandled rejection there would otherwise
+surface as a bare console error instead of the "stopped" message a
+reader clicked Stop to see.
+*Cost to change: none; this is what "Stop is enabled where headers
+permit, otherwise terminate-and-restart" (§5.4) already specified.
+`tests/e2e/pyodide.spec.ts` exercises exactly this path, since file://
+never has the headers — see decision 18 for why it can only be verified
+after this merges, same as everything else that test covers.*

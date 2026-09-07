@@ -395,6 +395,19 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
         await ensureBooted(declaredPackages(doc.frontMatter.fields));
         stopButton.disabled = !canStop();
         await runCell(cellId, code, (out) => applyOutputEvent(output, out));
+      } catch (err) {
+        // A rejection here, rather than a `{ ok: false }` result, means
+        // the cell never got to run its own error handling at all — the
+        // interpreter itself was terminated (requestStop's fallback for a
+        // page without cross-origin isolation) rather than interrupted.
+        // Built as a real element with textContent, not markup — unlike
+        // dewnote_tools.py's own output, this message is a raw JS Error,
+        // never pre-escaped HTML.
+        const message = err instanceof Error ? err.message : String(err);
+        const errorNode = document.createElement("pre");
+        errorNode.className = "dn-error";
+        errorNode.textContent = message;
+        output.appendChild(errorNode);
       } finally {
         runButton.disabled = false;
         runButton.textContent = "Run";

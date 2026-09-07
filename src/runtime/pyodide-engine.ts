@@ -1,7 +1,9 @@
 // The main-thread half of running a cell — a trimmed adaptation of
 // dewlab's assets/pyodide-engine.js. Kept: boot, run-cell, the
 // SharedArrayBuffer interrupt convention (byte 0 = 2, Pyodide's own
-// SIGINT signal), and the request/response envelope. Dropped: the entire
+// SIGINT signal) with a terminate-and-restart fallback for a page
+// without cross-origin isolation (plan §5.4's own documented baseline,
+// see requestStop), and the request/response envelope. Dropped: the entire
 // main-thread fallback for when a Worker can't be constructed (dewlab
 // needs it for a file:// tutorial page; dewnote's browser and GitHub
 // Pages targets are both served over http(s), so this is a real,
@@ -94,14 +96,32 @@ export async function runCell(cellId: string, code: string, onOutput: OutputList
   }
 }
 
-/** Only meaningful once booted with cross-origin isolation in effect
- * (SharedArrayBuffer requires it) — there is no fallback interrupt for a
- * page that isn't isolated, matching dewlab's own limitation exactly. */
+/** True once a worker exists at all — requestStop always does *something*
+ * from that point on, just not always the same thing (see there). */
 export function canStop(): boolean {
-  return interruptBuffer !== null;
+  return worker !== null;
 }
 
+/** Interrupts the running cell if cross-origin isolation made a
+ * SharedArrayBuffer available at boot (Pyodide's own SIGINT convention);
+ * otherwise terminates the worker outright and discards it, the plan's
+ * own documented baseline (§5.4) for a page without cross-origin
+ * isolation, since nothing else can stop a Python loop that never checks
+ * an interrupt buffer. Terminating loses the shared namespace — the next
+ * cell run boots a fresh interpreter from nothing, same as a first run —
+ * and rejects whatever run-cell request was in flight, which is why
+ * app.ts's Run handler always has a catch around `runCell`, not only a
+ * `finally`. */
 export function requestStop(): void {
-  if (!interruptBuffer) return;
-  new Int32Array(interruptBuffer)[0] = 2; // Pyodide's own SIGINT convention
+  if (interruptBuffer) {
+    new Int32Array(interruptBuffer)[0] = 2;
+    return;
+  }
+  if (!worker) return;
+  worker.terminate();
+  worker = null;
+  bootPromise = null;
+  interruptBuffer = null;
+  for (const pending of pendingRequests.values()) pending.reject(new Error("Stopped: the interpreter was restarted"));
+  pendingRequests.clear();
 }

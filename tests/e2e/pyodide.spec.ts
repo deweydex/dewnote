@@ -77,4 +77,26 @@ test("a real exec cell runs in a real browser: output, errors, and shared state"
     await cells.nth(1).locator(".dn-cell-run").click();
     await expect(cells.nth(1).locator(".dn-cell-output")).toContainText("42");
   });
+
+  await test.step("Stop recovers an infinite loop — terminate-and-restart, since file:// has no cross-origin isolation", async () => {
+    // canStop()'s SharedArrayBuffer path never applies under file://, so
+    // this exercises pyodide-engine.ts's other branch: worker.terminate()
+    // and a fresh interpreter next run. The Run button, not the loop
+    // itself, is the thing this test can observe finishing.
+    await mount(page, "```python exec\nid: loop\nwhile True:\n    pass\n```\n");
+    const cell = page.locator(".dn-block-fence");
+    await cell.locator(".dn-cell-run").click();
+    await expect(cell.locator(".dn-cell-stop")).toBeEnabled({ timeout: COLD_BOOT_TIMEOUT });
+
+    await cell.locator(".dn-cell-stop").click();
+    await expect(cell.locator(".dn-cell-run")).toHaveText("Run", { timeout: 30_000 });
+    await expect(cell.locator(".dn-cell-output .dn-error")).toContainText("restarted");
+
+    // The interpreter really did restart, not just recover cosmetically:
+    // a cell that depended on the loop cell's own state would find it
+    // gone, but a fresh cell still runs.
+    await mount(page, '```python exec\nid: after\nprint("back")\n```\n');
+    await page.locator(".dn-block-fence .dn-cell-run").click();
+    await expect(page.locator(".dn-cell-output")).toContainText("back", { timeout: COLD_BOOT_TIMEOUT });
+  });
 });
