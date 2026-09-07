@@ -179,7 +179,9 @@
   .cell.is-running .run-btn{ background: var(--ms-accent-warm, var(--accent-warm)); }
   .cell-code{
     font-family:var(--font-chrome); font-size:.83rem; line-height:1.6; padding:.75rem .9rem; overflow-x:auto;
+    outline:none; cursor:text;
   }
+  .cell-code:focus{ background: var(--ms-surface, var(--surface)); box-shadow: inset 2px 0 0 var(--ms-accent, var(--accent)); }
   .tok-kw{ color: var(--ms-accent, var(--accent)); }
   .tok-str{ color: var(--ms-accent-warm, var(--accent-warm)); }
   .cell-output{
@@ -206,6 +208,9 @@
   details.fold summary::before{ content:"▸ "; }
   details.fold[open] summary::before{ content:"▾ "; }
   details.fold .fold-body{ padding:0 .8rem .8rem; font-size:.92rem; }
+  details.fold .block{ margin:0; }
+  details.fold .block-render.fold-body{ padding:0 .8rem .8rem; }
+  details.fold .block textarea.fold-body{ margin:0 .8rem .8rem; width:calc(100% - 1.6rem); }
 
   /* ---------- right rail: settings ---------- */
   .rail-right{
@@ -255,9 +260,10 @@
       <b>Workshop</b> is dewnote's own resting look, <b>Manuscript</b> reproduces dewlab's
       real tokens for an honest preview, <b>Chalkboard</b> commits to dark. Drag the
       sliders after choosing one; nothing here is a fixed screenshot.</p>
-    <p>Click the heading or the paragraph to edit its source. Hover a gap between blocks
-      for the add control. Hover the code cell for its own quiet toolbar, and press ▸ to
-      re-run it.</p>
+    <p>Click the heading, the paragraph, or the hint to edit its source. The code
+      line has no separate render mode to click into — it's a live editor already,
+      the same as it would be behind CodeMirror. Hover a gap between blocks for the
+      add control, hover the cell for its own quiet toolbar, and press ▸ to re-run it.</p>
   </div>
 
   <div class="window">
@@ -341,7 +347,7 @@
                 <svg viewBox="0 0 14 14" width="10" height="10" fill="currentColor"><path d="M3 2l9 5-9 5z"/></svg>
               </button>
             </div>
-            <div class="cell-code">readings[readings[<span class="tok-str">"evening"</span>] &gt; 14]</div>
+            <div class="cell-code" contenteditable="true" spellcheck="false">readings[readings[<span class="tok-str">"evening"</span>] &gt; 14]</div>
             <div class="cell-output">
               <table class="out">
                 <tr><th>hour</th><th>morning</th><th>evening</th></tr>
@@ -360,9 +366,12 @@
             </div>
           </div>
 
-          <details class="fold">
+          <details class="fold" open>
             <summary>hint</summary>
-            <div class="fold-body">Compare each evening reading to 14 before deciding whether to keep the row.</div>
+            <div class="block" id="b-hint1">
+              <div class="block-render fold-body" tabindex="0" onclick="edit('b-hint1')" onkeydown="if(event.key==='Enter')edit('b-hint1')">Compare each evening reading to 14 before deciding whether to keep the row.</div>
+              <textarea class="fold-body" rows="2" onblur="unedit('b-hint1')">Compare each evening reading to 14 before deciding whether to keep the row.</textarea>
+            </div>
           </details>
         </div>
       </main>
