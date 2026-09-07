@@ -38,7 +38,7 @@ import { detectDialect } from "./dialect.ts";
 import { renderBlockPreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
 import { declaredPackages, isRunnableFence, parseCellSourceFromFenceText } from "./cell.ts";
-import { canStop, ensureBooted, requestStop, runCell, type OutputEvent } from "./runtime/pyodide-engine.ts";
+import { canStop, ensureBooted, requestStop, runCell, setStatusListener, type OutputEvent } from "./runtime/pyodide-engine.ts";
 
 export interface MountedDocument {
   /** The document's current source, byte for byte, including whatever is
@@ -391,6 +391,14 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       runButton.disabled = true;
       runButton.textContent = "Running…";
       stopButton.disabled = true;
+      // pyodide-engine.ts's status listener is one global slot, not one
+      // per cell — there is only ever one interpreter booting for the
+      // whole page, so whichever cell's Run was clicked last owns the
+      // button that shows it, a fine simplification until a page
+      // regularly has two cells clicked before the first boot finishes.
+      setStatusListener((text) => {
+        runButton.textContent = text || "Running…";
+      });
       try {
         await ensureBooted(declaredPackages(doc.frontMatter.fields));
         stopButton.disabled = !canStop();
@@ -409,6 +417,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
         errorNode.textContent = message;
         output.appendChild(errorNode);
       } finally {
+        setStatusListener(null);
         runButton.disabled = false;
         runButton.textContent = "Run";
         stopButton.disabled = true;

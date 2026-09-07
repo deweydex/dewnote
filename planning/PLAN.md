@@ -559,10 +559,16 @@ project; if they are not delightful, nothing after them will rescue it.
    ships on today lacks the headers for the first, so the second is what
    actually runs; it loses the shared namespace, same as a first run.
 
-   Still open: SQL and HTML/CSS/JS cells are unbuilt; no loading-status
-   text in the UI for a cold boot (`pyodide-engine.ts`'s
-   `setStatusListener` exists and is unused); a hint/answer fold's own
-   code, if it has any, is not yet wired to run. Verification gap specific to this
+   The Run button shows the interpreter's own boot/package-loading status
+   text while it's the thing waiting (`setStatusListener`, `app.ts`) —
+   one global status slot for the one page-wide interpreter, so if two
+   cells are clicked before the first boot finishes, only the more
+   recently clicked one's button shows it; a known simplification, not
+   an oversight, since only one boot ever happens regardless of how many
+   cells asked for it.
+
+   Still open: SQL and HTML/CSS/JS cells are unbuilt; a hint/answer
+   fold's own code, if it has any, is not yet wired to run. Verification gap specific to this
    environment, not to the feature: the sandbox this slice was built in
    blocks outbound access to `cdn.jsdelivr.net`, so `tests/e2e/pyodide.spec.ts`
    could not be run to a real pass from inside it — confirmed as a
