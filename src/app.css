@@ -124,6 +124,75 @@ body {
   border-color: var(--dl-error-fg);
 }
 
+/* -------------------------------------------------------- runnable cells */
+
+.dn-cell-panel {
+  margin: 0 0 0.9rem;
+}
+.dn-cell-runner {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.dn-cell-run,
+.dn-cell-stop {
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-mono);
+  font-size: 0.78em;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+}
+.dn-cell-run:hover:not(:disabled) {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}
+.dn-cell-stop:hover:not(:disabled) {
+  color: var(--dl-error-fg);
+  border-color: var(--dl-error-fg);
+}
+.dn-cell-run:disabled,
+.dn-cell-stop:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dn-cell-output:empty {
+  display: none;
+}
+.dn-cell-output {
+  border-radius: 4px;
+  background: var(--dl-output-bg);
+  padding: 0.6rem 0.8rem;
+  font-family: var(--dl-mono);
+  font-size: 0.82em;
+}
+.dn-cell-output pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.dn-cell-output pre + pre {
+  margin-top: 0.4rem;
+}
+.dn-cell-output .dn-stdout {
+  color: var(--dl-fg);
+}
+.dn-cell-output .dn-error {
+  color: var(--dl-error-fg);
+  background: var(--dl-error-bg);
+  padding: 0.4rem 0.5rem;
+  border-radius: 4px;
+}
+.dn-cell-output .dn-repr {
+  color: var(--dl-muted);
+}
+.dn-cell-output .dn-figure img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
 /* ------------------------------------------------------------- add gaps */
 
 .dn-add-gap {

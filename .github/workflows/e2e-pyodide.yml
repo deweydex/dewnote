@@ -1,0 +1,34 @@
+# The one Playwright test that needs a real network — a real Pyodide
+# interpreter, fetched from jsdelivr, run in a real headless Chromium.
+# tests.yml keeps the whole e2e suite out of its own gate for the reasons
+# recorded there (dewlab DECISIONS_LOG 0.17, 0.20); this workflow exists
+# only so that suite can be run somewhere with real internet access,
+# on demand, for a change that touches cell execution — a development
+# sandbox with restricted outbound network can build, typecheck and run
+# every other test, but cannot itself reach jsdelivr to verify this one.
+name: e2e (pyodide)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  pyodide:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright's browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: Build
+        run: bun run build
+
+      - name: Run the e2e suite
+        run: bunx playwright test
