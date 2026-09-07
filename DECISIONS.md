@@ -127,3 +127,28 @@ and `version` defaults to today's date plus the next unused sequence
 number. See the plan §5.10.
 *Cost to change: small; an empty index just leaves the form as free text,
 which is where it started.*
+
+**12 — CodeMirror 6 checked against the field, over Monaco and over
+Typora's approach, not only against Milkdown.** Decision 1 rejected block
+editors on the round-trip argument; this is the narrower question
+decision 2 left open — whether CodeMirror 6 is the right tool for "render
+when blurred, decorate when focused," or only the first one that came to
+hand from dewlab. It is the field's converged answer, not an untested
+one: Obsidian's Live Preview, Zettlr, and Logseq are all built on it for
+this exact behaviour, and at least two open-source projects
+(`atomic-editor`, `codemirror-live-markdown`) already implement
+Obsidian-style decoration sets on top of it, worth reading before writing
+dewnote's own. Two real alternatives were checked and both fail for a
+reason beyond size. Monaco, VS Code's own editor, is built for code, not
+prose: it has no decoration or widget system tuned for hiding syntax and
+rendering styled text in its place, so getting Live Preview's behaviour
+out of it means fighting the tool rather than composing with it, whatever
+its bundle costs (2–5MB against CodeMirror 6's tree-shaken core, a
+difference that would not have mattered here either way — see decision
+1). Typora takes the other real approach: no source view at all, a
+hybrid renderer that parses to an AST and edits the rendered DOM
+directly, serialising to markdown only on save. That is decision 1's
+objection in its most complete form — the model, not the file, is what a
+keystroke changes — and it is why Typora is proprietary and
+un-embeddable rather than a library choice on the table.
+*Cost to change: none; this confirms decision 2 rather than revising it.*
