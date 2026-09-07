@@ -445,6 +445,20 @@ work up front rather than at the first keystroke. Worth it, since the
 alternative is a human tracking module and series names by memory across
 however many tutorials exist by then.
 
+### 5.11 CI and dependency updates
+
+`.github/workflows/tests.yml` runs `bun test` and `bun run typecheck` on
+every push to main and every pull request, mirroring dewlab's own
+`tests.yml`. `.github/dependabot.yml` opens a weekly PR for the `bun`
+ecosystem and for `github-actions`, so a dependency bump goes through the
+same gate a hand-written change does rather than landing unreviewed —
+decision 13 has the incident that prompted writing this down rather than
+just doing it. `.github/workflows/deploy.yml` mirrors dewlab's
+`deploy.yml` for the same reason dewlab has one: publishing on push,
+not from somebody's laptop. It currently publishes a placeholder (the
+design sketch in `planning/mockups/`) since step 2 has not yet produced
+a real build to publish instead.
+
 ## 6. The order of work
 
 Each step ends with a test that says it is done. Steps 1 and 2 are the

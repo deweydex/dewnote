@@ -172,3 +172,46 @@ objection in its most complete form — the model, not the file, is what a
 keystroke changes — and it is why Typora is proprietary and
 un-embeddable rather than a library choice on the table.
 *Cost to change: none; this confirms decision 2 rather than revising it.*
+
+**13 — GitHub Actions runs the tests on every push and pull request, and
+Dependabot opens the PRs that keep dependencies current, rather than
+either being left to memory.** The prompt for writing this down rather
+than only doing it: `bun add markdown-it js-yaml katex`, run to add two
+new packages, silently rewrote `js-yaml`'s declared range from `^4.1.0`
+to `^5.4.1` — Bun re-resolves an already-present package to latest when
+it is named again, whatever the reason for the command — and nothing
+short of reading the diff by hand caught it before a commit could have
+carried an unplanned major bump in with two unrelated ones. Caught and
+reverted this time; a rule that depends on catching it every time is not
+a rule. `.github/workflows/tests.yml` (`bun install --frozen-lockfile`,
+`bun test`, `bun run typecheck`, on push to main, on every pull request,
+and on `workflow_dispatch` for the same reason dewlab's own tests.yml
+carries it — a GitHub App's push starts no workflow on its own)
+mirrors dewlab's `tests.yml` in shape. `.github/dependabot.yml` covers
+two ecosystems: `bun` (GitHub's own version-update support for it went
+GA in February 2025, reading the committed `bun.lock` text format
+directly — `docs.github.com` and `github.blog` were both unreachable
+from here to quote the exact YAML key verbatim, so this is worth a
+glance at GitHub's own Dependabot config validation before trusting the
+spelling blindly) and `github-actions` (so `actions/checkout@v4` and the
+rest age the same way the runtime dependencies do). A weekly Dependabot
+PR is exactly a rerun of what just happened by hand, except it lands as
+its own PR, on its own branch, red or green on `tests.yml` before
+anyone looks at it — which is the whole difference between this and
+what `bun add` did unsupervised.
+
+`.github/workflows/deploy.yml` rides along for the same reason dewlab's
+own deploy.yml exists — publishing should be something that happens on
+push, not something somebody remembers to do from a laptop — mirroring
+its structure (`configure-pages` with `enablement: true`, `upload-pages-
+artifact`, `deploy-pages`, the same concurrency group) even though there
+is nothing real to publish yet. Its one build step copies
+`planning/mockups/dewnote-sketch.html` to `dist/index.html` as a
+placeholder, so turning Pages on for this repository — which Josh did
+alongside this entry — shows the design sketch rather than a red
+workflow or an empty site, until step 2 gives it a real single-file
+build to run instead.
+*Cost to change: small. The placeholder build step is one line to
+replace; the ecosystem list in dependabot.yml grows by one entry if a
+second package manager joins bun (Rust's cargo, once Tauri's own
+dependencies exist, per §5.6).*

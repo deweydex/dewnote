@@ -1,0 +1,56 @@
+# Publishes to Pages on every push to main, mirroring dewlab's own
+# deploy.yml so the two repositories' publish stories stay recognisable
+# as siblings.
+#
+# There is no real app to build yet — step 2 of planning/PLAN.md is the
+# single-file Bun build this workflow will eventually run instead. Until
+# then the "build" step below just copies the design sketch in
+# planning/mockups/ to dist/index.html, so turning Pages on for this
+# repository shows something real (a look at where the design is headed)
+# rather than a red workflow or an empty site. Replace that one step,
+# and nothing else here, once `bun run build` produces the actual app.
+name: publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Placeholder build — see the note at the top of this file.
+      - name: Build
+        run: |
+          mkdir -p dist
+          cp planning/mockups/dewnote-sketch.html dist/index.html
+          touch dist/.nojekyll
+
+      - name: Check something was actually built
+        run: test -f dist/index.html || { echo "no index.html was built"; exit 1; }
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
