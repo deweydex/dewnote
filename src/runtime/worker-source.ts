@@ -11,8 +11,12 @@
 //
 // This is a trimmed adaptation of dewlab's assets/pyodide-worker.js —
 // boot, run a cell, and support Stop — not a port of its filesystem
-// mounting, autocomplete, or SQL-seeding message types, none of which
-// dewnote's cells need yet. See DECISIONS.md for the fuller comparison.
+// mounting or autocomplete message types, none of which dewnote's cells
+// need yet. See DECISIONS.md for the fuller comparison. SQL cells
+// (run-sql/reset-sql) are dewstack's own convention, not dewlab's;
+// dewnote_sql_tools.py is a trimmed adaptation of dewstack's own
+// sql_tools.py, sharing this same one Pyodide interpreter rather than a
+// second one, the same way dewstack's SQL and exec cells do.
 //
 // Because this is a plain string, not a module TypeScript can check, keep
 // it as small and literal as reasonably possible — anything that can live
@@ -20,6 +24,7 @@
 // pyodide-engine.ts) should.
 
 import pythonToolsSource from "./dewnote_tools.py" with { type: "text" };
+import sqlToolsSource from "./dewnote_sql_tools.py" with { type: "text" };
 
 // Nothing loads eagerly at boot any more — a document that never imports
 // pandas or matplotlib shouldn't pay for either. runCell's own
@@ -30,11 +35,14 @@ export const DEFAULT_PACKAGES: string[] = [];
 
 export function buildWorkerSource(): string {
   const pythonSourceLiteral = JSON.stringify(pythonToolsSource);
+  const sqlSourceLiteral = JSON.stringify(sqlToolsSource);
   return `
 "use strict";
 
 let pyodide = null;
 let tools = null;
+let sqlTools = null;
+let sqliteLoading = null;
 let matplotlibConfigured = false;
 
 function post(message) {
@@ -78,6 +86,30 @@ async function runCell(msg) {
   return { ok: !!ok };
 }
 
+// sqlite3 is only ever loaded once, on the first SQL cell any page
+// actually runs — a document with no sql cell= fence never pays for it,
+// the same "load what's actually used" discipline as runCell's own
+// loadPackagesFromImports, just triggered by a different kind of cell
+// instead of a Python import line.
+async function ensureSqlTools() {
+  if (sqlTools) return;
+  if (!sqliteLoading) sqliteLoading = pyodide.loadPackage(["sqlite3"]);
+  await sqliteLoading;
+  pyodide.FS.writeFile("/home/pyodide/dewnote_sql_tools.py", ${sqlSourceLiteral}, { encoding: "utf8" });
+  sqlTools = pyodide.pyimport("dewnote_sql_tools");
+}
+
+async function runSql(msg) {
+  await ensureSqlTools();
+  return { html: sqlTools.run_sql(msg.dbName, msg.sql) };
+}
+
+async function resetSql(msg) {
+  await ensureSqlTools();
+  sqlTools.reset(msg.dbName);
+  return true;
+}
+
 self.onmessage = async (event) => {
   const msg = event.data;
   if (msg.type === "set-interrupt-buffer") {
@@ -91,6 +123,10 @@ self.onmessage = async (event) => {
       result = true;
     } else if (msg.type === "run-cell") {
       result = await runCell(msg);
+    } else if (msg.type === "run-sql") {
+      result = await runSql(msg);
+    } else if (msg.type === "reset-sql") {
+      result = await resetSql(msg);
     } else {
       throw new Error("unknown message type: " + msg.type);
     }

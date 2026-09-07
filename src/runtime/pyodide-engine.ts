@@ -96,6 +96,25 @@ export async function runCell(cellId: string, code: string, onOutput: OutputList
   }
 }
 
+/** Runs a dewstack-style SQL cell's script against `dbName`'s own shared
+ * connection (every SQL cell using that name, across the page, hits the
+ * same one) and returns the complete HTML fragment the Python side
+ * already rendered — a table, an affected-row count, or an error, never
+ * streamed, since a SQL cell's own contract (dewstack's own) is one
+ * result per run, not running output. */
+export async function runSql(dbName: string, sql: string): Promise<{ html: string }> {
+  await ensureBooted();
+  return (await request("run-sql", { dbName, sql })) as { html: string };
+}
+
+/** A SQL cell's own Reset — closes and discards `dbName`'s connection, so
+ * a `CREATE TABLE` can run again from scratch. Does nothing to any other
+ * name's connection. */
+export async function resetSql(dbName: string): Promise<void> {
+  await ensureBooted();
+  await request("reset-sql", { dbName });
+}
+
 /** True once a worker exists at all — requestStop always does *something*
  * from that point on, just not always the same thing (see there). */
 export function canStop(): boolean {

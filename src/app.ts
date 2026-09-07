@@ -37,8 +37,24 @@ import { parseDocument, serialize, type Block, type Document } from "./blocks.ts
 import { detectDialect } from "./dialect.ts";
 import { renderBlockPreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
-import { declaredPackages, isRunnableFence, parseCellSourceFromFenceText } from "./cell.ts";
-import { canStop, ensureBooted, requestStop, runCell, setStatusListener, type OutputEvent } from "./runtime/pyodide-engine.ts";
+import {
+  declaredPackages,
+  isRunnableFence,
+  parseCellSourceFromFenceText,
+  parseSqlCellInfo,
+  sqlScriptFromFenceText,
+  type SqlCellInfo,
+} from "./cell.ts";
+import {
+  canStop,
+  ensureBooted,
+  requestStop,
+  resetSql,
+  runCell,
+  runSql,
+  setStatusListener,
+  type OutputEvent,
+} from "./runtime/pyodide-engine.ts";
 
 export interface MountedDocument {
   /** The document's current source, byte for byte, including whatever is
@@ -429,6 +445,83 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return panel;
   }
 
+  /** A dewstack SQL cell (parseSqlCellInfo) gets a Run/Reset bar and an
+   * output area under its editor. The whole fence body is the SQL
+   * script — there are no header lines the way an exec cell has — and
+   * every SQL cell sharing `info.name`, anywhere on the page, runs
+   * against the same connection (pyodide-engine.ts's runSql), so a
+   * second cell can query a table an earlier one created. Unlike an exec
+   * cell's Run, this has no Stop: dewstack's own SQL cells don't have
+   * one either, and a script's worth of statements runs to completion or
+   * to its first error, not indefinitely. */
+  function buildSqlCellRunner(index: number, view: EditorView, info: SqlCellInfo): HTMLElement {
+    const panel = document.createElement("div");
+    panel.className = "dn-sql-panel";
+
+    const bar = document.createElement("div");
+    bar.className = "dn-sql-runner";
+
+    const runButton = document.createElement("button");
+    runButton.type = "button";
+    runButton.className = "dn-sql-run";
+    runButton.textContent = "Run";
+
+    const resetButton = document.createElement("button");
+    resetButton.type = "button";
+    resetButton.className = "dn-sql-reset";
+    resetButton.textContent = "Reset";
+
+    const output = document.createElement("div");
+    output.className = "dn-sql-output";
+
+    function showError(err: unknown) {
+      output.replaceChildren();
+      const errorNode = document.createElement("pre");
+      errorNode.className = "dn-error";
+      errorNode.textContent = err instanceof Error ? err.message : String(err);
+      output.appendChild(errorNode);
+    }
+
+    runButton.addEventListener("click", async (clickEvent) => {
+      clickEvent.stopPropagation();
+      const script = sqlScriptFromFenceText(view.state.doc.toString());
+      runButton.disabled = true;
+      resetButton.disabled = true;
+      try {
+        // dewnote_sql_tools.py already renders a complete, self-escaped
+        // HTML fragment (a table, a row count, or a dn-error) — the same
+        // "Python returns HTML, JS assigns it" contract dewstack's own
+        // sql_tools.py uses, so there is no separate result type to walk.
+        const result = await runSql(info.name, script);
+        output.innerHTML = result.html;
+      } catch (err) {
+        showError(err);
+      } finally {
+        runButton.disabled = false;
+        resetButton.disabled = false;
+      }
+    });
+
+    resetButton.addEventListener("click", async (clickEvent) => {
+      clickEvent.stopPropagation();
+      runButton.disabled = true;
+      resetButton.disabled = true;
+      try {
+        await resetSql(info.name);
+        output.replaceChildren();
+      } catch (err) {
+        showError(err);
+      } finally {
+        runButton.disabled = false;
+        resetButton.disabled = false;
+      }
+    });
+
+    bar.append(runButton, resetButton);
+    panel.append(bar, output);
+    return panel;
+  }
+
   function renderBlockWrapper(block: Block, index: number): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = `dn-block dn-block-${block.kind}`;
@@ -442,11 +535,14 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     }
 
     if (block.kind === "fence") {
+      const info = block.fence?.info ?? "";
       const host = document.createElement("div");
       host.className = "dn-block-source";
       wrapper.appendChild(host);
-      const view = mountEditor(host, index, block.text, languageExtensionFor(block.fence?.info ?? ""));
-      if (isRunnableFence(block.fence?.info ?? "")) wrapper.appendChild(buildCellRunner(index, view));
+      const view = mountEditor(host, index, block.text, languageExtensionFor(info));
+      const sqlInfo = parseSqlCellInfo(info);
+      if (isRunnableFence(info)) wrapper.appendChild(buildCellRunner(index, view));
+      else if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
       return wrapper;
     }
 
