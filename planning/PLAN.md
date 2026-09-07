@@ -530,6 +530,44 @@ project; if they are not delightful, nothing after them will rescue it.
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as
    on the built site.
+
+   **First slice built**: a runnable fence (`isRunnableFence`, `src/cell.ts`
+   — the word `exec` in its info string, dewlab's own convention) gets a
+   Run/Stop bar and an output area under its editor. One Pyodide 0.28.3
+   interpreter per page, in a classic Worker built from a Blob URL rather
+   than a module Worker (`src/runtime/worker-source.ts`'s own header
+   comment has the reasoning — Bun's bundler doesn't resolve a
+   `new Worker(new URL(...))` reference the way Vite's does, so the
+   worker's source is a hand-authored string, not a separately-built
+   file), with `dewnote_tools.py` (a trimmed `tutorial_tools.py`)
+   rendering a cell's stdout/stderr, trailing expression, pandas tables
+   and matplotlib figures, and trimming a traceback to the cell's own
+   frames. A shared Python namespace across the page's cells, so a second
+   cell sees a first one's variables, the way a notebook does. Packages
+   load lazily, per cell, via Pyodide's own `loadPackagesFromImports`
+   against that cell's code — not the `packages:` front-matter field this
+   section originally named, which nothing yet writes or reads; a page
+   that never imports pandas never pays to load it, which a hardcoded
+   package list checked in and then reverted during this slice would not
+   have given it.
+
+   Still open: no fallback Stop — a page without cross-origin isolation
+   (every hosting mode this step actually ships on so far) has no way to
+   interrupt a running cell at all, not even this section's own baseline
+   of terminate-and-restart-the-Worker; SQL and HTML/CSS/JS cells, and
+   the `packages:` front-matter field, are unbuilt; no loading-status text
+   in the UI for a cold boot (`pyodide-engine.ts`'s `setStatusListener`
+   exists and is unused); a hint/answer fold's own code, if it has any,
+   is not yet wired to run. Verification gap specific to this
+   environment, not to the feature: the sandbox this slice was built in
+   blocks outbound access to `cdn.jsdelivr.net`, so `tests/e2e/pyodide.spec.ts`
+   could not be run to a real pass from inside it — confirmed as a
+   network-policy block, not an application bug, with a standalone script
+   that reached the same dynamic `import()` call and watched it fail on
+   the tunnel, not on anything before it. `.github/workflows/e2e-pyodide.yml`
+   (`workflow_dispatch` only, kept out of the push/PR gate the same way
+   `tests.yml` already keeps the rest of the e2e suite out of it) exists
+   so the same test can actually run somewhere with real network access.
 4. **Files.** The store interface, the browser store with OPFS and folder
    mounting, the files rail, the series view from `order.yaml`, new
    tutorial from a template, new series. *Done when* a module folder from

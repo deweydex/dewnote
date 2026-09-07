@@ -37,6 +37,8 @@ import { parseDocument, serialize, type Block, type Document } from "./blocks.ts
 import { detectDialect } from "./dialect.ts";
 import { renderBlockPreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
+import { isRunnableFence, parseCellSourceFromFenceText } from "./cell.ts";
+import { canStop, ensureBooted, requestStop, runCell, type OutputEvent } from "./runtime/pyodide-engine.ts";
 
 export interface MountedDocument {
   /** The document's current source, byte for byte, including whatever is
@@ -321,6 +323,90 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return toolbar;
   }
 
+  /** dewlab's own output-event protocol (clear/stream/append), applied to
+   * one cell's output area exactly the way dewlab's applyOutputEvent
+   * does: "clear" wipes it, "stream" appends running text (coalesced onto
+   * the previous run of the same css class rather than one element per
+   * write, since print() calls one line at a time), "append" inserts one
+   * complete HTML fragment (a table, a figure, an error) verbatim — safe
+   * because dewnote_tools.py, not any external input, produced it. */
+  function applyOutputEvent(output: HTMLElement, event: OutputEvent) {
+    if (event.kind === "clear") {
+      output.replaceChildren();
+      return;
+    }
+    if (event.kind === "stream") {
+      const last = output.lastElementChild;
+      if (last instanceof HTMLElement && last.dataset["stream"] === event.cssClass) {
+        last.append(event.text);
+      } else {
+        const span = document.createElement("pre");
+        span.className = `dn-cell-stream ${event.cssClass}`;
+        span.dataset["stream"] = event.cssClass;
+        span.textContent = event.text;
+        output.appendChild(span);
+      }
+      return;
+    }
+    output.insertAdjacentHTML("beforeend", event.markup);
+  }
+
+  /** A runnable fence (isRunnableFence) gets a Run/Stop bar and an output
+   * area under its editor. Run reads the fence's *live* text — not
+   * `block.text`, which is only as fresh as this fence's last blur — so
+   * typing and running without ever leaving the editor works the way a
+   * notebook cell does. Stop only ever becomes enabled once booted with
+   * cross-origin isolation in effect (pyodide-engine.ts's canStop()); on a
+   * page without it there is no way to interrupt a running cell, a
+   * documented gap, not a bug here. */
+  function buildCellRunner(index: number, view: EditorView): HTMLElement {
+    const panel = document.createElement("div");
+    panel.className = "dn-cell-panel";
+
+    const bar = document.createElement("div");
+    bar.className = "dn-cell-runner";
+
+    const runButton = document.createElement("button");
+    runButton.type = "button";
+    runButton.className = "dn-cell-run";
+    runButton.textContent = "Run";
+
+    const stopButton = document.createElement("button");
+    stopButton.type = "button";
+    stopButton.className = "dn-cell-stop";
+    stopButton.textContent = "Stop";
+    stopButton.disabled = true;
+    stopButton.addEventListener("click", (clickEvent) => {
+      clickEvent.stopPropagation();
+      requestStop();
+    });
+
+    const output = document.createElement("div");
+    output.className = "dn-cell-output";
+
+    runButton.addEventListener("click", async (clickEvent) => {
+      clickEvent.stopPropagation();
+      const { id, code } = parseCellSourceFromFenceText(view.state.doc.toString());
+      const cellId = id ?? `cell-${index}`;
+      runButton.disabled = true;
+      runButton.textContent = "Running…";
+      stopButton.disabled = true;
+      try {
+        await ensureBooted();
+        stopButton.disabled = !canStop();
+        await runCell(cellId, code, (out) => applyOutputEvent(output, out));
+      } finally {
+        runButton.disabled = false;
+        runButton.textContent = "Run";
+        stopButton.disabled = true;
+      }
+    });
+
+    bar.append(runButton, stopButton);
+    panel.append(bar, output);
+    return panel;
+  }
+
   function renderBlockWrapper(block: Block, index: number): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = `dn-block dn-block-${block.kind}`;
@@ -337,7 +423,8 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const host = document.createElement("div");
       host.className = "dn-block-source";
       wrapper.appendChild(host);
-      mountEditor(host, index, block.text, languageExtensionFor(block.fence?.info ?? ""));
+      const view = mountEditor(host, index, block.text, languageExtensionFor(block.fence?.info ?? ""));
+      if (isRunnableFence(block.fence?.info ?? "")) wrapper.appendChild(buildCellRunner(index, view));
       return wrapper;
     }
 

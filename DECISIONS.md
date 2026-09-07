@@ -267,3 +267,83 @@ had the identical bug the moment a document had a live fence *and* a
 reader clicked a paragraph.
 *Cost to change: none; this is the correct version of what decision 2
 already called for.*
+
+**16 — The Pyodide worker's own source is a hand-authored string, built
+at runtime from a Blob URL, not a separately-compiled file Bun's
+bundler resolves.** Checked directly before assuming it, the same way
+decision 14 checked the single-file build's actual shape rather than
+trusting §5.9's claim about it: a `new Worker(new URL("./worker.ts",
+import.meta.url))` reference, Vite's own documented pattern for a
+bundled worker, is left completely unresolved by `bun build
+--target=browser` — no second chunk, no error, just a broken reference
+at runtime. dewstack's `assets/site-editor.js` already had the answer
+for exactly this shape of problem (code for a different execution
+context that a single-file build has nowhere else to put): author it as
+a plain-JS string and hand it to `new Worker` via a Blob URL,
+`new Blob([source], { type: "text/javascript" }).createObjectURL(...)`.
+`src/runtime/worker-source.ts` follows that precedent — plain, untyped
+JavaScript, kept as small as reasonably possible, with everything that
+*can* be real, type-checked TypeScript (booting, the request/response
+envelope, the interrupt buffer) living in `pyodide-engine.ts` instead.
+The Python side (`dewnote_tools.py`) reaches the worker the same
+mechanical way: `import ... with { type: "text" }`, checked directly
+against a source containing backticks and `${…}` sequences before
+trusting that Bun's escaping is safe to inline into the worker string
+via `JSON.stringify`, since a naive inlining here would be exactly
+decision 14's `$`-pattern class of bug in a different disguise.
+*Cost to change: real but bounded. A future Bun release that resolves
+worker `new URL()` references the way Vite does would make this file
+unnecessary, at the cost of losing the "keep it plain JS" discipline
+that makes the string itself easy to audit; nothing downstream of
+`buildWorkerSource()` would need to change.*
+
+**17 — A cell loads only the packages its own code imports, on its own
+first run, not a fixed list eagerly at boot.** §5.4 named a `packages:`
+front-matter field as the mechanism (dewlab's own), and this slice
+shipped a simpler stand-in first: booting every page with
+`["numpy", "pandas", "matplotlib"]` already loaded, since no front
+matter field exists yet to read from. That was wrong to leave in past a
+first look — every page pays multiple megabytes of download and Pyodide
+package-init time for two libraries most cells never touch, before a
+single cell has even run. Pyodide's own `loadPackagesFromImports(code)`
+scans a cell's source for `import` statements and loads exactly the
+matching packages, memoised so a second cell that imports the same
+thing pays nothing further; `DEFAULT_PACKAGES` in
+`worker-source.ts` is now empty, and matplotlib's `AGG` backend is
+configured the first time a cell's own imports actually pull it in,
+not unconditionally at boot. The `packages:` front-matter field §5.4
+names is still unbuilt — a real gap where a cell depends on a package
+without importing it by name (unlikely, but not impossible) — recorded
+in `planning/PLAN.md` step 3 rather than solved here.
+*Cost to change: none currently outstanding; adding the front-matter
+field later is additive; the boot handler's `msg.packages` parameter
+still exists for that field to hand in.*
+
+**18 — A Playwright test that needs a real, reachable Pyodide CDN gets
+its own on-demand, network-only CI workflow, separate from the
+sandbox that wrote it.** This step's own verification loop hit a wall
+decisions 9 and 15 didn't anticipate: the development sandbox this
+session ran in blocks outbound access to `cdn.jsdelivr.net` by policy
+(confirmed directly — a `curl` to the exact URL the worker fetches
+returns a tunnel failure, and a standalone Playwright script that
+clicks Run and watches the page reaches the identical `import()` call
+before failing on the same tunnel, not on anything in the app's own
+code). `tests/e2e/pyodide.spec.ts` is written and, unlike every other
+test this project has, could not itself be run to a passing result from
+inside the environment that wrote it — a first for this codebase, and
+worth naming rather than quietly leaving unverified. `playwright.config.ts`
+also had a real portability bug surfaced by trying to fix this: its
+`executablePath` was pinned, unconditionally, to this one sandbox's own
+pre-baked Chromium, which does not exist on a contributor's machine or a
+GitHub Actions runner — now a fallback (`existsSync` first) rather than
+a hard requirement. `.github/workflows/e2e-pyodide.yml`
+(`workflow_dispatch` only, deliberately not on push/PR, for the same
+reason `tests.yml`'s own comment already gives for keeping the rest of
+the e2e suite out of that gate) exists so this one test can actually run
+somewhere with a real network — a GitHub-hosted runner — rather than
+staying permanently unverified because of where it happened to be
+written.
+*Cost to change: none; the workflow is additive and off by default. If
+Bun or Playwright ever ship a first-class way to vendor Pyodide for
+tests without a live CDN fetch, this workflow becomes redundant rather
+than wrong.*
