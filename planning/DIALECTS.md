@@ -1,4 +1,4 @@
-# The dialects remark must open and save
+# The dialects dewnote must open and save
 
 An inventory, taken 2026-09-06 from `build.py` in each site and from the
 tutorials themselves. Each dialect becomes one module in the editor that
@@ -135,7 +135,7 @@ YAML front matter with arbitrary keys, preserved in order and quoting
 unquote them). CommonMark with GFM tables and task lists, inline HTML
 passed through, `$…$` maths on. No cells run; fences are highlighted.
 The prompt-deck fields in writing-content (`prompt: 62`) are that app's
-business and remark leaves them alone.
+business and dewnote leaves them alone.
 
 ## 4. Jupyter (import and export only)
 
@@ -144,7 +144,7 @@ nbformat 4.5. Mapping from the block model:
 - A run of prose blocks → one markdown cell, joined by blank lines.
 - A code cell → a code cell. `id` from the dewlab `id:` line where there
   is one, else generated. The full fence info string, the `hint:` line,
-  and the dialect name go in `metadata.remark` so import can rebuild the
+  and the dialect name go in `metadata.dewnote` so import can rebuild the
   fence exactly.
 - Illustrative (non-exec) fences stay inside markdown cells.
 - Folds stay as raw HTML inside markdown cells; Jupyter renders
@@ -152,7 +152,7 @@ nbformat 4.5. Mapping from the block model:
 - Outputs, if included: `stream` for text, `display_data` with
   `image/png` for figures, taken from the last run.
 
-Import inverts this. A notebook without `metadata.remark` becomes a plain
+Import inverts this. A notebook without `metadata.dewnote` becomes a plain
 markdown document with `python exec` fences in the dewlab dialect if the
 user chose dewlab as the target, else plain `python` fences.
 

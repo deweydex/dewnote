@@ -12,7 +12,11 @@ two of the source repositories have already paid for that: dewlab's
 Milkdown surface silently dropped the `exec` attribute from every fence it
 saved (dewlab decision 7.59). The block splitter here records offsets and
 never rewrites prose; the first test in the repository is a byte-for-byte
-round trip over every tutorial in dewlab and dewstack.
+round trip over every tutorial in dewlab and dewstack. This is not a
+rejection on size — half a megabyte of Vue-carrying Crepe costs nothing
+worth arguing about at the scale of one or two authors' tutorials — it is
+a rejection on what the model can hold, which no amount of bundle weight
+changes either way. See the plan §5.1.
 *Cost to change: the whole editing surface. This is the one decision
 that is meant to be expensive.*
 
@@ -24,18 +28,7 @@ model chosen lets a focused prose block's CodeMirror instance gain those
 decorations later without anything else changing.
 *Cost to change: small, and additive.*
 
-**3 — The name is provisional.** `remark` is the name of the JavaScript
-markdown processor at the centre of the unified ecosystem (`remark`,
-`remark-math`, `remark-gfm`), which this project may well depend on, and
-of `remark.js`, a markdown slideshow tool. Both will collide in
-`package.json`, in searches, and in conversation. Candidates that keep
-the sense and the brevity: `margin` (where notes go), `folio`, `quire`,
-`dewnote` (matches `dewlab`, `dewstack`, `dewmini`, `dewmark`), `marginal`.
-The GitHub repository can be renamed without breaking clones. Decision
-left to Josh; the plan uses `remark` until then.
-*Cost to change: a rename, cheapest now.*
-
-**4 — A dialect is a data module, and the editor has no site-specific
+**3 — A dialect is a data module, and the editor has no site-specific
 code paths.** dewlab has one fence attribute and two fold classes;
 dewstack has five fence forms and a check block; the next site will have
 something else. `planning/DIALECTS.md` is the inventory. Each dialect
@@ -44,7 +37,7 @@ cell needs.
 *Cost to change: moderate; the discipline is easy to lose one shortcut at
 a time.*
 
-**5 — One Pyodide interpreter serves Python and SQL, in a Worker;
+**4 — One Pyodide interpreter serves Python and SQL, in a Worker;
 HTML/CSS/JS previews in a sandboxed iframe.** dewstack already made both
 calls and dewlab's `pyodide-engine.js` and `pyodide-worker.js` are the
 Worker. sql.js is not used anywhere current and is not adopted here. Stop
@@ -54,26 +47,36 @@ cannot set headers.
 *Cost to change: the runtime is behind one interface; swapping it is a
 week, not a rewrite.*
 
-**6 — Files come through a store interface with browser, GitHub and
-native implementations, because Safari on a Mac cannot open a folder from
-a web page.** Safari in 2026 supports only the origin-private file system,
-not `showOpenFilePicker` or `showDirectoryPicker`. Chrome has both. A Mac
-app is therefore not a luxury but the only way to open a Finder folder in
-the default browser's engine. The browser store still gets real folders in
-Chrome via the File System Access API, and OPFS plus drag-and-drop
-everywhere.
+**5 — Files come through a store interface with browser, GitHub and
+native implementations, because Safari has no live read-write handle to a
+real folder.** Precisely: Safari fully supports `<input type="file">` (a
+one-shot, read-only picker) and the origin-private file system since 15.2
+(a private sandboxed store, no picker, invisible in Finder); what it has
+never implemented, on any Apple platform, is `showOpenFilePicker()` /
+`showDirectoryPicker()`, the File System Access API calls that return a
+handle the page can keep and write back through at a real path. Chrome
+and Edge have all three. Both the browser store's private vault and its
+import/export by file and by download work in Safari today; only
+"open `~/dewlab/tutorials/` and save into it directly" needs the native
+store instead. See the plan §5.5 for the three-way distinction in full
+and §5.6 for how Tauri closes that one gap.
 *Cost to change: none; the interface is the cheap part.*
 
-**7 — Tauri 2 for the Mac app, over Electron and over a local Python
-server.** Its web view is WebKit, so testing in Safari is testing the app;
-its dialog and fs plugins are current and return real paths; the binary
-is small. Electron fails all three. A Python server (`python -m remark`)
-is the recorded fallback: no Rust, no signing, runs `build.py` natively,
-loses double-click launch.
+**6 — Tauri 2 for the Mac app, over Electron and over a local Python
+server.** A Tauri app is the same TypeScript front end shown in the
+operating system's own WebKit view, next to a small Rust process that
+holds the real file paths, dialogs and keychain access a web page is
+sandboxed away from; `invoke()` is the call across that boundary (the
+plan's §5.6 has the mechanics). Its web view is WebKit, so testing in
+Safari is testing the app; its dialog and fs plugins are current and
+return real paths; the binary is small because it carries no bundled
+browser. Electron fails all three, by shipping Chromium instead. A Python
+server (`python -m dewnote`) is the recorded fallback: no Rust, no
+signing, runs `build.py` natively, loses double-click launch.
 *Cost to change: the native store implementation and the packaging, a few
 days.*
 
-**8 — The design tokens are dewlab's `--dl-*` set, imported not copied,
+**7 — The design tokens are dewlab's `--dl-*` set, imported not copied,
 and every one is a user setting.** The two sites already share them so
 that they read as siblings; the editor renders the document under the
 same variables so the preview looks like the site because it is dressed
@@ -81,7 +84,7 @@ the same way. Family, size, measure, margins, cell tint and theme are
 written to `<html>` before first paint, FAQ's way.
 *Cost to change: small; the tokens are one file.*
 
-**9 — Generated navigation is rendered, never written.** Table of
+**8 — Generated navigation is rendered, never written.** Table of
 contents, previous and next, and series navigation are produced by both
 build scripts from headings and `order.yaml`. The editor shows them in
 the preview from the same inputs and does not put them in the file. A
@@ -89,8 +92,25 @@ plain-markdown target gets an explicit "insert contents" command that
 writes a marked list.
 *Cost to change: small.*
 
-**10 — Tests drive the built app in a real browser for anything with a
+**9 — Tests drive the built app in a real browser for anything with a
 cursor in it.** Both of dewlab's Milkdown traps were invisible from the
-API and found only by driving the editor. vitest covers the block model,
-dialects and exports; Playwright covers the surface.
+API and found only by driving the editor. `bun test` covers the block
+model, dialects and exports; Playwright covers the surface.
 *Cost to change: none worth taking.*
+
+**10 — TypeScript, compiled and bundled by Bun, over plain JavaScript
+with JSDoc and Vite.** The first draft of this plan proposed `// @ts-check`
+JSDoc, matching every other repository here, all of which are plain
+JavaScript because nobody working on them had a reason to reach for
+TypeScript. That reason exists here: real TypeScript is wanted, as
+something to learn, not only as a tool. Bun replaces Node, npm, Vite and
+vitest with one binary; its bundler reads an HTML entry point and a
+`browser` target and produces the single-file build directly (imports
+resolved, CSS bundled, assets inlined), which is the project's single-file
+requirement met without a separate plugin. Bun is younger than Vite and
+Node, which is the trade being made: if its HTML bundling or a needed
+native module proves unready, the fallback is Vite plus vitest, and
+neither the TypeScript nor the source layout is Bun-specific, so that
+fallback is a day's work, not a rewrite. Tauri does not care which of the
+two produced its `dist/` folder.
+*Cost to change: a day, by design — see above.*
