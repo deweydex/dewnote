@@ -545,20 +545,23 @@ project; if they are not delightful, nothing after them will rescue it.
    frames. A shared Python namespace across the page's cells, so a second
    cell sees a first one's variables, the way a notebook does. Packages
    load lazily, per cell, via Pyodide's own `loadPackagesFromImports`
-   against that cell's code — not the `packages:` front-matter field this
-   section originally named, which nothing yet writes or reads; a page
-   that never imports pandas never pays to load it, which a hardcoded
-   package list checked in and then reverted during this slice would not
-   have given it.
+   against that cell's code, with dewlab's own `packages:` front-matter
+   field (`declaredPackages`, `src/cell.ts`) read for the case that
+   mechanism can't cover on its own — a package needed under a different
+   import name, or without being imported by name at all — and passed to
+   the interpreter's one eager boot rather than replaced by it; a page
+   that never imports pandas and never declares it never pays to load it,
+   which a hardcoded package list checked in and then reverted during
+   this slice would not have given it.
 
    Still open: no fallback Stop — a page without cross-origin isolation
    (every hosting mode this step actually ships on so far) has no way to
    interrupt a running cell at all, not even this section's own baseline
-   of terminate-and-restart-the-Worker; SQL and HTML/CSS/JS cells, and
-   the `packages:` front-matter field, are unbuilt; no loading-status text
-   in the UI for a cold boot (`pyodide-engine.ts`'s `setStatusListener`
-   exists and is unused); a hint/answer fold's own code, if it has any,
-   is not yet wired to run. Verification gap specific to this
+   of terminate-and-restart-the-Worker; SQL and HTML/CSS/JS cells are
+   unbuilt; no loading-status text in the UI for a cold boot
+   (`pyodide-engine.ts`'s `setStatusListener` exists and is unused); a
+   hint/answer fold's own code, if it has any, is not yet wired to run.
+   Verification gap specific to this
    environment, not to the feature: the sandbox this slice was built in
    blocks outbound access to `cdn.jsdelivr.net`, so `tests/e2e/pyodide.spec.ts`
    could not be run to a real pass from inside it — confirmed as a

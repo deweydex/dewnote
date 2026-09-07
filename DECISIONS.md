@@ -312,9 +312,12 @@ thing pays nothing further; `DEFAULT_PACKAGES` in
 `worker-source.ts` is now empty, and matplotlib's `AGG` backend is
 configured the first time a cell's own imports actually pull it in,
 not unconditionally at boot. The `packages:` front-matter field §5.4
-names is still unbuilt — a real gap where a cell depends on a package
-without importing it by name (unlikely, but not impossible) — recorded
-in `planning/PLAN.md` step 3 rather than solved here.
+names is now read too (`declaredPackages`, `src/cell.ts`), alongside
+`loadPackagesFromImports` rather than instead of it — for the real but
+narrower gap that mechanism can't close on its own, a cell that depends
+on a package without importing it by that name (dewlab's own example
+is a package imported under a different name than it's installed
+under).
 *Cost to change: none currently outstanding; adding the front-matter
 field later is additive; the boot handler's `msg.packages` parameter
 still exists for that field to hand in.*

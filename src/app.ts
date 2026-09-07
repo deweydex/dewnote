@@ -37,7 +37,7 @@ import { parseDocument, serialize, type Block, type Document } from "./blocks.ts
 import { detectDialect } from "./dialect.ts";
 import { renderBlockPreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
-import { isRunnableFence, parseCellSourceFromFenceText } from "./cell.ts";
+import { declaredPackages, isRunnableFence, parseCellSourceFromFenceText } from "./cell.ts";
 import { canStop, ensureBooted, requestStop, runCell, type OutputEvent } from "./runtime/pyodide-engine.ts";
 
 export interface MountedDocument {
@@ -392,7 +392,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       runButton.textContent = "Running…";
       stopButton.disabled = true;
       try {
-        await ensureBooted();
+        await ensureBooted(declaredPackages(doc.frontMatter.fields));
         stopButton.disabled = !canStop();
         await runCell(cellId, code, (out) => applyOutputEvent(output, out));
       } finally {

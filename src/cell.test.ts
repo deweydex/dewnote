@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseDocument } from "./blocks.ts";
-import { isRunnableFence, parseCellSource, parseCellSourceFromFenceText } from "./cell.ts";
+import { declaredPackages, isRunnableFence, parseCellSource, parseCellSourceFromFenceText } from "./cell.ts";
 
 function fenceBlock(source: string) {
   const doc = parseDocument(source);
@@ -53,6 +53,25 @@ describe("parseCellSourceFromFenceText", () => {
       hint: null,
       code: "print(1)",
     });
+  });
+});
+
+describe("declaredPackages", () => {
+  test("reads a list of package names", () => {
+    expect(declaredPackages({ packages: ["sympy", "requests"] })).toEqual(["sympy", "requests"]);
+  });
+
+  test("is empty when the field is absent", () => {
+    expect(declaredPackages({ title: "A doc" })).toEqual([]);
+  });
+
+  test("is empty rather than throwing when the field isn't a list", () => {
+    expect(declaredPackages({ packages: "sympy" })).toEqual([]);
+    expect(declaredPackages({ packages: 5 })).toEqual([]);
+  });
+
+  test("drops non-string entries from an otherwise valid list", () => {
+    expect(declaredPackages({ packages: ["sympy", 5, null] })).toEqual(["sympy"]);
   });
 });
 

@@ -61,3 +61,16 @@ export function parseCellSourceFromFenceText(fenceText: string): CellSource {
 export function isRunnableFence(info: string): boolean {
   return info.split(/\s+/).includes("exec");
 }
+
+/** dewlab's `packages:` front-matter field (DIALECTS.md §1) — a document
+ * declaring a package `loadPackagesFromImports` can't infer from a cell's
+ * own `import` lines (a different import name than the package's own, or
+ * a package a cell needs without importing it by name). Anything not a
+ * list of strings is treated as absent rather than thrown on — front
+ * matter is arbitrary YAML a person typed, not a schema this editor
+ * enforces. */
+export function declaredPackages(fields: Record<string, unknown>): string[] {
+  const value = fields["packages"];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
