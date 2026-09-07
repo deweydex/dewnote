@@ -382,3 +382,24 @@ permit, otherwise terminate-and-restart" (§5.4) already specified.
 `tests/e2e/pyodide.spec.ts` exercises exactly this path, since file://
 never has the headers — see decision 18 for why it can only be verified
 after this merges, same as everything else that test covers.*
+
+**20 — `deploy.yml` checks whether Pages is enabled before trying to
+deploy, rather than letting a not-yet-configured repository fail every
+run.** Pages has never actually been turned on for this repository —
+that needs a one-time, admin-only Settings → Pages → Source: GitHub
+Actions toggle, not anything a workflow's own token can do — and
+`actions/configure-pages`'s own attempt to enable it on the workflow's
+behalf (`enablement: true`, the default) was exactly what failed, every
+single push to `main` since decision 13's placeholder was replaced with
+a real build: "Resource not accessible by integration." That is a
+GitHub Actions email on every push, for a condition that was never going
+to resolve itself — no code change fixes a setting only a repository
+admin can flip. A "Check whether Pages is enabled" step now calls the
+Pages API directly first; a 404 (not enabled yet) skips the rest of the
+job with a `::notice::` rather than failing it, while any other error
+still fails loudly, so this doesn't quietly swallow a real deploy
+problem along with the expected one. The moment the toggle happens, the
+same workflow starts deploying with no further changes.
+*Cost to change: none; the check becomes a permanent no-op (always
+"enabled=true") once Pages is turned on, and costs one cheap API call
+per run from then on.*
