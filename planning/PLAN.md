@@ -389,9 +389,20 @@ does not have.
   directly: point it at an `index.html` with `<script type="module"
   src="./main.ts">` in it, target `browser`, and it resolves every
   import, bundles the CSS, and inlines fonts and small assets as data
-  URIs, which is the single-file build with no extra plugin. `bun test`
-  is Jest-shaped and is the runner for the block model and dialects
-  (§6, step 1's byte round-trip test). This is a genuine trade, not a
+  URIs — checked directly, and this part holds: KaTeX's own webfonts come
+  out as `data:font/woff2` URIs inside the bundled CSS with nothing asked
+  for. What does not hold is "the single-file build with no extra plugin"
+  — `bun build ./index.html --outdir dist` writes `index.html` plus a
+  separate hashed `.js` and `.css` next to it, the same shape Vite's
+  default build has, not one file. `scripts/inline-single-file.ts` is the
+  extra plugin this sentence said wouldn't be needed: a few lines that
+  read the two asset files `bun build` wrote and splice them into
+  `index.html` directly, deleting the originals — decision 14 has the
+  finding and the one-line bug (`String.prototype.replace`'s `$`-pattern
+  interpolation, tripped by literal `$` sequences already present in
+  minified JavaScript) that came with writing it. `bun test` is
+  Jest-shaped and is the runner for the block model and dialects (§6,
+  step 1's byte round-trip test). This is a genuine trade, not a
   default: Bun is younger than Vite and Node, so if its bundler's HTML
   handling or a native module the project needs turns out unready,
   falling back to Vite plus vitest costs a day, not a rewrite, because
@@ -475,6 +486,25 @@ project; if they are not delightful, nothing after them will rescue it.
    dropped file and downloads a saved one. *Done when* a dewlab tutorial
    opened in it looks like the site, edits to prose and maths preview as
    you type, and a fence never loses its info string.
+
+   **First slice built** (`src/app.ts`, `src/render-block.ts`,
+   `src/lang.ts`): prose, maths, a fold and front matter render when
+   blurred and edit when focused, sharing one CodeMirror instance per
+   focused block; a fence has no rendered state at all and is always a
+   live, language-highlighted editor, several at once where a document
+   has several cells (decision 15 — the bug this uncovered and how the
+   fix works). One add control per gap inserts a paragraph; a per-block
+   delete control removes one. The single-file build exists and a real
+   dewlab tutorial round-trips byte for byte through the mounted DOM, not
+   only through `blocks.ts` directly (`tests/e2e/surface.spec.ts`).
+   Still open: the add menu offers only a paragraph, not a cell, a hint or
+   an image; there is no drag reorder or keyboard-driven reorder; there is
+   no whole-file source view (Cmd+/) yet; there is no settings/texture
+   rail, so the page renders in dewlab's own fixed look with nothing
+   user-tunable yet; a fence shows its full raw text, fence markers
+   included, rather than the site's bordered cell chrome with the fence
+   syntax hidden — the live-preview decoration work §5.1 already named as
+   the upgrade path, not a new gap.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as

@@ -215,3 +215,55 @@ build to run instead.
 replace; the ecosystem list in dependabot.yml grows by one entry if a
 second package manager joins bun (Rust's cargo, once Tauri's own
 dependencies exist, per §5.6).*
+
+**14 — Bun's HTML-entry bundler needs one small script of its own to
+produce a true single file, correcting what decision 10 assumed.**
+Checked directly rather than trusted: `bun build ./index.html --outdir
+dist` writes `index.html` plus a separate hashed `.js` and `.css` beside
+it — the same shape Vite's default build has, not the one file the
+browser-store and Mac-app-download modes both need (plan §5.5, §5.6).
+`scripts/inline-single-file.ts` is the few lines that read those two
+files and splice them into `index.html` directly. Writing it found a
+second, sharper thing worth its own line: the first version used
+`html.replace(linkMatch[0], \`<style>${css}</style>\`)`, and
+`String.prototype.replace` treats `$&`, `$$`, `` $` ``, `$'` and
+`$<n>`/`$<name>` in a replacement *string* as special patterns — always,
+even when the search value being replaced is a plain string rather than
+a regular expression. Minified JavaScript is dense with literal `$`
+characters, and the built bundle happened to contain sequences matching
+several of those patterns, so the naive version produced a 42 MB file (a
+2.77 MB build inflated roughly 15x) with the script tag duplicated 28
+times, silently — no error, no crash, just a build that "worked" until
+someone looked at the size. Caught by checking the built file's size
+against the sum of the two input files, not by trusting a green build. The fix is the standard one: pass a *function* as the
+replacement (`() => \`<style>${css}</style>\``), whose return value
+`replace` inserts verbatim with no pattern interpolation at all.
+*Cost to change: none; this is what "no extra plugin" should have said
+from the start.*
+
+**15 — A block's commit patches only that block in the DOM; a
+document-wide rebuild is the fallback for a structural change, not the
+default.** Decision 2 already anticipated this in general shape — the
+render/edit split — but the first version of `src/app.ts` still rebuilt
+the whole container from scratch on every commit, and its own comment
+undersold what that cost: "a cursor position or selection... can be
+lost even though no text is." A Playwright test written to check the
+opposite claim (`tests/e2e/surface.spec.ts`, "editing one fence and then
+focusing a second preserves both") found the real failure directly:
+clicking from one live fence into a second blurs the first, whose
+commit tore down and remounted *every* block, including the second —
+destroying the very click that was about to focus it, before a single
+keystroke could land. Not lost cursor position; lost input, silently,
+on the ordinary path of moving between two cells. The fix compares the
+reparsed document's shape (block count and each block's kind) against
+the old one: unchanged, and only the one block whose editor just
+blurred is replaced in the DOM, every other live editor left exactly as
+it was; changed — an edit that added or removed a block by, say,
+introducing a blank line — falls back to the full rebuild, since indices
+no longer line up cleanly enough to patch one in place. `enterEdit`
+(clicking into a prose block) was changed the same way for the same
+reason, on inspection rather than a second failing test: it would have
+had the identical bug the moment a document had a live fence *and* a
+reader clicked a paragraph.
+*Cost to change: none; this is the correct version of what decision 2
+already called for.*
