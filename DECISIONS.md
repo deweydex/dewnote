@@ -490,3 +490,69 @@ decision 17 itself set for its own approach.
 could still be added later without touching this one, if dewnote ever
 grows dewstack's per-name Python-cell concept — they would coexist,
 not conflict.*
+
+**23 — A hint/answer fold's own code stays illustrative, deliberately,
+never a live Run button.** Put to Josh directly rather than assumed: a
+fold's quoted code could plausibly become its own runnable cell,
+matching an exec fence anywhere else in the document. His call was no —
+a reader adapting a hint's code by hand, retyping it to look like their
+own attempt, is the better pedagogical experience than clicking Run on
+someone else's answer. Nothing needed building for this: `render-block.ts`'s
+`renderFold` already runs a second markdown-it pass over a fold's body,
+and a quoted fence already renders as a real `<pre><code class="language-x">`
+block there (`render-block.test.ts` already checked this). `blocks.ts`'s
+own header comment had gone stale, still describing this as an unsolved
+"future editor UI" problem well after `render-block.ts` solved the
+rendering half of it — fixed alongside this decision, per `CONTRIBUTING.md`'s
+own rule that a stale comment is worse than none. The one real, small
+gap that remains: entering edit on a fold still shows its whole body,
+any quoted fence included, as one flat markdown-source block, not a
+live per-language CodeMirror instance for the fence specifically — minor
+editing polish, not a rendering or pedagogical problem.
+*Cost to change: none; nothing here forecloses ever adding a live cell
+inside a fold later, if a future need for it turns up — it would be new
+work, not an undo.*
+
+**24 — The settings panel builds decision 7's own list directly, and
+skips the mockup's three named presets rather than inventing new
+palettes to fill them.** Asked broadly rather than narrowly — "think
+through what a settings panel should hold," not "build this exact
+list" — and answered by going back to what was actually already
+decided: decision 7 already named family, size, measure, margins, cell
+tint and theme as user settings, and dewstack's own `assets/settings.js`
+already has a complete, working version of the mechanism (one small
+object in localStorage, applied to `<html>` before first paint, a
+default value removing its own attribute/property rather than setting
+it so the stylesheet's default — including its dark-mode media query —
+stays authoritative). `src/settings.ts` ports that mechanism directly;
+`src/settings-panel.ts` is the UI around it, closed until asked (plan
+§3), a real dialog rather than a hover reveal since adjusting several
+controls in a row needs it to stay open between changes.
+
+The mockup (`planning/mockups/dewnote-sketch.html`) sketches three named
+presets — `workshop`, `manuscript`, `chalkboard` — each bundling a full
+palette and type pairing. That sketch is exploratory, never itself
+ratified the way decision 7 is, and choosing what those three (or any)
+named looks actually are is real art direction, not an engineering
+decision this session should make alone. Built instead: theme
+(system/light/dark) over dewlab's own tokens, which already fully define
+both a light and a dark set (`theme/dewlab-tokens.css`'s own
+`[data-theme="dark"]` block, untouched) — the one "preset" that needs no
+new palette work at all. `app.css` layers `--dn-cell-bg`/`--dn-output-bg`
+(a `color-mix` against `--dn-cell-tint`) behind every place that used to
+read `--dl-cell-bg`/`--dl-output-bg` directly, so a real named-preset
+system, whenever it's designed, has one seam to plug colours into rather
+than five call sites to find and change.
+
+Two small additions beyond decision 7's own list, both because they were
+sitting unbuilt rather than because they needed inventing: a Pyodide
+source URL field (plan §5.9 already named "loaded from jsDelivr by
+default with a self-host setting" — `pyodide-engine.ts` had the constant
+but no way to override it) and a "Restart Python interpreter" button
+(`restartInterpreter`, refactored out of `requestStop`'s own
+terminate-and-restart branch — the same mechanism, now reachable on
+its own rather than only ever firing as Stop's fallback).
+*Cost to change: none for the built controls. Named presets are
+additive whenever palettes for them exist — the color-mix seam above is
+exactly the thing that makes adding one later cheap rather than another
+five-call-site hunt.*
