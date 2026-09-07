@@ -130,6 +130,36 @@ body {
 .dn-sql-panel {
   margin: 0 0 0.9rem;
 }
+.dn-sql-restore {
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  background: var(--dl-cell-bg);
+  color: var(--dl-muted);
+  font-size: 0.82em;
+}
+/* `[hidden]` and this class have equal specificity — without :not(), a
+ * plain `display: flex` here would win the cascade tie and defeat
+ * `hidden`, since this rule is declared after the browser's own. */
+.dn-sql-restore:not([hidden]) {
+  display: flex;
+}
+.dn-sql-restore-button {
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-mono);
+  font-size: 0.85em;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+.dn-sql-restore-button:hover {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}
 .dn-cell-runner,
 .dn-sql-runner {
   display: flex;

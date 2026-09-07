@@ -190,3 +190,40 @@ test("a real dewlab tutorial round-trips byte for byte through the mounted DOM, 
   const roundTripped = await getSource(page);
   expect(roundTripped).toBe(original);
 });
+
+// A SQL cell's persist restore is pure DOM/localStorage — it never calls
+// pyodide-engine.ts (only Run and Reset do), so unlike tests/e2e/pyodide.spec.ts
+// this needs no real network and belongs in the suite that runs everywhere.
+test.describe("a persisted SQL cell's Restore banner", () => {
+  test("appears only for a persist cell with a saved script, and never otherwise", async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem("dewnote-sql:totals", "SELECT 2;"));
+
+    await mount(page, "```sql cell=totals persist\nSELECT 1;\n```\n");
+    await expect(page.locator(".dn-sql-restore")).toBeVisible();
+
+    // A different cell name never sees another cell's saved script.
+    await mount(page, "```sql cell=other persist\nSELECT 1;\n```\n");
+    await expect(page.locator(".dn-sql-restore")).toBeHidden();
+
+    // No persist flag at all, even with a saved entry sitting there.
+    await mount(page, "```sql cell=totals\nSELECT 1;\n```\n");
+    await expect(page.locator(".dn-sql-restore")).toBeHidden();
+  });
+
+  test("replaces only the fence's body, keeping the opening and closing lines exactly as authored", async ({
+    page,
+  }) => {
+    await page.evaluate(() => localStorage.setItem("dewnote-sql:totals", "SELECT 'saved';"));
+    await mount(page, "```sql cell=totals persist\nSELECT 'authored';\n```\n");
+
+    await page.locator(".dn-sql-restore-button").click();
+    await expect(page.locator(".dn-sql-restore")).toBeHidden();
+    await expect(page.locator(".dn-block-fence .cm-content")).toContainText("SELECT 'saved';");
+    await expect(page.locator(".dn-block-fence .cm-content")).not.toContainText("authored");
+
+    // Blurring commits it like any other edit — the info string (and its
+    // own persist flag) is untouched, only the SQL script changed.
+    await page.locator("body").click({ position: { x: 5, y: 5 } });
+    expect(await getSource(page)).toBe("```sql cell=totals persist\nSELECT 'saved';\n```\n");
+  });
+});

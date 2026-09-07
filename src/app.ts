@@ -42,6 +42,7 @@ import {
   isRunnableFence,
   parseCellSourceFromFenceText,
   parseSqlCellInfo,
+  sqlPersistStorageKey,
   sqlScriptFromFenceText,
   type SqlCellInfo,
 } from "./cell.ts";
@@ -73,6 +74,33 @@ const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
   { kind: "math", label: "Math" },
   { kind: "hint", label: "Hint" },
 ];
+
+// A persisted SQL cell's saved script lives in localStorage, wrapped in
+// try/catch the way dewstack's own save/restore is — private browsing or
+// blocked storage just means this run's script won't be there to offer
+// back next time, never a reason to fail the run or the restore click
+// itself.
+function readPersistedSql(name: string): string | null {
+  try {
+    return localStorage.getItem(sqlPersistStorageKey(name));
+  } catch {
+    return null;
+  }
+}
+function writePersistedSql(name: string, script: string): void {
+  try {
+    localStorage.setItem(sqlPersistStorageKey(name), script);
+  } catch {
+    // Nothing to do — this run's own result is unaffected either way.
+  }
+}
+function clearPersistedSql(name: string): void {
+  try {
+    localStorage.removeItem(sqlPersistStorageKey(name));
+  } catch {
+    // Couldn't have written it in the first place, then.
+  }
+}
 
 /** Same block count, same kind at every position — the condition under
  * which a change can be patched at one index rather than requiring a full
@@ -453,10 +481,30 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * second cell can query a table an earlier one created. Unlike an exec
    * cell's Run, this has no Stop: dewstack's own SQL cells don't have
    * one either, and a script's worth of statements runs to completion or
-   * to its first error, not indefinitely. */
+   * to its first error, not indefinitely.
+   *
+   * `persist` restores by an explicit reader click, never automatically —
+   * unlike dewstack, where the visible text is disposable generated
+   * markup, a fence's live editor content here IS the document's own
+   * saved text (`blockTexts()` reads it back out on every commit). An
+   * automatic restore would mean opening a document with an old browser
+   * session lying around silently overwrites the fence's authored
+   * starter script the moment it next commits, with nothing to undo it.
+   * A visible "Restore saved work" banner turns that into a choice
+   * instead of a surprise. */
   function buildSqlCellRunner(index: number, view: EditorView, info: SqlCellInfo): HTMLElement {
     const panel = document.createElement("div");
     panel.className = "dn-sql-panel";
+
+    const restoreBar = document.createElement("div");
+    restoreBar.className = "dn-sql-restore";
+    restoreBar.hidden = true;
+
+    const restoreButton = document.createElement("button");
+    restoreButton.type = "button";
+    restoreButton.className = "dn-sql-restore-button";
+    restoreButton.textContent = "Restore saved work";
+    restoreBar.append("A saved script for this cell is in this browser. ", restoreButton);
 
     const bar = document.createElement("div");
     bar.className = "dn-sql-runner";
@@ -482,11 +530,38 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       output.appendChild(errorNode);
     }
 
+    if (info.persist && readPersistedSql(info.name) !== null) {
+      restoreBar.hidden = false;
+    }
+
+    restoreButton.addEventListener("click", (clickEvent) => {
+      clickEvent.stopPropagation();
+      const saved = readPersistedSql(info.name);
+      if (saved === null) {
+        restoreBar.hidden = true;
+        return;
+      }
+      // Only the body changes — the opening (`sql cell=name persist`) and
+      // closing fence lines stay exactly as authored, the same shape
+      // fenceBody/sqlScriptFromFenceText already expect.
+      const lines = view.state.doc.toString().split("\n");
+      const openLine = lines[0]!;
+      let closeIndex = lines.length - 1;
+      while (closeIndex > 0 && lines[closeIndex] === "") closeIndex--;
+      const closeLine = lines[closeIndex]!;
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: `${openLine}\n${saved}\n${closeLine}\n` },
+      });
+      restoreBar.hidden = true;
+    });
+
     runButton.addEventListener("click", async (clickEvent) => {
       clickEvent.stopPropagation();
       const script = sqlScriptFromFenceText(view.state.doc.toString());
       runButton.disabled = true;
       resetButton.disabled = true;
+      if (info.persist) writePersistedSql(info.name, script);
+      restoreBar.hidden = true;
       try {
         // dewnote_sql_tools.py already renders a complete, self-escaped
         // HTML fragment (a table, a row count, or a dn-error) — the same
@@ -506,6 +581,8 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       clickEvent.stopPropagation();
       runButton.disabled = true;
       resetButton.disabled = true;
+      if (info.persist) clearPersistedSql(info.name);
+      restoreBar.hidden = true;
       try {
         await resetSql(info.name);
         output.replaceChildren();
@@ -518,7 +595,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     });
 
     bar.append(runButton, resetButton);
-    panel.append(bar, output);
+    panel.append(restoreBar, bar, output);
     return panel;
   }
 

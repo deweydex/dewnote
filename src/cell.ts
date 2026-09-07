@@ -68,28 +68,36 @@ export interface SqlCellInfo {
    * page with the same name runs against the same in-memory SQLite
    * connection, in the order they're run, not the order they appear. */
   name: string;
+  /** Whether this fence asked to have its script remembered across
+   * visits (`cell=name persist`). See `sqlPersistStorageKey` for what
+   * this actually does in dewnote, which is not what it does in
+   * dewstack — DECISIONS.md has the reasoning. */
+  persist: boolean;
 }
 
-const SQL_CELL_RE = /^sql\s+cell=([a-z0-9-]+)(?:\s+persist)?\s*$/;
+const SQL_CELL_RE = /^sql\s+cell=([a-z0-9-]+)(\s+persist)?\s*$/;
 
 /** Parses a dewstack SQL cell's info string (` ```sql cell=name `, or
  * ` ```sql cell=name persist `). Unlike a dewlab exec cell, there are no
  * header lines — the info string carries everything, and the fence body
  * is the SQL script itself, verbatim. `null` for anything else, fence
  * body included: a fence not shaped like this is not a SQL cell,
- * whatever language its info string names.
- *
- * `persist` (keeping a cell's script in localStorage across visits) is
- * accepted here so such a fence still runs as an ordinary shared-by-name
- * cell, but not yet honoured behaviourally — see DECISIONS.md for why a
- * dewnote fence's body being the document's own saved text, unlike
- * dewstack's static built page, makes porting dewstack's exact mechanism
- * (silently overwriting the visible editor with a restored script)
- * unsafe to do without deciding what "the document" means for a restored
- * session first. */
+ * whatever language its info string names. */
 export function parseSqlCellInfo(info: string): SqlCellInfo | null {
   const match = SQL_CELL_RE.exec(info.trim());
-  return match ? { name: match[1]! } : null;
+  return match ? { name: match[1]!, persist: !!match[2] } : null;
+}
+
+/** The localStorage key a persisted SQL cell's saved script lives under.
+ * Keyed by name alone, matching dewstack's own convention — dewnote has
+ * no per-document identity yet to fold in, a real (if narrow) gap: two
+ * differently-named documents each using `cell=totals persist` would
+ * offer each other's saved script for restore. Harmless rather than
+ * destructive, though, because of *how* it's offered — see
+ * `parseSqlCellInfo`'s own doc comment and DECISIONS.md for why restore
+ * is a reader's own explicit choice here, never automatic. */
+export function sqlPersistStorageKey(name: string): string {
+  return `dewnote-sql:${name}`;
 }
 
 /** A SQL cell's whole fence body, verbatim — there are no header lines

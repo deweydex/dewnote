@@ -579,12 +579,18 @@ project; if they are not delightful, nothing after them will rescue it.
    reuse the request/response envelope the exec-cell worker already has;
    sqlite3 itself loads lazily, on a page's first SQL cell run, the same
    "pay for what's used" discipline as `loadPackagesFromImports`.
-   `persist` (`cell=name persist`, dewstack's own localStorage-backed
-   session restore) parses without error but isn't honoured — see
-   DECISIONS.md 21 for why porting it as-is isn't safe in an editable
-   document the way it is on dewstack's static built pages. Also
-   deliberately not ported: `sql-check` (a hardcoded, single-tutorial quiz
-   convention with no dewnote equivalent yet).
+   `persist` (`cell=name persist`) **built**, in dewnote's own shape:
+   dewstack restores a saved script automatically, by silently
+   overwriting the visible text on load — safe there because that text
+   is disposable generated markup, never true on dewnote where a fence's
+   live text is the document's own saved content (`blockTexts()` reads
+   it back out on every commit). A reader instead sees a "Restore saved
+   work" banner and clicks it themselves (`parseSqlCellInfo`'s `persist`
+   flag, `sqlPersistStorageKey`, `src/cell.ts`; the banner and its click
+   handler, `app.ts`) — nothing is ever silently overwritten. Run saves
+   the script it just ran; Reset clears the saved entry along with the
+   connection. Also deliberately not ported: `sql-check` (a hardcoded,
+   single-tutorial quiz convention with no dewnote equivalent yet).
 
    **`read_sql` bridge built**, in dewnote's own shape rather than
    dewstack's: `read_sql(db_name, query)` is pre-seeded into the one
@@ -604,9 +610,15 @@ project; if they are not delightful, nothing after them will rescue it.
    full-stack tracks) are unbuilt — they need consecutive-fence grouping
    dewnote's block model doesn't have yet, a materially different piece
    of work than a single-fence cell kind, deliberately left for its own
-   slice rather than folded into this one; `sql-check` and `persist` are
-   named above; a hint/answer fold's own code, if it has any, is not yet
-   wired to run. Verification gap specific to this environment, not to
+   slice rather than folded into this one; `sql-check` is named above; a
+   hint/answer fold's own code, if it has any, is not yet wired to run;
+   the persisted-script localStorage key is name-only like dewstack's,
+   with no per-document identity yet to fold in, so two differently-named
+   documents each using the same `cell=name persist` would offer each
+   other's saved script for restore — harmless given restore is a
+   reader's own explicit click, not silent, but still a real gap once
+   dewnote has more than one document open in the same browser.
+   Verification gap specific to this environment, not to
    the feature (every slice of this step shares it): the sandbox this
    work was built in blocks outbound access to `cdn.jsdelivr.net`, so
    `tests/e2e/pyodide.spec.ts` could not be run to a real pass from
