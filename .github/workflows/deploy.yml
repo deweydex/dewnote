@@ -48,7 +48,7 @@ jobs:
       - name: Check something was actually built
         run: test -f dist/index.html || { echo "no index.html was built"; exit 1; }
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           enablement: true
 
