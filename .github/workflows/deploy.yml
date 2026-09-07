@@ -2,13 +2,9 @@
 # deploy.yml so the two repositories' publish stories stay recognisable
 # as siblings.
 #
-# There is no real app to build yet — step 2 of planning/PLAN.md is the
-# single-file Bun build this workflow will eventually run instead. Until
-# then the "build" step below just copies the design sketch in
-# planning/mockups/ to dist/index.html, so turning Pages on for this
-# repository shows something real (a look at where the design is headed)
-# rather than a red workflow or an empty site. Replace that one step,
-# and nothing else here, once `bun run build` produces the actual app.
+# This is the actual single-file build (`bun run build`, step 2 of
+# planning/PLAN.md) as of the change that added this note — not the
+# design sketch it published as a placeholder before a real app existed.
 name: publish
 
 on:
@@ -32,25 +28,33 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      # Placeholder build — see the note at the top of this file.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
       - name: Build
         run: |
-          mkdir -p dist
-          cp planning/mockups/dewnote-sketch.html dist/index.html
+          bun run build
           touch dist/.nojekyll
 
+      # A build that produced nothing would otherwise publish an empty
+      # site over a working one, silently — dewlab's own deploy.yml checks
+      # this for the same reason.
       - name: Check something was actually built
         run: test -f dist/index.html || { echo "no index.html was built"; exit 1; }
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
         with:
           enablement: true
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

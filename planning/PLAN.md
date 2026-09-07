@@ -466,9 +466,9 @@ same gate a hand-written change does rather than landing unreviewed —
 decision 13 has the incident that prompted writing this down rather than
 just doing it. `.github/workflows/deploy.yml` mirrors dewlab's
 `deploy.yml` for the same reason dewlab has one: publishing on push,
-not from somebody's laptop. It currently publishes a placeholder (the
-design sketch in `planning/mockups/`) since step 2 has not yet produced
-a real build to publish instead.
+not from somebody's laptop. It publishes the real single-file build
+(`bun run build`) as of step 2's first slice; before that existed it
+published the design sketch in `planning/mockups/` as a placeholder.
 
 ## 6. The order of work
 
