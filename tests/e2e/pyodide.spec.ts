@@ -145,4 +145,24 @@ test("a real exec cell runs in a real browser: output, errors, and shared state"
     await expect(output.locator("td").first()).toHaveText("<b>hi</b>");
     await expect(output.locator("b")).toHaveCount(0); // escaped, never rendered as a real tag
   });
+
+  await test.step("an exec cell reads a SQL cell's table with read_sql, as a real pandas DataFrame", async () => {
+    await mount(
+      page,
+      "```sql cell=inventory\nCREATE TABLE inventory (item TEXT, qty INTEGER);\nINSERT INTO inventory VALUES ('Mug', 4), ('Notebook', 9);\n```\n\n```python exec\nid: reader\ndf = read_sql('inventory', 'SELECT item, qty FROM inventory ORDER BY item')\ndf\n```\n",
+    );
+    await page.locator(".dn-block-fence .dn-sql-run").click();
+    await expect(page.locator(".dn-sql-output")).toContainText("2 row(s) affected", { timeout: COLD_BOOT_TIMEOUT });
+
+    const pyCell = page.locator(".dn-block-fence").nth(1);
+    await pyCell.locator(".dn-cell-run").click();
+    const output = pyCell.locator(".dn-cell-output");
+    // pandas loads on this path too (read_sql's own dependency, not
+    // something the cell's own code imports for loadPackagesFromImports
+    // to see), hence the generous timeout despite everything else
+    // already being booted.
+    await expect(output.locator("table")).toBeVisible({ timeout: COLD_BOOT_TIMEOUT });
+    await expect(output).toContainText("Mug");
+    await expect(output).toContainText("Notebook");
+  });
 });

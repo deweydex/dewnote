@@ -441,14 +441,39 @@ mechanism.
 Also not ported: `sql-check` (five functions hardcoded to one dewlab
 tutorial, `data/the-tentacular-plushies-quiz`, with no per-document or
 per-check registry — a global Python namespace dewnote has no reason to
-inherit) and `python_tools.py`'s `read_sql`, the bridge a `py cell=`
-uses to read a SQL cell's connection as a DataFrame. dewnote's exec
-cells already share one namespace for the whole page (decision-free,
-this session's very first cut of step 3), unlike dewstack's `py cell=`,
-which is its own per-name namespace the same shape as a SQL cell's
-connection — the bridge doesn't carry over onto a different namespace
-shape without its own design pass.
+inherit).
 *Cost to change: sharing the interpreter, none — it is already the
 right call. `persist`, real but bounded: whatever mechanism gets
 designed slots in behind the same `parseSqlCellInfo` parse, which
 already reads the modifier and simply ignores it today.*
+
+**22 — `read_sql` is pre-seeded into dewnote's one shared exec-cell
+namespace, not ported as a per-name bridge the way dewstack's `py cell=`
+has it.** Decision 21 named this as unported, for a reason that still
+holds exactly: dewstack's `read_sql` lives inside a `py cell=name`'s own
+namespace (`python_tools.py`'s `_namespace(name)`, pre-seeded per name),
+bridging to the SQL connection of the *same* name — a shape dewnote's
+exec cells don't have, since every exec cell already shares one
+namespace for the whole page (this session's very first cut of step 3,
+made before SQL cells existed at all). Porting the per-name bridge
+unchanged had nothing to attach to. The straightforward alternative
+turned out to be strictly more useful, not a compromise: put `read_sql`
+in the one namespace every exec cell already has
+(`dewnote_tools.py`'s `_page_globals`), so any cell can read any SQL
+cell's table, not only one sharing its name — the natural shape once
+there is only one namespace to begin with, not five. `get_connection`
+(`dewnote_sql_tools.py`) is the same public door dewstack's own
+`read_sql` uses.
+
+The one real gap this leaves: `loadPackagesFromImports` (decision 17)
+sees a cell's `import` lines, not a bare function call, so it has no way
+to know a cell calling `read_sql(...)` needs `sqlite3` and `pandas`
+loaded. `worker-source.ts`'s `runCell` checks for the literal substring
+`"read_sql("` in a cell's own code before running it, and loads both
+first if it's there — a plain heuristic, not real static analysis
+(`fn = read_sql; fn(...)` would miss it), matching the honesty standard
+decision 17 itself set for its own approach.
+*Cost to change: none currently outstanding. A `py cell=`-shaped bridge
+could still be added later without touching this one, if dewnote ever
+grows dewstack's per-name Python-cell concept — they would coexist,
+not conflict.*

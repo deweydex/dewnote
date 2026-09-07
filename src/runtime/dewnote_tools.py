@@ -23,9 +23,31 @@ import sys
 import traceback
 from typing import Any, Callable
 
+
+def read_sql(db_name: str, query: str) -> Any:
+    """Reads a SQL cell's own table as a pandas DataFrame — dewstack's own
+    bridge between a Python cell and a SQL cell (DIALECTS.md §2,
+    `python_tools.py`'s `read_sql`), ported onto dewnote's one shared
+    exec-cell namespace instead of dewstack's per-name `py cell=`
+    namespaces: every exec cell already has this, not just ones sharing
+    some name with a SQL cell. Requires `dewnote_sql_tools` (and the
+    `sqlite3` package it needs) already loaded — worker-source.ts's
+    `runCell` checks a cell's own code for the literal substring
+    "read_sql(" before running it and loads both first if it's there, a
+    plain heuristic (not real static analysis, and missed by something
+    indirect like `fn = read_sql; fn(...)`) documented as such rather
+    than pretended to be exact."""
+    import pandas as pd
+    import dewnote_sql_tools
+
+    return pd.read_sql_query(query, dewnote_sql_tools.get_connection(db_name))
+
+
 # One namespace for the life of the interpreter — this is what makes a
 # second cell see a first cell's variables, the way a notebook does.
-_page_globals: dict[str, Any] = {"__name__": "__dewnote__"}
+# read_sql is pre-seeded the way dewstack's own py cell namespaces are,
+# so a cell can call it without importing anything first.
+_page_globals: dict[str, Any] = {"__name__": "__dewnote__", "read_sql": read_sql}
 
 _figures_rendered: set[int] = set()
 
@@ -164,4 +186,5 @@ def reset_namespace() -> None:
     so nothing should clear it except a deliberate reset."""
     _page_globals.clear()
     _page_globals["__name__"] = "__dewnote__"
+    _page_globals["read_sql"] = read_sql
     _figures_rendered.clear()
