@@ -138,7 +138,27 @@ one: Obsidian's Live Preview, Zettlr, and Logseq are all built on it for
 this exact behaviour, and at least two open-source projects
 (`atomic-editor`, `codemirror-live-markdown`) already implement
 Obsidian-style decoration sets on top of it, worth reading before writing
-dewnote's own. Two real alternatives were checked and both fail for a
+dewnote's own. Checked since this entry was first written: neither is a
+dependency to add now, for two different reasons, and step 8's live-preview
+work should read rather than install either. `@atomic-editor/editor` (MIT,
+137 stars, an actual published npm package, actively developed) is ruled
+out as a direct dependency regardless of its polish, because its peer
+dependencies are `react` and `react-dom` as hard requirements, not
+optional ones — exactly the framework §5.9 already declined to take on for
+a problem that is DOM manipulation and event handling, not component
+trees. `codemirror-live-markdown` (MIT, zero runtime dependencies, CM6 and
+`@lezer/markdown` as peers, KaTeX and lowlight as optional ones) is the
+right architectural shape and needs no framework at all, but its latest
+release is `0.5.1-alpha.1`, published January 2026 and quiet since — pinning
+it as a real dependency means trusting a pre-1.0 API that could move
+without warning. The reasonable use of both, when step 8 arrives, is
+reading their decoration and widget code as worked examples of the exact
+problem — how Obsidian-style hiding is implemented in CM6, concretely —
+and vendoring a pinned copy or a rewritten equivalent of whichever pieces
+prove useful — the same "vendor and adapt, don't chase a moving upstream"
+instinct decision 4 already applies to Pyodide and decision 7 to the
+`--dl-*` tokens — rather than taking either as a live `npm install`
+dependency of the shipped app. Two real alternatives were checked and both fail for a
 reason beyond size. Monaco, VS Code's own editor, is built for code, not
 prose: it has no decoration or widget system tuned for hiding syntax and
 rendering styled text in its place, so getting Live Preview's behaviour
