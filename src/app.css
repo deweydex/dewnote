@@ -355,6 +355,69 @@ body {
   }
 }
 
+/* --------------------------------------------------------- file bar */
+
+.dn-file-bar {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: var(--dl-font-family);
+  font-size: 0.82em;
+  color: var(--dl-muted);
+  transition: background 0.1s, border-color 0.1s;
+}
+.dn-file-bar:hover,
+.dn-file-bar:focus-within {
+  background: var(--dl-panel-bg);
+  border-color: var(--dl-cell-border);
+}
+.dn-file-bar.is-drag-target {
+  background: var(--dl-panel-bg);
+  border-color: var(--dl-orange);
+}
+
+.dn-file-name {
+  color: var(--dl-fg);
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dn-file-open,
+.dn-file-save {
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 1em;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+.dn-file-open:hover,
+.dn-file-save:hover {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}
+.dn-file-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dn-file-status {
+  font-size: 0.9em;
+  font-style: italic;
+}
+
 /* ---------------------------------------------------------- settings */
 
 .dn-settings-toggle {

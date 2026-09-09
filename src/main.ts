@@ -4,6 +4,7 @@ import "./app.css";
 import { mountDocument, type MountedDocument } from "./app.ts";
 import { applySettings, loadSettings } from "./settings.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
+import { mountFileBar } from "./file-bar.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
@@ -37,6 +38,13 @@ if (!page) throw new Error("index.html is missing #dn-page");
 
 let current: MountedDocument = mountDocument(page, STARTER_DOCUMENT);
 mountSettingsPanel();
+mountFileBar({
+  getSource: () => current.getSource(),
+  loadDocument(source, _name) {
+    current.destroy();
+    current = mountDocument(page, source);
+  },
+});
 
 // Playwright (tests/e2e/) drives this same built page directly rather than
 // a second harness entry point, remounting whatever source a test needs
