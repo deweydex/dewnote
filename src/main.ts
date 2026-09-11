@@ -7,6 +7,7 @@ import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountFileBar } from "./file-bar.ts";
 import { mountRepoPanel } from "./repo-panel.ts";
 import { mountFolderPanel } from "./folder-panel.ts";
+import { mountDialectPanel } from "./dialect-panel.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
@@ -49,6 +50,13 @@ const fileBar = mountFileBar({
 });
 mountFolderPanel(fileBar);
 mountRepoPanel({
+  getSource: () => current.getSource(),
+  loadDocument(source, _name) {
+    current.destroy();
+    current = mountDocument(page, source);
+  },
+});
+mountDialectPanel({
   getSource: () => current.getSource(),
   loadDocument(source, _name) {
     current.destroy();
