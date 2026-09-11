@@ -393,7 +393,8 @@ body {
 }
 
 .dn-file-open,
-.dn-file-save {
+.dn-file-save,
+.dn-file-export {
   border: 1px solid var(--dl-cell-border);
   border-radius: 4px;
   background: var(--dl-panel-bg);
@@ -404,7 +405,8 @@ body {
   cursor: pointer;
 }
 .dn-file-open:hover,
-.dn-file-save:hover {
+.dn-file-save:hover,
+.dn-file-export:hover {
   color: var(--dl-orange);
   border-color: var(--dl-orange);
 }
