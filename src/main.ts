@@ -8,6 +8,7 @@ import { mountFileBar } from "./file-bar.ts";
 import { mountRepoPanel } from "./repo-panel.ts";
 import { mountFolderPanel } from "./folder-panel.ts";
 import { mountDialectPanel } from "./dialect-panel.ts";
+import { mountOutlinePanel } from "./outline-panel.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
@@ -63,6 +64,7 @@ mountDialectPanel({
     current = mountDocument(page, source);
   },
 });
+mountOutlinePanel({ getSource: () => current.getSource() });
 
 // Playwright (tests/e2e/) drives this same built page directly rather than
 // a second harness entry point, remounting whatever source a test needs
