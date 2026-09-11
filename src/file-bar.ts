@@ -18,6 +18,11 @@ export interface FileBarHost {
 
 export interface FileBar {
   destroy(): void;
+  /** Adopts a document opened by another source — the folder rail's own
+   * "open a file from the mounted folder" — as if Open had been clicked
+   * here. Feeds the same Save button and dirty indicator a single-file
+   * open already has, rather than a second, parallel save mechanism. */
+  open(opened: OpenedDocument): void;
 }
 
 function isMarkdownDrag(event: DragEvent): boolean {
@@ -142,6 +147,7 @@ export function mountFileBar(host: FileBarHost): FileBar {
   render();
 
   return {
+    open,
     destroy() {
       window.clearInterval(dirtyCheck);
       document.removeEventListener("keydown", onKeydown);
