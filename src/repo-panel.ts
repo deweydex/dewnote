@@ -1,0 +1,365 @@
+// The repository rail — step 5's first slice: browse a real GitHub
+// repository's markdown (dewlab's tutorials and practice pages, by
+// default any repo the token can reach), search it by path, open one
+// into the editor, and push an edit back as a commit on a working
+// branch with a draft PR to hand it back — never a silent push to the
+// base branch. Mounted the same quiet, independent way settings-panel.ts
+// and file-bar.ts are; this is the plan's own "left rail for files"
+// (§5.3), closed until asked.
+//
+// What this slice does not do, on purpose rather than by oversight: no
+// conflict UI beyond reporting the 409 GitHub itself returns (FAQ's
+// "show both, never pick" is real work for a later slice); no front-matter
+// index or module/series picker (decision 11 — needs step 4's fuller
+// multi-file concept); no OPFS or local-clone mode, only the REST API.
+
+import {
+  ensureBranch,
+  forgetToken,
+  getFileContent,
+  listMarkdownFiles,
+  loadToken,
+  openPullRequest,
+  putFileContent,
+  saveToken,
+  type RepoFile,
+  type RepoRef,
+} from "./github.ts";
+
+export interface RepoPanelHost {
+  getSource(): string;
+  loadDocument(source: string, name: string): void;
+}
+
+export interface RepoPanel {
+  destroy(): void;
+}
+
+const REPO_STORAGE_KEY = "dewnote:github-repo";
+
+interface SavedRepoSettings {
+  owner: string;
+  repo: string;
+  base: string;
+  branch: string;
+}
+
+function loadRepoSettings(): SavedRepoSettings {
+  try {
+    const raw = localStorage.getItem(REPO_STORAGE_KEY);
+    if (raw) return { base: "main", branch: "dewnote-edits", ...JSON.parse(raw) };
+  } catch {
+    // fall through to defaults
+  }
+  return { owner: "", repo: "", base: "main", branch: "dewnote-edits" };
+}
+
+function saveRepoSettings(settings: SavedRepoSettings): void {
+  try {
+    localStorage.setItem(REPO_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    // Not persisted this session; the fields just start blank next time.
+  }
+}
+
+function field(labelText: string, control: HTMLElement): HTMLLabelElement {
+  const label = document.createElement("label");
+  label.className = "dn-repo-field";
+  const span = document.createElement("span");
+  span.textContent = labelText;
+  label.append(span, control);
+  return label;
+}
+
+function textInput(placeholder: string, value: string): HTMLInputElement {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = placeholder;
+  input.value = value;
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  return input;
+}
+
+/** Mounted once, independently of any particular document. */
+export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
+  const settings = loadRepoSettings();
+  let files: RepoFile[] = [];
+  let opened: { repo: RepoRef; file: RepoFile; ref: string } | null = null;
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "dn-repo-toggle";
+  toggle.setAttribute("aria-label", "Repository");
+  toggle.setAttribute("aria-expanded", "false");
+  toggle.textContent = "⌂";
+
+  const panel = document.createElement("div");
+  panel.className = "dn-repo-panel";
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-modal", "false");
+  panel.setAttribute("aria-label", "Repository");
+  panel.hidden = true;
+  toggle.setAttribute("aria-controls", (panel.id = "dn-repo-panel"));
+
+  toggle.addEventListener("click", () => {
+    panel.hidden = !panel.hidden;
+    toggle.setAttribute("aria-expanded", String(!panel.hidden));
+  });
+
+  const header = document.createElement("div");
+  header.className = "dn-repo-header";
+  const heading = document.createElement("h2");
+  heading.textContent = "Repository";
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "dn-repo-close";
+  closeButton.setAttribute("aria-label", "Close repository panel");
+  closeButton.textContent = "×";
+  closeButton.addEventListener("click", () => {
+    panel.hidden = true;
+    toggle.setAttribute("aria-expanded", "false");
+  });
+  header.append(heading, closeButton);
+  panel.appendChild(header);
+
+  // ------------------------------------------------------------- token
+  const tokenSection = document.createElement("section");
+  tokenSection.className = "dn-repo-section";
+  const tokenInput = document.createElement("input");
+  tokenInput.type = "password";
+  tokenInput.placeholder = "GitHub token";
+  tokenInput.autocomplete = "off";
+  tokenInput.value = loadToken() ?? "";
+  const forgetButton = document.createElement("button");
+  forgetButton.type = "button";
+  forgetButton.className = "dn-repo-forget";
+  forgetButton.textContent = "Forget";
+  forgetButton.title = "Removes the saved token from this browser.";
+  forgetButton.addEventListener("click", () => {
+    forgetToken();
+    tokenInput.value = "";
+  });
+  tokenInput.addEventListener("change", () => saveToken(tokenInput.value.trim()));
+  const tokenRow = document.createElement("div");
+  tokenRow.className = "dn-repo-token-row";
+  tokenRow.append(tokenInput, forgetButton);
+  tokenSection.appendChild(field("Token", tokenRow));
+  tokenSection.appendChild(
+    (() => {
+      const p = document.createElement("p");
+      p.className = "dn-repo-hint";
+      p.textContent = "A fine-grained personal access token, scoped to contents and pull requests. Kept in this browser only.";
+      return p;
+    })(),
+  );
+  panel.appendChild(tokenSection);
+
+  // -------------------------------------------------------- repository
+  const repoSection = document.createElement("section");
+  repoSection.className = "dn-repo-section";
+  const ownerInput = textInput("owner", settings.owner);
+  const repoInput = textInput("repo", settings.repo);
+  const baseInput = textInput("main", settings.base);
+  const ownerRepoRow = document.createElement("div");
+  ownerRepoRow.className = "dn-repo-owner-row";
+  ownerRepoRow.append(ownerInput, repoInput);
+  repoSection.appendChild(field("Owner / repo", ownerRepoRow));
+  repoSection.appendChild(field("Base branch", baseInput));
+
+  const loadButton = document.createElement("button");
+  loadButton.type = "button";
+  loadButton.className = "dn-repo-load";
+  loadButton.textContent = "Load files";
+  repoSection.appendChild(loadButton);
+
+  const repoStatus = document.createElement("p");
+  repoStatus.className = "dn-repo-hint dn-repo-status";
+  repoSection.appendChild(repoStatus);
+  panel.appendChild(repoSection);
+
+  // -------------------------------------------------------- search
+  const searchSection = document.createElement("section");
+  searchSection.className = "dn-repo-section";
+  const searchInput = textInput("Search files…", "");
+  searchInput.className = "dn-repo-search";
+  searchSection.appendChild(searchInput);
+
+  const fileList = document.createElement("ul");
+  fileList.className = "dn-repo-files";
+  searchSection.appendChild(fileList);
+  panel.appendChild(searchSection);
+
+  function currentRepo(): RepoRef {
+    return { owner: ownerInput.value.trim(), repo: repoInput.value.trim() };
+  }
+
+  function currentToken(): string | null {
+    const token = tokenInput.value.trim();
+    return token.length > 0 ? token : null;
+  }
+
+  function renderFiles() {
+    const query = searchInput.value.trim().toLowerCase();
+    const matches = query ? files.filter((f) => f.path.toLowerCase().includes(query)) : files;
+    fileList.replaceChildren();
+    for (const file of matches.slice(0, 300)) {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "dn-repo-file";
+      button.textContent = file.path;
+      button.addEventListener("click", () => openRepoFile(file));
+      item.appendChild(button);
+      fileList.appendChild(item);
+    }
+    if (files.length > 0 && matches.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "dn-repo-empty";
+      empty.textContent = "No files match.";
+      fileList.appendChild(empty);
+    }
+  }
+  searchInput.addEventListener("input", renderFiles);
+
+  async function loadRepoFiles() {
+    const token = currentToken();
+    const repo = currentRepo();
+    if (!token) {
+      repoStatus.textContent = "Enter a token first.";
+      return;
+    }
+    if (!repo.owner || !repo.repo) {
+      repoStatus.textContent = "Enter an owner and repo.";
+      return;
+    }
+    saveRepoSettings({ owner: repo.owner, repo: repo.repo, base: baseInput.value.trim() || "main", branch: settings.branch });
+    loadButton.disabled = true;
+    repoStatus.textContent = "Loading…";
+    try {
+      files = await listMarkdownFiles(repo, baseInput.value.trim() || "main", token);
+      repoStatus.textContent = `${files.length} markdown file${files.length === 1 ? "" : "s"}.`;
+      renderFiles();
+    } catch (err) {
+      repoStatus.textContent = err instanceof Error ? err.message : String(err);
+    } finally {
+      loadButton.disabled = false;
+    }
+  }
+  loadButton.addEventListener("click", () => loadRepoFiles());
+
+  async function openRepoFile(file: RepoFile) {
+    const token = currentToken();
+    if (!token) {
+      repoStatus.textContent = "Enter a token first.";
+      return;
+    }
+    const repo = currentRepo();
+    const ref = baseInput.value.trim() || "main";
+    repoStatus.textContent = `Opening ${file.path}…`;
+    try {
+      const { content, sha } = await getFileContent(repo, file.path, ref, token);
+      opened = { repo, file: { path: file.path, sha }, ref };
+      host.loadDocument(content, file.path);
+      renderPush();
+      repoStatus.textContent = `Opened ${file.path}.`;
+    } catch (err) {
+      repoStatus.textContent = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  // ------------------------------------------------------------- push
+  const pushSection = document.createElement("section");
+  pushSection.className = "dn-repo-section";
+  const branchInput = textInput("dewnote-edits", settings.branch);
+  pushSection.appendChild(field("Working branch", branchInput));
+
+  const pushButton = document.createElement("button");
+  pushButton.type = "button";
+  pushButton.className = "dn-repo-push";
+  pushSection.appendChild(pushButton);
+
+  const prButton = document.createElement("button");
+  prButton.type = "button";
+  prButton.className = "dn-repo-pr";
+  prButton.textContent = "Open pull request";
+  prButton.hidden = true;
+  pushSection.appendChild(prButton);
+
+  const pushStatus = document.createElement("p");
+  pushStatus.className = "dn-repo-hint dn-repo-status";
+  pushSection.appendChild(pushStatus);
+  panel.appendChild(pushSection);
+
+  function renderPush() {
+    pushSection.hidden = !opened;
+    if (!opened) return;
+    pushButton.textContent = `Push to ${branchInput.value.trim() || "dewnote-edits"}`;
+  }
+  branchInput.addEventListener("input", renderPush);
+
+  pushButton.addEventListener("click", async () => {
+    if (!opened) return;
+    const token = currentToken();
+    if (!token) {
+      pushStatus.textContent = "Enter a token first.";
+      return;
+    }
+    const branch = branchInput.value.trim() || "dewnote-edits";
+    const base = baseInput.value.trim() || "main";
+    saveRepoSettings({ owner: opened.repo.owner, repo: opened.repo.repo, base, branch });
+    pushButton.disabled = true;
+    pushStatus.textContent = `Pushing to ${branch}…`;
+    try {
+      await ensureBranch(opened.repo, branch, base, token);
+      const result = await putFileContent(
+        opened.repo,
+        opened.file.path,
+        host.getSource(),
+        opened.file.sha,
+        branch,
+        `Edit ${opened.file.path} from dewnote`,
+        token,
+      );
+      opened = { ...opened, file: { path: opened.file.path, sha: result.sha } };
+      pushStatus.textContent = `Pushed to ${branch}.`;
+      prButton.hidden = false;
+    } catch (err) {
+      pushStatus.textContent = err instanceof Error ? err.message : String(err);
+    } finally {
+      pushButton.disabled = false;
+    }
+  });
+
+  prButton.addEventListener("click", async () => {
+    if (!opened) return;
+    const token = currentToken();
+    if (!token) {
+      pushStatus.textContent = "Enter a token first.";
+      return;
+    }
+    const branch = branchInput.value.trim() || "dewnote-edits";
+    const base = baseInput.value.trim() || "main";
+    prButton.disabled = true;
+    try {
+      const pr = await openPullRequest(opened.repo, branch, base, `Edit ${opened.file.path} from dewnote`, token);
+      pushStatus.textContent = `Draft PR: ${pr.html_url}`;
+      window.open(pr.html_url, "_blank", "noopener");
+    } catch (err) {
+      pushStatus.textContent = err instanceof Error ? err.message : String(err);
+    } finally {
+      prButton.disabled = false;
+    }
+  });
+
+  document.body.append(toggle, panel);
+  renderFiles();
+  renderPush();
+
+  return {
+    destroy() {
+      toggle.remove();
+      panel.remove();
+    },
+  };
+}
