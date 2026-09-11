@@ -7,16 +7,22 @@
 // and file-bar.ts are; this is the plan's own "left rail for files"
 // (§5.3), closed until asked.
 //
-// What this slice does not do, on purpose rather than by oversight: no
-// conflict UI beyond reporting the 409 GitHub itself returns (FAQ's
-// "show both, never pick" is real work for a later slice); no front-matter
-// index or module/series picker (decision 11 — needs step 4's fuller
-// multi-file concept); no OPFS or local-clone mode, only the REST API.
+// A push that lands on a 409 (someone — another dewnote tab, or a commit
+// made straight on GitHub — changed the file on this branch since it was
+// opened) shows both versions rather than picking one, FAQ's own rule:
+// the reader chooses to keep their edit and overwrite, or take the
+// remote copy and lose theirs, but nothing is ever silently clobbered.
+//
+// What this slice still does not do, on purpose rather than by
+// oversight: no front-matter index or module/series picker (decision 11
+// — needs step 4's fuller multi-file concept); no OPFS or local-clone
+// mode, only the REST API.
 
 import {
   ensureBranch,
   forgetToken,
   getFileContent,
+  GithubApiError,
   listMarkdownFiles,
   loadToken,
   openPullRequest,
@@ -261,6 +267,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       const { content, sha } = await getFileContent(repo, file.path, ref, token);
       opened = { repo, file: { path: file.path, sha }, ref };
       host.loadDocument(content, file.path);
+      hideConflict();
       renderPush();
       repoStatus.textContent = `Opened ${file.path}.`;
     } catch (err) {
@@ -291,6 +298,93 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   pushSection.appendChild(pushStatus);
   panel.appendChild(pushSection);
 
+  // ---------------------------------------------------------- conflict
+  // FAQ's own rule, ported here rather than invented: on a 409 (the
+  // branch moved under this file since it was opened, or since the last
+  // push), show both versions and let the reader choose — never pick
+  // one, and never silently overwrite either.
+  interface Conflict {
+    mine: string;
+    theirsContent: string;
+    theirsSha: string;
+    branch: string;
+  }
+  let conflict: Conflict | null = null;
+
+  const conflictSection = document.createElement("section");
+  conflictSection.className = "dn-repo-section dn-repo-conflict";
+  conflictSection.hidden = true;
+
+  const conflictHeading = document.createElement("p");
+  conflictHeading.className = "dn-repo-hint";
+  conflictHeading.textContent = "Someone changed this file on the branch since it was opened.";
+  conflictSection.appendChild(conflictHeading);
+
+  const mineLabel = document.createElement("p");
+  mineLabel.className = "dn-repo-hint";
+  mineLabel.textContent = "Your edit:";
+  const minePre = document.createElement("pre");
+  minePre.className = "dn-repo-conflict-text";
+  const theirsLabel = document.createElement("p");
+  theirsLabel.className = "dn-repo-hint";
+  theirsLabel.textContent = "Theirs, currently on the branch:";
+  const theirsPre = document.createElement("pre");
+  theirsPre.className = "dn-repo-conflict-text";
+  conflictSection.append(mineLabel, minePre, theirsLabel, theirsPre);
+
+  const keepMineButton = document.createElement("button");
+  keepMineButton.type = "button";
+  keepMineButton.className = "dn-repo-conflict-keep";
+  keepMineButton.textContent = "Keep mine, overwrite theirs";
+  const takeTheirsButton = document.createElement("button");
+  takeTheirsButton.type = "button";
+  takeTheirsButton.className = "dn-repo-conflict-take";
+  takeTheirsButton.textContent = "Discard mine, load theirs";
+  conflictSection.append(keepMineButton, takeTheirsButton);
+  panel.appendChild(conflictSection);
+
+  function showConflict(next: Conflict) {
+    conflict = next;
+    minePre.textContent = next.mine;
+    theirsPre.textContent = next.theirsContent;
+    conflictSection.hidden = false;
+    pushStatus.textContent = "Conflict — choose a version below.";
+  }
+  function hideConflict() {
+    conflict = null;
+    conflictSection.hidden = true;
+  }
+
+  keepMineButton.addEventListener("click", async () => {
+    if (!opened || !conflict) return;
+    const token = currentToken();
+    if (!token) {
+      pushStatus.textContent = "Enter a token first.";
+      return;
+    }
+    const { mine, theirsSha, branch } = conflict;
+    keepMineButton.disabled = true;
+    try {
+      const result = await putFileContent(opened.repo, opened.file.path, mine, theirsSha, branch, `Edit ${opened.file.path} from dewnote`, token);
+      opened = { ...opened, file: { path: opened.file.path, sha: result.sha } };
+      hideConflict();
+      pushStatus.textContent = `Pushed to ${branch}.`;
+      prButton.hidden = false;
+    } catch (err) {
+      pushStatus.textContent = err instanceof Error ? err.message : String(err);
+    } finally {
+      keepMineButton.disabled = false;
+    }
+  });
+
+  takeTheirsButton.addEventListener("click", () => {
+    if (!opened || !conflict) return;
+    host.loadDocument(conflict.theirsContent, opened.file.path);
+    opened = { ...opened, file: { path: opened.file.path, sha: conflict.theirsSha } };
+    pushStatus.textContent = "Loaded their version — your edit was discarded.";
+    hideConflict();
+  });
+
   function renderPush() {
     pushSection.hidden = !opened;
     if (!opened) return;
@@ -308,24 +402,26 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     const branch = branchInput.value.trim() || "dewnote-edits";
     const base = baseInput.value.trim() || "main";
     saveRepoSettings({ owner: opened.repo.owner, repo: opened.repo.repo, base, branch });
+    const mine = host.getSource();
     pushButton.disabled = true;
     pushStatus.textContent = `Pushing to ${branch}…`;
     try {
       await ensureBranch(opened.repo, branch, base, token);
-      const result = await putFileContent(
-        opened.repo,
-        opened.file.path,
-        host.getSource(),
-        opened.file.sha,
-        branch,
-        `Edit ${opened.file.path} from dewnote`,
-        token,
-      );
+      const result = await putFileContent(opened.repo, opened.file.path, mine, opened.file.sha, branch, `Edit ${opened.file.path} from dewnote`, token);
       opened = { ...opened, file: { path: opened.file.path, sha: result.sha } };
       pushStatus.textContent = `Pushed to ${branch}.`;
       prButton.hidden = false;
     } catch (err) {
-      pushStatus.textContent = err instanceof Error ? err.message : String(err);
+      if (err instanceof GithubApiError && err.status === 409) {
+        try {
+          const theirs = await getFileContent(opened.repo, opened.file.path, branch, token);
+          showConflict({ mine, theirsContent: theirs.content, theirsSha: theirs.sha, branch });
+        } catch (fetchErr) {
+          pushStatus.textContent = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+        }
+      } else {
+        pushStatus.textContent = err instanceof Error ? err.message : String(err);
+      }
     } finally {
       pushButton.disabled = false;
     }

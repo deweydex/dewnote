@@ -531,7 +531,9 @@ body {
 .dn-repo-forget,
 .dn-repo-load,
 .dn-repo-push,
-.dn-repo-pr {
+.dn-repo-pr,
+.dn-repo-conflict-keep,
+.dn-repo-conflict-take {
   border: 1px solid var(--dl-cell-border);
   border-radius: 4px;
   background: var(--dl-panel-bg);
@@ -544,13 +546,17 @@ body {
 .dn-repo-forget:hover,
 .dn-repo-load:hover,
 .dn-repo-push:hover,
-.dn-repo-pr:hover {
+.dn-repo-pr:hover,
+.dn-repo-conflict-keep:hover,
+.dn-repo-conflict-take:hover {
   color: var(--dl-orange);
   border-color: var(--dl-orange);
 }
 .dn-repo-load,
 .dn-repo-push,
-.dn-repo-pr {
+.dn-repo-pr,
+.dn-repo-conflict-keep,
+.dn-repo-conflict-take {
   display: block;
   width: 100%;
   margin-top: 0.4rem;
@@ -607,6 +613,21 @@ body {
   color: var(--dl-muted);
   font-size: 0.9em;
   padding: 0.3rem 0.2rem;
+}
+
+.dn-repo-conflict-text {
+  max-height: 8rem;
+  overflow: auto;
+  margin: 0 0 0.5rem;
+  padding: 0.4rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-mono-family, monospace);
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ---------------------------------------------------------- settings */

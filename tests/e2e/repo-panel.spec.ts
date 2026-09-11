@@ -13,12 +13,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html");
 
 // A 404 checking whether the working branch already exists
-// (ensureBranch's own "does this ref exist" probe) is Chromium's own
-// devtools noise for any non-2xx fetch, not an application error — the
-// code treats that 404 as a normal, handled outcome (branchSha returns
-// null), so it's filtered here rather than silencing console errors
-// generally the way the other specs in this folder do not.
-const EXPECTED_CONSOLE_NOISE = /Failed to load resource: the server responded with a status of 404/;
+// (ensureBranch's own "does this ref exist" probe) and a 409 on a
+// conflicting push are both Chromium's own devtools noise for any
+// non-2xx fetch, not an application error — the code treats both as
+// normal, handled outcomes (branchSha returns null; putFileContent's
+// caller shows the conflict UI), so they're filtered here rather than
+// silencing console errors generally the way the other specs in this
+// folder do not.
+const EXPECTED_CONSOLE_NOISE = /Failed to load resource: the server responded with a status of (404|409)/;
 
 const test = base.extend<{ failOnConsoleErrors: void }>({
   failOnConsoleErrors: [
@@ -43,11 +45,27 @@ async function fulfillJson(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
+interface MockOptions {
+  fileContent: string;
+  fileSha: string;
+  /** Content GitHub reports for this same path on the working branch
+   * (`dewnote-edits`) specifically — distinct from `fileContent`, which
+   * is what `main` (or whatever `ref` the file was opened from) has.
+   * Used to simulate the branch having moved since the file was opened. */
+  branchContent?: string;
+  branchContentSha?: string;
+  /** The first PUT to this path returns 409 (a stale SHA); every PUT
+   * after that succeeds — simulating a conflict that clears once the
+   * reader picks a version and retries. */
+  conflictOnFirstPush?: boolean;
+}
+
 /** Stubs the exact GitHub calls this slice makes, keyed by method + a
  * pattern against the path. Anything unmatched 404s loudly rather than
  * hitting the real network — a route this test doesn't expect is a bug
  * in the test, not something to fall through on. */
-async function mockGithub(page: Page, opts: { fileContent: string; fileSha: string }) {
+async function mockGithub(page: Page, opts: MockOptions) {
+  let putCalls = 0;
   await page.route("https://api.github.com/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -65,6 +83,10 @@ async function mockGithub(page: Page, opts: { fileContent: string; fileSha: stri
     }
 
     if (method === "GET" && /\/contents\//.test(path)) {
+      const onBranch = url.searchParams.get("ref") === "dewnote-edits";
+      if (onBranch && opts.branchContent !== undefined) {
+        return fulfillJson(route, 200, { content: toBase64(opts.branchContent), sha: opts.branchContentSha ?? "branch-sha" });
+      }
       return fulfillJson(route, 200, { content: toBase64(opts.fileContent), sha: opts.fileSha });
     }
 
@@ -79,7 +101,11 @@ async function mockGithub(page: Page, opts: { fileContent: string; fileSha: stri
     }
 
     if (method === "PUT" && /\/contents\//.test(path)) {
-      return fulfillJson(route, 200, { content: { sha: "new-sha" } });
+      putCalls += 1;
+      if (opts.conflictOnFirstPush && putCalls === 1) {
+        return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ message: "sha does not match" }) });
+      }
+      return fulfillJson(route, 200, { content: { sha: `new-sha-${putCalls}` } });
     }
 
     if (method === "POST" && /\/pulls$/.test(path)) {
@@ -90,9 +116,9 @@ async function mockGithub(page: Page, opts: { fileContent: string; fileSha: stri
   });
 }
 
-test.beforeEach(async ({ page }) => {
+async function setup(page: Page, opts: MockOptions) {
   // Stubbed before navigation, so anything main.ts fires on load is covered too.
-  await mockGithub(page, { fileContent: "# A Rule\n\nWhere it lives.\n", fileSha: "file-sha-1" });
+  await mockGithub(page, opts);
   // window.open would try to pop a real tab; no-op it before any click reaches it.
   await page.addInitScript(() => {
     (window as unknown as { open: () => null }).open = () => null;
@@ -104,9 +130,12 @@ test.beforeEach(async ({ page }) => {
   const ownerRepo = page.locator(".dn-repo-owner-row input");
   await ownerRepo.nth(0).fill("dewlab");
   await ownerRepo.nth(1).fill("dewlab");
-});
+}
+
+const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n", fileSha: "file-sha-1" };
 
 test("loading a repository lists only its markdown files, and search filters them", async ({ page }) => {
+  await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
   await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files.");
 
@@ -121,6 +150,7 @@ test("loading a repository lists only its markdown files, and search filters the
 });
 
 test("opening a file renders its real content in the editor", async ({ page }) => {
+  await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
   await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
 
@@ -129,6 +159,7 @@ test("opening a file renders its real content in the editor", async ({ page }) =
 });
 
 test("pushing an edit creates the working branch, commits, and offers a draft PR", async ({ page }) => {
+  await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
   await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
   await expect(page.locator("h1")).toHaveText("A Rule");
@@ -142,4 +173,49 @@ test("pushing an edit creates the working branch, commits, and offers a draft PR
 
   await page.locator(".dn-repo-pr").click();
   await expect(pushStatus).toContainText("https://github.com/dewlab/dewlab/pull/42");
+});
+
+test("a conflicting push shows both versions, and keeping mine overwrites theirs", async ({ page }) => {
+  await setup(page, {
+    ...DEFAULT_OPTS,
+    conflictOnFirstPush: true,
+    branchContent: "# A Rule\n\nSomeone else's edit, already on the branch.\n",
+    branchContentSha: "branch-sha-1",
+  });
+  await page.locator(".dn-repo-load").click();
+  await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
+  await expect(page.locator("h1")).toHaveText("A Rule");
+
+  await page.locator(".dn-repo-push").click();
+
+  const pushStatus = page.locator(".dn-repo-section", { has: page.locator(".dn-repo-push") }).locator(".dn-repo-status");
+  await expect(pushStatus).toHaveText("Conflict — choose a version below.");
+
+  const conflictTexts = page.locator(".dn-repo-conflict-text");
+  await expect(conflictTexts).toHaveCount(2);
+  await expect(conflictTexts.nth(0)).toContainText("Where it lives.");
+  await expect(conflictTexts.nth(1)).toContainText("Someone else's edit, already on the branch.");
+
+  await page.locator("button", { hasText: "Keep mine, overwrite theirs" }).click();
+  await expect(pushStatus).toHaveText("Pushed to dewnote-edits.");
+  await expect(page.locator(".dn-repo-conflict")).toBeHidden();
+  await expect(page.locator(".dn-repo-pr")).toBeVisible();
+});
+
+test("a conflicting push can also discard mine and load theirs into the editor", async ({ page }) => {
+  await setup(page, {
+    ...DEFAULT_OPTS,
+    conflictOnFirstPush: true,
+    branchContent: "# A Rule\n\nSomeone else's edit, already on the branch.\n",
+    branchContentSha: "branch-sha-1",
+  });
+  await page.locator(".dn-repo-load").click();
+  await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
+  await page.locator(".dn-repo-push").click();
+  await expect(page.locator(".dn-repo-conflict-text")).toHaveCount(2);
+
+  await page.locator("button", { hasText: "Discard mine, load theirs" }).click();
+
+  await expect(page.locator(".dn-block-render").filter({ hasText: "Someone else's edit, already on the branch." })).toBeVisible();
+  await expect(page.locator(".dn-repo-conflict")).toBeHidden();
 });

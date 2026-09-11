@@ -98,21 +98,63 @@ async function apiJson<T>(token: string, method: string, path: string, body?: un
   return response.json() as Promise<T>;
 }
 
-/** Every markdown file in a repository at `ref`, via one recursive tree
- * call rather than walking directories one fetch at a time — this is the
- * search command's own index, built fresh on every "Load repository"
- * rather than cached, since the tree is cheap and staleness would be the
- * worse trade for a tool used across an afternoon of edits elsewhere. A
- * repository large enough that GitHub truncates the tree response is a
- * real, known limitation this doesn't handle — `truncated: true` on the
- * response is silently ignored rather than paginated around. */
+interface TreeEntry {
+  path: string;
+  type: string;
+  sha: string;
+}
+interface TreeResponse {
+  tree: TreeEntry[];
+  truncated?: boolean;
+}
+
+function blobsToMarkdownFiles(entries: TreeEntry[], prefix: string): RepoFile[] {
+  return entries
+    .filter((entry) => entry.type === "blob")
+    .map((entry) => ({ path: prefix ? `${prefix}/${entry.path}` : entry.path, sha: entry.sha }))
+    .filter((file) => file.path.endsWith(".md"));
+}
+
+/** A repository too large for one recursive tree call to cover — GitHub
+ * truncates rather than erroring — falls back to walking directory by
+ * directory, each of which GitHub does not truncate on its own. Slower
+ * (one call per directory instead of one call total), but this is the
+ * honest fix for the gap the first version of this function had: a
+ * truncated response was silently treated as complete, which for a
+ * large repository means files simply never showing up in search with
+ * no indication anything was missing. */
+async function walkTreeForMarkdown(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
+  const results: RepoFile[] = [];
+  const queue: { sha: string; prefix: string }[] = [{ sha: ref, prefix: "" }];
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next) break;
+    const { sha, prefix } = next;
+    const node = await apiJson<TreeResponse>(token, "GET", `/repos/${repo.owner}/${repo.repo}/git/trees/${encodeURIComponent(sha)}`);
+    results.push(...blobsToMarkdownFiles(node.tree, prefix));
+    for (const entry of node.tree) {
+      if (entry.type !== "tree") continue;
+      queue.push({ sha: entry.sha, prefix: prefix ? `${prefix}/${entry.path}` : entry.path });
+    }
+  }
+  return results;
+}
+
+/** Every markdown file in a repository at `ref`. The common case is one
+ * recursive tree call — this is the search command's own index, built
+ * fresh on every "Load repository" rather than cached, since the tree is
+ * cheap and staleness would be the worse trade for a tool used across an
+ * afternoon of edits elsewhere. A repository large enough that GitHub
+ * truncates that single response falls back to `walkTreeForMarkdown`
+ * rather than returning an incomplete list silently. */
 export async function listMarkdownFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
-  const data = await apiJson<{ tree: { path: string; type: string; sha: string }[] }>(
+  const data = await apiJson<TreeResponse>(
     token,
     "GET",
     `/repos/${repo.owner}/${repo.repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`,
   );
-  return data.tree.filter((entry) => entry.type === "blob" && entry.path.endsWith(".md")).map((entry) => ({ path: entry.path, sha: entry.sha }));
+  if (!data.truncated) return blobsToMarkdownFiles(data.tree, "");
+  return walkTreeForMarkdown(repo, ref, token);
 }
 
 export async function getFileContent(
