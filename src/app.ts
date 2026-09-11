@@ -67,13 +67,39 @@ export interface MountedDocument {
 
 const BASE_EXTENSIONS: Extension[] = [history(), keymap.of([...defaultKeymap, ...historyKeymap])];
 
-type AddKind = "paragraph" | "cell" | "math" | "hint";
+type AddKind = "paragraph" | "cell" | "math" | "hint" | "image";
 const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
   { kind: "paragraph", label: "Paragraph" },
   { kind: "cell", label: "Code cell" },
   { kind: "math", label: "Math" },
   { kind: "hint", label: "Hint" },
+  { kind: "image", label: "Image" },
 ];
+
+/** file-bar.ts's own promptForNotebookFile follows the same shape: an
+ * `<input type=file>` never attached to the DOM, clicked once and
+ * discarded. A picker dismissed without choosing a file never fires
+ * `change` in every browser this app targets, so a cancelled pick just
+ * leaves this promise unsettled rather than resolving null — the same
+ * behaviour file-bar.ts's own picker already has, not a new gap. */
+function pickImageFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
+    input.click();
+  });
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error as Error);
+    reader.readAsDataURL(file);
+  });
+}
 
 // A persisted SQL cell's saved script lives in localStorage, wrapped in
 // try/catch the way dewstack's own save/restore is — private browsing or
@@ -168,7 +194,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * cell forms, not dewlab's one), and this is the same universal set
    * regardless of the open document's dialect until that per-dialect
    * module exists. */
-  const NEW_BLOCK_SPEC: Record<AddKind, () => { text: string; anchor: number; head: number }> = {
+  const NEW_BLOCK_SPEC: Record<Exclude<AddKind, "image">, () => { text: string; anchor: number; head: number }> = {
     paragraph: () => ({ text: "New paragraph.\n\n", anchor: 0, head: "New paragraph.".length }),
     cell: () => {
       const text = `\`\`\`python exec\nid: ${generateCellId()}\n\n\`\`\`\n\n`;
@@ -202,7 +228,34 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return `new-cell-${n}`;
   }
 
-  function insertAfter(afterIndex: number | null, kind: AddKind) {
+  /** Not in NEW_BLOCK_SPEC's own synchronous table because picking a
+   * file and reading it are both async, unlike every other add-menu
+   * kind. Inlined as a `data:` URI in the markdown itself rather than
+   * saved alongside the document, since no store this file knows about
+   * (browser, folder, or GitHub — src/store.ts, src/folder-store.ts,
+   * src/github.ts) has a "copy this asset next to the document" method
+   * yet; plan §8's own "a copy into the tutorial folder" is still open
+   * for the same reason the link picker is (§6 step 8's own note) —
+   * both need more of the store interface than exists today. Alt text
+   * is asked for the same way DIALECTS.md's own worked examples always
+   * write it: required in the markdown, never left empty by this UI
+   * even though a reader could still hand-edit it away afterwards. */
+  async function insertImageAfter(afterIndex: number | null) {
+    const file = await pickImageFile();
+    if (!file) return;
+    const dataUrl = await readAsDataUrl(file);
+    const alt = window.prompt("Alt text for this image:", "") ?? "";
+    const text = `![${alt}](${dataUrl})\n\n`;
+    const parts = blockTexts();
+    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
+    parts.splice(newIndex, 0, text);
+    source = parts.join("");
+    teardownLiveViews();
+    doc = parseDocument(source);
+    render();
+  }
+
+  function insertAfter(afterIndex: number | null, kind: Exclude<AddKind, "image">) {
     const spec = NEW_BLOCK_SPEC[kind]();
     const parts = blockTexts();
     const newIndex = afterIndex === null ? 0 : afterIndex + 1;
@@ -307,7 +360,8 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       item.textContent = label;
       item.addEventListener("click", () => {
         closeOpenAddMenus();
-        insertAfter(afterIndex, kind);
+        if (kind === "image") insertImageAfter(afterIndex);
+        else insertAfter(afterIndex, kind);
       });
       menu.appendChild(item);
     }
