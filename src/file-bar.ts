@@ -9,6 +9,7 @@
 
 import { downloadAsFile, openDroppedItem, openFile, saveDocument, suggestedFilename, type OpenedDocument } from "./store.ts";
 import { buildStandaloneHtmlPage, collectPageCss } from "./export-html.ts";
+import { exportToNotebook, importFromNotebook, type Notebook } from "./jupyter.ts";
 
 export interface FileBarHost {
   /** The mounted document's current source, live-editor content included. */
@@ -28,6 +29,39 @@ export interface FileBar {
 
 function isMarkdownDrag(event: DragEvent): boolean {
   return Boolean(event.dataTransfer?.types.includes("Files"));
+}
+
+/** An `<input type=file>` scoped to `.ipynb`, the same fallback shape
+ * store.ts's own `openFileFallback` uses for markdown — there is no
+ * File System Access equivalent worth reaching for here, since an
+ * imported notebook becomes a new markdown document, never a file this
+ * app could write a `.ipynb` back to. */
+function promptForNotebookFile(): Promise<{ name: string; markdown: string } | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".ipynb,application/x-ipynb+json";
+    input.addEventListener(
+      "change",
+      async () => {
+        const file = input.files?.[0];
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        try {
+          const notebook = JSON.parse(await file.text()) as Notebook;
+          resolve({ name: file.name.replace(/\.ipynb$/i, ".md"), markdown: importFromNotebook(notebook) });
+        } catch {
+          // A file that isn't real notebook JSON just doesn't open —
+          // no partial import, nothing half-converted to clean up.
+          resolve(null);
+        }
+      },
+      { once: true },
+    );
+    input.click();
+  });
 }
 
 /** Mounted once, independently of any particular document — like the
@@ -54,14 +88,26 @@ export function mountFileBar(host: FileBarHost): FileBar {
 
   const exportButton = document.createElement("button");
   exportButton.type = "button";
-  exportButton.className = "dn-file-export";
+  exportButton.className = "dn-file-export dn-file-export-html";
   exportButton.textContent = "Export HTML";
   exportButton.title = "Downloads a standalone HTML page — the rendered document, no editor, nothing to run.";
+
+  const exportIpynbButton = document.createElement("button");
+  exportIpynbButton.type = "button";
+  exportIpynbButton.className = "dn-file-export dn-file-export-ipynb";
+  exportIpynbButton.textContent = "Export ipynb";
+  exportIpynbButton.title = "Downloads this document as a Jupyter notebook — exec cells become real code cells.";
+
+  const importIpynbButton = document.createElement("button");
+  importIpynbButton.type = "button";
+  importIpynbButton.className = "dn-file-export dn-file-import-ipynb";
+  importIpynbButton.textContent = "Import ipynb";
+  importIpynbButton.title = "Opens a .ipynb file as a new document, converted to markdown.";
 
   const status = document.createElement("span");
   status.className = "dn-file-status";
 
-  bar.append(nameLabel, openButton, saveButton, exportButton, status);
+  bar.append(nameLabel, openButton, saveButton, exportButton, exportIpynbButton, importIpynbButton, status);
   document.body.appendChild(bar);
 
   function render() {
@@ -107,6 +153,18 @@ export function mountFileBar(host: FileBarHost): FileBar {
     const html = buildStandaloneHtmlPage(content, collectPageCss());
     const baseName = (opened?.name ?? suggestedFilename(content)).replace(/\.md$/i, "");
     downloadAsFile(`${baseName}.html`, html, "text/html");
+  });
+  exportIpynbButton.addEventListener("click", () => {
+    const content = host.getSource();
+    const notebook = exportToNotebook(content);
+    const baseName = (opened?.name ?? suggestedFilename(content)).replace(/\.md$/i, "");
+    downloadAsFile(`${baseName}.ipynb`, JSON.stringify(notebook, null, 1), "application/x-ipynb+json");
+  });
+  importIpynbButton.addEventListener("click", () => {
+    promptForNotebookFile().then((result) => {
+      if (!result) return;
+      open({ name: result.name, content: result.markdown, handle: null });
+    });
   });
 
   function onKeydown(event: KeyboardEvent) {

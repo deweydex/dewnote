@@ -55,7 +55,7 @@ test("Export HTML downloads a standalone page with real content and the live sty
   );
   await expect(page.locator("h1")).toHaveText("A Rule");
 
-  const [download] = await Promise.all([page.waitForEvent("download"), page.locator(".dn-file-export").click()]);
+  const [download] = await Promise.all([page.waitForEvent("download"), page.locator(".dn-file-export-html").click()]);
   expect(download.suggestedFilename()).toBe("a-rule.html");
 
   const savedPath = await download.path();
