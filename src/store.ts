@@ -140,8 +140,11 @@ export async function saveDocument(opened: OpenedDocument, content: string): Pro
   return opened;
 }
 
-function downloadAsFile(name: string, content: string): void {
-  const blob = new Blob([content], { type: "text/markdown" });
+/** Exported for export-html.ts's own download — a rendered HTML page has
+ * nowhere else to go but a download, the same as a markdown save with no
+ * writable handle behind it. */
+export function downloadAsFile(name: string, content: string, mimeType = "text/markdown"): void {
+  const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

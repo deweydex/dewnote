@@ -7,7 +7,8 @@
 // the plan's "single-file build that opens a dropped file" line for step
 // 2 that nothing before this actually delivered.
 
-import { openDroppedItem, openFile, saveDocument, suggestedFilename, type OpenedDocument } from "./store.ts";
+import { downloadAsFile, openDroppedItem, openFile, saveDocument, suggestedFilename, type OpenedDocument } from "./store.ts";
+import { buildStandaloneHtmlPage, collectPageCss } from "./export-html.ts";
 
 export interface FileBarHost {
   /** The mounted document's current source, live-editor content included. */
@@ -46,10 +47,16 @@ export function mountFileBar(host: FileBarHost): FileBar {
   saveButton.className = "dn-file-save";
   saveButton.textContent = "Save";
 
+  const exportButton = document.createElement("button");
+  exportButton.type = "button";
+  exportButton.className = "dn-file-export";
+  exportButton.textContent = "Export HTML";
+  exportButton.title = "Downloads a standalone HTML page — the rendered document, no editor, nothing to run.";
+
   const status = document.createElement("span");
   status.className = "dn-file-status";
 
-  bar.append(nameLabel, openButton, saveButton, status);
+  bar.append(nameLabel, openButton, saveButton, exportButton, status);
   document.body.appendChild(bar);
 
   function render() {
@@ -89,6 +96,12 @@ export function mountFileBar(host: FileBarHost): FileBar {
   });
   saveButton.addEventListener("click", () => {
     save();
+  });
+  exportButton.addEventListener("click", () => {
+    const content = host.getSource();
+    const html = buildStandaloneHtmlPage(content, collectPageCss());
+    const baseName = (opened?.name ?? suggestedFilename(content)).replace(/\.md$/i, "");
+    downloadAsFile(`${baseName}.html`, html, "text/html");
   });
 
   function onKeydown(event: KeyboardEvent) {
