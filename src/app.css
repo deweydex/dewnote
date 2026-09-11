@@ -1159,3 +1159,68 @@ body {
   color: var(--dl-error-fg);
   border-color: var(--dl-error-fg);
 }
+
+/* ------------------------------------------------------- command palette */
+
+.dn-palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--dl-shadow);
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.dn-palette-overlay:not([hidden]) {
+  display: flex;
+}
+
+.dn-palette-box {
+  width: 32rem;
+  max-width: 90vw;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--dl-panel-bg);
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px var(--dl-shadow);
+  font-family: var(--dl-font-family);
+}
+
+.dn-palette-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-bottom: 1px solid var(--dl-rule);
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 1.05em;
+  padding: 0.75rem 1rem;
+}
+.dn-palette-input:focus {
+  outline: none;
+}
+
+.dn-palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem 0;
+}
+.dn-palette-item button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.95em;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+}
+.dn-palette-item.is-active button {
+  background: var(--dl-rule);
+  color: var(--dl-orange);
+}
