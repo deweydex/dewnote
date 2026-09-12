@@ -28,7 +28,7 @@ const test = base.extend<{ failOnConsoleErrors: void }>({
 });
 
 type TestHook = {
-  setFileIndex(index: { path: string; title?: string; slug?: string }[]): void;
+  setFileIndex(index: { path: string; title?: string; slug?: string; status?: string; version?: string }[]): void;
   setSeries(series: { module: string; slug: string; title: string; order: string[] }[]): void;
 };
 
@@ -59,6 +59,20 @@ test("groups series by module, in reading order, preferring an indexed title ove
   await expect(items).toHaveCount(2);
   await expect(items.nth(0)).toHaveText("First Steps");
   await expect(items.nth(1)).toHaveText("working-with-tables");
+});
+
+test("with several versions of the same tutorial indexed, the series list shows the live one's title, not an archived one's", async ({ page }) => {
+  await page.evaluate(() => {
+    const hook = window as unknown as { __dewnote: TestHook };
+    hook.__dewnote.setFileIndex([
+      { path: "tutorials/data/filtering/v2026.01.01.1.md", slug: "filtering", title: "Filtering (old draft title)", status: "archived", version: "2026.01.01.1" },
+      { path: "tutorials/data/filtering/filtering.md", slug: "filtering", title: "Filtering", status: "live", version: "2026.06.01.1" },
+    ]);
+    hook.__dewnote.setSeries([{ module: "data", slug: "series", title: "A series", order: ["filtering"] }]);
+  });
+
+  await page.locator(".dn-series-toggle").click();
+  await expect(page.locator(".dn-series-list li")).toHaveText("Filtering");
 });
 
 test("several series in different modules each get their own section", async ({ page }) => {

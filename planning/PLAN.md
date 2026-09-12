@@ -843,10 +843,29 @@ project; if they are not delightful, nothing after them will rescue it.
    `repo-panel.ts` exposes today); reordering a series or creating a new
    one.
 
-   **`.order.yaml` files made openable**, one of a short, deliberately
-   ordered follow-up list raised discussing the series view directly
-   (a version-disambiguation fix elsewhere in this same list, tracked
-   separately): neither `folder-panel.ts` nor `repo-panel.ts` listed an order
+   **Version disambiguation fixed**, raised discussing this section's own
+   "still open" list directly, ahead of the rest of it: `file-index.ts`
+   read `title`/`slug`/`module`/`series` from a file's own front matter
+   but never `status` or `version` — dewlab's own versioning fields
+   (`build.py`'s `STATUSES`, `VERSION_RE`), which let several physical
+   files share one slug (a live tutorial, an archived one, a frozen past
+   release). Nothing resolved that ambiguity: a slug's title lookup
+   (`series-panel.ts`'s own `titleFor`) just took whichever file happened
+   to be indexed first, which could as easily be an archived or
+   superseded copy as the real one — a real, latent bug sitting under
+   every slug-based lookup this session had already built (the series
+   panel's titles, `link-check.ts`'s existence check, `link-picker.ts`'s
+   own search), just never yet exercised by a fixtures document with a
+   second version of anything. `file-index.ts` gained `defaultEntryFor`,
+   picking the same file `build.py`'s own `versions_of()` would mark
+   `is_default` (the newest `live` version, or the newest version at all
+   with none live) — every version still gets its own index entry (an
+   author working on a draft, or browsing an archived one, needs to find
+   it by path), this only decides which *one* answers "what does this
+   slug mean" where a lookup has to pick exactly one.
+
+   **`.order.yaml` files made openable**, next on that same follow-up
+   list: neither `folder-panel.ts` nor `repo-panel.ts` listed an order
    file in the ordinary browsable/searchable list at all — it was read
    separately, for the series view alone, which meant the only way to
    actually reorder a series (insert a tutorial, delete one, move a
