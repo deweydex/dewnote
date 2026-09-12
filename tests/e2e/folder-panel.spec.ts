@@ -74,7 +74,7 @@ async function stubDirectoryPicker(page: Page) {
     // as a real filesystem, letting the Refresh test below simulate a
     // change made outside dewnote between an open and a refresh.
     const contentEntries: Record<string, unknown> = {
-      "a-rule.md": fakeFileHandle("a-rule.md", "# A Rule\n\nWhere it lives.\n"),
+      "a-rule.md": fakeFileHandle("a-rule.md", "---\ntitle: A Rule\nslug: a-rule\n---\n\n# A Rule\n\nWhere it lives.\n"),
     };
 
     const root = fakeDirHandle("tutorials", {
@@ -205,5 +205,25 @@ test("opening a folder builds the file index the link picker searches", async ({
 
   const items = page.locator(".dn-link-item button");
   await expect(items).toHaveCount(2);
-  await expect(items).toContainText(["README.md", "content/a-rule.md"]);
+  await expect(items).toContainText(["README.md", "A Rule"]);
+});
+
+// active-store.ts's own "open this path" hook, exercised through the
+// series panel — a series listing a real, indexed slug is a real
+// clickable button there, opening the exact file this folder already
+// has, the same as clicking it directly in this rail's own file list.
+test("the series panel can open a listed tutorial by clicking it", async ({ page }) => {
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+  await expect(page.locator(".dn-folder-file")).toHaveCount(3);
+  await page.locator(".dn-folder-close").click();
+
+  await page.locator(".dn-series-toggle").click();
+  await expect(page.locator(".dn-series-module h3")).toHaveText("(no module)");
+  const link = page.locator(".dn-series-link", { hasText: "A Rule" });
+  await expect(link).toBeVisible();
+  await link.click();
+
+  await expect(page.locator("h1")).toHaveText("A Rule");
+  await expect(page.locator(".dn-block-render").filter({ hasText: "Where it lives." })).toBeVisible();
 });

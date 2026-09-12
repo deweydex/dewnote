@@ -907,6 +907,33 @@ project; if they are not delightful, nothing after them will rescue it.
    every other conditional control here already has. *Done when*
    clicking Refresh, after a file is added to the folder outside
    dewnote, shows the new file without dewnote's own picker reopening.
+
+   **The store-agnostic "open this path" hook built** (`src/active-store.ts`),
+   the gap raised discussing the series view directly that this whole
+   follow-up list traced back to: opening a listed tutorial with a
+   click needed some way for a third module (`series-panel.ts`) to say
+   "open this path" without knowing or caring whether a folder or a
+   repository is actually open. Deliberately thin rather than a real
+   unification of the two stores' own read/write semantics, which
+   genuinely differ (a folder writes straight back through a real
+   handle; a repository commits to a branch, with its own conflict UI)
+   and shouldn't be flattened into one shape just to look uniform.
+   `ActiveStore` is one method, `openPath(path): Promise<boolean>`; a
+   module-level `setActiveStore`/`openPath` pair, the same
+   one-registration-at-a-time shape `app.ts`'s own `sharedFileIndex`
+   already has, since there is only ever one store open at a time here.
+   `folder-panel.ts` and `repo-panel.ts` each register themselves once a
+   folder or repository is actually opened, both by reusing their own
+   existing `openFolderFile`/`openRepoFile` — a call through
+   `active-store.ts` is exactly a click on that same file in either
+   panel's own list, not a second "open a file" implementation.
+   `series-panel.ts`'s own list items are real buttons now wherever
+   `defaultEntryFor` resolves a slug to an indexed file, calling
+   `openPath` with that entry's own path; a slug nothing indexes stays
+   plain text, since there is no path to send anywhere. *Done when*
+   clicking a series entry that resolves to a real, indexed file opens
+   it into the editor, the same as clicking it directly in whichever
+   rail's own file list it came from.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.

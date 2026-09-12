@@ -13,10 +13,12 @@
 // title where the slug is actually indexed and the bare slug otherwise
 // (an order file naming a tutorial not yet opened, or not part of this
 // folder at all, is a real and unremarkable case — dewlab's own build
-// would fail on it, but this is a viewer, not a build). Deliberately not
-// clickable: opening one by a click needs a store-agnostic "open this
-// path" hook neither folder-panel.ts nor repo-panel.ts exposes today,
-// real plumbing left for later rather than rushed here.
+// would fail on it, but this is a viewer, not a build). An indexed entry
+// is a real, clickable button, opening it through active-store.ts's own
+// "open this path" hook — the same routing folder-panel.ts's and
+// repo-panel.ts's own file lists use, just reached from here instead. A
+// slug with nothing indexed for it renders as plain text: there is no
+// path to send anywhere.
 //
 // A slug can index to more than one file — dewlab's own versioned
 // releases (`status`/`version` in front matter, `build.py`'s
@@ -25,8 +27,10 @@
 // is what picks the one build.py itself would call `is_default` (the
 // newest live version, or the newest version at all if none is live);
 // picking whichever entry happened to be indexed first, as this used to,
-// would show an archived or superseded title as often as the real one.
+// would show an archived or superseded title (and open its path) as
+// often as the real one.
 
+import { openPath } from "./active-store.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
 import type { Series } from "./series.ts";
 
@@ -85,9 +89,6 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   empty.textContent = "No order.yaml files found — open a folder or repository with any.";
   panel.appendChild(empty);
 
-  function titleFor(slug: string): string {
-    return defaultEntryFor(getFileIndex(), slug)?.title ?? slug;
-  }
 
   function render() {
     body.replaceChildren();
@@ -117,8 +118,18 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
         const list = document.createElement("ol");
         list.className = "dn-series-list";
         for (const slug of one.order) {
+          const entry = defaultEntryFor(getFileIndex(), slug);
           const item = document.createElement("li");
-          item.textContent = titleFor(slug);
+          if (entry) {
+            const link = document.createElement("button");
+            link.type = "button";
+            link.className = "dn-series-link";
+            link.textContent = entry.title ?? slug;
+            link.addEventListener("click", () => void openPath(entry.path));
+            item.appendChild(link);
+          } else {
+            item.textContent = slug;
+          }
           list.appendChild(item);
         }
         seriesBlock.appendChild(list);

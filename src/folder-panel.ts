@@ -10,6 +10,7 @@ import { chooseFolder, listMarkdownFiles, listOrderFiles, readFile, supportsDire
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseSeriesFiles, type Series } from "./series.ts";
+import { setActiveStore } from "./active-store.ts";
 
 export interface FolderPanel {
   destroy(): void;
@@ -240,6 +241,21 @@ export function mountFolderPanel(
     folderName = root.name;
     openButton.textContent = `Open folder… (${folderName})`;
     refreshButton.disabled = false;
+    // active-store.ts's own "open this path" hook — registered once a
+    // folder is actually open, not at mount time (nothing to open yet),
+    // and closing over the live `files` binding rather than a snapshot,
+    // so a later Refresh's own reassignment is seen without registering
+    // again. Reuses openFolderFile itself rather than a second "open a
+    // file" implementation — a click here is exactly a click on this
+    // same file in `fileList`.
+    setActiveStore({
+      async openPath(path) {
+        const file = files.find((f) => f.path === path);
+        if (!file) return false;
+        await openFolderFile(file);
+        return true;
+      },
+    });
     await loadFromRoot(root, folderName, "Reading");
   });
 

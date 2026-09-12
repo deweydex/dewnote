@@ -1488,6 +1488,22 @@ body {
   padding: 0.15rem 0;
   color: var(--dl-fg);
 }
+.dn-series-link {
+  border: none;
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 1em;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+.dn-series-link:hover,
+.dn-series-link:focus-visible {
+  color: var(--dl-orange);
+  text-decoration: underline;
+  outline: none;
+}
 
 .dn-outline-toggle {
   position: fixed;
