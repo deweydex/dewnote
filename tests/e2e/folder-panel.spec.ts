@@ -68,15 +68,25 @@ async function stubDirectoryPicker(page: Page) {
       };
     }
 
+    // A real `Object.entries` re-walked on every `entries()` call, not a
+    // snapshot taken once — so a file added to it after the folder is
+    // first opened is genuinely invisible until the next walk, the same
+    // as a real filesystem, letting the Refresh test below simulate a
+    // change made outside dewnote between an open and a refresh.
+    const contentEntries: Record<string, unknown> = {
+      "a-rule.md": fakeFileHandle("a-rule.md", "# A Rule\n\nWhere it lives.\n"),
+    };
+
     const root = fakeDirHandle("tutorials", {
       "README.md": fakeFileHandle("README.md", "# Read Me\n\nTop level.\n"),
       "a-series.order.yaml": fakeFileHandle("a-series.order.yaml", "series: A Series\norder:\n  - a-rule\n"),
-      content: fakeDirHandle("content", {
-        "a-rule.md": fakeFileHandle("a-rule.md", "# A Rule\n\nWhere it lives.\n"),
-      }),
+      content: fakeDirHandle("content", contentEntries),
     });
 
     (window as unknown as { showDirectoryPicker: () => Promise<unknown> }).showDirectoryPicker = async () => root;
+    (window as unknown as { __testAddFile(name: string, content: string): void }).__testAddFile = (name, content) => {
+      contentEntries[name] = fakeFileHandle(name, content);
+    };
   });
 }
 
@@ -101,6 +111,34 @@ test("opening a folder lists its markdown files recursively, and search filters 
   await page.locator(".dn-folder-search").fill("content");
   await expect(page.locator(".dn-folder-file")).toHaveCount(1);
   await expect(page.locator(".dn-folder-file")).toHaveText("content/a-rule.md");
+});
+
+// Step 4's own follow-up, raised alongside the series view: there is no
+// browser API that watches a local folder for changes, so seeing what
+// changed outside dewnote means asking for it — Refresh re-walks the
+// already-open folder without reopening the OS picker.
+test("Refresh re-scans the open folder, picking up a file added outside dewnote, without reopening the picker", async ({ page }) => {
+  await page.locator(".dn-folder-toggle").click();
+  await expect(page.locator(".dn-folder-refresh")).toBeDisabled();
+
+  await page.locator(".dn-folder-open").click();
+  await expect(page.locator(".dn-folder-file")).toHaveCount(3);
+  await expect(page.locator(".dn-folder-refresh")).toBeEnabled();
+
+  await page.evaluate(() => {
+    (window as unknown as { __testAddFile(name: string, content: string): void }).__testAddFile(
+      "new-page.md",
+      "# New Page\n\nAdded after opening.\n",
+    );
+  });
+
+  // Not visible yet — the folder was only walked once, on open.
+  await expect(page.locator(".dn-folder-file")).toHaveCount(3);
+
+  await page.locator(".dn-folder-refresh").click();
+  await expect(page.locator(".dn-folder-status").first()).toHaveText('3 markdown files, 1 order file, in "tutorials".');
+  await expect(page.locator(".dn-folder-file")).toHaveCount(4);
+  await expect(page.locator(".dn-folder-file", { hasText: "new-page.md" })).toBeVisible();
 });
 
 // Step 4's own follow-up, raised alongside the series view: an

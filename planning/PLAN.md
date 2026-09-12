@@ -888,6 +888,25 @@ project; if they are not delightful, nothing after them will rescue it.
    `.order.yaml` file appears in the file list, opens with its real
    content, and a hand-edit round-trips through Save (the folder store)
    or Push (the repository store) the same as any tutorial.
+
+   **A Refresh action added to the folder rail**, closing out that same
+   follow-up list — how does a reader see a change made to the
+   repository from outside dewnote at all? No browser API watches a
+   local folder for changes on its own, and the repository store never
+   needed anything new here: "Load repository" already re-reads whatever
+   the form fields say, with no picker of its own in the way, so
+   clicking it again already is a refresh. The folder store's own
+   `chooseFolder()` does put a real OS dialog in the way, though — before
+   this, seeing a file added or removed outside dewnote meant clicking
+   through that dialog again. `folder-panel.ts` now keeps the last
+   opened `FileSystemDirectoryHandle` (`currentRoot`), and a new
+   "Refresh" button re-walks it directly — the exact same
+   `loadFromRoot` pass `openButton`'s own click handler was refactored
+   to share, just without a new picker call in front of it. Disabled
+   until a folder is actually open, the same "nothing to do yet" gating
+   every other conditional control here already has. *Done when*
+   clicking Refresh, after a file is added to the folder outside
+   dewnote, shows the new file without dewnote's own picker reopening.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.

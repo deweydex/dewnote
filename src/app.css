@@ -967,9 +967,14 @@ body {
   padding: 0.75rem 0;
 }
 
+.dn-folder-open-row {
+  display: flex;
+  gap: 0.5rem;
+}
 .dn-folder-open {
   display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   border: 1px solid var(--dl-cell-border);
   border-radius: 4px;
   background: var(--dl-panel-bg);
@@ -982,6 +987,25 @@ body {
 .dn-folder-open:hover {
   color: var(--dl-orange);
   border-color: var(--dl-orange);
+}
+.dn-folder-refresh {
+  flex: 0 0 auto;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.9em;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+.dn-folder-refresh:hover:not(:disabled) {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}
+.dn-folder-refresh:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .dn-folder-hint {
