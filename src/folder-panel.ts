@@ -6,7 +6,7 @@
 // unchanged, since an opened folder file is exactly the single-file
 // case #18 already built — a name, content, and a real writable handle.
 
-import { chooseFolder, listMarkdownFiles, listOrderFiles, readFile, supportsDirectoryPicker, type FolderFile } from "./folder-store.ts";
+import { chooseFolder, listMarkdownFiles, listOrderFiles, readFile, supportsDirectoryPicker, type DirectoryLike, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseSeriesFiles, type Series } from "./series.ts";
@@ -41,6 +41,16 @@ export function mountFolderPanel(
 ): FolderPanel {
   let files: FolderFile[] = [];
   let folderName = "";
+  /** The directory handle from the last successful `chooseFolder()` —
+   * kept so `refreshButton` can re-walk the same folder without making
+   * the reader click through the OS picker again. There is no live
+   * filesystem-watch API a browser can call to notice a change on its
+   * own (unlike a GitHub repository, where "Load repository" already
+   * doubles as its own refresh, since it re-reads whatever the form
+   * fields already say rather than reopening any picker), so a manual
+   * re-scan is the whole mechanism — closed until asked, the same as
+   * every other action here. */
+  let currentRoot: DirectoryLike | null = null;
 
   const toggle = document.createElement("button");
   toggle.type = "button";
@@ -87,11 +97,22 @@ export function mountFolderPanel(
 
   const openSection = document.createElement("section");
   openSection.className = "dn-folder-section";
+  const openRow = document.createElement("div");
+  openRow.className = "dn-folder-open-row";
   const openButton = document.createElement("button");
   openButton.type = "button";
   openButton.className = "dn-folder-open";
   openButton.textContent = "Open folder…";
-  openSection.appendChild(openButton);
+  openRow.appendChild(openButton);
+
+  const refreshButton = document.createElement("button");
+  refreshButton.type = "button";
+  refreshButton.className = "dn-folder-refresh";
+  refreshButton.textContent = "Refresh";
+  refreshButton.disabled = true;
+  refreshButton.title = "Re-scan the open folder for changes made outside dewnote.";
+  openRow.appendChild(refreshButton);
+  openSection.appendChild(openRow);
 
   const status = document.createElement("p");
   status.className = "dn-folder-hint dn-folder-status";
@@ -149,11 +170,15 @@ export function mountFolderPanel(
    * reading an individual file (permissions, a file removed mid-scan)
    * just leave that one file out of the index rather than failing the
    * whole folder open — the file list itself (already built) still
-   * works regardless. */
-  async function refreshIndex() {
+   * works regardless. Takes `markdownFiles` explicitly rather than
+   * reading the shared `files` — that list also carries `.order.yaml`
+   * files now (the click handler's own comment explains why), and an order
+   * file has no front matter worth indexing at all, so reading its
+   * content again here would only ever produce a bare `{path}` entry. */
+  async function refreshIndex(markdownFiles: FolderFile[]) {
     if (!onIndexChange) return;
     const entries = await Promise.all(
-      files.map(async (file) => {
+      markdownFiles.map(async (file) => {
         try {
           return { path: file.path, content: await readFile(file.handle) };
         } catch {
@@ -164,12 +189,12 @@ export function mountFolderPanel(
     onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
   }
 
-  /** Mirrors refreshIndex's own shape, over `.order.yaml` files instead
-   * of markdown — order files are typically few, so no attempt is made
-   * to fold this into the same pass over `files`. */
-  async function refreshSeries(root: Parameters<typeof listOrderFiles>[0]) {
+  /** Mirrors refreshIndex's own shape, over the `.order.yaml` files
+   * `openButton`'s own click handler already listed — order files are
+   * typically few, so no attempt is made to fold this into the same pass
+   * as `refreshIndex`. */
+  async function refreshSeries(orderFiles: FolderFile[]) {
     if (!onSeriesChange) return;
-    const orderFiles = await listOrderFiles(root);
     const entries = await Promise.all(
       orderFiles.map(async (file) => {
         try {
@@ -182,21 +207,44 @@ export function mountFolderPanel(
     onSeriesChange(parseSeriesFiles(entries.filter((e): e is { path: string; content: string } => e !== null)));
   }
 
-  openButton.addEventListener("click", async () => {
-    const root = await chooseFolder();
-    if (!root) return;
-    folderName = root.name;
-    openButton.textContent = `Open folder… (${folderName})`;
-    status.textContent = "Reading folder…";
+  /** The whole "read this folder and rebuild everything" pass, shared by
+   * `openButton` (against a freshly chosen folder) and `refreshButton`
+   * (against `currentRoot`, already held) — the same work either way,
+   * just with or without a new `chooseFolder()` in front of it. Listed
+   * and read separately (folder-store.ts's own two functions, one walk
+   * each), but merged into one browsable/searchable list: an
+   * `.order.yaml` file is a plain text file like any other, and opening
+   * one hands it to the same editor and Save path every other file
+   * already gets — the whole-file source view (Cmd+/) shows its raw
+   * YAML untouched by any markdown rendering, which is exactly what
+   * hand-editing a reading order (inserting a slug, reordering two
+   * lines) actually wants, with no new UI needed. */
+  async function loadFromRoot(root: DirectoryLike, name: string, verb: "Reading" | "Refreshing") {
+    status.textContent = `${verb} folder…`;
     try {
-      files = await listMarkdownFiles(root);
-      status.textContent = `${files.length} markdown file${files.length === 1 ? "" : "s"} in "${folderName}".`;
+      const [markdownFiles, orderFiles] = await Promise.all([listMarkdownFiles(root), listOrderFiles(root)]);
+      files = [...markdownFiles, ...orderFiles];
+      status.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${orderFiles.length} order file${orderFiles.length === 1 ? "" : "s"}, in "${name}".`;
       renderFiles();
-      await refreshIndex();
-      await refreshSeries(root);
+      await refreshIndex(markdownFiles);
+      await refreshSeries(orderFiles);
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : String(err);
     }
+  }
+
+  openButton.addEventListener("click", async () => {
+    const root = await chooseFolder();
+    if (!root) return;
+    currentRoot = root;
+    folderName = root.name;
+    openButton.textContent = `Open folder… (${folderName})`;
+    refreshButton.disabled = false;
+    await loadFromRoot(root, folderName, "Reading");
+  });
+
+  refreshButton.addEventListener("click", () => {
+    if (currentRoot) void loadFromRoot(currentRoot, folderName, "Refreshing");
   });
 
   document.body.append(toggle, panel);

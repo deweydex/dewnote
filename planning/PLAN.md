@@ -863,6 +863,50 @@ project; if they are not delightful, nothing after them will rescue it.
    author working on a draft, or browsing an archived one, needs to find
    it by path), this only decides which *one* answers "what does this
    slug mean" where a lookup has to pick exactly one.
+
+   **`.order.yaml` files made openable**, next on that same follow-up
+   list: neither `folder-panel.ts` nor `repo-panel.ts` listed an order
+   file in the ordinary browsable/searchable list at all — it was read
+   separately, for the series view alone, which meant the only way to
+   actually reorder a series (insert a tutorial, delete one, move a
+   line) was leaving dewnote entirely. `folder-store.ts`'s and
+   `github.ts`'s own `listOrderFiles` (already built for the series
+   view) are now called alongside `listMarkdownFiles` in both panels'
+   own open/load flow, and merged into the one list a reader browses and
+   clicks — an order file is a plain text file like any other, and
+   clicking it hands it to the exact same editor and Save/push path
+   every markdown file already gets. The whole-file source view (Cmd+/,
+   this section's own earlier item) turns out to be exactly the right
+   tool for this: it shows the raw YAML untouched by any markdown
+   rendering, so inserting a slug or reordering two lines is "edit a
+   line, close" through machinery that already existed, no new UI
+   required. Kept out of the front-matter index and out of
+   `link-picker.ts`'s search deliberately — an order file has no
+   front-matter fields worth indexing, so folding it into that pass
+   would only ever produce a bare, useless entry (and, on the repository
+   store, spend a real API call fetching one). *Done when* an
+   `.order.yaml` file appears in the file list, opens with its real
+   content, and a hand-edit round-trips through Save (the folder store)
+   or Push (the repository store) the same as any tutorial.
+
+   **A Refresh action added to the folder rail**, closing out that same
+   follow-up list — how does a reader see a change made to the
+   repository from outside dewnote at all? No browser API watches a
+   local folder for changes on its own, and the repository store never
+   needed anything new here: "Load repository" already re-reads whatever
+   the form fields say, with no picker of its own in the way, so
+   clicking it again already is a refresh. The folder store's own
+   `chooseFolder()` does put a real OS dialog in the way, though — before
+   this, seeing a file added or removed outside dewnote meant clicking
+   through that dialog again. `folder-panel.ts` now keeps the last
+   opened `FileSystemDirectoryHandle` (`currentRoot`), and a new
+   "Refresh" button re-walks it directly — the exact same
+   `loadFromRoot` pass `openButton`'s own click handler was refactored
+   to share, just without a new picker call in front of it. Disabled
+   until a folder is actually open, the same "nothing to do yet" gating
+   every other conditional control here already has. *Done when*
+   clicking Refresh, after a file is added to the folder outside
+   dewnote, shows the new file without dewnote's own picker reopening.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.

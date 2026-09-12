@@ -78,6 +78,7 @@ async function mockGithub(page: Page, opts: MockOptions) {
           { path: "content/tutorials/a-rule.md", type: "blob", sha: "tree-sha-1" },
           { path: "content/tutorials/sub/b-page.md", type: "blob", sha: "tree-sha-2" },
           { path: "assets/logo.png", type: "blob", sha: "tree-sha-3" },
+          { path: "content/tutorials/a-series.order.yaml", type: "blob", sha: "tree-sha-4" },
         ],
       });
     }
@@ -134,19 +135,36 @@ async function setup(page: Page, opts: MockOptions) {
 
 const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n", fileSha: "file-sha-1" };
 
-test("loading a repository lists only its markdown files, and search filters them", async ({ page }) => {
+test("loading a repository lists its markdown and order files, and search filters them", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 order file.");
 
   const items = page.locator(".dn-repo-file");
-  await expect(items).toHaveCount(2);
+  await expect(items).toHaveCount(3);
   await expect(items.nth(0)).toHaveText("content/tutorials/a-rule.md");
   await expect(items.nth(1)).toHaveText("content/tutorials/sub/b-page.md");
 
   await page.locator(".dn-repo-search").fill("sub");
   await expect(page.locator(".dn-repo-file")).toHaveCount(1);
   await expect(page.locator(".dn-repo-file")).toHaveText("content/tutorials/sub/b-page.md");
+});
+
+// Step 4's own follow-up, raised alongside the series view: an
+// .order.yaml file is now just another file in the browsable list —
+// opening one hands it to the same editor and push path every markdown
+// file already gets, no new UI needed to hand-edit a reading order.
+test("an .order.yaml file opens and pushes through the ordinary repo panel, same as a markdown file", async ({ page }) => {
+  await setup(page, DEFAULT_OPTS);
+  await page.locator(".dn-repo-load").click();
+  await page.locator(".dn-repo-file", { hasText: "a-series.order.yaml" }).click();
+
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened content/tutorials/a-series.order.yaml.");
+  await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
+  await page.locator(".dn-repo-push").click();
+
+  const pushStatus = page.locator(".dn-repo-section", { has: page.locator(".dn-repo-push") }).locator(".dn-repo-status");
+  await expect(pushStatus).toHaveText("Pushed to dewnote-edits.");
 });
 
 // file-index.ts's own side: loading a repository builds the front-matter
@@ -156,7 +174,7 @@ test("loading a repository lists only its markdown files, and search filters the
 test("loading a repository builds the file index the link picker searches", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 order file.");
   await page.locator(".dn-repo-close").click();
 
   const gap = page.locator(".dn-add-gap").first();
