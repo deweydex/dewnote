@@ -11,6 +11,7 @@ import { mountDialectPanel } from "./dialect-panel.ts";
 import { mountOutlinePanel } from "./outline-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountLinkCheckPanel } from "./link-check.ts";
+import { mountSeriesPanel } from "./series-panel.ts";
 import { mountCommandPalette } from "./command-palette.ts";
 
 // Applied before the document mounts, not after, so there is never a
@@ -52,7 +53,8 @@ const fileBar = mountFileBar({
     current = mountDocument(page, source);
   },
 });
-mountFolderPanel(fileBar, setFileIndex);
+const seriesPanel = mountSeriesPanel(getFileIndex);
+mountFolderPanel(fileBar, setFileIndex, seriesPanel.setSeries);
 mountRepoPanel({
   getSource: () => current.getSource(),
   loadDocument(source, _name) {
@@ -60,6 +62,7 @@ mountRepoPanel({
     current = mountDocument(page, source);
   },
   onIndexChange: setFileIndex,
+  onSeriesChange: seriesPanel.setSeries,
 });
 mountDialectPanel({
   getSource: () => current.getSource(),
@@ -86,6 +89,7 @@ interface DewnoteTestHook {
   mount(source: string): void;
   getSource(): string;
   setFileIndex(index: Parameters<typeof setFileIndex>[0]): void;
+  setSeries(series: Parameters<typeof seriesPanel.setSeries>[0]): void;
 }
 (window as unknown as { __dewnote: DewnoteTestHook }).__dewnote = {
   mount(source: string): void {
@@ -96,4 +100,5 @@ interface DewnoteTestHook {
     return current.getSource();
   },
   setFileIndex,
+  setSeries: seriesPanel.setSeries,
 };

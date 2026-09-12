@@ -108,11 +108,11 @@ interface TreeResponse {
   truncated?: boolean;
 }
 
-function blobsToMarkdownFiles(entries: TreeEntry[], prefix: string): RepoFile[] {
+function matchingBlobs(entries: TreeEntry[], prefix: string, matches: (path: string) => boolean): RepoFile[] {
   return entries
     .filter((entry) => entry.type === "blob")
     .map((entry) => ({ path: prefix ? `${prefix}/${entry.path}` : entry.path, sha: entry.sha }))
-    .filter((file) => file.path.endsWith(".md"));
+    .filter((file) => matches(file.path));
 }
 
 /** A repository too large for one recursive tree call to cover — GitHub
@@ -122,8 +122,10 @@ function blobsToMarkdownFiles(entries: TreeEntry[], prefix: string): RepoFile[] 
  * honest fix for the gap the first version of this function had: a
  * truncated response was silently treated as complete, which for a
  * large repository means files simply never showing up in search with
- * no indication anything was missing. */
-async function walkTreeForMarkdown(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
+ * no indication anything was missing. Takes the same `matches` predicate
+ * `listMarkdownFiles` and `listOrderFiles` each pass their own suffix
+ * check as, so the walk itself is written once. */
+async function walkTree(repo: RepoRef, ref: string, token: string, matches: (path: string) => boolean): Promise<RepoFile[]> {
   const results: RepoFile[] = [];
   const queue: { sha: string; prefix: string }[] = [{ sha: ref, prefix: "" }];
   while (queue.length > 0) {
@@ -131,7 +133,7 @@ async function walkTreeForMarkdown(repo: RepoRef, ref: string, token: string): P
     if (!next) break;
     const { sha, prefix } = next;
     const node = await apiJson<TreeResponse>(token, "GET", `/repos/${repo.owner}/${repo.repo}/git/trees/${encodeURIComponent(sha)}`);
-    results.push(...blobsToMarkdownFiles(node.tree, prefix));
+    results.push(...matchingBlobs(node.tree, prefix, matches));
     for (const entry of node.tree) {
       if (entry.type !== "tree") continue;
       queue.push({ sha: entry.sha, prefix: prefix ? `${prefix}/${entry.path}` : entry.path });
@@ -140,21 +142,36 @@ async function walkTreeForMarkdown(repo: RepoRef, ref: string, token: string): P
   return results;
 }
 
-/** Every markdown file in a repository at `ref`. The common case is one
- * recursive tree call — this is the search command's own index, built
- * fresh on every "Load repository" rather than cached, since the tree is
- * cheap and staleness would be the worse trade for a tool used across an
- * afternoon of edits elsewhere. A repository large enough that GitHub
- * truncates that single response falls back to `walkTreeForMarkdown`
- * rather than returning an incomplete list silently. */
-export async function listMarkdownFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
+async function listMatchingFiles(repo: RepoRef, ref: string, token: string, matches: (path: string) => boolean): Promise<RepoFile[]> {
   const data = await apiJson<TreeResponse>(
     token,
     "GET",
     `/repos/${repo.owner}/${repo.repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`,
   );
-  if (!data.truncated) return blobsToMarkdownFiles(data.tree, "");
-  return walkTreeForMarkdown(repo, ref, token);
+  if (!data.truncated) return matchingBlobs(data.tree, "", matches);
+  return walkTree(repo, ref, token, matches);
+}
+
+/** Every markdown file in a repository at `ref`. The common case is one
+ * recursive tree call — this is the search command's own index, built
+ * fresh on every "Load repository" rather than cached, since the tree is
+ * cheap and staleness would be the worse trade for a tool used across an
+ * afternoon of edits elsewhere. A repository large enough that GitHub
+ * truncates that single response falls back to `walkTree` rather than
+ * returning an incomplete list silently. */
+export async function listMarkdownFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
+  return listMatchingFiles(repo, ref, token, (path) => path.endsWith(".md"));
+}
+
+/** Every `<series>.order.yaml` file (series.ts's own reading-order files,
+ * DIALECTS.md §1) in a repository at `ref` — series-panel.ts's own
+ * source, alongside `listMarkdownFiles`'s front-matter index. A second,
+ * separate tree fetch rather than one call serving both lists: simpler
+ * than threading a second predicate through every caller of
+ * `listMarkdownFiles`, at the cost of one extra (cheap, per the same
+ * reasoning above) request when both are actually needed. */
+export async function listOrderFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
+  return listMatchingFiles(repo, ref, token, (path) => path.endsWith(".order.yaml"));
 }
 
 export async function getFileContent(

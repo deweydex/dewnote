@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { listMarkdownFiles, type DirectoryLike } from "./folder-store.ts";
+import { listMarkdownFiles, listOrderFiles, type DirectoryLike } from "./folder-store.ts";
 
 /** A hand-built fake — no real FileSystemDirectoryHandle needed to
  * verify the walk itself, the same split github.ts's own truncation
@@ -40,5 +40,21 @@ describe("listMarkdownFiles", () => {
 
   test("an empty folder yields no files", async () => {
     expect(await listMarkdownFiles(fakeDir({}))).toEqual([]);
+  });
+});
+
+describe("listOrderFiles", () => {
+  test("finds .order.yaml files, ignoring markdown and everything else, walking nested directories the same way", async () => {
+    const root = fakeDir({
+      "README.md": { kind: "file" },
+      tutorials: fakeDir({
+        "computational-methods": fakeDir({
+          "python-fundamentals.order.yaml": { kind: "file" },
+          "first-steps.md": { kind: "file" },
+        }),
+      }),
+    });
+    const files = await listOrderFiles(root);
+    expect(files.map((f) => f.path)).toEqual(["tutorials/computational-methods/python-fundamentals.order.yaml"]);
   });
 });

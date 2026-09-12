@@ -773,15 +773,49 @@ project; if they are not delightful, nothing after them will rescue it.
    list and search, and one opens, edits and saves through the same bar
    a single dropped file already uses.
 
+   **Third slice built** (`src/series.ts`, `src/series-panel.ts`),
+   read against dewlab's own `build.py` rather than guessed from this
+   document's own summary — which turned out to be wrong in one real
+   way, corrected in DIALECTS.md §1 alongside this: an order file is a
+   genuine two-key mapping (`series:`, `order:`), not a flat list.
+   `folder-panel.ts` and `repo-panel.ts` each gained a `listOrderFiles`
+   read (`folder-store.ts`'s and `github.ts`'s own new function,
+   factored out of the existing markdown walk/tree-fetch so the walk
+   itself is written once, matched against `.order.yaml` instead of
+   `.md`), handed to a new optional `onSeriesChange` callback the same
+   shape `onIndexChange` already has. `series-panel.ts` is a read-only
+   rail, closed until asked like every other one here, grouping every
+   series by its module and listing each in its own reading order,
+   showing an entry's real title from the file index where the slug is
+   actually indexed and the bare slug otherwise — an order file naming a
+   tutorial dewlab's own build would reject outright is a perfectly
+   ordinary thing to see in an editor that hasn't opened every file yet.
+
+   Deliberately not built, and not silently narrowed into this: opening
+   a listed tutorial with a click (needs a store-agnostic "open this
+   path" hook neither `folder-panel.ts` nor `repo-panel.ts` exposes
+   today — real plumbing, not a detail); `series.yaml`'s own cross-series
+   chaining and `modules.yaml`'s own module ordering (both real dewlab
+   files, found while reading `build.py` rather than assumed, but purely
+   about *glossary accumulation and module display order* for a build —
+   nothing this session's series view needs); reordering a series or
+   creating a new one, each listed as its own separate item on this same
+   line. *Done when* opening a folder or repository with real
+   `order.yaml` files shows every series, grouped by module, each in the
+   order its own file lists, with indexed titles where available.
+
    Still open: no OPFS private-vault mode (decision 5's own "browser
-   store" half beyond a folder or a single file); no series view built
-   from `order.yaml`; no "new tutorial from a template" or "new series"
-   affordance; the index is built once, on open, not refreshed on save
-   (§5.10's own other half) — a folder edited entirely through dewnote
-   itself stays accurate, since every edit still round-trips through the
-   same in-memory document, but a file changed by some other program
-   while the folder stays open would not be picked up until it's
-   reopened.
+   store" half beyond a folder or a single file); no "new tutorial from a
+   template" or "new series" affordance; the file index and the series
+   view are both built once, on open, not refreshed on save (§5.10's own
+   other half) — a folder edited entirely through dewnote itself stays
+   accurate, since every edit still round-trips through the same
+   in-memory document, but a file changed by some other program while the
+   folder stays open would not be picked up until it's reopened; opening
+   a listed tutorial from the series view with a click (needs a
+   store-agnostic "open this path" hook neither `folder-panel.ts` nor
+   `repo-panel.ts` exposes today); reordering a series or creating a new
+   one.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.

@@ -44,28 +44,43 @@ export async function chooseFolder(): Promise<FileSystemDirectoryHandle | null> 
   }
 }
 
-/** Every markdown file under `root`, walked recursively. Takes a
- * `DirectoryLike` rather than the real `FileSystemDirectoryHandle` type
- * specifically so this is unit-testable against a fake — the same
- * "verify the walk, not the browser API" split `github.ts`'s own
- * truncation fallback uses against a mocked `fetch`. */
-export async function listMarkdownFiles(root: DirectoryLike): Promise<FolderFile[]> {
+/** Walks `root` recursively, collecting every file whose path satisfies
+ * `matches` — `listMarkdownFiles` and `listOrderFiles` are both thin
+ * wrappers over this with their own suffix check, so the walk itself
+ * exists once. Takes a `DirectoryLike` rather than the real
+ * `FileSystemDirectoryHandle` type specifically so this is unit-testable
+ * against a fake — the same "verify the walk, not the browser API"
+ * split `github.ts`'s own truncation fallback uses against a mocked
+ * `fetch`. */
+async function walk(root: DirectoryLike, matches: (path: string) => boolean): Promise<FolderFile[]> {
   const results: FolderFile[] = [];
-  async function walk(dir: DirectoryLike, prefix: string): Promise<void> {
+  async function step(dir: DirectoryLike, prefix: string): Promise<void> {
     for await (const [name, handle] of dir.entries()) {
       const path = prefix ? `${prefix}/${name}` : name;
       // Duck-typed on `entries` rather than `.kind`, so a hand-built
       // fake directory in a test needs nothing but that one method —
       // the same minimal shape `DirectoryLike` itself declares.
       if (typeof (handle as Partial<DirectoryLike>).entries === "function") {
-        await walk(handle as DirectoryLike, path);
-      } else if (path.endsWith(".md")) {
+        await step(handle as DirectoryLike, path);
+      } else if (matches(path)) {
         results.push({ path, handle: handle as FileSystemFileHandle });
       }
     }
   }
-  await walk(root, "");
+  await step(root, "");
   return results;
+}
+
+/** Every markdown file under `root`, walked recursively. */
+export async function listMarkdownFiles(root: DirectoryLike): Promise<FolderFile[]> {
+  return walk(root, (path) => path.endsWith(".md"));
+}
+
+/** Every `<series>.order.yaml` file under `root` — series.ts's own
+ * reading-order files (DIALECTS.md §1), the source series-panel.ts reads
+ * alongside `listMarkdownFiles`'s front-matter index. */
+export async function listOrderFiles(root: DirectoryLike): Promise<FolderFile[]> {
+  return walk(root, (path) => path.endsWith(".order.yaml"));
 }
 
 export async function readFile(handle: FileSystemFileHandle): Promise<string> {
