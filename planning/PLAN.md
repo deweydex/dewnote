@@ -580,20 +580,47 @@ project; if they are not delightful, nothing after them will rescue it.
    component; an empty index (nothing opened yet) just leaves the field
    an ordinary text input.
 
-   Still open: no whole-file source view (Cmd+/) yet; named aesthetic
-   presets, as above; the add menu's six kinds are the same regardless of
-   dialect, not yet reading dewstack's five cell forms or knowing it has
-   no maths, which decision 3 already promises a dialect module rather
-   than this; a fence shows its full raw text, fence markers included,
-   rather than the site's bordered cell chrome with the fence syntax
-   hidden — the live-preview decoration work §5.1 already named as the
-   upgrade path, not a new gap; an orphan blank block, once one exists,
-   has no way to be reached or cleaned up through the UI; there is no
-   "+ Add field" for an optional field a dialect doesn't already give a
-   fixed spot to (dewlab's `packages`, `covers`, and the rest stay
-   raw-YAML-only) — this needs a real index of existing values to seed a
-   text field with, the way `status`'s select seeds itself from its own
-   fixed options, and is its own small slice, not folded into this one.
+   **Fifth slice built**: the whole-file source view §5.1 already named
+   as the third option's own upgrade path — `src/source-view.ts`, a
+   Cmd+/ overlay showing the entire document in one CodeMirror instance,
+   fence markers and front matter included, the same `sourceLanguageExtension`
+   a focused prose block's own raw view already uses. Modelled on
+   `command-palette.ts`'s full-screen overlay, not `outline-panel.ts`'s
+   or `dialect-panel.ts`'s docked side rail: those stay open *alongside*
+   a still-editable document underneath, fine for a read-only outline or
+   a one-shot convert, but this view is a second, complete editing
+   surface over the very same content — letting both it and the block
+   surface accept edits at once would mean whichever closes last
+   silently wins, and taking over the screen removes the ambiguity
+   rather than trying to reconcile it. Applies its edit on close (the
+   close button, Escape, or Cmd+/ again), not on every keystroke, for
+   the same reason a per-block commit only ever fires on blur —
+   reparsing the whole document as the reader types would tear this very
+   editor down mid-edit. Reachable from the command palette too
+   (`command-palette.ts`'s own "find the button and click it" pattern,
+   unchanged). *Done when* opening and closing with no edit round-trips
+   the document byte for byte, and an edit made in the whole-file view
+   shows up in the ordinary block surface once closed.
+
+   (This section's own "still open" list, several entries of which had
+   already been closed by later steps — an image and a link in the add
+   menu, drag reorder, the front-matter form, the whole-file view itself —
+   is corrected below rather than left further out of date.)
+
+   Still open: named aesthetic presets, as above; the add menu's six
+   kinds are the same regardless of dialect, not yet reading dewstack's
+   five cell forms or knowing it has no maths, which decision 3 already
+   promises a dialect module rather than this; a fence shows its full raw
+   text, fence markers included, rather than the site's bordered cell
+   chrome with the fence syntax hidden — the live-preview decoration work
+   §5.1 already named as the upgrade path, not a new gap; an orphan blank
+   block, once one exists, has no way to be reached or cleaned up through
+   the UI; there is no "+ Add field" for an optional front-matter field a
+   dialect doesn't already give a fixed spot to (dewlab's `packages`,
+   `covers`, and the rest stay raw-YAML-only) — this needs a real index
+   of existing values to seed a text field with, the way `status`'s
+   select seeds itself from its own fixed options, and is its own small
+   slice, not folded into this one.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as
