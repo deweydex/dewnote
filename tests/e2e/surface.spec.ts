@@ -121,6 +121,25 @@ test("a fence can be deleted like any other block, not just a prose one", async 
   expect(finalSource).toBe("One.\n\n\nThree.\n");
 });
 
+test("the orphan blank-line block a fence leaves behind is hoverable and deletable, not an invisible dead spot", async ({
+  page,
+}) => {
+  // render-block.ts's BLANK_LINE_PREVIEW is the fix: without it this block
+  // renders to zero height and there is nothing for a mouse to hover to
+  // reach its own delete button, even though it is a real, addressable
+  // block in the document (PLAN.md §6 step 2's own "still open" note).
+  await mount(page, "```python exec\nid: a\n1\n```\n\nAfter.\n");
+  const blank = page.locator(".dn-block-prose").first();
+  const box = await blank.boundingBox();
+  expect(box?.height).toBeGreaterThan(0);
+
+  await blank.hover();
+  await blank.locator(".dn-block-delete").click();
+
+  const finalSource = await getSource(page);
+  expect(finalSource).toBe("```python exec\nid: a\n1\n```\nAfter.\n");
+});
+
 test("the grip arms a block, and arrow keys reorder it while armed", async ({ page }) => {
   await mount(page, "One.\n\nTwo.\n\nThree.\n");
   const blocks = page.locator(".dn-block");

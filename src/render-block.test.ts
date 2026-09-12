@@ -26,6 +26,21 @@ describe("renderBlockPreview: prose", () => {
     expect(html).not.toContain("katex");
     expect(html).toContain("$5");
   });
+
+  test("a blank-only prose block (blocks.ts's own orphan-line case) renders a real, hoverable placeholder", () => {
+    // A fence doesn't absorb its own trailing blank run the way a paragraph
+    // does, so the blank line right after one is a real prose block of its
+    // own — md.render() of pure whitespace is "", which collapses to zero
+    // height in the DOM and leaves nothing for a mouse to hover to reach
+    // its delete button (PLAN.md §6 step 2's own "still open" note). This
+    // checks the fix, not just the fence fixture that first surfaced it:
+    // any prose block whose markdown renders empty gets the same
+    // placeholder, whatever put it there.
+    const block = firstBlockOfKind("```python exec\nid: x\n1\n```\n\nMore.\n", "prose");
+    expect(block.text.trim()).toBe("");
+    const html = renderBlockPreview(block, "plain");
+    expect(html).toBe('<p class="dn-blank-line">&nbsp;</p>');
+  });
 });
 
 describe("renderBlockPreview: math", () => {

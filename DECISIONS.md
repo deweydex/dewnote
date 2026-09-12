@@ -648,3 +648,43 @@ way `link-picker.ts`'s own overlay does — is a swap inside
 `frontmatter-fields.ts`/`app.ts`'s row-building code, not a rethink of
 `setFrontMatterField` or the commit path, both of which are unaffected by
 where a field's value ends up coming from.*
+
+**26 — A blank-only prose block gets a real, hoverable placeholder rather
+than being absorbed into the block next to it.** `blocks.ts`'s own header
+comment already named the gap: a fence, fold or front-matter block
+doesn't own a trailing blank line the way a real paragraph does, so the
+blank line right after one becomes its own prose block — real, and
+correctly round-tripping, but rendering to the empty string
+(`md.render()` of pure whitespace) and so collapsing to zero height, with
+nothing for a mouse to hover to reach its own delete button. Confirmed
+directly rather than assumed to be cosmetic: the pristine starter
+document itself already has one, sitting silently between the exec cell
+and the hint fold.
+
+The tempting fix — make a fence/fold/front-matter block absorb its own
+trailing blank run the same way a prose block already does — was
+rejected: that would extend the block's own `text`, which `cell.ts` and
+`app.ts` both read as exactly the fence's own delimiters and body with
+nothing appended, `mountEditor`'s initial CodeMirror content included.
+Extending it would put a stray blank line inside a code cell's own
+editable box, worse than the invisible block it would replace, not
+better — decision 1's byte-exact block model was never the problem here,
+only the rendering.
+
+Built instead, confined entirely to the render layer: `render-block.ts`'s
+`renderBlockPreview` renders `<p class="dn-blank-line">&nbsp;</p>` for
+*any* prose or math block whose markdown renders to nothing, not only
+the fence-adjacent case that first surfaced it — a non-breaking space is
+the standard technique for giving an element real height without a
+literal character a reader would ever look at directly. This reuses
+every other prose block's own hover-toolbar and click-to-edit path
+outright: no new interaction code, just a block that finally has a
+surface for the existing one to find. Confirmed live, not just built:
+the starter document's own orphan block went from a `0`-height, silently
+present, silently unreachable entry to a normal hoverable row whose
+existing delete button removes exactly the one blank line and nothing
+else.
+*Cost to change: none. A future rendering pass (the fence-chrome work
+this session's own "cleanest and simplest editing experience" thread is
+headed toward) can replace this placeholder with something richer
+without touching `blocks.ts` or any index arithmetic in `app.ts`.*
