@@ -44,6 +44,7 @@ let tools = null;
 let sqlTools = null;
 let sqliteLoading = null;
 let matplotlibConfigured = false;
+let sharedDbSeeded = false;
 
 function post(message) {
   self.postMessage(message);
@@ -85,12 +86,24 @@ async function runCell(msg) {
   // is a plain heuristic standing in for it, same limitation dewstack's
   // own build-time "a py cell= on this page always gets sqlite3" rule
   // has, just applied per cell instead of per page.
-  if (msg.code.indexOf("read_sql(") !== -1) {
+  if (msg.code.indexOf("read_sql(") !== -1 || msg.sql) {
     await ensureSqlTools();
     if (!pyodide.loadedPackages || !pyodide.loadedPackages["pandas"]) {
       post({ type: "status", text: "Loading pandas…" });
       await pyodide.loadPackage(["pandas"]);
     }
+  }
+  // A sql exec cell (msg.sql, set by pyodide-engine.ts's own runCell
+  // call — dewnote_sql_tools.run_sql_cell's own first argument, wrapped
+  // into the cell's code by cell.ts's wrapSqlExecCode) needs the one
+  // shared, page-wide "db" connection dewlab's own sql exec model uses
+  // (DIALECTS.md §1) seeded into the same namespace every python exec
+  // cell already shares — seeded once, lazily, on whichever cell (SQL
+  // or Python) actually needs it first, the same "pay for what's used"
+  // discipline read_sql's own sqlite3 load already follows.
+  if (msg.sql && !sharedDbSeeded) {
+    await pyodide.runPythonAsync("import sqlite3, dewnote_tools\ndewnote_tools._page_globals['db'] = sqlite3.connect(':memory:')");
+    sharedDbSeeded = true;
   }
   post({ type: "status", text: "" });
   const emit = (kind, cssClass, text, markup) =>

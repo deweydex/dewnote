@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { parseDocument } from "./blocks.ts";
 import {
   declaredPackages,
+  execCellLanguage,
   isRunnableFence,
   parseCellSource,
   parseCellSourceFromFenceText,
   parseSqlCellInfo,
   sqlPersistStorageKey,
   sqlScriptFromFenceText,
+  wrapSqlExecCode,
 } from "./cell.ts";
 
 function fenceBlock(source: string) {
@@ -165,5 +167,29 @@ describe("isRunnableFence", () => {
   test("does not match exec as a substring of another token", () => {
     expect(isRunnableFence("nonexec")).toBe(false);
     expect(isRunnableFence("execute")).toBe(false);
+  });
+});
+
+describe("execCellLanguage", () => {
+  test("is sql only when the fence's first word is literally sql", () => {
+    expect(execCellLanguage("sql exec")).toBe("sql");
+  });
+
+  test("is python for python exec, and for anything else, dewlab's own default", () => {
+    expect(execCellLanguage("python exec")).toBe("python");
+    expect(execCellLanguage("exec")).toBe("python");
+    expect(execCellLanguage("javascript exec")).toBe("python");
+  });
+});
+
+describe("wrapSqlExecCode", () => {
+  test("wraps the script as a bare expression against the shared db, not an assignment", () => {
+    const wrapped = wrapSqlExecCode("select * from readings;");
+    expect(wrapped).toBe('import dewnote_sql_tools as _dn_sql\n_dn_sql.run_sql_cell(db, "select * from readings;")');
+  });
+
+  test("JSON-escapes the script, so quotes and newlines in it survive as real Python string content", () => {
+    const wrapped = wrapSqlExecCode("select 'a' as x;\nselect 2;");
+    expect(wrapped).toContain('"select \'a\' as x;\\nselect 2;"');
   });
 });

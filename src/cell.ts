@@ -88,6 +88,32 @@ export function isRunnableFence(info: string): boolean {
   return info.split(/\s+/).includes("exec");
 }
 
+/** Which of dewlab's two exec-cell languages a runnable fence is
+ * (DIALECTS.md §1, `d2a21ed`) — mirrors dewlab's own `CELL_TYPES`
+ * check in `parse_cell()`: the fence's first word decides, and
+ * anything other than literally `sql` is Python, `exec` itself
+ * included (a bare ` ```exec ` fence, dewlab's own shorthand for
+ * `python exec`). Only meaningful for a fence `isRunnableFence`
+ * already said yes to. */
+export function execCellLanguage(info: string): "python" | "sql" {
+  return info.trim().split(/\s+/)[0] === "sql" ? "sql" : "python";
+}
+
+/** The Python dewnote actually runs for a `sql exec` cell — the fence's
+ * raw SQL text, wrapped into a call against the one shared, page-wide
+ * `db` connection (DIALECTS.md §1), mirroring dewlab's own
+ * `wrapSqlCode()`. A bare expression, not assigned to anything: unlike
+ * dewlab's own `_run_sql_cell` (which renders itself and returns a value
+ * that must then be discarded to avoid a second render), dewnote's
+ * `dewnote_sql_tools.run_sql_cell` only *returns* a DataFrame or `None`,
+ * so leaving this as the cell's own trailing expression is what lets
+ * `dewnote_tools.py`'s existing `_render_value` render it — the same
+ * path any other cell's trailing DataFrame already takes, not a second
+ * rendering mechanism. */
+export function wrapSqlExecCode(script: string): string {
+  return `import dewnote_sql_tools as _dn_sql\n_dn_sql.run_sql_cell(db, ${JSON.stringify(script)})`;
+}
+
 export interface SqlCellInfo {
   /** The database this cell's script runs against — dewstack's own
    * sharing key (DIALECTS.md §2): every `sql cell=name` fence on the

@@ -41,11 +41,13 @@ import type { FileIndexEntry } from "./file-index.ts";
 import { pickLink } from "./link-picker.ts";
 import {
   declaredPackages,
+  execCellLanguage,
   isRunnableFence,
   parseCellSourceFromFenceText,
   parseSqlCellInfo,
   sqlPersistStorageKey,
   sqlScriptFromFenceText,
+  wrapSqlExecCode,
   type SqlCellInfo,
 } from "./cell.ts";
 import {
@@ -549,7 +551,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * cross-origin isolation in effect (pyodide-engine.ts's canStop()); on a
    * page without it there is no way to interrupt a running cell, a
    * documented gap, not a bug here. */
-  function buildCellRunner(index: number, view: EditorView): HTMLElement {
+  function buildCellRunner(index: number, view: EditorView, info: string): HTMLElement {
     const panel = document.createElement("div");
     panel.className = "dn-cell-panel";
 
@@ -592,7 +594,9 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       try {
         await ensureBooted(declaredPackages(doc.frontMatter.fields));
         stopButton.disabled = !canStop();
-        await runCell(cellId, code, (out) => applyOutputEvent(output, out));
+        const isSql = execCellLanguage(info) === "sql";
+        const toRun = isSql ? wrapSqlExecCode(code) : code;
+        await runCell(cellId, toRun, (out) => applyOutputEvent(output, out), { sql: isSql });
       } catch (err) {
         // A rejection here, rather than a `{ ok: false }` result, means
         // the cell never got to run its own error handling at all — the
@@ -801,7 +805,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       wrapper.appendChild(host);
       const view = mountEditor(host, index, block.text, languageExtensionFor(info));
       const sqlInfo = parseSqlCellInfo(info);
-      if (isRunnableFence(info)) wrapper.appendChild(buildCellRunner(index, view));
+      if (isRunnableFence(info)) wrapper.appendChild(buildCellRunner(index, view, info));
       else if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
       return wrapper;
     }

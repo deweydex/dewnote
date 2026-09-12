@@ -35,6 +35,14 @@ describe("dewlab -> dewstack", () => {
     expect(report).toEqual([]);
   });
 
+  test("sql exec has no dewstack equivalent (a shared connection, not a per-name one) — kept as illustrative, reported", () => {
+    const source = "```sql exec\nid: totals\nselect count(*) from readings;\n```\n";
+    const { markdown, report } = convertDialect(source, "dewlab", "dewstack");
+    expect(markdown).toBe("```sql\nid: totals\nselect count(*) from readings;\n```\n");
+    expect(report.length).toBe(1);
+    expect(report[0]).toContain("no dewstack equivalent");
+  });
+
   test("front matter drops year, covers, and practice_* fields, keeps the rest", () => {
     const source = "---\ntitle: A Rule\nyear: 2026\ncovers: {}\npractice_for: other-slug\nmodule: computational-methods\n---\n\nBody.\n";
     const { markdown, report } = convertDialect(source, "dewlab", "dewstack");
@@ -55,21 +63,41 @@ describe("dewstack -> dewlab", () => {
     expect(report).toEqual([]);
   });
 
-  test("sql, sql-check, site=, and app= fences have no dewlab equivalent and become illustrative, reported", () => {
+  test("sql-check, site=, and app= fences have no dewlab equivalent and become illustrative, reported", () => {
     const cases = [
-      "```sql cell=orders\nselect * from orders;\n```\n",
       "```sql-check db=orders task=check_totals\n```\n",
       "```html site=widget\n<div></div>\n```\n",
       "```js app=dashboard\nconsole.log(1);\n```\n",
     ];
     for (const source of cases) {
       const { markdown, report } = convertDialect(source, "dewstack", "dewlab");
-      expect(markdown).not.toContain("cell=");
       expect(markdown).not.toContain("site=");
       expect(markdown).not.toContain("app=");
       expect(report.length).toBe(1);
       expect(report[0]).toContain("no dewlab equivalent");
     }
+  });
+
+  test("sql cell=x becomes sql exec, using the database name as the new id", () => {
+    const source = "```sql cell=orders\nselect * from orders;\n```\n";
+    const { markdown, report } = convertDialect(source, "dewstack", "dewlab");
+    expect(markdown).toBe("```sql exec\nid: orders\nselect * from orders;\n```\n");
+    expect(report).toEqual([]);
+  });
+
+  test("persist has no home in dewlab's sql exec, and is reported", () => {
+    const source = "```sql cell=orders persist\nselect * from orders;\n```\n";
+    const { markdown, report } = convertDialect(source, "dewstack", "dewlab");
+    expect(markdown).toBe("```sql exec\nid: orders\nselect * from orders;\n```\n");
+    expect(report).toEqual(['"orders": persist has no home in dewlab\'s sql exec (no per-document save/restore there) — dropped']);
+  });
+
+  test("two sql cell=x fences sharing a name convert to two sql exec fences, with a report about the colliding id", () => {
+    const source = "```sql cell=orders\ncreate table orders (id integer);\n```\n\n```sql cell=orders\nselect * from orders;\n```\n";
+    const { markdown, report } = convertDialect(source, "dewstack", "dewlab");
+    expect(markdown).toContain("id: orders\ncreate table orders (id integer);");
+    expect(markdown).toContain("id: orders\nselect * from orders;");
+    expect(report).toEqual(['"orders": another cell already used this name — dewlab requires a unique id per exec cell; rename one by hand after converting']);
   });
 
   test("front matter adds an empty year and empty covers, and reports the gap", () => {

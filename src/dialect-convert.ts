@@ -2,11 +2,17 @@
 // mapping in the dialect modules... applied block by block, with a
 // report of what did not map," and DIALECTS.md §5's own table, followed
 // directly rather than re-derived: dewlab `python exec` with `id: x`
-// becomes dewstack `py cell=x` (a hint has no home there, reported);
-// dewstack `py cell=x` becomes dewlab `python exec`; dewstack's other
-// four fence forms (`sql`, `sql-check`, `site=`, `app=`) have no dewlab
-// equivalent and become illustrative fences, reported; either dialect
-// dropped to plain markdown keeps the language and drops the attribute.
+// becomes dewstack `py cell=x` (`hint:`/`expect:`/`name:` have no home
+// there, each reported); dewstack `py cell=x` becomes dewlab `python
+// exec`; dewstack `sql cell=x` becomes dewlab `sql exec` (`persist` has
+// no home, reported; dewstack's own per-cell database name becomes the
+// new id); dewlab's own `sql exec` has no dewstack equivalent going the
+// other way (dewstack's SQL cells are per-name databases, dewlab's share
+// one); dewstack's `sql-check`, `site=`, `app=` (plan §8 item 3 still
+// pending for `site=`/dewlab's own `html/css/js site`) have no dewlab
+// equivalent yet and become illustrative fences, reported; either
+// dialect dropped to plain markdown keeps the language and drops the
+// attribute.
 //
 // Unlike blocks.ts's own round trip, or jupyter.ts's notebook import,
 // this is not lossless by design — DIALECTS.md §5 names exactly what
@@ -19,7 +25,7 @@
 
 import { load as parseYaml, dump as dumpYaml } from "js-yaml";
 import { parseDocument, type Block } from "./blocks.ts";
-import { isRunnableFence, parseCellSource, parseSqlCellInfo } from "./cell.ts";
+import { execCellLanguage, isRunnableFence, parseCellSource, parseSqlCellInfo } from "./cell.ts";
 import type { DialectName } from "./dialect.ts";
 
 export interface ConversionResult {
@@ -47,12 +53,21 @@ function fence(backticks: string, info: string, body: string): string {
   return `${backticks}${info}\n${body}\n${backticks}\n`;
 }
 
-function convertFence(block: Block, from: DialectName, to: DialectName, report: string[]): string {
+function convertFence(block: Block, from: DialectName, to: DialectName, report: string[], usedSqlIds: Set<string>): string {
   const info = block.fence?.info ?? "";
   const backticks = "`".repeat(block.fence?.length ?? 3);
 
   if (from === "dewlab" && to === "dewstack") {
     if (!isRunnableFence(info)) return block.text;
+    if (execCellLanguage(info) === "sql") {
+      // dewlab's sql exec cells share one page-wide `db`; dewstack's own
+      // SQL grammar is per-name databases with no such thing to address
+      // as one — the same mismatch DIALECTS.md §5 already names for the
+      // reverse direction, just with no id to preserve here since a
+      // dewstack fence carries no header lines at all (§2).
+      report.push(`fence "${info}": dewlab's sql exec has no dewstack equivalent (dewstack's SQL cells are per-name databases) — kept as illustrative code`);
+      return fence(backticks, "sql", fenceBody(block.text));
+    }
     const { id, hint, expect, name, code } = parseCellSource(block);
     const cellName = id ?? "cell";
     if (hint) report.push(`"${cellName}": hint: has no home in dewstack — dropped ("${hint}")`);
@@ -64,7 +79,26 @@ function convertFence(block: Block, from: DialectName, to: DialectName, report: 
   if (from === "dewstack" && to === "dewlab") {
     const pyCell = PY_CELL_RE.exec(info.trim());
     if (pyCell) return fence(backticks, "python exec", `id: ${pyCell[1]}\n${fenceBody(block.text)}`);
-    const isOtherDewstackCell = parseSqlCellInfo(info) !== null || /^sql-check\b/.test(info) || /\b(?:site|app)=/.test(info);
+    const sqlInfo = parseSqlCellInfo(info);
+    if (sqlInfo) {
+      if (sqlInfo.persist) report.push(`"${sqlInfo.name}": persist has no home in dewlab's sql exec (no per-document save/restore there) — dropped`);
+      // dewstack's own database name becomes the new id verbatim — a
+      // dewlab exec id needs no relation to a database name, but reusing
+      // it keeps the cell recognisable, and dewstack's own naming
+      // convention already matches an id's own shape ([a-z0-9-]+). Two
+      // dewstack fences sharing one name is dewstack's own way of
+      // continuing one session across cells; dewlab's sql exec cells all
+      // share one connection regardless of id, so nothing about the SQL
+      // itself is lost — but dewlab still requires every exec id to be
+      // unique, so the second and later fence sharing a name is reported
+      // rather than silently given a colliding id.
+      if (usedSqlIds.has(sqlInfo.name)) {
+        report.push(`"${sqlInfo.name}": another cell already used this name — dewlab requires a unique id per exec cell; rename one by hand after converting`);
+      }
+      usedSqlIds.add(sqlInfo.name);
+      return fence(backticks, "sql exec", `id: ${sqlInfo.name}\n${fenceBody(block.text)}`);
+    }
+    const isOtherDewstackCell = /^sql-check\b/.test(info) || /\b(?:site|app)=/.test(info);
     if (isOtherDewstackCell) {
       report.push(`fence "${info}": no dewlab equivalent — kept as illustrative code`);
       const language = info.split(/\s+/)[0] || "text";
@@ -123,10 +157,14 @@ export function convertDialect(source: string, from: DialectName, to: DialectNam
   if (from === to) return { markdown: source, report: [] };
   const doc = parseDocument(source);
   const report: string[] = [];
+  // Only used going dewstack -> dewlab, to notice when two `sql cell=x`
+  // fences share a name — see convertFence's own comment on why that
+  // case is reported rather than resolved.
+  const usedSqlIds = new Set<string>();
   const markdown = doc.blocks
     .map((block) => {
       if (block.kind === "frontmatter") return convertFrontMatter(block, from, to, report);
-      if (block.kind === "fence") return convertFence(block, from, to, report);
+      if (block.kind === "fence") return convertFence(block, from, to, report, usedSqlIds);
       return block.text;
     })
     .join("");
