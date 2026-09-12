@@ -1,7 +1,7 @@
 import "katex/dist/katex.min.css";
 import "./theme/dewlab-tokens.css";
 import "./app.css";
-import { mountDocument, setFileIndex, type MountedDocument } from "./app.ts";
+import { getFileIndex, mountDocument, setFileIndex, type MountedDocument } from "./app.ts";
 import { applySettings, loadSettings } from "./settings.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountFileBar } from "./file-bar.ts";
@@ -9,6 +9,7 @@ import { mountRepoPanel } from "./repo-panel.ts";
 import { mountFolderPanel } from "./folder-panel.ts";
 import { mountDialectPanel } from "./dialect-panel.ts";
 import { mountOutlinePanel } from "./outline-panel.ts";
+import { mountLinkCheckPanel } from "./link-check.ts";
 import { mountCommandPalette } from "./command-palette.ts";
 
 // Applied before the document mounts, not after, so there is never a
@@ -67,6 +68,7 @@ mountDialectPanel({
   },
 });
 mountOutlinePanel({ getSource: () => current.getSource() });
+mountLinkCheckPanel({ getSource: () => current.getSource(), getFileIndex });
 mountCommandPalette();
 
 // Playwright (tests/e2e/) drives this same built page directly rather than
