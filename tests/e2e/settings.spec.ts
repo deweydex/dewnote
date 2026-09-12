@@ -98,7 +98,11 @@ test("tinted cells off flattens a cell's background to the page background", asy
       return Array.from(ctx.getImageData(0, 0, 1, 1).data);
     }, color);
 
-  const fenceSource = page.locator(".dn-block-fence .dn-block-source");
+  // .dn-cell-box, not .dn-block-source directly: a runnable fence's own
+  // tinted background lives on the box wrapping both its header bar and
+  // its (deliberately transparent) code editor now (decision 27), not on
+  // .dn-block-source itself.
+  const fenceSource = page.locator(".dn-block-fence .dn-cell-box");
   const bodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const tintedCellBg = await fenceSource.evaluate((el) => getComputedStyle(el).backgroundColor);
   // Confirms the test can actually tell tinted from untinted before

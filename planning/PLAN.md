@@ -602,25 +602,51 @@ project; if they are not delightful, nothing after them will rescue it.
    the document byte for byte, and an edit made in the whole-file view
    shows up in the ordinary block surface once closed.
 
+   **Sixth slice built** (`src/cell.ts`'s `setCellHeaderField`/
+   `replaceCellCode`, `app.ts`'s `fenceCodeViews`, decision 27): the
+   "cleanest and simplest editing experience" thread's own centrepiece —
+   a runnable fence's `id:`/`hint:`/`expect:`/`name:` header lines render
+   as a compact form (the language as a label, `id` always shown, the
+   rest behind a "+ field" until asked for), and the fence's own live
+   editor holds only the code beneath them, not the fence markers or
+   header lines mixed in. Decision 15 is untouched — still one live
+   CodeMirror instance per fence, always — only *which text* that
+   instance holds changed. Four real treatments were mocked up and
+   compared before choosing this one over a full Obsidian-style
+   cursor-aware decoration system; decision 27 has the comparison and
+   why the chosen one won on cost. `id` edits go through their own path,
+   confirmed before a genuine rename and refused outright on an empty
+   value or a collision with another cell's id (DIALECTS.md §1's own
+   contract, and the same warning dewlab's own authoring editor gives);
+   `hint`/`expect`/`name` patch only the header bar's own DOM, so editing
+   one never costs the code editor its cursor position or undo history.
+   Scoped to `isRunnableFence` fences (`python exec`/`sql exec`) only —
+   the one shape with these header lines to begin with. *Done when*,
+   satisfied: a cell with every header field set round-trips through the
+   mounted DOM byte for byte with no edit made, editing the code below a
+   just-added hint keeps both, and a rename is refused, confirmed, or
+   applied exactly as DIALECTS.md's own contract requires.
+
    (This section's own "still open" list, several entries of which had
    already been closed by later steps — an image and a link in the add
-   menu, drag reorder, the front-matter form, the whole-file view itself —
-   is corrected below rather than left further out of date.)
+   menu, drag reorder, the front-matter form, the whole-file view itself,
+   the orphan blank block, a runnable fence's own raw header syntax — is
+   corrected below rather than left further out of date.)
 
    Still open: named aesthetic presets, as above; the add menu's six
    kinds are the same regardless of dialect, not yet reading dewstack's
    five cell forms or knowing it has no maths, which decision 3 already
-   promises a dialect module rather than this; a fence shows its full raw
-   text, fence markers included, rather than the site's bordered cell
-   chrome with the fence syntax hidden — the live-preview decoration work
-   §5.1 already named as the upgrade path, not a new gap; an orphan blank
-   block, once one exists, has no way to be reached or cleaned up through
-   the UI; there is no "+ Add field" for an optional front-matter field a
-   dialect doesn't already give a fixed spot to (dewlab's `packages`,
-   `covers`, and the rest stay raw-YAML-only) — this needs a real index
-   of existing values to seed a text field with, the way `status`'s
-   select seeds itself from its own fixed options, and is its own small
-   slice, not folded into this one.
+   promises a dialect module rather than this; a fence *other* than a
+   runnable `python exec`/`sql exec` cell — a dewstack SQL cell, a site
+   pane, a staged-hint fence — still shows its full raw text, fence
+   markers and all, since the sixth slice above is scoped to the one
+   fence shape that actually has header lines to turn into a form; there
+   is no "+ Add field" for an optional front-matter field a dialect
+   doesn't already give a fixed spot to (dewlab's `packages`, `covers`,
+   and the rest stay raw-YAML-only) — this needs a real index of
+   existing values to seed a text field with, the way `status`'s select
+   seeds itself from its own fixed options, and is its own small slice,
+   not folded into this one.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as

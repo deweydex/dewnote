@@ -688,3 +688,82 @@ else.
 this session's own "cleanest and simplest editing experience" thread is
 headed toward) can replace this placeholder with something richer
 without touching `blocks.ts` or any index arithmetic in `app.ts`.*
+
+**27 — A runnable fence's own header lines become a compact form; the
+fence's live editor holds only the code. Chosen from four mocked-up
+options, over a full Obsidian-style cursor-aware decoration system.**
+Screenshotting the built app directly (decision 9) surfaced the actual
+cost of §5.1's own deferred "live-preview decorations" upgrade: every
+cell shows its raw ` ```python exec `, `id:` and `hint:` lines forever,
+never hidden, for the two things Josh named as mattering most — Python
+and prose. Four concrete treatments were mocked up in dewnote's own
+tokens (an artifact, not a description) before writing any code: hiding
+the fence lines unconditionally behind a badge with a reveal click; the
+full Obsidian-style decorations, hidden only while the cursor is
+elsewhere; header lines as real form fields; and a badge added on top of
+the untouched raw text. Picked: the form-field option, with two further
+asks — space efficiency and easy Python editing — that shaped the actual
+build more than the mockup did.
+
+Decision 15 is untouched on purpose: a fence is still always a live
+CodeMirror instance, never a separate rendered view. What changed is
+*which text* that instance holds. `cell.ts` gained `setCellHeaderField`
+(mirrors `setFrontMatterField`'s own byte-exact discipline exactly,
+touching only one header line) and `replaceCellCode` (the inverse: swaps
+the code, leaves every header line untouched). `app.ts`'s fence-code
+`EditorView` now holds only `parseCellSourceFromFenceText(block.text).code`
+— not the whole fence — so the language extension highlights real code
+alone, no more `id: first-cell` lines for CodeMirror's Python mode to
+render nonsensically. A second map, `fenceCodeViews`, sits alongside the
+existing `liveViews`, since `blockTexts()` now has to know which of a
+block's live editors is "the whole block's own text" versus "just this
+block's code, headers already committed elsewhere" — `mountEditor`
+grew an optional target-map parameter for exactly this, rather than a
+second near-identical mounting function.
+
+A genuine correctness trap surfaced building this, not found by
+inspection: `parseHeaderAndCode` reads *both* "no code lines at all"
+and "a single blank code line" as `code: ""` — collapsing two distinct
+byte shapes to the same parsed value. `replaceCellCode`'s first cut
+reconstructed unconditionally, which meant simply *mounting* an
+untouched cell with no code at all inserted a phantom blank line on
+every read — caught immediately by `tests/e2e/surface.spec.ts`'s own
+real-fixture round-trip test actually failing, not by review. Fixed
+with the same no-op guard every sibling function here already has:
+compare against *this* fence's own current code before reconstructing
+anything, and return the original bytes untouched when they match.
+
+Two further choices, both about not losing what the split already had.
+Editing `hint`/`expect`/`name` patches only the header bar's own DOM
+(`commitCellHeaderField`), leaving the code's live editor completely
+alone — its cursor position and undo history survive a hint edit, which
+a full block re-render (every other commit path's own habit) would have
+thrown away for no reason, since a header edit can never change the
+document's shape. `id` gets its own path instead
+(`commitCellId`): DIALECTS.md §1 calls a cell's id a contract, so a
+clear is refused outright, a value already used by another cell is
+refused outright with `window.alert` (the same native-dialog idiom
+`pickImageFile`'s own alt-text prompt already uses, not a bespoke
+modal for something this rare), and an actual rename of a non-empty id
+is confirmed first — the same warning dewlab's own authoring editor
+gives (§4). `id` changes rebuild the whole block regardless, since the
+Run button's own closed-over id needs the same fresh value the header
+bar does, and a rename is rare and deliberate enough that losing the
+code editor's cursor position over it is a fair trade, unlike a hint
+edit.
+
+Scoped to `isRunnableFence` fences only — dewlab's `python exec`/`sql
+exec` convention, the one shape with `id:`/`hint:`/`expect:`/`name:`
+header lines to begin with. A SQL cell (`sql cell=name`), a site pane,
+and a staged-hint fence each carry their own information in the info
+string or their own header shape already, not this one, and keep
+rendering exactly as before.
+*Cost to change: low. The scoping to `isRunnableFence` is a single `if`
+in `renderBlockWrapper` — extending the same treatment to another fence
+kind's own header shape later is additive, not a rework of
+`setCellHeaderField`/`replaceCellCode`, both of which only know about
+generic `key: value` header lines and code, never about which fence kind
+called them. Reverting to one CodeMirror instance per fence, if that
+ever seemed better, is un-doing the `fenceCodeViews` split and its one
+call site in `renderBlockWrapper` — contained, not spread through the
+file.*

@@ -50,9 +50,13 @@ import {
   parseCellSourceFromFenceText,
   parseSitePaneInfo,
   parseSqlCellInfo,
+  replaceCellCode,
+  setCellHeaderField,
   sqlPersistStorageKey,
   sqlScriptFromFenceText,
   wrapSqlExecCode,
+  type CellHeaderKey,
+  type CellSource,
   type SitePaneInfo,
   type SqlCellInfo,
 } from "./cell.ts";
@@ -172,6 +176,14 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   let source = initialSource;
   let doc = parseDocument(source);
   const liveViews = new Map<number, EditorView>();
+  /** A runnable fence's own code-only CodeMirror instance (decision 27) —
+   * kept separate from `liveViews` because `blockTexts()` has to treat it
+   * differently: the block's full text is the header lines (committed
+   * straight into `doc`/`source` by `commitCellHeaderField`/`commitCellId`,
+   * never live in an editor) plus whatever this view currently holds, not
+   * this view's content standing in for the whole block the way every
+   * other live editor's does. */
+  const fenceCodeViews = new Map<number, EditorView>();
   const blockElements: HTMLElement[] = [];
   let focusedProseIndex: number | null = null;
   // Front matter's own edit state has two views (decision 11): the
@@ -189,20 +201,46 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   let armedIndex: number | null = null;
 
   /** Every block's current text — a live editor's content where one is
-   * mounted, the block's own text otherwise — joined in order. */
+   * mounted, the block's own text otherwise — joined in order. A
+   * runnable fence with its own code-only view (`fenceCodeViews`) folds
+   * that view's live content back into the block's own (already
+   * header-current) text via `replaceCellCode`, rather than standing in
+   * for the block's whole text the way every other live editor's does. */
   function blockTexts(): string[] {
-    return doc.blocks.map((block, index) => liveViews.get(index)?.state.doc.toString() ?? block.text);
+    return doc.blocks.map((block, index) => {
+      const codeView = fenceCodeViews.get(index);
+      if (codeView) return replaceCellCode(block.text, codeView.state.doc.toString());
+      return liveViews.get(index)?.state.doc.toString() ?? block.text;
+    });
   }
 
   function currentSource(): string {
     return blockTexts().join("");
   }
 
+  function destroyEditorAt(index: number) {
+    liveViews.get(index)?.destroy();
+    liveViews.delete(index);
+    fenceCodeViews.get(index)?.destroy();
+    fenceCodeViews.delete(index);
+  }
+
   function teardownLiveViews() {
     for (const view of liveViews.values()) view.destroy();
     liveViews.clear();
+    for (const view of fenceCodeViews.values()) view.destroy();
+    fenceCodeViews.clear();
     focusedProseIndex = null;
     frontMatterRawMode = false;
+  }
+
+  /** The common tail of every commit path that patches one block in
+   * place rather than falling back to a full rebuild: re-render just
+   * that block's wrapper from the current `doc` and swap it in. */
+  function rerenderBlock(index: number) {
+    const newWrapper = renderBlockWrapper(doc.blocks[index]!, index);
+    blockElements[index]!.replaceWith(newWrapper);
+    blockElements[index] = newWrapper;
   }
 
   /** Called on a block's own blur. Patches just that block in place when
@@ -230,14 +268,11 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       return;
     }
 
-    liveViews.get(changedIndex)?.destroy();
-    liveViews.delete(changedIndex);
+    destroyEditorAt(changedIndex);
     if (changedIndex === focusedProseIndex) focusedProseIndex = null;
     source = newSource;
     doc = newDoc;
-    const newWrapper = renderBlockWrapper(doc.blocks[changedIndex]!, changedIndex);
-    blockElements[changedIndex]!.replaceWith(newWrapper);
-    blockElements[changedIndex] = newWrapper;
+    rerenderBlock(changedIndex);
   }
 
   /** The front-matter form's own commit path (decision 11) — there is no
@@ -267,9 +302,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     }
 
     doc = newDoc;
-    const newWrapper = renderBlockWrapper(doc.blocks[index]!, index);
-    blockElements[index]!.replaceWith(newWrapper);
-    blockElements[index] = newWrapper;
+    rerenderBlock(index);
   }
 
   /** The form's "Done" button: collapse front matter back to its one-line
@@ -277,9 +310,24 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   function exitFrontMatterEdit(index: number) {
     if (focusedProseIndex === index) focusedProseIndex = null;
     frontMatterRawMode = false;
-    const newWrapper = renderBlockWrapper(doc.blocks[index]!, index);
-    blockElements[index]!.replaceWith(newWrapper);
-    blockElements[index] = newWrapper;
+    rerenderBlock(index);
+  }
+
+  /** Every dewlab `id:` line already in the document, front-fence-block's
+   * own excepted (so a rename can freely reuse the value it's leaving —
+   * the check is "does some *other* cell have this", not "did I have it
+   * a moment ago"). Shared by `generateCellId` (a fresh id must avoid
+   * every existing one) and `commitCellId` (a renamed id must avoid every
+   * *other* cell's), so the two can never silently disagree about what
+   * counts as taken. */
+  function collectExistingCellIds(excludeIndex: number | null): Set<string> {
+    const existing = new Set<string>();
+    doc.blocks.forEach((block, i) => {
+      if (i === excludeIndex || block.kind !== "fence") return;
+      const match = /^id:\s*(.+)$/m.exec(block.text);
+      if (match) existing.add(match[1]!.trim());
+    });
+    return existing;
   }
 
   /** A new block's starting text and where the cursor should land, by
@@ -296,8 +344,10 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     paragraph: () => ({ text: "New paragraph.\n\n", anchor: 0, head: "New paragraph.".length }),
     cell: () => {
       const text = `\`\`\`python exec\nid: ${generateCellId()}\n\n\`\`\`\n\n`;
-      const at = text.indexOf("\n\n") + 1;
-      return { text, anchor: at, head: at };
+      // A fresh cell's own code-only editor (fenceCodeViews) starts
+      // empty, so position 0 is always right — unlike the other three
+      // kinds here, this offset was never into the full spliced text.
+      return { text, anchor: 0, head: 0 };
     },
     math: () => {
       const text = "$$\n\n$$\n\n";
@@ -315,12 +365,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * dewlab `id:` line anywhere in the document, since that id is a
    * contract (DIALECTS.md §1) and two cells must never collide. */
   function generateCellId(): string {
-    const existing = new Set<string>();
-    for (const block of doc.blocks) {
-      if (block.kind !== "fence") continue;
-      const match = /^id:\s*(.+)$/m.exec(block.text);
-      if (match) existing.add(match[1]!.trim());
-    }
+    const existing = collectExistingCellIds(null);
     let n = 1;
     while (existing.has(`new-cell-${n}`)) n++;
     return `new-cell-${n}`;
@@ -385,15 +430,20 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     // enterEdit to swap it into its source view — either way, a block
     // just created from a placeholder is exactly when a reader wants to
     // start typing immediately, not clicking a second time to get there.
+    // A runnable fence's own live editor is its code-only view
+    // (fenceCodeViews), not liveViews — every other fence kind still
+    // uses liveViews, same as ever.
     const newBlock = doc.blocks[newIndex];
-    if (newBlock?.kind === "fence") liveViews.get(newIndex)?.focus();
+    const newFenceView = newBlock?.kind === "fence" ? fenceCodeViews.get(newIndex) : undefined;
+    if (newFenceView) newFenceView.focus();
+    else if (newBlock?.kind === "fence") liveViews.get(newIndex)?.focus();
     else if (newBlock) enterEdit(newIndex);
     // enterEdit's own focus (renderBlockWrapper's queueMicrotask) queues
     // first when it applies; queuing this one after it, rather than
     // setting the selection synchronously here, is what makes it land
     // after that focus instead of being clobbered by it.
     queueMicrotask(() => {
-      liveViews.get(newIndex)?.dispatch({ selection: EditorSelection.single(spec.anchor, spec.head) });
+      (newFenceView ?? liveViews.get(newIndex))?.dispatch({ selection: EditorSelection.single(spec.anchor, spec.head) });
     });
   }
 
@@ -469,7 +519,19 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     }
   }
 
-  function mountEditor(host: HTMLElement, index: number, text: string, extensions: Extension[]): EditorView {
+  /** `targetMap` defaults to `liveViews` — the generic "this view's own
+   * content is the whole block" case every kind but a split runnable
+   * fence is. A runnable fence's own code-only view passes
+   * `fenceCodeViews` instead, so `blockTexts()` knows to reassemble its
+   * content with the block's header lines rather than stand in for the
+   * whole block on its own (see `fenceCodeViews`'s own comment). */
+  function mountEditor(
+    host: HTMLElement,
+    index: number,
+    text: string,
+    extensions: Extension[],
+    targetMap: Map<number, EditorView> = liveViews,
+  ): EditorView {
     const view = new EditorView({
       state: EditorState.create({
         doc: text,
@@ -486,7 +548,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       }),
       parent: host,
     });
-    liveViews.set(index, view);
+    targetMap.set(index, view);
     return view;
   }
 
@@ -494,9 +556,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     if (focusedProseIndex !== null) return; // one non-fence block editable at a time, in this first cut
     focusedProseIndex = index;
     frontMatterRawMode = false;
-    const newWrapper = renderBlockWrapper(doc.blocks[index]!, index);
-    blockElements[index]!.replaceWith(newWrapper);
-    blockElements[index] = newWrapper;
+    rerenderBlock(index);
   }
 
   function closeOpenAddMenus() {
@@ -636,15 +696,234 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return panel;
   }
 
+  interface CellHeaderFieldSpec {
+    key: CellHeaderKey;
+    label: string;
+    required: boolean;
+  }
+
+  /** dewlab's own fixed header shape for an exec cell (DIALECTS.md §1) —
+   * `id:` required, the rest optional. Not a per-dialect list the way
+   * `frontmatter-fields.ts`'s is: dewstack has no `python exec` cells of
+   * its own to give a different shape to, so there is only one shape to
+   * describe here, ever. */
+  const CELL_HEADER_FIELDS: CellHeaderFieldSpec[] = [
+    { key: "id", label: "id", required: true },
+    { key: "hint", label: "hint", required: false },
+    { key: "expect", label: "expect", required: false },
+    { key: "name", label: "name", required: false },
+  ];
+
+  /** One header field's own compact row (decision 27) — a label, a plain
+   * text input with no visible border until it's hovered or focused (the
+   * plan's own "quiet by default, everything one press away," applied to
+   * a cell's own chrome exactly as it already is to a document's), and
+   * for an optional field a small clear button. `id` is required and
+   * never removable — DIALECTS.md §1's own contract — and edits to it go
+   * through `commitCellId`'s own rename safeguards rather than the
+   * generic commit every other field uses. */
+  function buildCellHeaderField(index: number, field: CellHeaderFieldSpec, value: string): HTMLElement {
+    const row = document.createElement("label");
+    row.className = "dn-cell-header-field";
+
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "dn-cell-header-label";
+    labelSpan.textContent = field.label;
+    row.appendChild(labelSpan);
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "dn-cell-header-input";
+    input.value = value;
+    input.addEventListener("change", () => {
+      if (field.key === "id") commitCellId(index, input.value);
+      else commitCellHeaderField(index, field.key, input.value);
+    });
+    row.appendChild(input);
+
+    if (!field.required) {
+      const clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "dn-cell-header-clear";
+      clearButton.setAttribute("aria-label", `Remove ${field.label}`);
+      clearButton.textContent = "×";
+      clearButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        commitCellHeaderField(index, field.key, "");
+      });
+      row.appendChild(clearButton);
+    }
+
+    return row;
+  }
+
+  /** A runnable fence's own compact meta-bar (decision 27): the language,
+   * `id` (always present, required), and any of `hint`/`expect`/`name`
+   * already on the cell — one row, wrapping only when there's more on it
+   * than fits, so the common case (just `id`) costs almost no space at
+   * all. A "+ field" button seeds an absent optional field with an empty
+   * value and focuses it immediately, reverting back to the button on
+   * blur if nothing was typed — the same "clearing a field that was
+   * never there is a no-op" rule `setCellHeaderField` itself already
+   * holds to, just given a way to back out of the empty row it leaves
+   * showing rather than leaving that lying around. */
+  function buildCellHeaderBar(index: number, cellSource: CellSource, info: string): HTMLElement {
+    const bar = document.createElement("div");
+    bar.className = "dn-cell-header";
+
+    const langLabel = document.createElement("span");
+    const language = execCellLanguage(info);
+    langLabel.className = `dn-cell-lang dn-cell-lang-${language}`;
+    langLabel.textContent = language === "sql" ? "SQL" : "Python";
+    bar.appendChild(langLabel);
+
+    const values: Record<CellHeaderKey, string | null> = {
+      id: cellSource.id,
+      hint: cellSource.hint,
+      expect: cellSource.expect,
+      name: cellSource.name,
+    };
+
+    const hiddenOptional: CellHeaderFieldSpec[] = [];
+    for (const field of CELL_HEADER_FIELDS) {
+      const value = values[field.key];
+      if (!field.required && value === null) {
+        hiddenOptional.push(field);
+        continue;
+      }
+      bar.appendChild(buildCellHeaderField(index, field, value ?? ""));
+    }
+
+    if (hiddenOptional.length > 0) {
+      const addRow = document.createElement("div");
+      addRow.className = "dn-cell-header-add-row";
+      for (const field of hiddenOptional) {
+        const addButton = document.createElement("button");
+        addButton.type = "button";
+        addButton.className = "dn-cell-header-add";
+        addButton.textContent = `+ ${field.label}`;
+        addButton.addEventListener("click", () => {
+          const row = buildCellHeaderField(index, field, "");
+          const input = row.querySelector("input")!;
+          addButton.replaceWith(row);
+          input.focus();
+          input.addEventListener(
+            "blur",
+            () => {
+              if (input.value.trim() === "") row.replaceWith(addButton);
+            },
+            { once: true },
+          );
+        });
+        addRow.appendChild(addButton);
+      }
+      bar.appendChild(addRow);
+    }
+
+    return bar;
+  }
+
+  /** Commits one optional header field's edit (`hint`/`expect`/`name`),
+   * patching only the header bar's own DOM rather than the whole block —
+   * unlike every other commit path here, this leaves the code's own live
+   * editor (`fenceCodeViews`) completely untouched, so editing a hint
+   * mid-session never costs the code editor its cursor position or undo
+   * history the way a full block re-render would. Safe because a header
+   * field's own line never changes the document's shape (still one fence
+   * block, same kind) except in some pathological case `sameShape` would
+   * still catch, falling back to the full rebuild every other path uses. */
+  function commitCellHeaderField(index: number, key: CellHeaderKey, value: string) {
+    const parts = blockTexts();
+    const currentFenceText = parts[index]!;
+    const newText = setCellHeaderField(currentFenceText, key, value);
+    if (newText === currentFenceText) return;
+
+    parts[index] = newText;
+    source = parts.join("");
+    const newDoc = parseDocument(source);
+
+    if (!sameShape(doc, newDoc)) {
+      teardownLiveViews();
+      doc = newDoc;
+      render();
+      return;
+    }
+
+    doc = newDoc;
+    const info = doc.blocks[index]!.fence?.info ?? "";
+    const cellSource = parseCellSourceFromFenceText(newText);
+    const newHeaderBar = buildCellHeaderBar(index, cellSource, info);
+    blockElements[index]!.querySelector(".dn-cell-header")?.replaceWith(newHeaderBar);
+  }
+
+  /** Commits an `id` edit — never silently: DIALECTS.md §1 calls a cell's
+   * id a contract (saved student work is keyed on it), so an empty value
+   * is refused outright, a value already used by another cell in the
+   * same document is refused outright, and an actual change to a
+   * non-empty existing id is confirmed before it applies, the same
+   * warning dewlab's own authoring editor gives (plan §4). A refused or
+   * declined edit re-renders the block to restore the input's old value
+   * rather than leaving the stale typed text sitting there unconfirmed.
+   * Unlike `commitCellHeaderField`, this rebuilds the whole block: the
+   * Run button's own closed-over `id` needs the same fresh value the
+   * header bar does, and an id change is rare and deliberate enough that
+   * losing the code editor's cursor position over it is a fair trade. */
+  function commitCellId(index: number, rawValue: string) {
+    const parts = blockTexts();
+    const currentFenceText = parts[index]!;
+    const oldId = parseCellSourceFromFenceText(currentFenceText).id ?? "";
+    const trimmed = rawValue.trim();
+    if (trimmed === oldId) return;
+
+    if (trimmed === "") {
+      rerenderBlock(index);
+      return;
+    }
+    if (collectExistingCellIds(index).has(trimmed)) {
+      window.alert(`Another cell already uses the id "${trimmed}" — cell ids must be unique.`);
+      rerenderBlock(index);
+      return;
+    }
+    if (oldId !== "") {
+      const confirmed = window.confirm(
+        `Renaming this cell's id from "${oldId}" to "${trimmed}" will disconnect it from any work ` +
+          `saved under "${oldId}". Rename anyway?`,
+      );
+      if (!confirmed) {
+        rerenderBlock(index);
+        return;
+      }
+    }
+
+    const newText = setCellHeaderField(currentFenceText, "id", trimmed);
+    parts[index] = newText;
+    source = parts.join("");
+    const newDoc = parseDocument(source);
+
+    if (!sameShape(doc, newDoc)) {
+      teardownLiveViews();
+      doc = newDoc;
+      render();
+      return;
+    }
+
+    doc = newDoc;
+    rerenderBlock(index);
+  }
+
   /** A runnable fence (isRunnableFence) gets a Run/Stop bar and an output
-   * area under its editor. Run reads the fence's *live* text — not
-   * `block.text`, which is only as fresh as this fence's last blur — so
-   * typing and running without ever leaving the editor works the way a
-   * notebook cell does. Stop only ever becomes enabled once booted with
-   * cross-origin isolation in effect (pyodide-engine.ts's canStop()); on a
-   * page without it there is no way to interrupt a running cell, a
-   * documented gap, not a bug here. */
-  function buildCellRunner(index: number, view: EditorView, info: string): HTMLElement {
+   * area under its editor. `view` is the fence's own code-only editor
+   * (decision 27) — its content *is* the code to run, no header lines to
+   * strip off first — so Run reads it directly, live, not `block.text`,
+   * which is only as fresh as this fence's last blur; typing and running
+   * without ever leaving the editor works the way a notebook cell does.
+   * `id` is read once, at render time — `commitCellId` always triggers a
+   * full re-render of this block on an actual id change, so this closure
+   * is never stale for longer than that one re-render takes. Stop only
+   * ever becomes enabled once booted with cross-origin isolation in
+   * effect (pyodide-engine.ts's canStop()); on a page without it there is
+   * no way to interrupt a running cell, a documented gap, not a bug here. */
+  function buildCellRunner(index: number, view: EditorView, info: string, id: string | null): HTMLElement {
     const bar = document.createElement("div");
     bar.className = "dn-cell-runner";
 
@@ -668,7 +947,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
     runButton.addEventListener("click", async (clickEvent) => {
       clickEvent.stopPropagation();
-      const { id, code } = parseCellSourceFromFenceText(view.state.doc.toString());
+      const code = view.state.doc.toString();
       const cellId = id ?? `cell-${index}`;
       runButton.disabled = true;
       runButton.textContent = "Running…";
@@ -1110,13 +1389,35 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
     if (block.kind === "fence") {
       const info = block.fence?.info ?? "";
+
+      if (isRunnableFence(info)) {
+        // Decision 27: a runnable fence's header lines (id/hint/expect/
+        // name) render as a compact form bar, not raw text, and the
+        // fence's own live editor holds only the code beneath them —
+        // still always a live CodeMirror instance either way (decision
+        // 15 is untouched), just one that no longer mixes header syntax
+        // in with the code it sits above.
+        const cellSource = parseCellSourceFromFenceText(block.text);
+        const box = document.createElement("div");
+        box.className = "dn-cell-box";
+        box.appendChild(buildCellHeaderBar(index, cellSource, info));
+
+        const host = document.createElement("div");
+        host.className = "dn-block-source dn-cell-code";
+        box.appendChild(host);
+        const view = mountEditor(host, index, cellSource.code, languageExtensionFor(info), fenceCodeViews);
+
+        wrapper.appendChild(box);
+        wrapper.appendChild(buildCellRunner(index, view, info, cellSource.id));
+        return wrapper;
+      }
+
       const host = document.createElement("div");
       host.className = "dn-block-source";
       wrapper.appendChild(host);
       const view = mountEditor(host, index, block.text, languageExtensionFor(info));
       const sqlInfo = parseSqlCellInfo(info);
-      if (isRunnableFence(info)) wrapper.appendChild(buildCellRunner(index, view, info));
-      else if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
+      if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
       else if (isHintFence(info)) wrapper.appendChild(buildHintPreview(block));
       else if (isSitePaneFence(info)) {
         wrapper.appendChild(buildSitePaneLabel(parseSitePaneInfo(block)));
