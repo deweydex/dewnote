@@ -6,7 +6,7 @@
 // unchanged, since an opened folder file is exactly the single-file
 // case #18 already built — a name, content, and a real writable handle.
 
-import { chooseFolder, listMarkdownFiles, listOrderFiles, readFile, supportsDirectoryPicker, type DirectoryLike, type FolderFile } from "./folder-store.ts";
+import { chooseFolder, createFile, listMarkdownFiles, listOrderFiles, readFile, supportsDirectoryPicker, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseSeriesFiles, type Series } from "./series.ts";
@@ -51,7 +51,7 @@ export function mountFolderPanel(
    * fields already say rather than reopening any picker), so a manual
    * re-scan is the whole mechanism — closed until asked, the same as
    * every other action here. */
-  let currentRoot: DirectoryLike | null = null;
+  let currentRoot: FileSystemDirectoryHandle | null = null;
 
   const toggle = document.createElement("button");
   toggle.type = "button";
@@ -220,7 +220,7 @@ export function mountFolderPanel(
    * YAML untouched by any markdown rendering, which is exactly what
    * hand-editing a reading order (inserting a slug, reordering two
    * lines) actually wants, with no new UI needed. */
-  async function loadFromRoot(root: DirectoryLike, name: string, verb: "Reading" | "Refreshing") {
+  async function loadFromRoot(root: FileSystemDirectoryHandle, name: string, verb: "Reading" | "Refreshing") {
     status.textContent = `${verb} folder…`;
     try {
       const [markdownFiles, orderFiles] = await Promise.all([listMarkdownFiles(root), listOrderFiles(root)]);
@@ -247,13 +247,21 @@ export function mountFolderPanel(
     // so a later Refresh's own reassignment is seen without registering
     // again. Reuses openFolderFile itself rather than a second "open a
     // file" implementation — a click here is exactly a click on this
-    // same file in `fileList`.
+    // same file in `fileList`. `createFile` re-runs the whole
+    // `loadFromRoot` pass afterward rather than splicing the one new
+    // file into `files` by hand — simpler, and correct even when the
+    // new file landed in a module folder that didn't exist a moment ago
+    // (a fresh directory `loadFromRoot`'s own walk needs to see).
     setActiveStore({
       async openPath(path) {
         const file = files.find((f) => f.path === path);
         if (!file) return false;
         await openFolderFile(file);
         return true;
+      },
+      async createFile(path, content) {
+        await createFile(root, path, content);
+        await loadFromRoot(root, folderName, "Refreshing");
       },
     });
     await loadFromRoot(root, folderName, "Reading");

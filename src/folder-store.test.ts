@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { listMarkdownFiles, listOrderFiles, type DirectoryLike } from "./folder-store.ts";
+import { createFile, listMarkdownFiles, listOrderFiles, readFile, type DirectoryLike } from "./folder-store.ts";
 
 /** A hand-built fake — no real FileSystemDirectoryHandle needed to
  * verify the walk itself, the same split github.ts's own truncation
@@ -56,5 +56,85 @@ describe("listOrderFiles", () => {
     });
     const files = await listOrderFiles(root);
     expect(files.map((f) => f.path)).toEqual(["tutorials/computational-methods/python-fundamentals.order.yaml"]);
+  });
+});
+
+/** A hand-built, genuinely writable fake — real `getDirectoryHandle`/
+ * `getFileHandle` semantics (create-on-demand, or reject when `create`
+ * isn't set and nothing's there), backed by a plain in-memory Map
+ * rather than a real filesystem, the same "verify the logic, not the
+ * browser API" split `fakeDir` above already uses for reading. */
+function fakeWritableDir(): FileSystemDirectoryHandle {
+  const children = new Map<string, unknown>();
+  const dir = {
+    kind: "directory",
+    async getDirectoryHandle(name: string, options?: { create?: boolean }) {
+      let child = children.get(name);
+      if (!child) {
+        if (!options?.create) throw new Error(`"${name}" not found`);
+        child = fakeWritableDir();
+        children.set(name, child);
+      }
+      return child;
+    },
+    async getFileHandle(name: string, options?: { create?: boolean }) {
+      let child = children.get(name);
+      if (!child) {
+        if (!options?.create) throw new Error(`"${name}" not found`);
+        child = fakeWritableFile();
+        children.set(name, child);
+      }
+      return child;
+    },
+  };
+  return dir as unknown as FileSystemDirectoryHandle;
+}
+
+function fakeWritableFile(): FileSystemFileHandle {
+  let content = "";
+  const file = {
+    kind: "file",
+    async createWritable() {
+      return {
+        async write(data: string) {
+          content = data;
+        },
+        async close() {},
+      };
+    },
+    async getFile() {
+      return { text: async () => content };
+    },
+  };
+  return file as unknown as FileSystemFileHandle;
+}
+
+describe("createFile", () => {
+  test("creates a file at the root, readable back through the handle it returns", async () => {
+    const root = fakeWritableDir();
+    const file = await createFile(root, "a-series.order.yaml", "series: A Series\norder: []\n");
+    expect(file.path).toBe("a-series.order.yaml");
+    expect(await readFile(file.handle)).toBe("series: A Series\norder: []\n");
+  });
+
+  test("creates any missing intermediate directories along the way", async () => {
+    const root = fakeWritableDir();
+    const file = await createFile(root, "computational-methods/python-fundamentals.order.yaml", "series: Python fundamentals\norder: []\n");
+    expect(file.path).toBe("computational-methods/python-fundamentals.order.yaml");
+    // The directory really was created, not merely assumed — a second
+    // file in the same directory reuses it rather than failing.
+    const second = await createFile(root, "computational-methods/second.order.yaml", "series: Second\norder: []\n");
+    expect(second.path).toBe("computational-methods/second.order.yaml");
+  });
+
+  test("refuses to overwrite a file that already exists", async () => {
+    const root = fakeWritableDir();
+    await createFile(root, "x.order.yaml", "series: X\norder: []\n");
+    await expect(createFile(root, "x.order.yaml", "series: Overwritten\norder: []\n")).rejects.toThrow(/already exists/);
+  });
+
+  test("an empty path has no file name to create, and is rejected", async () => {
+    const root = fakeWritableDir();
+    await expect(createFile(root, "", "content")).rejects.toThrow(/no file name/);
   });
 });

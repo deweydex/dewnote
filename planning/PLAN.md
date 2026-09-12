@@ -934,6 +934,37 @@ project; if they are not delightful, nothing after them will rescue it.
    clicking a series entry that resolves to a real, indexed file opens
    it into the editor, the same as clicking it directly in whichever
    rail's own file list it came from.
+
+   **"New series" built, folder store only** — one of the two
+   remaining named items on step 4's own line (a new tutorial from a
+   template is the other, still open). `active-store.ts` gained a
+   second, optional capability: `createFile(path, content)`, thrown
+   with a real message on failure rather than a boolean, since unlike
+   `openPath`'s "nothing there" this is a real error a reader needs to
+   see and act on. `folder-store.ts`'s own new `createFile` is the write
+   half of the walk `listMarkdownFiles`/`listOrderFiles` already do for
+   reading — `getDirectoryHandle(..., {create: true})` down to wherever
+   the new file belongs, creating any missing module folder on the way,
+   then a real `getFileHandle`/`createWritable` write, refusing outright
+   if something's already there rather than silently overwriting it.
+   `repo-panel.ts` doesn't implement this yet — creating a file on a
+   working branch is its own real scope (which branch, whether it needs
+   a commit of its own before whatever's already open there), not
+   guessed at here.
+
+   `series-panel.ts` gained the form itself: module (optional), series
+   slug, title. The module field is left for the reader to fill in or
+   leave blank on purpose, not detected automatically — whether the
+   currently open folder already *is* one module's own directory, or
+   the whole multi-module `tutorials/` tree, isn't something the
+   `order.yaml` files already open can tell apart reliably on their own
+   (an empty folder looks the same either way), and the reader already
+   knows which case they're in. *Done when* creating a series with a
+   real folder open writes a real `<series>.order.yaml` (nested under a
+   fresh module directory if one was given) and the new series appears
+   in the list without reopening the folder; creating one with the same
+   path as an existing file reports that plainly rather than
+   overwriting it.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.

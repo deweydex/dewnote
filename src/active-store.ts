@@ -22,6 +22,18 @@ export interface ActiveStore {
    * asking about a path that turns out not to exist is a normal
    * outcome, not an error. */
   openPath(path: string): Promise<boolean>;
+  /** Creates a new file at `path` with `content`, for a store that
+   * supports writing new ones — only folder-panel.ts does today.
+   * repo-panel.ts doesn't implement this yet: creating a file on a
+   * working branch is real, separate scope (which branch, whether it
+   * needs its own commit before a reader's already-open edit does),
+   * left for later rather than guessed at now. Throws with a real
+   * message on failure (the file already exists, the write itself
+   * failed, or — from `createFile` below, when nothing implements
+   * this — the store open right now doesn't support it at all), since
+   * unlike `openPath`'s "nothing there" outcome, a failed create is
+   * something the reader needs to see and act on. */
+  createFile?(path: string, content: string): Promise<void>;
 }
 
 let active: ActiveStore | null = null;
@@ -36,4 +48,9 @@ export function setActiveStore(store: ActiveStore | null): void {
 
 export function openPath(path: string): Promise<boolean> {
   return active ? active.openPath(path) : Promise.resolve(false);
+}
+
+export async function createFile(path: string, content: string): Promise<void> {
+  if (!active?.createFile) throw new Error("Creating a file isn't supported by whatever's open right now — try a local folder.");
+  await active.createFile(path, content);
 }
