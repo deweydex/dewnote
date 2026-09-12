@@ -767,3 +767,156 @@ called them. Reverting to one CodeMirror instance per fence, if that
 ever seemed better, is un-doing the `fenceCodeViews` split and its one
 call site in `renderBlockWrapper` — contained, not spread through the
 file.*
+
+**28 — Every panel's toggle button lives in one shared icon rail
+(`icon-rail.ts`), not `document.body` directly.** Eight panels
+(`settings-panel.ts`, `folder-panel.ts`, `repo-panel.ts`,
+`series-panel.ts`, `dialect-panel.ts`, `outline-panel.ts`,
+`source-view.ts`, `link-check.ts`) each mount completely independently
+from `main.ts`, with no shared parent. Each one had also picked its own
+`position: fixed; top: Nrem` offset by hand, one panel author at a
+time — eight numbers, each the "next free slot" down the right edge,
+with `.dn-repo-toggle` left on the *left* edge, an inconsistency with
+no reason behind it beyond whoever wrote that panel reaching for the
+opposite side. `icon-rail.ts` is one lazily-created, memoised
+`<div class="dn-icon-rail">`, `position: fixed` itself and laid out as
+a flex column; every panel appends its toggle button there instead
+(`iconRail().appendChild(toggle)`), and the panel or overlay itself
+still goes straight to `document.body` as before — only the toggle
+moves. Each `-toggle` CSS rule dropped its own `position`/`top`/
+`left`/`right`/`z-index` and kept everything else (shape, colour,
+opacity, hover state) untouched, and every toggle also gained a
+`title` attribute mirroring its existing `aria-label` — the "unlabeled
+glyph buttons" half of the toolbar problem, not just the scattered
+layout. No button's class name changed, so none of the many existing
+Playwright tests that select a toggle by its exact class needed to
+change; the full suite passed unmodified. `.dn-repo-toggle` now sits in
+the same rail as the other seven, in main.ts's own mount order.
+*Cost to change: low. `icon-rail.ts` is a dozen lines with one exported
+function; reverting to per-panel fixed positioning is deleting the file
+and putting each panel's own `top`/`left`/`right` back, one rule at a
+time, with no other file depending on the rail's own internals.*
+
+**29 — Plain markdown's front matter gets a one-line caption explaining
+why it opened as raw YAML, not a form.** Clicking a dewlab/dewstack
+document's front matter opens the per-field form built for decision 11;
+clicking a plain document's own opens the same raw-source editor as any
+other block, with nothing on screen saying why the two look different.
+A reader who has only ever seen the form has no way to tell "this
+document has no recognised dialect" apart from "the form is broken."
+`renderBlockWrapper` now appends a `.dn-frontmatter-plain-caption`
+immediately above the raw editor whenever `frontMatterFieldsFor` returns
+an empty list — never when a dewlab/dewstack author reached the raw
+editor deliberately through the form's own "Edit raw YAML" toggle, since
+that reader already knows what they asked for. The caption names the
+actual fix (`year:` for dewlab, `module_title:` for dewstack), not just
+the absence. Caught while looking at the starter document with fresh
+eyes for workstream 4 (the "first five minutes"): `render-block.ts`'s
+own `renderFrontMatterPreview` still carried a comment calling the
+per-field form "later work," stale since decision 11 shipped it —
+fixed alongside this, since a comment that says a built feature doesn't
+exist yet is worse than the one this replaced it with.
+
+The bigger question workstream 4 opened — whether the starter document
+itself should model a real dialect's front matter rather than staying
+plain, so a first-time reader sees the form and not just this caption —
+is still open; see `planning/PLAN.md` §6, step 8.
+*Cost to change: low. One `if` in `renderBlockWrapper`, one CSS rule,
+and a caption string with no state of its own — removing it is deleting
+those three things, nothing else reads `.dn-frontmatter-plain-caption`.*
+
+**30 — A prose block's own slash command, alongside the "+" menu, not
+instead of it.** Requested directly: "let's use slash commands to help
+with cells and code insertions etc." Typing "/" in a block that holds
+nothing else (fresh from the "+" menu's own "Paragraph," or an existing
+block cleared back to empty) opens a small menu of the same three kinds
+the "+" menu itself offers that have nowhere near them to race: Code
+cell, Math, Hint. Filtered as more letters follow ("/c" narrows to
+"Code cell"), arrow keys move the selection, Enter or a click confirms,
+Escape dismisses — and stays dismissed through further keystrokes that
+would otherwise still match, until the text stops looking like a slash
+command at all (a `dismissed` flag `sync` itself clears, not just the
+menu's own visibility). Deliberately whole-block, not per-line the way
+Notion's own slash menu is: a block already holding real prose that
+happens to contain a literal "/" is not offering to replace itself,
+only a block that is nothing else yet reads as one — the check is
+against the block's *entire* text (trailing newlines from the "+"
+menu's own placeholder stripped first), not the current line. Scoped to
+`block.kind === "prose"` only, in `renderBlockWrapper`; front matter's
+raw-YAML fallback and a fold's raw HTML have no business turning into a
+code cell mid-edit.
+
+Image and Link stay "+"-menu only, not offered here — both are async
+(a file picker, a search overlay) with a real blur in the middle of
+that wait, unlike Cell/Math/Hint's synchronous, direct-to-`NEW_BLOCK_SPEC`
+path; extending the slash menu to them is choosing to solve that race
+first, not free once the machinery already exists for the other three.
+
+Confirming a selection reuses exactly the machinery the "+" menu's own
+`insertAfter` already had, refactored rather than duplicated:
+`spliceNewBlock(spliceIndex, deleteCount, spec)` is `insertAfter`'s own
+former body, generalised with a `deleteCount` — 0 for "+" (insert after
+an existing block), 1 for the slash menu's own `replaceBlockViaSlash`
+(replace the very block being typed into, since there is nothing in it
+worth keeping). `insertAfter` itself is now three lines calling it.
+
+A real, reentrancy bug surfaced building this, not from inspection: the
+slash menu's own confirm runs from inside the block's own CodeMirror
+keymap dispatch (Enter), and `spliceNewBlock`'s `teardownLiveViews()`
+call destroys that same view as part of the structural rebuild every
+insert path already takes. Destroying a view that currently holds DOM
+focus — which never happens on any *other* teardownLiveViews caller,
+since a click on the "+" menu, the delete button, or a drag handle
+never has focus inside the block it's acting on — fires that view's own
+`blur` DOM event synchronously as part of `EditorView.destroy()`, which
+`mountEditor`'s own blur handler was treating exactly like a genuine,
+user-initiated blur: calling `commit()` for a block already mid-teardown,
+reading `blockTexts()` against a `doc` this function hadn't finished
+reassigning yet, and overwriting `source` with a stale reconstruction —
+the whole splice, silently discarded, with no thrown error to point at
+it (found only by tracing `commit()`'s own call stack, which named
+`EditorView.destroy()` as the caller). Fixed at `teardownLiveViews()`
+itself, not in the slash menu: a module-level `suppressBlurCommit` flag,
+set for the exact span of its own destroy loop, that `mountEditor`'s
+blur handler checks before calling `commit()`. This is a latent hazard
+every future feature that programmatically replaces the currently-
+focused block inherits protection from, not a slash-menu-specific patch.
+
+`buildSlashMenu` also exposed a second, smaller gap while testing
+against the *realistic* entry point (typing over the "+" menu's own
+pre-selected "New paragraph.", not hand-clearing a block with
+Ctrl+A+Delete): the block's own trailing `"\n\n"` survives a selection
+replace, so the live text right after typing "/c" is `"/c\n\n"`, not
+`"/c"` — `sync`'s own match against the *whole* string needed trailing
+newlines stripped first, or the menu never opened at all outside a
+manufactured, fully-emptied block.
+*Cost to change: low, for the menu itself — `buildSlashMenu` and its two
+call sites (the extension wiring in `renderBlockWrapper`,
+`replaceBlockViaSlash`) come out cleanly, and `insertAfter` reverts to
+owning its old body directly. The `suppressBlurCommit` guard is worth
+keeping regardless of the slash menu's own fate — it fixes a real class
+of bug in `teardownLiveViews`, not a workaround tied to this feature.*
+
+**31 — The starter document is dewlab, not plain markdown.** Decision
+29's own "still open" note asked this directly: `main.ts`'s
+`STARTER_DOCUMENT` carried no `year:` or `module_title:`, so
+`detectDialect` read it as plain and a first-time reader never saw the
+per-field form, dialect-aware preview styling, or anything else gated
+on a real dialect — the very things most worth showing in a first five
+minutes, and dewnote's own default *texture* is already dewlab's
+regardless of a document's front matter (§5.3), so the front matter
+staying dialect-less was a gap, not a neutral default. Answered
+directly rather than picked unilaterally, choosing this over dewstack
+or a first-open dialect chooser. `module: getting-started`,
+`module_title: "Getting Started"`, `year: "2026"`,
+`series: first-notebook`, `version: 1` were added to the starter's own
+front matter — plausible, harmless placeholder values in the same shape
+real dewlab tutorials use (`fixtures/dewlab/*.md`'s own quoting
+conventions), not a real module a document could actually collide with.
+A reader who wants plain markdown instead loses nothing: the
+dialect-convert panel (⇄, already built) drops every one of these
+fields in one click, the same as converting any real dewlab document
+down to plain.
+*Cost to change: low. Six front-matter lines in one template literal —
+reverting is deleting them, and nothing else reads STARTER_DOCUMENT's
+own field values by name.*

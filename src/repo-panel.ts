@@ -34,6 +34,7 @@ import {
 } from "./github.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseSeriesFiles, type Series } from "./series.ts";
+import { iconRail } from "./icon-rail.ts";
 
 export interface RepoPanelHost {
   getSource(): string;
@@ -108,6 +109,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   toggle.className = "dn-repo-toggle";
   toggle.setAttribute("aria-label", "Repository");
   toggle.setAttribute("aria-expanded", "false");
+  toggle.title = "Repository";
   toggle.textContent = "⌂";
 
   const panel = document.createElement("div");
@@ -513,7 +515,8 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     }
   });
 
-  document.body.append(toggle, panel);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(panel);
   renderFiles();
   renderPush();
 

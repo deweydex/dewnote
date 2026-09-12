@@ -12,6 +12,7 @@
 
 import { convertDialect } from "./dialect-convert.ts";
 import type { DialectName } from "./dialect.ts";
+import { iconRail } from "./icon-rail.ts";
 
 export interface DialectPanelHost {
   getSource(): string;
@@ -47,6 +48,7 @@ export function mountDialectPanel(host: DialectPanelHost): DialectPanel {
   toggle.className = "dn-dialect-toggle";
   toggle.setAttribute("aria-label", "Convert dialect");
   toggle.setAttribute("aria-expanded", "false");
+  toggle.title = "Convert dialect";
   toggle.textContent = "⇄";
 
   const panel = document.createElement("div");
@@ -123,7 +125,8 @@ export function mountDialectPanel(host: DialectPanelHost): DialectPanel {
     }
   });
 
-  document.body.append(toggle, panel);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(panel);
 
   return {
     destroy() {

@@ -627,6 +627,33 @@ project; if they are not delightful, nothing after them will rescue it.
    just-added hint keeps both, and a rename is refused, confirmed, or
    applied exactly as DIALECTS.md's own contract requires.
 
+   **Seventh slice built** (`app.ts`'s `buildSlashMenu`, `spliceNewBlock`,
+   `replaceBlockViaSlash`, decision 30): a prose block's own keyboard
+   equivalent to the "+" menu, requested directly rather than found —
+   typing "/" in an otherwise-empty block (fresh from "+ Paragraph," or
+   one cleared back to nothing) opens a small filtered menu of Code
+   cell, Math, or Hint; arrow keys move the selection, Enter or a click
+   confirms, Escape dismisses and stays dismissed until the text stops
+   looking like a slash command. Image and Link stay "+"-menu only —
+   both are async with a real blur mid-flight that Cell/Math/Hint's
+   synchronous path never has to survive. `insertAfter` itself is now a
+   three-line wrapper around the shared `spliceNewBlock`, generalised
+   with a `deleteCount` so the slash menu's own confirm can replace the
+   block it was typed into rather than insert after it. Also fixed
+   alongside it, not scoped to the slash menu alone: `teardownLiveViews`
+   destroying a view that currently holds DOM focus — something no
+   *other* caller of it ever does, since a click on the "+" menu, the
+   delete button, or a drag handle is never itself inside the block it
+   acts on — fired that view's own blur synchronously, reentering
+   `commit()` mid-teardown and silently discarding the whole edit with
+   no thrown error. `suppressBlurCommit` closes that gap generally, not
+   just for this one caller. *Done when* the same three kinds the "+"
+   menu offers a `NEW_BLOCK_SPEC` for round-trip through the slash menu
+   identically, Escape and a non-matching filter both leave the block as
+   ordinary prose, and the new block's own live editor is focused with
+   no second click needed — all seven confirmed in
+   `tests/e2e/slash-menu.spec.ts`.
+
    (This section's own "still open" list, several entries of which had
    already been closed by later steps — an image and a link in the add
    menu, drag reorder, the front-matter form, the whole-file view itself,
@@ -646,7 +673,11 @@ project; if they are not delightful, nothing after them will rescue it.
    and the rest stay raw-YAML-only) — this needs a real index of
    existing values to seed a text field with, the way `status`'s select
    seeds itself from its own fixed options, and is its own small slice,
-   not folded into this one.
+   not folded into this one; the slash menu (seventh slice) offers Code
+   cell, Math, and Hint but not Image or Link, deliberately — both need
+   the confirm to survive an async file-picker/search-overlay wait with
+   the block still focused underneath it, a real design question of its
+   own rather than a rename of `replaceBlockViaSlash`.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as
@@ -1013,7 +1044,7 @@ project; if they are not delightful, nothing after them will rescue it.
    and a copy into the tutorial folder, link picker, the live-preview
    decorations if step 2's block editing still wants them.
 
-   **Built**, across four slices: the outline rail (`src/outline-panel.ts`,
+   **Built**, across five slices: the outline rail (`src/outline-panel.ts`,
    #24) reads headings straight out of the document's own prose blocks —
    not a second markdown parse of the rendered HTML — and a click scrolls
    the matching block into view, using nothing of `app.ts` beyond the
@@ -1032,7 +1063,19 @@ project; if they are not delightful, nothing after them will rescue it.
    bare path for one without; with no index yet (nothing opened) it
    falls back to typing a link by hand, since a URL to somewhere else
    entirely is too common a case for a slug-only picker to leave with no
-   way in.
+   way in. A shared icon rail (`src/icon-rail.ts`, decision 28) replaced
+   the eight independent `position: fixed; top: Nrem` offsets each panel
+   toggle had picked for itself one at a time — one hand-spaced number
+   per panel, with the repository toggle left on the opposite edge of
+   the screen from the rest for no reason beyond who wrote it. Every
+   toggle now appends into one flex-column container instead of
+   `document.body` directly, keeps its own class name (so no existing
+   Playwright selector needed to change) and gained a `title` tooltip
+   alongside its existing `aria-label`. Plain markdown's front matter
+   (decision 29) gained a one-line caption explaining why it opens as
+   raw YAML rather than a form, and naming the fix (`year:` or
+   `module_title:`) instead of only the absence — found looking at the
+   starter document itself with fresh eyes for this same workstream.
 
    Still open: **"a copy into the tutorial folder"** is this step's own
    line, not yet true — a picked image is inlined as a `data:` URI, never
@@ -1047,6 +1090,16 @@ project; if they are not delightful, nothing after them will rescue it.
    "cleanest and simplest editing experience" workstream this section's
    own step 2 entry is heading toward) may turn out to be the same piece
    of work under a different name, not two.
+
+   The bigger question this raised — whether the starter document
+   itself should model a real dialect, and if so which one — was put
+   directly rather than picked unilaterally, and answered: dewlab
+   (decision 31). `STARTER_DOCUMENT` now carries `module:`,
+   `module_title:`, `year:`, `series:`, and `version:` alongside the
+   `title:`/`slug:` it already had, so a first-time reader sees the
+   per-field form immediately rather than the plain-markdown caption
+   above. A reader who wants plain markdown instead reaches it through
+   the dialect-convert panel (⇄), already built, in one click.
 
 The generated parts of a page (table of contents, previous and next,
 series navigation) are rendered in the preview from headings and from

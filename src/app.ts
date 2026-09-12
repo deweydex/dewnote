@@ -30,8 +30,8 @@
 // back to a full rebuild, since indices no longer line up cleanly enough
 // to patch in place.
 
-import { EditorView, keymap } from "@codemirror/view";
-import { EditorSelection, EditorState, type Extension } from "@codemirror/state";
+import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
+import { EditorSelection, EditorState, Prec, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { parseDocument, serialize, type Block, type Document } from "./blocks.ts";
 import { detectDialect } from "./dialect.ts";
@@ -91,6 +91,17 @@ const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
   { kind: "hint", label: "Hint" },
   { kind: "image", label: "Image" },
   { kind: "link", label: "Link" },
+];
+
+/** The slash-command menu's own, smaller list — everything the "+" menu
+ * offers except Paragraph (typing "/" only makes sense inside one
+ * already) and Image/Link, whose file-picker and search overlay each
+ * have to survive a blur mid-flight in a way Cell/Math/Hint's own
+ * synchronous NEW_BLOCK_SPEC never has to (see buildSlashMenu). */
+const SLASH_MENU_ITEMS: { kind: Exclude<AddKind, "paragraph" | "image" | "link">; label: string }[] = [
+  { kind: "cell", label: "Code cell" },
+  { kind: "math", label: "Math" },
+  { kind: "hint", label: "Hint" },
 ];
 
 /** Set by main.ts whenever folder-panel.ts or repo-panel.ts (re)builds
@@ -199,6 +210,19 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * accident while selecting text or clicking through the document the
    * way an always-draggable block would invite. */
   let armedIndex: number | null = null;
+  /** Guards mountEditor's own blur handler against a specific reentrancy:
+   * destroying a view that currently has DOM focus (the block a keyboard
+   * action, not a click, just replaced or removed — the slash menu's own
+   * confirm is the first thing here that can do that) fires that view's
+   * blur synchronously as part of `EditorView.destroy()`, which would
+   * otherwise call `commit()` for a block already mid-teardown, reading
+   * `blockTexts()` against a `doc` this function hasn't finished
+   * reassigning yet and clobbering `source` with a stale reconstruction.
+   * Every other teardown (a click on the "+" menu, the delete button, a
+   * drag) never destroys the block that has focus, so this never fired
+   * before; set for the duration of `teardownLiveViews`'s own destroy
+   * loop, not for the length of any commit it might otherwise trigger. */
+  let suppressBlurCommit = false;
 
   /** Every block's current text — a live editor's content where one is
    * mounted, the block's own text otherwise — joined in order. A
@@ -226,10 +250,12 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   }
 
   function teardownLiveViews() {
+    suppressBlurCommit = true;
     for (const view of liveViews.values()) view.destroy();
     liveViews.clear();
     for (const view of fenceCodeViews.values()) view.destroy();
     fenceCodeViews.clear();
+    suppressBlurCommit = false;
     focusedProseIndex = null;
     frontMatterRawMode = false;
   }
@@ -417,34 +443,50 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     render();
   }
 
-  function insertAfter(afterIndex: number | null, kind: Exclude<AddKind, "image" | "link">) {
-    const spec = NEW_BLOCK_SPEC[kind]();
+  /** Shared by insertAfter (deleteCount 0 — the "+" menu, between two
+   * existing blocks) and replaceBlockViaSlash (deleteCount 1 — the slash
+   * menu, replacing the very block the reader is typing into): splice a
+   * freshly-specced block's text into `parts` at `spliceIndex`, reparse,
+   * and focus it exactly the way a block just created from a placeholder
+   * wants — immediately, not on a second click. A fence is already live
+   * the moment it renders; anything else needs enterEdit to swap it into
+   * its source view. A runnable fence's own live editor is its code-only
+   * view (fenceCodeViews), not liveViews — every other fence kind still
+   * uses liveViews, same as ever. */
+  function spliceNewBlock(spliceIndex: number, deleteCount: number, spec: { text: string; anchor: number; head: number }) {
     const parts = blockTexts();
-    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
-    parts.splice(newIndex, 0, spec.text);
+    parts.splice(spliceIndex, deleteCount, spec.text);
     source = parts.join("");
     teardownLiveViews();
     doc = parseDocument(source);
     render();
-    // A fence is already live the moment it renders; anything else needs
-    // enterEdit to swap it into its source view — either way, a block
-    // just created from a placeholder is exactly when a reader wants to
-    // start typing immediately, not clicking a second time to get there.
-    // A runnable fence's own live editor is its code-only view
-    // (fenceCodeViews), not liveViews — every other fence kind still
-    // uses liveViews, same as ever.
-    const newBlock = doc.blocks[newIndex];
-    const newFenceView = newBlock?.kind === "fence" ? fenceCodeViews.get(newIndex) : undefined;
+    const newBlock = doc.blocks[spliceIndex];
+    const newFenceView = newBlock?.kind === "fence" ? fenceCodeViews.get(spliceIndex) : undefined;
     if (newFenceView) newFenceView.focus();
-    else if (newBlock?.kind === "fence") liveViews.get(newIndex)?.focus();
-    else if (newBlock) enterEdit(newIndex);
+    else if (newBlock?.kind === "fence") liveViews.get(spliceIndex)?.focus();
+    else if (newBlock) enterEdit(spliceIndex);
     // enterEdit's own focus (renderBlockWrapper's queueMicrotask) queues
     // first when it applies; queuing this one after it, rather than
     // setting the selection synchronously here, is what makes it land
     // after that focus instead of being clobbered by it.
     queueMicrotask(() => {
-      (newFenceView ?? liveViews.get(newIndex))?.dispatch({ selection: EditorSelection.single(spec.anchor, spec.head) });
+      (newFenceView ?? liveViews.get(spliceIndex))?.dispatch({ selection: EditorSelection.single(spec.anchor, spec.head) });
     });
+  }
+
+  function insertAfter(afterIndex: number | null, kind: Exclude<AddKind, "image" | "link">) {
+    const spec = NEW_BLOCK_SPEC[kind]();
+    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
+    spliceNewBlock(newIndex, 0, spec);
+  }
+
+  /** The slash menu's own confirm (buildSlashMenu): replaces the block
+   * the reader is mid-typing into — not the block after it, the way the
+   * "+" menu's insertAfter does — since the whole point of typing "/cell"
+   * is that there is nothing in this block worth keeping. */
+  function replaceBlockViaSlash(index: number, kind: (typeof SLASH_MENU_ITEMS)[number]["kind"]) {
+    const spec = NEW_BLOCK_SPEC[kind]();
+    spliceNewBlock(index, 1, spec);
   }
 
   function deleteBlock(index: number) {
@@ -540,7 +582,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
           ...extensions,
           EditorView.domEventHandlers({
             blur: () => {
-              commit(index);
+              if (!suppressBlurCommit) commit(index);
               return false;
             },
           }),
@@ -598,6 +640,113 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     gap.appendChild(button);
     gap.appendChild(menu);
     return gap;
+  }
+
+  /** A prose block's own keyboard shortcut for the "+" menu: typing "/"
+   * (optionally followed by a few letters) while the block holds nothing
+   * else offers to turn the whole block into a code cell, a math block,
+   * or a hint fold. Deliberately whole-block, not per-line the way
+   * Notion's own slash menu is — a block that already holds real prose
+   * typing a literal "/" is not offering to replace itself, only a block
+   * that is nothing else yet reads as one. Scoped to `SLASH_MENU_ITEMS`,
+   * not the full add-menu: Image and Link are both async (a file picker,
+   * a search overlay) and this block's own editor is still focused and
+   * live while the reader answers those, with a real blur mid-flight to
+   * account for — Cell/Math/Hint stay synchronous end to end through
+   * NEW_BLOCK_SPEC, so there is nothing to race. Renders into the block
+   * wrapper (renderBlockWrapper's own prose branch), `sync` called from
+   * an `EditorView.updateListener` on every doc change, `keymap` wired
+   * in alongside it so the arrow keys/Enter/Escape only ever mean
+   * "the menu" while it actually has items open. */
+  function buildSlashMenu(index: number): { element: HTMLElement; sync: (text: string) => void; keymap: readonly KeyBinding[] } {
+    const menu = document.createElement("div");
+    menu.className = "dn-slash-menu";
+    let items: typeof SLASH_MENU_ITEMS = [];
+    let selected = 0;
+    // Escape dismisses this one slash attempt, not slash commands in
+    // general — set here and cleared only once the text stops looking
+    // like a slash command at all (sync's own "no match" branch), so
+    // the very next keystroke after Escape (still matching) doesn't
+    // reopen the menu the reader just closed.
+    let dismissed = false;
+
+    function confirm(kind: (typeof SLASH_MENU_ITEMS)[number]["kind"]) {
+      items = [];
+      replaceBlockViaSlash(index, kind);
+    }
+
+    function renderItems() {
+      menu.replaceChildren();
+      items.forEach((item, i) => {
+        const option = document.createElement("button");
+        option.type = "button";
+        option.textContent = item.label;
+        option.className = i === selected ? "is-selected" : "";
+        // mousedown, not click: fires before the editor's own blur
+        // handler would commit "/cell" as the block's real prose text.
+        option.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          confirm(item.kind);
+        });
+        menu.appendChild(option);
+      });
+      menu.classList.toggle("is-open", items.length > 0);
+    }
+
+    function sync(text: string) {
+      // Trailing newlines stripped before matching: the "+" menu's own
+      // fresh paragraph (NEW_BLOCK_SPEC.paragraph) selects only its
+      // placeholder words, so typing "/c" over that selection leaves the
+      // block's own "\n\n" after it untouched — still nothing but a
+      // slash command as far as this block's own content goes.
+      const match = /^\/([a-zA-Z]*)$/.exec(text.replace(/\n+$/, ""));
+      const filter = match?.[1]?.toLowerCase() ?? null;
+      if (filter === null) dismissed = false;
+      items = filter === null || dismissed ? [] : SLASH_MENU_ITEMS.filter((item) => item.label.toLowerCase().startsWith(filter));
+      selected = 0;
+      renderItems();
+    }
+
+    const bindings: KeyBinding[] = [
+      {
+        key: "ArrowDown",
+        run: () => {
+          if (items.length === 0) return false;
+          selected = (selected + 1) % items.length;
+          renderItems();
+          return true;
+        },
+      },
+      {
+        key: "ArrowUp",
+        run: () => {
+          if (items.length === 0) return false;
+          selected = (selected - 1 + items.length) % items.length;
+          renderItems();
+          return true;
+        },
+      },
+      {
+        key: "Enter",
+        run: () => {
+          if (items.length === 0) return false;
+          confirm(items[selected]!.kind);
+          return true;
+        },
+      },
+      {
+        key: "Escape",
+        run: () => {
+          if (items.length === 0) return false;
+          dismissed = true;
+          items = [];
+          renderItems();
+          return true;
+        },
+      },
+    ];
+
+    return { element: menu, sync, keymap: bindings };
   }
 
   /** Move and delete apply to every block kind, fences included — a code
@@ -1438,14 +1587,45 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       }
       // Plain markdown (no dialect field list to build a form from) or
       // the form's own "Edit raw YAML" toggle: falls through to the same
-      // raw-source editor every other block already uses, just below.
+      // raw-source editor every other block already uses, just below. Only
+      // the first case gets a caption — a dewlab/dewstack author who
+      // clicked "Edit raw YAML" already knows what they asked for.
+      if (fieldList.length === 0) {
+        const caption = document.createElement("p");
+        caption.className = "dn-frontmatter-plain-caption";
+        caption.textContent =
+          "No dewlab or dewstack fields recognized here, so this is plain YAML — add year: (dewlab) or module_title: (dewstack) for the per-field form instead.";
+        wrapper.appendChild(caption);
+      }
     }
 
     if (index === focusedProseIndex) {
       const host = document.createElement("div");
       host.className = "dn-block-source";
       wrapper.appendChild(host);
-      const view = mountEditor(host, index, block.text, [sourceLanguageExtension()]);
+
+      // Slash commands (buildSlashMenu) apply only to a real prose
+      // block — front matter's own raw-YAML fallback and a hint fold's
+      // raw HTML have no business turning into a code cell mid-edit.
+      const extensions: Extension[] = [sourceLanguageExtension()];
+      if (block.kind === "prose") {
+        const slashMenu = buildSlashMenu(index);
+        wrapper.appendChild(slashMenu.element);
+        extensions.push(
+          // Prec.highest: BASE_EXTENSIONS' own defaultKeymap already
+          // binds Enter (insertNewlineAndIndent) and the arrow keys at
+          // the same default precedence CodeMirror gives a plain
+          // keymap.of — without this, that earlier-installed keymap
+          // wins ties and this one's own run() never even gets called
+          // while the menu is open.
+          Prec.highest(keymap.of(slashMenu.keymap)),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) slashMenu.sync(update.state.doc.toString());
+          }),
+        );
+      }
+
+      const view = mountEditor(host, index, block.text, extensions);
       queueMicrotask(() => view.focus());
       return wrapper;
     }

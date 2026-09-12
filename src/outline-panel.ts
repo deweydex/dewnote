@@ -14,6 +14,7 @@
 // document. Nothing here knows app.ts exists beyond that one selector.
 
 import { parseDocument } from "./blocks.ts";
+import { iconRail } from "./icon-rail.ts";
 
 export interface OutlinePanelHost {
   getSource(): string;
@@ -54,6 +55,7 @@ export function mountOutlinePanel(host: OutlinePanelHost): OutlinePanel {
   toggle.className = "dn-outline-toggle";
   toggle.setAttribute("aria-label", "Outline");
   toggle.setAttribute("aria-expanded", "false");
+  toggle.title = "Outline";
   toggle.textContent = "≡";
 
   const panel = document.createElement("div");
@@ -127,7 +129,8 @@ export function mountOutlinePanel(host: OutlinePanelHost): OutlinePanel {
     if (!panel.hidden) render();
   }, 500);
 
-  document.body.append(toggle, panel);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(panel);
 
   return {
     destroy() {
