@@ -17,8 +17,17 @@
 // clickable: opening one by a click needs a store-agnostic "open this
 // path" hook neither folder-panel.ts nor repo-panel.ts exposes today,
 // real plumbing left for later rather than rushed here.
+//
+// A slug can index to more than one file — dewlab's own versioned
+// releases (`status`/`version` in front matter, `build.py`'s
+// `versions_of()`) mean a live tutorial, an archived one, and a frozen
+// past release can all share a slug. file-index.ts's `defaultEntryFor`
+// is what picks the one build.py itself would call `is_default` (the
+// newest live version, or the newest version at all if none is live);
+// picking whichever entry happened to be indexed first, as this used to,
+// would show an archived or superseded title as often as the real one.
 
-import type { FileIndexEntry } from "./file-index.ts";
+import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
 import type { Series } from "./series.ts";
 
 export interface SeriesPanel {
@@ -77,7 +86,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   panel.appendChild(empty);
 
   function titleFor(slug: string): string {
-    return getFileIndex().find((entry) => entry.slug === slug)?.title ?? slug;
+    return defaultEntryFor(getFileIndex(), slug)?.title ?? slug;
   }
 
   function render() {
