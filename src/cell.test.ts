@@ -3,9 +3,11 @@ import { parseDocument } from "./blocks.ts";
 import {
   declaredPackages,
   execCellLanguage,
+  isHintFence,
   isRunnableFence,
   parseCellSource,
   parseCellSourceFromFenceText,
+  parseHintFence,
   parseSqlCellInfo,
   sqlPersistStorageKey,
   sqlScriptFromFenceText,
@@ -191,5 +193,39 @@ describe("wrapSqlExecCode", () => {
   test("JSON-escapes the script, so quotes and newlines in it survive as real Python string content", () => {
     const wrapped = wrapSqlExecCode("select 'a' as x;\nselect 2;");
     expect(wrapped).toContain('"select \'a\' as x;\\nselect 2;"');
+  });
+});
+
+describe("isHintFence", () => {
+  test("is true when the fence's first info word is literally hint", () => {
+    expect(isHintFence("hint")).toBe(true);
+  });
+
+  test("is false for anything else, including a fence that merely mentions hint", () => {
+    expect(isHintFence("python exec")).toBe(false);
+    expect(isHintFence("")).toBe(false);
+    expect(isHintFence("hinted")).toBe(false);
+  });
+});
+
+describe("parseHintFence", () => {
+  test("reads for:, after:, and title:, and the body beneath them", () => {
+    const block = fenceBlock("```hint\nfor: totals\nafter: 3 errors\ntitle: Try this\n\nCheck your column names.\n```\n");
+    expect(parseHintFence(block)).toEqual({ for: "totals", after: "3 errors", title: "Try this", body: "Check your column names." });
+  });
+
+  test("defaults after: and title: when absent, and for: stays null rather than guessed", () => {
+    const block = fenceBlock("```hint\nCheck your column names.\n```\n");
+    expect(parseHintFence(block)).toEqual({
+      for: null,
+      after: "errors:5",
+      title: "Let’s slow down a moment…",
+      body: "Check your column names.",
+    });
+  });
+
+  test("a hint with no header lines at all is still read correctly, body only", () => {
+    const block = fenceBlock("```hint\nJust the body, no headers.\n```\n");
+    expect(parseHintFence(block).body).toBe("Just the body, no headers.");
   });
 });

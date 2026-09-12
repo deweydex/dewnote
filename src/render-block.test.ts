@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseFold, renderBlockPreview } from "./render-block.ts";
+import { parseFold, renderBlockPreview, renderHintFencePreview } from "./render-block.ts";
 import { parseDocument } from "./blocks.ts";
 
 function firstBlockOfKind(source: string, kind: string) {
@@ -111,5 +111,32 @@ describe("renderBlockPreview: fence", () => {
   test("throws — fences have no rendered state to produce", () => {
     const block = firstBlockOfKind("```python\n1\n```\n", "fence");
     expect(() => renderBlockPreview(block, "plain")).toThrow();
+  });
+});
+
+describe("renderHintFencePreview", () => {
+  test("renders the title and markdown body as an open dl-hint dl-hint-staged fold", () => {
+    const block = firstBlockOfKind("```hint\nafter: 3 errors\ntitle: Slow down\n\nCheck your *column names*.\n```\n", "fence");
+    const html = renderHintFencePreview(block);
+    expect(html).toContain('class="dl-hint dl-hint-staged"');
+    expect(html).toContain("open");
+    expect(html).toContain("<summary>Slow down</summary>");
+    expect(html).toContain("<em>column names</em>");
+    // Never `hidden` — dewnote has no reader-side trigger to gate on, so
+    // showing the hint openly is the honest choice, not a simulation.
+    expect(html).not.toContain("hidden");
+  });
+
+  test("uses dewlab's own default title when none is given", () => {
+    const block = firstBlockOfKind("```hint\nJust the body.\n```\n", "fence");
+    const html = renderHintFencePreview(block);
+    expect(html).toContain("Let’s slow down a moment…");
+  });
+
+  test("escapes a title that happens to contain HTML-significant characters", () => {
+    const block = firstBlockOfKind('```hint\ntitle: <b>& "quotes"\n\nBody.\n```\n', "fence");
+    const html = renderHintFencePreview(block);
+    expect(html).toContain("&lt;b&gt;");
+    expect(html).not.toContain("<b>&");
   });
 });

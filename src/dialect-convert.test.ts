@@ -43,6 +43,14 @@ describe("dewlab -> dewstack", () => {
     expect(report[0]).toContain("no dewstack equivalent");
   });
 
+  test("a staged-hint fence has no dewstack equivalent — kept as illustrative, reported", () => {
+    const source = "```hint\nafter: 3 errors\ntitle: Slow down\n\nCheck your work.\n```\n";
+    const { markdown, report } = convertDialect(source, "dewlab", "dewstack");
+    expect(markdown).toBe(source);
+    expect(report.length).toBe(1);
+    expect(report[0]).toContain("no dewstack equivalent");
+  });
+
   test("front matter drops year, covers, and practice_* fields, keeps the rest", () => {
     const source = "---\ntitle: A Rule\nyear: 2026\ncovers: {}\npractice_for: other-slug\nmodule: computational-methods\n---\n\nBody.\n";
     const { markdown, report } = convertDialect(source, "dewlab", "dewstack");

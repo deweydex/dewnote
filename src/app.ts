@@ -35,13 +35,14 @@ import { EditorSelection, EditorState, type Extension } from "@codemirror/state"
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { parseDocument, serialize, type Block, type Document } from "./blocks.ts";
 import { detectDialect } from "./dialect.ts";
-import { renderBlockPreview } from "./render-block.ts";
+import { renderBlockPreview, renderHintFencePreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
 import type { FileIndexEntry } from "./file-index.ts";
 import { pickLink } from "./link-picker.ts";
 import {
   declaredPackages,
   execCellLanguage,
+  isHintFence,
   isRunnableFence,
   parseCellSourceFromFenceText,
   parseSqlCellInfo,
@@ -749,6 +750,18 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return panel;
   }
 
+  /** A staged-hint fence's own read-only preview, shown alongside its
+   * live editor — never in place of it, unlike a fold block, since a
+   * fence never loses its "always a live editor" state (plan §5.1,
+   * decision 15). render-block.ts's renderHintFencePreview builds the
+   * actual markup; this only hosts it. */
+  function buildHintPreview(block: Block): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "dn-hint-preview";
+    container.innerHTML = renderHintFencePreview(block);
+    return container;
+  }
+
   function renderBlockWrapper(block: Block, index: number): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = `dn-block dn-block-${block.kind}`;
@@ -807,6 +820,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const sqlInfo = parseSqlCellInfo(info);
       if (isRunnableFence(info)) wrapper.appendChild(buildCellRunner(index, view, info));
       else if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
+      else if (isHintFence(info)) wrapper.appendChild(buildHintPreview(block));
       return wrapper;
     }
 
