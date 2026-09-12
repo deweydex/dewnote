@@ -23,6 +23,7 @@ const COMMANDS: Command[] = [
   { id: "dialect", label: "Convert dialect…", selector: ".dn-dialect-toggle" },
   { id: "outline", label: "Outline", selector: ".dn-outline-toggle" },
   { id: "source", label: "Whole-file source", selector: ".dn-source-toggle" },
+  { id: "check-links", label: "Check links", selector: ".dn-linkcheck-toggle" },
   { id: "settings", label: "Settings", selector: ".dn-settings-toggle" },
 ];
 

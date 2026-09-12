@@ -99,6 +99,13 @@ let sharedFileIndex: FileIndexEntry[] = [];
 export function setFileIndex(index: FileIndexEntry[]): void {
   sharedFileIndex = index;
 }
+/** link-check.ts's own read of the same index the link picker searches —
+ * a getter alongside the existing setter rather than exporting the
+ * variable itself, so every reader goes through one place regardless of
+ * whether the index has been built yet. */
+export function getFileIndex(): FileIndexEntry[] {
+  return sharedFileIndex;
+}
 
 /** file-bar.ts's own promptForNotebookFile follows the same shape: an
  * `<input type=file>` never attached to the DOM, clicked once and

@@ -708,6 +708,28 @@ project; if they are not delightful, nothing after them will rescue it.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.
+
+   **Link checking built** (`src/link-check.ts`), the one item in this
+   step's own line that stayed unbuilt after browse/edit/push (#19):
+   DIALECTS.md §1's own "the editor should offer a picker over real
+   slugs and anchors and check links on save" — link-picker.ts is the
+   picker half; this reads every `tutorial:slug` link already in the
+   document and reports any whose slug isn't in the current file index,
+   the same index the picker itself searches. A manual "Check links"
+   panel, the same "closed until asked" shape every other rail here
+   already has, rather than the "on save" trigger DIALECTS.md itself
+   suggests — that would mean this module reaching into file-bar.ts's,
+   folder-panel.ts's, and repo-panel.ts's three separate save paths, a
+   real piece of coupling left as a follow-up rather than folded in
+   quietly. Anchor checking (a dead slug *or anchor* fails the build,
+   per DIALECTS.md) is left open too: an anchor is a heading in some
+   other document, which the index never reads, only front matter, for
+   the same speed reason link-picker.ts's own search already depends
+   on — checking anchors for real means reading and parsing every linked
+   file's body, materially more work than comparing a slug against a
+   list already in memory. *Done when* a document with both a real and
+   a broken `tutorial:` link reports only the broken one, and a clean
+   document says so rather than showing nothing.
 6. **Exports.** Jupyter out and in, dialect conversion, HTML page.
    *Done when* a tutorial survives markdown → ipynb → markdown unchanged.
 7. **The Mac app.** Tauri shell, native store, keychain, file watching,
