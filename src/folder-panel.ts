@@ -6,9 +6,10 @@
 // unchanged, since an opened folder file is exactly the single-file
 // case #18 already built — a name, content, and a real writable handle.
 
-import { chooseFolder, listMarkdownFiles, readFile, supportsDirectoryPicker, type FolderFile } from "./folder-store.ts";
+import { chooseFolder, listMarkdownFiles, listOrderFiles, readFile, supportsDirectoryPicker, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
+import { parseSeriesFiles, type Series } from "./series.ts";
 
 export interface FolderPanel {
   destroy(): void;
@@ -30,8 +31,14 @@ function textInput(placeholder: string): HTMLInputElement {
  * when given, is handed plan §5.10's own front-matter index every time
  * it's (re)built — main.ts wires it to app.ts's setFileIndex so the link
  * picker (link-picker.ts) has something to search once a folder is
- * open. */
-export function mountFolderPanel(fileBar: FileBar, onIndexChange?: (index: FileIndexEntry[]) => void): FolderPanel {
+ * open. `onSeriesChange`, when given, is handed series.ts's own read of
+ * every `.order.yaml` file in the folder the same way, for
+ * series-panel.ts. */
+export function mountFolderPanel(
+  fileBar: FileBar,
+  onIndexChange?: (index: FileIndexEntry[]) => void,
+  onSeriesChange?: (series: Series[]) => void,
+): FolderPanel {
   let files: FolderFile[] = [];
   let folderName = "";
 
@@ -157,6 +164,24 @@ export function mountFolderPanel(fileBar: FileBar, onIndexChange?: (index: FileI
     onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
   }
 
+  /** Mirrors refreshIndex's own shape, over `.order.yaml` files instead
+   * of markdown — order files are typically few, so no attempt is made
+   * to fold this into the same pass over `files`. */
+  async function refreshSeries(root: Parameters<typeof listOrderFiles>[0]) {
+    if (!onSeriesChange) return;
+    const orderFiles = await listOrderFiles(root);
+    const entries = await Promise.all(
+      orderFiles.map(async (file) => {
+        try {
+          return { path: file.path, content: await readFile(file.handle) };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    onSeriesChange(parseSeriesFiles(entries.filter((e): e is { path: string; content: string } => e !== null)));
+  }
+
   openButton.addEventListener("click", async () => {
     const root = await chooseFolder();
     if (!root) return;
@@ -168,6 +193,7 @@ export function mountFolderPanel(fileBar: FileBar, onIndexChange?: (index: FileI
       status.textContent = `${files.length} markdown file${files.length === 1 ? "" : "s"} in "${folderName}".`;
       renderFiles();
       await refreshIndex();
+      await refreshSeries(root);
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : String(err);
     }

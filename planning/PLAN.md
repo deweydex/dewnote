@@ -741,6 +741,37 @@ project; if they are not delightful, nothing after them will rescue it.
    mounting, the files rail, the series view from `order.yaml`, new
    tutorial from a template, new series. *Done when* a module folder from
    dewlab can be opened in Chrome and worked on for an afternoon.
+
+   **The series view built** (`src/series.ts`, `src/series-panel.ts`),
+   read against dewlab's own `build.py` rather than guessed from this
+   document's own summary — which turned out to be wrong in one real
+   way, corrected in DIALECTS.md §1 alongside this: an order file is a
+   genuine two-key mapping (`series:`, `order:`), not a flat list.
+   `folder-panel.ts` and `repo-panel.ts` each gained a `listOrderFiles`
+   read (`folder-store.ts`'s and `github.ts`'s own new function,
+   factored out of the existing markdown walk/tree-fetch so the walk
+   itself is written once, matched against `.order.yaml` instead of
+   `.md`), handed to a new optional `onSeriesChange` callback the same
+   shape `onIndexChange` already has. `series-panel.ts` is a read-only
+   rail, closed until asked like every other one here, grouping every
+   series by its module and listing each in its own reading order,
+   showing an entry's real title from the file index where the slug is
+   actually indexed and the bare slug otherwise — an order file naming a
+   tutorial dewlab's own build would reject outright is a perfectly
+   ordinary thing to see in an editor that hasn't opened every file yet.
+
+   Deliberately not built, and not silently narrowed into this: opening
+   a listed tutorial with a click (needs a store-agnostic "open this
+   path" hook neither `folder-panel.ts` nor `repo-panel.ts` exposes
+   today — real plumbing, not a detail); `series.yaml`'s own cross-series
+   chaining and `modules.yaml`'s own module ordering (both real dewlab
+   files, found while reading `build.py` rather than assumed, but purely
+   about *glossary accumulation and module display order* for a build —
+   nothing this session's series view needs); reordering a series or
+   creating a new one, each listed as its own separate item on this same
+   line. *Done when* opening a folder or repository with real
+   `order.yaml` files shows every series, grouped by module, each in the
+   order its own file lists, with indexed titles where available.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.
