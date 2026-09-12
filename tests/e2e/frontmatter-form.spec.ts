@@ -182,3 +182,82 @@ test("plain markdown's front matter has no dialect field list, so it opens strai
   await expect(page.locator(".dn-frontmatter-form")).toHaveCount(0);
   await expect(page.locator(".dn-block-frontmatter .cm-content")).toContainText("created:");
 });
+
+// Decision 11's own "module and series are a picker over the index, not
+// free text" — file-index.ts's distinctValues, once a folder is open,
+// drives a plain <datalist> on each field's own text input. Stubs
+// window.showDirectoryPicker the same way folder-panel.spec.ts does,
+// since Playwright has no scriptable equivalent of the OS picker.
+test("module and series offer autocomplete suggestions once a folder's own index exists", async ({ page }) => {
+  await page.addInitScript(() => {
+    function fakeFileHandle(name: string, content: string) {
+      return {
+        kind: "file",
+        name,
+        async getFile() {
+          return { text: async () => content };
+        },
+      };
+    }
+    function fakeDirHandle(name: string, entries: Record<string, unknown>) {
+      return {
+        kind: "directory",
+        name,
+        async *entries() {
+          for (const [key, value] of Object.entries(entries)) yield [key, value];
+        },
+      };
+    }
+    const root = fakeDirHandle("tutorials", {
+      "first.md": fakeFileHandle(
+        "first.md",
+        "---\ntitle: First\nslug: first\nmodule: pandas-basics\nmodule_title: Pandas basics\nyear: \"2026\"\nseries: core\nversion: 2026.09.04.1\n---\n\nBody.\n",
+      ),
+      "second.md": fakeFileHandle(
+        "second.md",
+        "---\ntitle: Second\nslug: second\nmodule: sql-basics\nmodule_title: SQL basics\nyear: \"2026\"\nseries: advanced\nversion: 2026.09.04.1\n---\n\nBody.\n",
+      ),
+    });
+    (window as unknown as { showDirectoryPicker: () => Promise<unknown> }).showDirectoryPicker = async () => root;
+  });
+  await page.goto(BUILT_APP);
+  await expect(page.locator(".dn-block").first()).toBeVisible();
+
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+  await expect(page.locator(".dn-folder-file")).toHaveCount(2);
+  await page.locator(".dn-folder-close").click();
+
+  // A document mounted independently of the folder still sees the same
+  // shared index — file-index.ts is a module-level singleton in app.ts,
+  // not something threaded through a particular open file.
+  await mount(page, DEWLAB_DOC);
+  await page.locator(".dn-block-frontmatter .dn-block-render").click();
+
+  const moduleInput = page
+    .locator(".dn-frontmatter-row")
+    .filter({ has: page.locator(".dn-frontmatter-label", { hasText: /^Module$/ }) })
+    .locator('input[type="text"]');
+  const moduleListId = await moduleInput.getAttribute("list");
+  expect(moduleListId).toBeTruthy();
+  const moduleOptions = await page.locator(`datalist#${moduleListId} option`).evaluateAll((els) =>
+    els.map((el) => (el as HTMLOptionElement).value),
+  );
+  expect(moduleOptions).toEqual(["pandas-basics", "sql-basics"]);
+
+  const seriesInput = page
+    .locator(".dn-frontmatter-row")
+    .filter({ has: page.locator(".dn-frontmatter-label", { hasText: /^Series$/ }) })
+    .locator('input[type="text"]');
+  const seriesListId = await seriesInput.getAttribute("list");
+  const seriesOptions = await page.locator(`datalist#${seriesListId} option`).evaluateAll((els) =>
+    els.map((el) => (el as HTMLOptionElement).value),
+  );
+  expect(seriesOptions).toEqual(["advanced", "core"]);
+
+  // The datalist suggests; it never restricts — typing a brand-new value
+  // still commits normally (decision 11's own "new" escape hatch).
+  await moduleInput.fill("brand-new-module");
+  await moduleInput.blur();
+  expect(await getSource(page)).toContain("module: brand-new-module\n");
+});

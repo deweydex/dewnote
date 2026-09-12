@@ -564,29 +564,36 @@ project; if they are not delightful, nothing after them will rescue it.
    "Done" button collapses back to the one-line summary. Plain markdown's
    front matter (`frontMatterFieldsFor("plain")` is empty — arbitrary
    keys, no fixed schema per DIALECTS.md §3) skips the form entirely and
-   opens straight to the raw editor, as before. `module` and `series` are
-   still plain text inputs, not the index-backed autocomplete picker
-   decision 11 eventually wants.
+   opens straight to the raw editor, as before.
 
-   Still open: no image in the add menu; no drag reorder or
-   keyboard-driven reorder (only the move buttons); no whole-file source
-   view (Cmd+/) yet; named aesthetic presets, as above; the add menu is
-   the same four kinds regardless of dialect, not yet reading dewstack's
-   five cell forms or knowing it has no maths, which decision 3 already
-   promises a dialect module rather than this; a fence shows its full raw
-   text, fence markers included, rather than the site's bordered cell
-   chrome with the fence syntax hidden — the live-preview decoration work
-   §5.1 already named as the upgrade path, not a new gap; an orphan blank
-   block, once one exists, has no way to be reached or cleaned up through
-   the UI; the front-matter form's `module` and `series` fields are still
-   free text, and there is no "+ Add field" for an optional field the
-   dialect doesn't already give a fixed spot to (dewlab's `packages`,
-   `covers`, and the rest stay raw-YAML-only) — both need step 4's
-   multi-file folder concept, the picker for the first and a real index of
-   existing values for the second, and are their own slice, not folded
-   into this one; `tutorial:` links round-trip and render fine as ordinary
-   markdown links already, but the link picker (step 8) has the same
-   multi-file dependency and waits on the same thing.
+   `module` and `series` started this slice as plain text, since step 4's
+   file index didn't exist yet when this slice began; by the time it
+   merged, a separate line of concurrent work (step 5.10/8, below) had
+   landed `file-index.ts` on `main`. With the blocker gone, finishing
+   decision 11 properly took one more step rather than shipping the
+   second-best version: both fields now carry `indexedAs` in
+   `frontmatter-fields.ts`, and `app.ts` attaches a plain `<datalist>` —
+   populated from `distinctValues(sharedFileIndex, ...)`, the same shared
+   index `link-picker.ts` already reads — to each one's text input. A
+   `<datalist>` suggests, never restricts, so it is decision 11's own
+   "picker... with a 'new' escape hatch" without a custom overlay
+   component; an empty index (nothing opened yet) just leaves the field
+   an ordinary text input.
+
+   Still open: no whole-file source view (Cmd+/) yet; named aesthetic
+   presets, as above; the add menu's six kinds are the same regardless of
+   dialect, not yet reading dewstack's five cell forms or knowing it has
+   no maths, which decision 3 already promises a dialect module rather
+   than this; a fence shows its full raw text, fence markers included,
+   rather than the site's bordered cell chrome with the fence syntax
+   hidden — the live-preview decoration work §5.1 already named as the
+   upgrade path, not a new gap; an orphan blank block, once one exists,
+   has no way to be reached or cleaned up through the UI; there is no
+   "+ Add field" for an optional field a dialect doesn't already give a
+   fixed spot to (dewlab's `packages`, `covers`, and the rest stay
+   raw-YAML-only) — this needs a real index of existing values to seed a
+   text field with, the way `status`'s select seeds itself from its own
+   fixed options, and is its own small slice, not folded into this one.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as
@@ -766,3 +773,152 @@ Still open:
   first sketch built on that premise (three presets, one settings rail);
   whether it should grow more presets or fewer is a question about how
   much choice is actually wanted, not one research can answer.
+
+## 8. dewlab's own 2026-09 changes, and what they mean for dewnote
+
+Written 2026-09-12, after dewlab's own `planning/DEWSTACK_MERGE.md`
+(2026-09-10) and the commits either side of it. `DIALECTS.md` §§1-2, 5
+are already updated against these; this section is the order of work to
+close the gap they describe. Not started yet — a plan, the way this
+document's own header describes itself, not a record of what's built.
+
+**0. A correctness fix, ahead of everything else here.** `cell.ts`'s
+header parser only recognises `id:`/`hint:` (`HEADER_RE` there); dewlab's
+own now recognises `id:`/`hint:`/`expect:`/`name:` (`d2a21ed`,
+2026-09-10). Opening a real dewlab tutorial that uses `expect:` or
+`name:` today has that line fall through into the cell's own *code* —
+harmless for the round-trip (blocks.ts still preserves it byte for byte,
+same as it always has), but wrong the moment Run is clicked, since
+`parseCellSourceFromFenceText` hands that line to Pyodide as Python and
+`expect: len(readings) == 4` is not valid Python. *Done when* `cell.ts`
+recognises all four header keys, preserves `expect:`/`name:` verbatim
+(dewnote does not evaluate `expect:` yet — that's item 3 below, or later
+— it only has to stop swallowing the line), and a fixtures document using
+both runs its actual code, not its header line.
+
+1. **`sql exec` cells.** DIALECTS.md §1 has the full grammar and the
+   runtime shape (`_run_sql_cell(db, script)` wrapped around the fence's
+   raw SQL, run through the same Pyodide exec pipeline every `python
+   exec` cell already uses, against one page-wide shared connection
+   seeded the first time a page needs it — not dewstack's per-name
+   database model dewnote's existing dewstack SQL support already
+   handles separately in `dewnote_sql_tools.py`). Needs: `cell.ts` to
+   read a fence's language word (`python` vs `sql`, mirroring dewlab's
+   own `CELL_TYPES`) rather than assuming every exec cell is Python;
+   `lang.ts` to highlight a `sql exec` fence as SQL; a shared-`db`
+   seed-on-first-use in `pyodide-engine.ts`/`dewnote_tools.py`, ported
+   from dewlab's own `SEED_SQL_DB_SOURCE`; the SQL-wrapping call site in
+   `app.ts`'s cell runner, alongside the Python case it already has, not
+   replacing it. *Done when* a `sql exec` cell in the fixtures folder
+   runs its query against the shared `db` and shows a real table, and a
+   `python exec` cell run afterward on the same page can see whatever
+   that query left behind (dewlab's own shared-namespace behaviour).
+
+2. **The `hint` fence — built, in a shape corrected once actually
+   building it met decision 15.** DIALECTS.md §1 has the grammar
+   (`for:`/`after:`/`title:`, defaulting to the cell just above, `errors:5`,
+   and dewlab's own default title). Round-trips safely as an opaque
+   fence, unchanged. The plan as first written here said `render-block.ts`
+   should render a `hint` fence as a fold "matching the look of a
+   `dl-hint` fold" — which turned out to conflict with decision 15's own
+   rule that a fence never gets a rendered/blurred state at all, folds
+   included; giving one fence kind a render/edit toggle no other fence
+   has would be a real architectural exception, not a rendering detail.
+   Built instead: the fence stays a live editor like every other (its
+   `for:`/`after:`/`title:` headers and body all directly editable,
+   headers included, the same as any exec cell's own), and
+   `render-block.ts`'s new `renderHintFencePreview` builds a read-only
+   preview — the same `<details class="dl-hint dl-hint-staged">` markup
+   dewlab's own build emits, open rather than hidden (no reader-side
+   trigger to gate a reveal on) — shown *beside* the editor, the same way
+   a cell's own Run bar and output sit beside its code rather than
+   replacing it. `dialect-convert.ts` gained the rule DIALECTS.md §5
+   names: dewstack has no equivalent, so either direction through
+   dewstack drops it as illustrative and reports. *Done when* a fixtures
+   document with a `hint` fence shows its title and body in dewnote's own
+   preview alongside the still-editable fence, and converting that
+   document to dewstack reports the drop rather than silently keeping a
+   fence dewstack's own build would reject.
+
+3. **`html site`/`css site`/`js site` cells — built, with the grouping
+   in a different file than first planned.** This is plan §6 step 3's
+   own long-deferred "`site=`/`app=` cells... need consecutive-fence
+   grouping dewnote's block model doesn't have yet" — postponed there
+   for exactly the reason DIALECTS.md §1 now gives in full: dewlab
+   settled its own spelling only in 2026-09, so there was no stable
+   target to build against before now. The plan as first written here
+   said the grouping work belongs in `blocks.ts`; built instead in a new
+   `site-cell.ts`, because deciding which fences group together means
+   reading a `site:` header *inside* a fence's own body, and `blocks.ts`
+   only ever looks at a fence's info string to split the document
+   correctly (`cell.ts`'s own header comment already states this as the
+   general rule for every other fence kind's header lines — grouping is
+   the same rule, applied to a decision about several fences instead of
+   one). `site-cell.ts`'s `findSiteGroups` walks `doc.blocks` directly:
+   consecutive `html site`/`css site`/`js site` fences sharing one
+   `site:` value group (a blank-only prose block between two panes
+   doesn't break it — an ordinary blank line between two fences is its
+   own orphan prose block, per `blocks.ts`'s own trailing-blank-line
+   rule, not real content); a second pane of a language already claimed
+   starts a fresh group instead of overwriting the first. `cell.ts` reads
+   `id:`/`site:` off the header (`SITE_HEADER_RE`, alongside the
+   exec-cell one); `runtime/site-relay.ts`'s `mountSite` — dewlab's own
+   words for the shape (`DEWSTACK_MERGE.md` §3: "`mount(container,
+   {html, css, js})` returning `{run, destroy}`") — drives a sandboxed
+   `srcdoc` iframe, HTML/CSS rebuilding immediately, a `js site` pane
+   running only on an explicit Run click with its console relayed back
+   through `postMessage`. `app.ts` renders every pane as its own live
+   editor, same as any other fence, with the group's one shared preview
+   hosted after its *last* pane; editing any pane forces a full
+   `render()` on blur (`commit()`'s own new check) rather than the
+   single-block patch every other fence gets, since the preview lives on
+   a different block's wrapper than whichever pane just changed — the
+   one deliberate extra cost this feature has that no other fence kind
+   does. `dialect-convert.ts` gained both directions DIALECTS.md §5 now
+   names: dewstack `site=name` → dewlab `html/css/js site` (a fresh
+   `<name>-<language>` id per pane); dewlab's own site fence back to
+   dewstack (`id:` dropped, reported — `site=name`'s own info string is
+   the whole identity there).
+
+   A real, separately-found bug along the way, not part of the plan as
+   written: `runtime/site-relay.ts` builds the sandboxed frame's own
+   `<script>` tag as a JS string inside dewnote's *own* bundle — which is
+   itself one `<script type="module">` element in `index.html`. The
+   browser's HTML parser ends that outer element on the first literal
+   closing-script-tag text it finds anywhere in its raw content, JS
+   string literals included; the standard `<\/script>` escape in the
+   TypeScript source wasn't enough on its own, because Bun's minifier
+   normalises that escaped slash to a bare one (a legitimate
+   simplification on its own — the two are always equivalent JS
+   escapes), quietly reintroducing the exact literal text the escape was
+   there to avoid. Found by a real build breaking every page load with a
+   `SyntaxError: Unexpected end of input` pointing at `index.html`
+   itself, the outer script element cut off mid-file — not assumed,
+   caught because this step's own e2e suite runs the actual built app the
+   same as every other step's does. Fixed by building the tag's angle
+   bracket from `String.fromCharCode(60)` at runtime instead of writing
+   it as source text at all, immune to a minifier's escape-normalising
+   the way a plain backslash trick is not.
+
+   *Done when* a fixtures page with a two-pane (`html site`+`css site`)
+   group renders a live preview in dewnote the way it would on dewlab's
+   own built page, editing either pane updates the preview, and a
+   `js site` pane's Run button actually runs its script in the sandboxed
+   frame — all true, checked directly against the real built app, not
+   only against `bun test`.
+
+Order matters here more than usual: item 0 is a real bug fix and costs
+almost nothing, so it goes first regardless of what else is picked up.
+Items 1-3 are independent of each other and can be built in any order —
+listed here in the order dewlab itself built them (data track before web
+track), not because dewnote must follow the same sequence.
+
+**Left open, on purpose:** `sql-check` (dewstack) and `app=` (dewstack's
+full-stack track) both stay unbuilt, matching dewlab's own choice not to
+port them yet (`DEWSTACK_MERGE.md` §2 in dewlab: full-stack needs both
+tracks live first, and isn't scheduled). `expect:`'s own runtime meaning
+— evaluating it after a run and using the result to drive anything —
+is not proposed here at all; dewnote is an authoring surface, and
+whether an author-side "does this look right" check ever belongs in it
+is a question worth asking Josh directly rather than assuming yes because
+dewlab has it on the reading side.

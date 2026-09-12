@@ -65,6 +65,46 @@ def _table_html(columns: list[str], rows: list[tuple[Any, ...]], max_rows: int =
     return f'<div class="dn-sql-result"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>{note}'
 
 
+def run_sql_cell(conn: sqlite3.Connection, script: str) -> Any:
+    """dewlab's own `sql exec` cell (`_run_sql_cell` there,
+    DIALECTS.md §1) — the one, page-wide `db` connection every `sql
+    exec` cell shares, not the per-name `_connections` dict the rest of
+    this module manages for dewstack's own `sql cell=name` fences.
+
+    Splits `script` on a bare `;`, runs every statement but the last for
+    effect, and returns the last statement's own result — a pandas
+    DataFrame if it had rows to show, or `None` after printing a plain
+    "N rows affected" line for a CREATE/INSERT/UPDATE/DELETE, since there
+    is no value worth returning for those. Every statement commits at
+    the end.
+
+    Deliberately returns rather than renders: `dewnote_tools.py`'s own
+    `run_cell` already renders a cell's trailing value (a DataFrame
+    through the same `_render_value` path a `python exec` cell's own
+    trailing DataFrame takes), so this needs no rendering of its own —
+    unlike dewlab's version, which renders itself because dewlab's own
+    per-cell `sink` has no equivalent "render my own trailing value"
+    step to reuse.
+    """
+    import pandas as pd
+
+    statements = [s.strip() for s in _strip_comments(script).split(";") if s.strip()]
+    if not statements:
+        return None
+    for statement in statements[:-1]:
+        conn.execute(statement)
+    cursor = conn.execute(statements[-1])
+    frame = None
+    if cursor.description:
+        columns = [d[0] for d in cursor.description]
+        frame = pd.DataFrame(cursor.fetchall(), columns=columns)
+    else:
+        noun = "row" if cursor.rowcount == 1 else "rows"
+        print(f"{cursor.rowcount if cursor.rowcount >= 0 else 0} {noun} affected.")
+    conn.commit()
+    return frame
+
+
 def run_sql(db_name: str, script: str) -> str:
     """Runs `script` as a sequence of `;`-separated statements against
     `db_name`'s own connection (created on first use), all but the last

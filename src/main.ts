@@ -1,9 +1,15 @@
 import "katex/dist/katex.min.css";
 import "./theme/dewlab-tokens.css";
 import "./app.css";
-import { mountDocument, type MountedDocument } from "./app.ts";
+import { mountDocument, setFileIndex, type MountedDocument } from "./app.ts";
 import { applySettings, loadSettings } from "./settings.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
+import { mountFileBar } from "./file-bar.ts";
+import { mountRepoPanel } from "./repo-panel.ts";
+import { mountFolderPanel } from "./folder-panel.ts";
+import { mountDialectPanel } from "./dialect-panel.ts";
+import { mountOutlinePanel } from "./outline-panel.ts";
+import { mountCommandPalette } from "./command-palette.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
@@ -37,6 +43,31 @@ if (!page) throw new Error("index.html is missing #dn-page");
 
 let current: MountedDocument = mountDocument(page, STARTER_DOCUMENT);
 mountSettingsPanel();
+const fileBar = mountFileBar({
+  getSource: () => current.getSource(),
+  loadDocument(source, _name) {
+    current.destroy();
+    current = mountDocument(page, source);
+  },
+});
+mountFolderPanel(fileBar, setFileIndex);
+mountRepoPanel({
+  getSource: () => current.getSource(),
+  loadDocument(source, _name) {
+    current.destroy();
+    current = mountDocument(page, source);
+  },
+  onIndexChange: setFileIndex,
+});
+mountDialectPanel({
+  getSource: () => current.getSource(),
+  loadDocument(source, _name) {
+    current.destroy();
+    current = mountDocument(page, source);
+  },
+});
+mountOutlinePanel({ getSource: () => current.getSource() });
+mountCommandPalette();
 
 // Playwright (tests/e2e/) drives this same built page directly rather than
 // a second harness entry point, remounting whatever source a test needs
@@ -44,6 +75,7 @@ mountSettingsPanel();
 interface DewnoteTestHook {
   mount(source: string): void;
   getSource(): string;
+  setFileIndex(index: Parameters<typeof setFileIndex>[0]): void;
 }
 (window as unknown as { __dewnote: DewnoteTestHook }).__dewnote = {
   mount(source: string): void {
@@ -53,4 +85,5 @@ interface DewnoteTestHook {
   getSource(): string {
     return current.getSource();
   },
+  setFileIndex,
 };

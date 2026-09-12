@@ -96,12 +96,17 @@ export function setStatusListener(listener: ((text: string) => void) | null): vo
 
 /** Runs one cell, streaming its output through `onOutput` as it happens —
  * a cell's print() should appear as the cell runs, not all at once when
- * it finishes. Resolves once the cell has finished (or been stopped). */
-export async function runCell(cellId: string, code: string, onOutput: OutputListener): Promise<{ ok: boolean }> {
+ * it finishes. Resolves once the cell has finished (or been stopped).
+ * `sql`, set for a `sql exec` cell (app.ts's own cell runner, deciding
+ * from `execCellLanguage`), tells the worker this run needs sqlite3 and
+ * the shared `db` connection — `code` itself is already the wrapped
+ * Python `wrapSqlExecCode` produces, not raw SQL; this flag only tells
+ * the worker what to load and seed *before* running it. */
+export async function runCell(cellId: string, code: string, onOutput: OutputListener, opts: { sql?: boolean } = {}): Promise<{ ok: boolean }> {
   await ensureBooted();
   outputListeners.set(cellId, onOutput);
   try {
-    return (await request("run-cell", { cellId, code })) as { ok: boolean };
+    return (await request("run-cell", { cellId, code, sql: !!opts.sql })) as { ok: boolean };
   } finally {
     outputListeners.delete(cellId);
   }

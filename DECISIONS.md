@@ -557,18 +557,32 @@ additive whenever palettes for them exist — the color-mix seam above is
 exactly the thing that makes adding one later cheap rather than another
 five-call-site hunt.*
 
-**25 — The front-matter form (decision 11) ships scoped down to what
-doesn't need a multi-file index, rather than waiting for step 4.** Josh's
-own "let's build what we can now" pointed at this as the one item from
-the settings-panel discussion's list that was actually buildable today;
-the rest of decision 11 — an autocomplete picker for `module` and
-`series` drawn from every other file already on disk — needs step 4's
-folder-opening concept to exist first, since there is no "other files"
-to pick from before then (§5.10 says so directly). Splitting it this way
-rather than waiting for the whole thing is the same call as decision 21's
-own SQL persist and decision 24's own settings panel: ship the slice that
-stands on its own, name the rest as still open, rather than blocking a
-real improvement on a dependency that doesn't exist yet.
+**25 — The front-matter form (decision 11) is built from the same
+per-dialect scalar field list either way; whether `module`/`series` get
+real autocomplete just depends on whether an index exists yet.** Started
+from Josh's own "let's build what we can now," aimed at the one item from
+the settings-panel discussion still open when this slice began — at that
+point step 4's file-opening concept (and so file-index.ts, §5.10's own
+index) genuinely didn't exist on `main` yet, so the form was built and
+tested with `module` and `series` as plain text, the honestly scoped-down
+half of decision 11. By the time this branch went to merge, a separate
+run of work (PR #28, "the front-matter index, and the link picker it
+unblocks") had landed `file-index.ts` and `distinctValues` on `main` in
+the meantime — real concurrent progress on the same plan, not a
+duplicate of anything this slice built (that PR's own front matter still
+rendered as flat YAML; nobody had built the per-field form itself). With
+the index no longer missing, finishing decision 11 properly took one
+more small step rather than shipping a form already known to be
+second-best: `frontmatter-fields.ts`'s field specs gained `indexedAs:
+"module" | "series"`, and `buildFrontMatterRow` in `app.ts` attaches a
+plain HTML `<datalist>` — populated from `distinctValues(sharedFileIndex,
+field.indexedAs)`, the same module-level index singleton the link picker
+already reads — to either field's text input when the index has anything
+in it. A `<datalist>` is decision 11's own "picker... with a 'new' escape
+hatch" for free: it suggests, never restricts, so typing a value that
+isn't in the index still commits normally, and an empty index (no folder
+or repository opened yet) just leaves the field an ordinary text input,
+exactly as it always was.
 
 What decision 3 ("a dialect is data, not a code path") makes this cheap:
 `src/frontmatter-fields.ts` is one data table per dialect — the exact
@@ -628,9 +642,9 @@ moved on" signal — no debouncing invented to approximate it.
 are both named gaps with a clear trigger for revisiting them (a dialect
 gaining a scalar list field with real values behind it; an optional text
 field being added to either dialect's own list) rather than an assumption
-baked in anywhere language can't reach. The index-backed picker itself,
-when step 4 exists, replaces `module`/`series`'s plain text inputs with
-whatever picker component gets built then — a swap inside
+baked in anywhere language can't reach. A richer picker than a native
+`<datalist>` — one that shows title as well as module/series, say, the
+way `link-picker.ts`'s own overlay does — is a swap inside
 `frontmatter-fields.ts`/`app.ts`'s row-building code, not a rethink of
 `setFrontMatterField` or the commit path, both of which are unaffected by
 where a field's value ends up coming from.*

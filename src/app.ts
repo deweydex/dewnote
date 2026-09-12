@@ -37,17 +37,27 @@ import { parseDocument, serialize, type Block, type Document } from "./blocks.ts
 import { detectDialect } from "./dialect.ts";
 import { setFrontMatterField } from "./frontmatter.ts";
 import { frontMatterFieldsFor, isScalarField, type FrontMatterFieldSpec } from "./frontmatter-fields.ts";
-import { renderBlockPreview } from "./render-block.ts";
+import { renderBlockPreview, renderHintFencePreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
+import { distinctValues, type FileIndexEntry } from "./file-index.ts";
+import { pickLink } from "./link-picker.ts";
 import {
   declaredPackages,
+  execCellLanguage,
+  isHintFence,
   isRunnableFence,
+  isSitePaneFence,
   parseCellSourceFromFenceText,
+  parseSitePaneInfo,
   parseSqlCellInfo,
   sqlPersistStorageKey,
   sqlScriptFromFenceText,
+  wrapSqlExecCode,
+  type SitePaneInfo,
   type SqlCellInfo,
 } from "./cell.ts";
+import { findSiteGroups, siteGroupContaining, type SiteGroup, type SitePane } from "./site-cell.ts";
+import { mountSite, type SiteMountOptions } from "./runtime/site-relay.ts";
 import {
   canStop,
   ensureBooted,
@@ -69,13 +79,53 @@ export interface MountedDocument {
 
 const BASE_EXTENSIONS: Extension[] = [history(), keymap.of([...defaultKeymap, ...historyKeymap])];
 
-type AddKind = "paragraph" | "cell" | "math" | "hint";
+type AddKind = "paragraph" | "cell" | "math" | "hint" | "image" | "link";
 const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
   { kind: "paragraph", label: "Paragraph" },
   { kind: "cell", label: "Code cell" },
   { kind: "math", label: "Math" },
   { kind: "hint", label: "Hint" },
+  { kind: "image", label: "Image" },
+  { kind: "link", label: "Link" },
 ];
+
+/** Set by main.ts whenever folder-panel.ts or repo-panel.ts (re)builds
+ * its own file-index.ts index — a module-level singleton rather than
+ * something threaded through mountDocument, since there is only ever one
+ * store open and one document mounted at a time (the same reasoning
+ * window.__dewnote's own test hook already relies on). Starts empty, so
+ * a document opened before any folder or repository is opened still
+ * gets a working link picker — DIALECTS.md never had a `tutorial:` link
+ * depend on the index existing, only on it being helpful when it does. */
+let sharedFileIndex: FileIndexEntry[] = [];
+export function setFileIndex(index: FileIndexEntry[]): void {
+  sharedFileIndex = index;
+}
+
+/** file-bar.ts's own promptForNotebookFile follows the same shape: an
+ * `<input type=file>` never attached to the DOM, clicked once and
+ * discarded. A picker dismissed without choosing a file never fires
+ * `change` in every browser this app targets, so a cancelled pick just
+ * leaves this promise unsettled rather than resolving null — the same
+ * behaviour file-bar.ts's own picker already has, not a new gap. */
+function pickImageFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
+    input.click();
+  });
+}
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error as Error);
+    reader.readAsDataURL(file);
+  });
+}
 
 // A persisted SQL cell's saved script lives in localStorage, wrapped in
 // try/catch the way dewstack's own save/restore is — private browsing or
@@ -123,6 +173,13 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   // toggling to raw and then blurring away and back always lands on the
   // form again rather than getting stuck in whichever mode was last left.
   let frontMatterRawMode = false;
+  /** The one block, if any, currently armed for drag reorder — set by
+   * clicking its own grip handle, never by hovering or focusing the
+   * block itself. A block is draggable only while armed (renderBlockWrapper
+   * sets `wrapper.draggable` from this), so dragging never fires by
+   * accident while selecting text or clicking through the document the
+   * way an always-draggable block would invite. */
+  let armedIndex: number | null = null;
 
   /** Every block's current text — a live editor's content where one is
    * mounted, the block's own text otherwise — joined in order. */
@@ -149,7 +206,16 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     const newSource = currentSource();
     const newDoc = parseDocument(newSource);
 
-    if (!sameShape(doc, newDoc)) {
+    // A site pane's own live preview lives on a *different* block's
+    // wrapper (its group's last pane — see buildSiteGroupPreview), which
+    // the single-block patch below never touches. Forcing the full
+    // rebuild here, the same path a structural change already takes, is
+    // what makes editing any pane actually refresh the shared preview —
+    // a small, deliberate cost, not an oversight.
+    const editedBlock = doc.blocks[changedIndex];
+    const editedIsSitePane = editedBlock?.kind === "fence" && isSitePaneFence(editedBlock.fence?.info ?? "");
+
+    if (!sameShape(doc, newDoc) || editedIsSitePane) {
       source = newSource;
       teardownLiveViews();
       doc = newDoc;
@@ -219,7 +285,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * cell forms, not dewlab's one), and this is the same universal set
    * regardless of the open document's dialect until that per-dialect
    * module exists. */
-  const NEW_BLOCK_SPEC: Record<AddKind, () => { text: string; anchor: number; head: number }> = {
+  const NEW_BLOCK_SPEC: Record<Exclude<AddKind, "image" | "link">, () => { text: string; anchor: number; head: number }> = {
     paragraph: () => ({ text: "New paragraph.\n\n", anchor: 0, head: "New paragraph.".length }),
     cell: () => {
       const text = `\`\`\`python exec\nid: ${generateCellId()}\n\n\`\`\`\n\n`;
@@ -253,7 +319,53 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return `new-cell-${n}`;
   }
 
-  function insertAfter(afterIndex: number | null, kind: AddKind) {
+  /** Not in NEW_BLOCK_SPEC's own synchronous table because picking a
+   * file and reading it are both async, unlike every other add-menu
+   * kind. Inlined as a `data:` URI in the markdown itself rather than
+   * saved alongside the document, since no store this file knows about
+   * (browser, folder, or GitHub — src/store.ts, src/folder-store.ts,
+   * src/github.ts) has a "copy this asset next to the document" method
+   * yet; plan §8's own "a copy into the tutorial folder" is still open
+   * for the same reason the link picker is (§6 step 8's own note) —
+   * both need more of the store interface than exists today. Alt text
+   * is asked for the same way DIALECTS.md's own worked examples always
+   * write it: required in the markdown, never left empty by this UI
+   * even though a reader could still hand-edit it away afterwards. */
+  async function insertImageAfter(afterIndex: number | null) {
+    const file = await pickImageFile();
+    if (!file) return;
+    const dataUrl = await readAsDataUrl(file);
+    const alt = window.prompt("Alt text for this image:", "") ?? "";
+    const text = `![${alt}](${dataUrl})\n\n`;
+    const parts = blockTexts();
+    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
+    parts.splice(newIndex, 0, text);
+    source = parts.join("");
+    teardownLiveViews();
+    doc = parseDocument(source);
+    render();
+  }
+
+  /** Also async, like insertImageAfter, and for the same reason it isn't
+   * in NEW_BLOCK_SPEC — pickLink is a whole search overlay, not a
+   * synchronous placeholder. Resolves to the finished `[text](target)`
+   * markdown already, so this only has to splice it in; sharedFileIndex
+   * is whatever main.ts last set from an opened folder or repository,
+   * empty until then. */
+  async function insertLinkAfter(afterIndex: number | null) {
+    const markdown = await pickLink(sharedFileIndex);
+    if (!markdown) return;
+    const text = `${markdown}\n\n`;
+    const parts = blockTexts();
+    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
+    parts.splice(newIndex, 0, text);
+    source = parts.join("");
+    teardownLiveViews();
+    doc = parseDocument(source);
+    render();
+  }
+
+  function insertAfter(afterIndex: number | null, kind: Exclude<AddKind, "image" | "link">) {
     const spec = NEW_BLOCK_SPEC[kind]();
     const parts = blockTexts();
     const newIndex = afterIndex === null ? 0 : afterIndex + 1;
@@ -297,6 +409,12 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return doc.blocks[index]!.kind !== "frontmatter" && index < doc.blocks.length - 1;
   }
 
+  /** Keyboard reorder — ArrowUp/ArrowDown on an armed block's own grip
+   * handle. Re-arms the block at its new position afterward, since
+   * render() tears down and rebuilds every wrapper (including the grip
+   * that has focus), and a keyboard user pressing the arrow again
+   * expects the same block still armed under their finger, not the one
+   * that used to be at this index. */
   function moveBlock(index: number, delta: -1 | 1) {
     const parts = blockTexts();
     const [moved] = parts.splice(index, 1);
@@ -305,6 +423,43 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     teardownLiveViews();
     doc = parseDocument(source);
     render();
+    setArmed(index + delta);
+    blockElements[index + delta]?.querySelector<HTMLElement>(".dn-block-grip")?.focus();
+  }
+
+  /** Drag reorder's own move — dropping block `fromIndex` onto block
+   * `toIndex`. Clamped to never land above front matter (canMoveUp's own
+   * rule, expressed differently here since drag has no "one step at a
+   * time" adjacent-index shape to check against). */
+  function moveBlockTo(fromIndex: number, toIndex: number) {
+    const minIndex = doc.blocks[0]?.kind === "frontmatter" ? 1 : 0;
+    if (fromIndex < minIndex || fromIndex === toIndex) return;
+    const parts = blockTexts();
+    const [moved] = parts.splice(fromIndex, 1);
+    let target = toIndex > fromIndex ? toIndex - 1 : toIndex;
+    if (target < minIndex) target = minIndex;
+    parts.splice(target, 0, moved!);
+    source = parts.join("");
+    teardownLiveViews();
+    doc = parseDocument(source);
+    render();
+  }
+
+  /** Arms exactly one block for drag reorder at a time — arming a second
+   * disarms the first, the same "one thing open" rule closeOpenAddMenus
+   * already keeps for the add menus. */
+  function setArmed(index: number | null) {
+    if (armedIndex !== null && blockElements[armedIndex]) {
+      blockElements[armedIndex]!.classList.remove("is-armed");
+      blockElements[armedIndex]!.draggable = false;
+      blockElements[armedIndex]!.querySelector(".dn-block-grip")?.setAttribute("aria-pressed", "false");
+    }
+    armedIndex = index;
+    if (index !== null && blockElements[index]) {
+      blockElements[index]!.classList.add("is-armed");
+      blockElements[index]!.draggable = true;
+      blockElements[index]!.querySelector(".dn-block-grip")?.setAttribute("aria-pressed", "true");
+    }
   }
 
   function mountEditor(host: HTMLElement, index: number, text: string, extensions: Extension[]): EditorView {
@@ -359,7 +514,9 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       item.textContent = label;
       item.addEventListener("click", () => {
         closeOpenAddMenus();
-        insertAfter(afterIndex, kind);
+        if (kind === "image") insertImageAfter(afterIndex);
+        else if (kind === "link") insertLinkAfter(afterIndex);
+        else insertAfter(afterIndex, kind);
       });
       menu.appendChild(item);
     }
@@ -379,30 +536,36 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   /** Move and delete apply to every block kind, fences included — a code
    * cell is as reorderable and removable as a paragraph, even though it
    * has no rendered state to click into the way the others do. */
+  /** A single grip, not up/down arrows — clicking it arms the block for
+   * drag reorder (setArmed), and once armed, ArrowUp/ArrowDown on the
+   * grip itself move it exactly as the old buttons did, so keyboard
+   * reorder loses nothing by losing the arrows. */
   function buildToolbar(index: number): HTMLElement {
     const toolbar = document.createElement("div");
     toolbar.className = "dn-block-toolbar";
 
-    const moveUp = document.createElement("button");
-    moveUp.type = "button";
-    moveUp.className = "dn-block-move";
-    moveUp.setAttribute("aria-label", "Move this block up");
-    moveUp.textContent = "▲";
-    moveUp.disabled = !canMoveUp(index);
-    moveUp.addEventListener("click", (event) => {
+    const grip = document.createElement("button");
+    grip.type = "button";
+    grip.className = "dn-block-grip";
+    grip.setAttribute("aria-label", "Drag to reorder, or arm and use the arrow keys");
+    grip.setAttribute("aria-pressed", String(index === armedIndex));
+    grip.textContent = "⠿";
+    grip.addEventListener("click", (event) => {
       event.stopPropagation();
-      moveBlock(index, -1);
+      setArmed(armedIndex === index ? null : index);
     });
-
-    const moveDown = document.createElement("button");
-    moveDown.type = "button";
-    moveDown.className = "dn-block-move";
-    moveDown.setAttribute("aria-label", "Move this block down");
-    moveDown.textContent = "▼";
-    moveDown.disabled = !canMoveDown(index);
-    moveDown.addEventListener("click", (event) => {
-      event.stopPropagation();
-      moveBlock(index, 1);
+    grip.addEventListener("keydown", (event) => {
+      if (armedIndex !== index) return;
+      if (event.key === "ArrowUp" && canMoveUp(index)) {
+        event.preventDefault();
+        moveBlock(index, -1);
+      } else if (event.key === "ArrowDown" && canMoveDown(index)) {
+        event.preventDefault();
+        moveBlock(index, 1);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        setArmed(null);
+      }
     });
 
     const deleteButton = document.createElement("button");
@@ -415,7 +578,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       deleteBlock(index);
     });
 
-    toolbar.append(moveUp, moveDown, deleteButton);
+    toolbar.append(grip, deleteButton);
     return toolbar;
   }
 
@@ -455,7 +618,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * cross-origin isolation in effect (pyodide-engine.ts's canStop()); on a
    * page without it there is no way to interrupt a running cell, a
    * documented gap, not a bug here. */
-  function buildCellRunner(index: number, view: EditorView): HTMLElement {
+  function buildCellRunner(index: number, view: EditorView, info: string): HTMLElement {
     const panel = document.createElement("div");
     panel.className = "dn-cell-panel";
 
@@ -498,7 +661,9 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       try {
         await ensureBooted(declaredPackages(doc.frontMatter.fields));
         stopButton.disabled = !canStop();
-        await runCell(cellId, code, (out) => applyOutputEvent(output, out));
+        const isSql = execCellLanguage(info) === "sql";
+        const toRun = isSql ? wrapSqlExecCode(code) : code;
+        await runCell(cellId, toRun, (out) => applyOutputEvent(output, out), { sql: isSql });
       } catch (err) {
         // A rejection here, rather than a `{ ok: false }` result, means
         // the cell never got to run its own error handling at all — the
@@ -682,6 +847,27 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const input = document.createElement("input");
       input.type = "text";
       input.value = stringValue;
+      // Decision 11's own "picker over the index, not free text": a
+      // native <datalist> suggests every distinct value already in use
+      // elsewhere, typing anything else still works (the "new" escape
+      // hatch, for free — a datalist never restricts input to its own
+      // options), and an empty index just leaves this an ordinary text
+      // field, same as before the index existed.
+      if (field.indexedAs) {
+        const suggestions = distinctValues(sharedFileIndex, field.indexedAs);
+        if (suggestions.length > 0) {
+          const datalistId = `dn-frontmatter-list-${field.key}-${index}`;
+          const datalist = document.createElement("datalist");
+          datalist.id = datalistId;
+          for (const value of suggestions) {
+            const option = document.createElement("option");
+            option.value = value;
+            datalist.appendChild(option);
+          }
+          input.setAttribute("list", datalistId);
+          row.appendChild(datalist);
+        }
+      }
       control = input;
     }
     control.addEventListener("change", () => commitFrontMatterField(index, field.key, control.value));
@@ -777,6 +963,91 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return form;
   }
 
+  /** A staged-hint fence's own read-only preview, shown alongside its
+   * live editor — never in place of it, unlike a fold block, since a
+   * fence never loses its "always a live editor" state (plan §5.1,
+   * decision 15). render-block.ts's renderHintFencePreview builds the
+   * actual markup; this only hosts it. */
+  function buildHintPreview(block: Block): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "dn-hint-preview";
+    container.innerHTML = renderHintFencePreview(block);
+    return container;
+  }
+
+  /** A small label above a site pane's own live editor, since three
+   * fences in a row otherwise look identical until you read their info
+   * strings — the same reason a cell's Run bar names nothing but a
+   * site pane genuinely needs a "which language, which site" hint a
+   * plain code fence doesn't. */
+  function buildSitePaneLabel(info: SitePaneInfo): HTMLElement {
+    const label = document.createElement("div");
+    label.className = "dn-site-pane-label";
+    label.textContent = `${info.language} · site: ${info.site || "(none)"}`;
+    return label;
+  }
+
+  /** A site group's one shared live preview — HTML and CSS rebuild it
+   * immediately (site-relay.ts's own `update`); a `js` pane, if the
+   * group has one, gets its own Run button, since JS only ever runs on
+   * an explicit click (plan §5.4's own convention, DIALECTS.md §2).
+   * Reads every pane's *current, committed* body straight from `doc`,
+   * which commit()'s own forced full-render for a site pane guarantees
+   * is fresh by the time this runs — never blockTexts()'s live,
+   * uncommitted text, since a pane that's still focused hasn't been
+   * parsed into a body yet. */
+  function buildSiteGroupPreview(group: SiteGroup): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "dn-site-preview";
+
+    const header = document.createElement("div");
+    header.className = "dn-site-preview-header";
+    header.textContent = `Preview — site: ${group.site || "(none)"}`;
+    container.appendChild(header);
+
+    function bodyOf(pane: SitePane | undefined): string {
+      return pane ? parseSitePaneInfo(doc.blocks[pane.blockIndex]!).body : "";
+    }
+    function currentBodies(): SiteMountOptions {
+      return { html: bodyOf(group.panes.html), css: bodyOf(group.panes.css), js: bodyOf(group.panes.js) };
+    }
+
+    if (group.panes.js) {
+      const runBar = document.createElement("div");
+      runBar.className = "dn-site-run-bar";
+      const runButton = document.createElement("button");
+      runButton.type = "button";
+      runButton.className = "dn-site-run";
+      runButton.textContent = "Run";
+      runButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        consoleOutput.replaceChildren();
+        mount.update(currentBodies());
+        mount.run();
+      });
+      runBar.appendChild(runButton);
+      container.appendChild(runBar);
+    }
+
+    const frameHost = document.createElement("div");
+    frameHost.className = "dn-site-frame-host";
+    container.appendChild(frameHost);
+
+    const consoleOutput = document.createElement("div");
+    consoleOutput.className = "dn-site-console";
+    container.appendChild(consoleOutput);
+
+    const mount = mountSite(frameHost, (message) => {
+      const line = document.createElement("div");
+      line.className = `dn-site-console-line dn-site-console-${message.level}`;
+      line.textContent = message.text;
+      consoleOutput.appendChild(line);
+    });
+    mount.update(currentBodies());
+
+    return container;
+  }
+
   function renderBlockWrapper(block: Block, index: number): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = `dn-block dn-block-${block.kind}`;
@@ -784,9 +1055,46 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
     if (block.kind === "frontmatter") {
       // Front matter always stays first — no move controls at all, per
-      // canMoveUp/canMoveDown, so it never gets a toolbar either.
+      // canMoveUp/canMoveDown, so it never gets a toolbar (and so never a
+      // grip to arm) either. Still a valid drop target, though — dropping
+      // onto it is how a block gets moved to the very top of the body —
+      // moveBlockTo's own minIndex clamp is what keeps it from landing
+      // *above* front matter instead.
+      wrapper.addEventListener("dragover", (event) => {
+        if (armedIndex === null) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      });
+      wrapper.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const from = Number(event.dataTransfer?.getData("text/plain"));
+        if (Number.isNaN(from)) return;
+        moveBlockTo(from, index);
+        setArmed(null);
+      });
     } else {
       wrapper.appendChild(buildToolbar(index));
+      wrapper.draggable = index === armedIndex;
+      // dragover must call preventDefault for drop to fire at all — the
+      // browser's default is "this isn't a drop target." Gated on
+      // armedIndex, not on wrapper.draggable, since the *target* wrapper
+      // being dragged over is never itself the draggable one.
+      wrapper.addEventListener("dragover", (event) => {
+        if (armedIndex === null) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      });
+      wrapper.addEventListener("dragstart", (event) => {
+        event.dataTransfer?.setData("text/plain", String(index));
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      });
+      wrapper.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const from = Number(event.dataTransfer?.getData("text/plain"));
+        if (Number.isNaN(from)) return;
+        moveBlockTo(from, index);
+        setArmed(null);
+      });
     }
 
     if (block.kind === "fence") {
@@ -796,8 +1104,17 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       wrapper.appendChild(host);
       const view = mountEditor(host, index, block.text, languageExtensionFor(info));
       const sqlInfo = parseSqlCellInfo(info);
-      if (isRunnableFence(info)) wrapper.appendChild(buildCellRunner(index, view));
+      if (isRunnableFence(info)) wrapper.appendChild(buildCellRunner(index, view, info));
       else if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
+      else if (isHintFence(info)) wrapper.appendChild(buildHintPreview(block));
+      else if (isSitePaneFence(info)) {
+        wrapper.appendChild(buildSitePaneLabel(parseSitePaneInfo(block)));
+        const group = siteGroupContaining(findSiteGroups(doc.blocks), index);
+        // Only the group's *last* pane hosts the shared preview — three
+        // panes sharing one site get exactly one preview between them,
+        // not one each.
+        if (group && group.endIndex === index) wrapper.appendChild(buildSiteGroupPreview(group));
+      }
       return wrapper;
     }
 
@@ -853,10 +1170,23 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   // ever fires for a click genuinely elsewhere.
   document.addEventListener("click", closeOpenAddMenus);
 
+  /** A click anywhere outside the armed block disarms it, the same
+   * "elsewhere means done with this" rule closeOpenAddMenus follows —
+   * the grip's own click handler stops propagation, so arming or
+   * disarming via the grip itself never reaches this. */
+  function disarmOnOutsideClick(event: MouseEvent) {
+    if (armedIndex === null) return;
+    const armedWrapper = blockElements[armedIndex];
+    if (armedWrapper && event.target instanceof Node && armedWrapper.contains(event.target)) return;
+    setArmed(null);
+  }
+  document.addEventListener("click", disarmOnOutsideClick);
+
   return {
     getSource: currentSource,
     destroy() {
       document.removeEventListener("click", closeOpenAddMenus);
+      document.removeEventListener("click", disarmOnOutsideClick);
       teardownLiveViews();
       container.innerHTML = "";
     },

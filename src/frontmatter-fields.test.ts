@@ -13,6 +13,16 @@ describe("frontMatterFieldsFor", () => {
     expect(byKey["covers"]).toBeUndefined();
   });
 
+  test("module and series are marked for index-backed autocomplete; other fields are not", () => {
+    for (const dialect of ["dewlab", "dewstack"] as const) {
+      const byKey = Object.fromEntries(frontMatterFieldsFor(dialect).map((f) => [f.key, f]));
+      expect(byKey["module"]?.indexedAs).toBe("module");
+      expect(byKey["series"]?.indexedAs).toBe("series");
+      expect(byKey["title"]?.indexedAs).toBeUndefined();
+      expect(byKey["slug"]?.indexedAs).toBeUndefined();
+    }
+  });
+
   test("dewstack has no year field and offers a live/draft status", () => {
     const fields = frontMatterFieldsFor("dewstack");
     const byKey = Object.fromEntries(fields.map((f) => [f.key, f]));

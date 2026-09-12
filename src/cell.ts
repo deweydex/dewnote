@@ -1,20 +1,31 @@
-// Parses a dewlab-style exec cell's body — the `id:` and optional `hint:`
-// header lines DIALECTS.md documents (`HEADER_RE`,
-// `^\s*(id|hint)\s*:\s*(.*)$`), followed by the code itself — out of a
-// fence block's raw text. blocks.ts deliberately never does this itself:
-// it only needs a fence's own info string to split the document
-// correctly, and the header lines are a rendering/running concern, not
-// a document-model one.
+// Parses a dewlab-style exec cell's body — the `id:`, `hint:`, `expect:`
+// and `name:` header lines DIALECTS.md documents (`HEADER_RE`, matching
+// dewlab's own `d2a21ed`), followed by the code itself — out of a fence
+// block's raw text. blocks.ts deliberately never does this itself: it
+// only needs a fence's own info string to split the document correctly,
+// and the header lines are a rendering/running concern, not a
+// document-model one.
+//
+// `expect:` and `name:` are read and preserved verbatim but not acted on
+// — dewnote has no reader-side trigger logic to evaluate `expect:`
+// against (that's a staged hint's business, plan §8 item 2) and `name:`
+// is reserved on dewlab's own side for a feature dewnote doesn't need to
+// know about yet. What matters here is only that *not* recognising them
+// used to mean their line fell through into `code` — a real bug, not a
+// missing feature: `expect: len(readings) == 4` is not valid Python, and
+// dewnote would hand it straight to Pyodide on Run.
 
 import type { Block } from "./blocks.ts";
 
 export interface CellSource {
   id: string | null;
   hint: string | null;
+  expect: string | null;
+  name: string | null;
   code: string;
 }
 
-const HEADER_RE = /^\s*(id|hint)\s*:\s*(.*)$/;
+const HEADER_RE = /^\s*(id|hint|expect|name)\s*:\s*(.*)$/;
 
 /** Everything between the opening ```lang info line and the closing ```
  * line, exactly as blocks.ts sees it — a fence block's own text always
@@ -31,15 +42,30 @@ function parseHeaderAndCode(body: string): CellSource {
   const lines = body.split("\n");
   let id: string | null = null;
   let hint: string | null = null;
+  let expect: string | null = null;
+  let name: string | null = null;
   let i = 0;
   while (i < lines.length) {
     const match = HEADER_RE.exec(lines[i]!);
     if (!match) break;
-    if (match[1] === "id") id = match[2]!.trim();
-    else hint = match[2]!.trim();
+    const key = match[1]!;
+    const value = match[2]!;
+    // `name:`, uniquely among these four keys, collides with real code: a
+    // type-annotated first line of a cell's own body — `name: str = "Ada"`
+    // — is indistinguishable from the header by shape alone. dewlab's own
+    // fix (`ca6e16e`, 2026-09-07) is the same rule ported verbatim: `=`
+    // never appears in a genuine name (a short label), so its presence
+    // means this was never the header. `expect:` keeps matching even with
+    // `=` in it, since a real expectation legitimately uses one
+    // (`expect: total == 6`).
+    if (key === "name" && value.includes("=")) break;
+    if (key === "id") id = value.trim();
+    else if (key === "hint") hint = value.trim();
+    else if (key === "expect") expect = value.trim();
+    else name = value.trim();
     i++;
   }
-  return { id, hint, code: lines.slice(i).join("\n") };
+  return { id, hint, expect, name, code: lines.slice(i).join("\n") };
 }
 
 export function parseCellSource(block: Block): CellSource {
@@ -60,6 +86,32 @@ export function parseCellSourceFromFenceText(fenceText: string): CellSource {
  * illustrative, read-only code, never executed. */
 export function isRunnableFence(info: string): boolean {
   return info.split(/\s+/).includes("exec");
+}
+
+/** Which of dewlab's two exec-cell languages a runnable fence is
+ * (DIALECTS.md §1, `d2a21ed`) — mirrors dewlab's own `CELL_TYPES`
+ * check in `parse_cell()`: the fence's first word decides, and
+ * anything other than literally `sql` is Python, `exec` itself
+ * included (a bare ` ```exec ` fence, dewlab's own shorthand for
+ * `python exec`). Only meaningful for a fence `isRunnableFence`
+ * already said yes to. */
+export function execCellLanguage(info: string): "python" | "sql" {
+  return info.trim().split(/\s+/)[0] === "sql" ? "sql" : "python";
+}
+
+/** The Python dewnote actually runs for a `sql exec` cell — the fence's
+ * raw SQL text, wrapped into a call against the one shared, page-wide
+ * `db` connection (DIALECTS.md §1), mirroring dewlab's own
+ * `wrapSqlCode()`. A bare expression, not assigned to anything: unlike
+ * dewlab's own `_run_sql_cell` (which renders itself and returns a value
+ * that must then be discarded to avoid a second render), dewnote's
+ * `dewnote_sql_tools.run_sql_cell` only *returns* a DataFrame or `None`,
+ * so leaving this as the cell's own trailing expression is what lets
+ * `dewnote_tools.py`'s existing `_render_value` render it — the same
+ * path any other cell's trailing DataFrame already takes, not a second
+ * rendering mechanism. */
+export function wrapSqlExecCode(script: string): string {
+  return `import dewnote_sql_tools as _dn_sql\n_dn_sql.run_sql_cell(db, ${JSON.stringify(script)})`;
 }
 
 export interface SqlCellInfo {
@@ -120,4 +172,104 @@ export function declaredPackages(fields: Record<string, unknown>): string[] {
   const value = fields["packages"];
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
+}
+
+/** dewlab's own staged-hint fence (DIALECTS.md §1, `d2a21ed`) — a
+ * `for:`/`after:`/`title:` header, the same shape dewlab's own
+ * `parse_hint()` reads, followed by the hint's own markdown body. */
+export interface HintFenceInfo {
+  /** The exec cell this hint belongs to, from an explicit `for:` line.
+   * No default: dewlab's own build falls back to "the exec cell
+   * immediately above this fence in the source," but that's a
+   * document-wide notion dewnote's own per-fence parsing has no access
+   * to here — a real, narrower gap than dewlab's own, left null rather
+   * than guessed at (see cell.ts's own `parseHintFence` for where a
+   * caller with the surrounding document could still work it out). */
+  for: string | null;
+  after: string;
+  title: string;
+  body: string;
+}
+
+const HINT_HEADER_RE = /^\s*(for|after|title)\s*:\s*(.*)$/;
+export const DEFAULT_HINT_AFTER = "errors:5";
+export const DEFAULT_HINT_TITLE = "Let’s slow down a moment…";
+
+/** Whether a fence is a staged-hint fence — its first info word is
+ * literally "hint", the same test dewlab's own `extract_blocks()` runs
+ * (`info and info[0] == "hint"`). */
+export function isHintFence(info: string): boolean {
+  return info.trim().split(/\s+/)[0] === "hint";
+}
+
+/** Reads a staged-hint fence's own header lines and body, defaults
+ * (`errors:5`, dewlab's own default title) included, so a caller with no
+ * header lines at all still gets something meaningful to show. */
+export function parseHintFence(block: Block): HintFenceInfo {
+  const lines = fenceBody(block.text).split("\n");
+  const header: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length) {
+    const match = HINT_HEADER_RE.exec(lines[i]!);
+    if (!match || match[1]! in header) break;
+    header[match[1]!] = match[2]!.trim();
+    i++;
+  }
+  return {
+    for: header["for"] ?? null,
+    after: header["after"] || DEFAULT_HINT_AFTER,
+    title: header["title"] || DEFAULT_HINT_TITLE,
+    body: lines.slice(i).join("\n").trim(),
+  };
+}
+
+/** dewlab's own native site-editor fence (DIALECTS.md §1) — `html
+ * site`/`css site`/`js site`, an `id:`/`site:` header the same shape
+ * every other exec-family fence uses, in place of dewstack's
+ * `site=name` (which puts the identity in the info string itself,
+ * something dewlab's own authoring editor can't round-trip — DIALECTS.md
+ * §1's own note). Consecutive fences sharing one `site:` value group
+ * into one editor; site-cell.ts owns that grouping, this module only
+ * parses one pane at a time. */
+export type SiteLanguage = "html" | "css" | "js";
+const SITE_LANGUAGES = new Set<string>(["html", "css", "js"]);
+
+export interface SitePaneInfo {
+  language: SiteLanguage;
+  id: string | null;
+  site: string | null;
+  body: string;
+}
+
+const SITE_HEADER_RE = /^\s*(id|site)\s*:\s*(.*)$/;
+
+/** dewlab's own `len(info) >= 2 and info[1] == "site"` check — the
+ * fence's first word must be one of the three site languages and its
+ * second word must be literally "site". */
+export function isSitePaneFence(info: string): boolean {
+  const words = info.trim().split(/\s+/);
+  return words.length >= 2 && words[1] === "site" && SITE_LANGUAGES.has(words[0]!);
+}
+
+/** Reads a site pane's own `id:`/`site:` header and body. Only
+ * meaningful for a fence `isSitePaneFence` already said yes to — the
+ * language comes from the fence's own first info word, not re-validated
+ * here. */
+export function parseSitePaneInfo(block: Block): SitePaneInfo {
+  const language = (block.fence?.info.trim().split(/\s+/)[0] ?? "html") as SiteLanguage;
+  const lines = fenceBody(block.text).split("\n");
+  const header: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length) {
+    const match = SITE_HEADER_RE.exec(lines[i]!);
+    if (!match || match[1]! in header) break;
+    header[match[1]!] = match[2]!.trim();
+    i++;
+  }
+  return {
+    language,
+    id: header["id"] ?? null,
+    site: header["site"] ?? null,
+    body: lines.slice(i).join("\n"),
+  };
 }

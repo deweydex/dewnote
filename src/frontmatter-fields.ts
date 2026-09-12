@@ -5,10 +5,16 @@
 // `practice_for`, `practice_across` — see DIALECTS.md §1) has no row and
 // stays reachable only through the form's raw-YAML fallback in app.ts.
 //
-// `module` and `series` are still plain text inputs here, not the
-// autocomplete-over-a-real-index picker decision 11 eventually wants —
-// that needs step 4's file index to exist first (see PLAN.md). This is
-// the scoped-down slice of decision 11 that's buildable without it.
+// `module` and `series` carry `indexedAs`, naming which of file-index.ts's
+// `distinctValues` fields a text field's row should offer as autocomplete
+// suggestions — decision 11's own "module and series fields are a picker
+// over it, not free text," now that the index (§5.10) exists. A plain
+// HTML `<datalist>` is the picker: type anything (the "new" escape hatch
+// decision 11 names, for free, since a datalist never restricts input to
+// its own options) or pick a suggestion. `practice_for`/`practice_across`
+// are lists, not scalars, so they stay out of this form entirely (see
+// above) — decision 11's own mention of them belongs to the raw-YAML
+// fallback, not a row here.
 
 import type { DialectName } from "./dialect.ts";
 
@@ -18,15 +24,21 @@ export interface FrontMatterFieldSpec {
   required: boolean;
   kind: "text" | "select";
   options?: { value: string; label: string }[];
+  /** Which file-index.ts field this text field's own datalist suggestions
+   * should be drawn from (app.ts's buildFrontMatterRow). Undefined for a
+   * field with no meaningful cross-file index — title and slug are each
+   * unique per document, so suggesting one from elsewhere would suggest
+   * the wrong document's own value. */
+  indexedAs?: "module" | "series";
 }
 
 const DEWLAB_FIELDS: FrontMatterFieldSpec[] = [
   { key: "title", label: "Title", required: true, kind: "text" },
   { key: "slug", label: "Slug", required: true, kind: "text" },
-  { key: "module", label: "Module", required: true, kind: "text" },
+  { key: "module", label: "Module", required: true, kind: "text", indexedAs: "module" },
   { key: "module_title", label: "Module title", required: true, kind: "text" },
   { key: "year", label: "Year", required: true, kind: "text" },
-  { key: "series", label: "Series", required: true, kind: "text" },
+  { key: "series", label: "Series", required: true, kind: "text", indexedAs: "series" },
   { key: "version", label: "Version", required: true, kind: "text" },
   {
     key: "status",
@@ -43,9 +55,9 @@ const DEWLAB_FIELDS: FrontMatterFieldSpec[] = [
 const DEWSTACK_FIELDS: FrontMatterFieldSpec[] = [
   { key: "title", label: "Title", required: true, kind: "text" },
   { key: "slug", label: "Slug", required: true, kind: "text" },
-  { key: "module", label: "Module", required: true, kind: "text" },
+  { key: "module", label: "Module", required: true, kind: "text", indexedAs: "module" },
   { key: "module_title", label: "Module title", required: true, kind: "text" },
-  { key: "series", label: "Series", required: true, kind: "text" },
+  { key: "series", label: "Series", required: true, kind: "text", indexedAs: "series" },
   { key: "version", label: "Version", required: true, kind: "text" },
   {
     key: "status",

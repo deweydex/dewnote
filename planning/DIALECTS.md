@@ -1,11 +1,15 @@
 # The dialects dewnote must open and save
 
 An inventory, taken 2026-09-06 from `build.py` in each site and from the
-tutorials themselves. Each dialect becomes one module in the editor that
-declares its front matter, its block kinds, what the add-block menu
-offers, and which runtime a cell needs. This file is the reference those
-modules are written from and checked against; when a build script
-changes, this file changes first.
+tutorials themselves, and updated 2026-09-12 against dewlab's own commits
+since (§1's `sql exec`, `hint` fence, and `html/css/js site` fence
+entries, and dewstack's changed status in §2 — see
+`deweydex/dewlab@planning/DEWSTACK_MERGE.md`, written there 2026-09-10).
+Each dialect becomes one module in the editor that declares its front
+matter, its block kinds, what the add-block menu offers, and which
+runtime a cell needs. This file is the reference those modules are
+written from and checked against; when a build script changes, this file
+changes first.
 
 Everything is CommonMark underneath. A dialect is the set of additions.
 
@@ -26,7 +30,8 @@ front matter field.
 outcomes). Slug must equal the file name; module must equal the parent
 folder.
 
-**Cells.** One fence attribute: `exec`.
+**Cells.** Two cell languages as of `d2a21ed` (2026-09-10), both exec
+fences sharing one header grammar: `python exec` and `sql exec`.
 
 ````markdown
 ```python exec
@@ -34,13 +39,43 @@ id: filter-evening
 hint: Try printing readings["evening"] > 14 on its own first.
 readings[readings["evening"] > 14]
 ```
+
+```sql exec
+id: total-readings
+expect: len(_) > 0
+select count(*) from readings;
+```
 ````
 
 The `id:` line is required and is a contract: saved student work is keyed
 on it, so renaming one throws that work away. The editor must warn before
-a rename and never generate ids that could collide. `hint:` is optional.
-A fence without `exec` is illustrative, read-only code. Counted across the
-repository: 806 `python exec`, 252 plain `python`, nothing else.
+a rename and never generate ids that could collide. Header lines, in the
+order dewlab's own `HEADER_RE` accepts them: `id:` (required), `hint:`,
+`expect:`, `name:` (all optional) — `cell.ts` must recognise and preserve
+all four verbatim, not just `id`/`hint`; a real dewlab tutorial using
+`expect:` or `name:` currently has that line swallowed into the cell's
+own *code* by dewnote's header parser, which then fails to run (§8 has
+the fix). `expect:` is a Python expression checked after a run, driving a
+staged hint's trigger (`planning/CELL_HINTS.md` in dewlab); `name:` is
+reserved there for a related feature dewnote does not need to act on yet,
+only preserve. A fence without `exec` is illustrative, read-only code.
+Counted across the repository as of 2026-09-06: 806 `python exec`, 252
+plain `python`, nothing else — `sql exec` and the newer headers postdate
+that count.
+
+A `sql exec` cell's body is SQL text, not Python, and runs against one
+shared, page-wide SQLite connection (`tutorial-runtime.js`'s
+`SEED_SQL_DB_SOURCE`, seeded into the same shared namespace every
+`python exec` cell already uses, under the name `db`) — not a per-cell
+named database the way dewstack's SQL cells work (§2). Running it means
+wrapping the fence's raw SQL as
+`tutorial_tools._run_sql_cell(db, <script>)` before handing it to the
+same Python-exec pipeline every other cell already uses, exactly the way
+`tutorial-runtime.js`'s own `wrapSqlCode()` does — not a second execution
+path. `_run_sql_cell` is already dewmini's own SQL cell function
+(`tutorial_tools.py`), which is also what dewnote's existing
+`dewnote_sql_tools.py` was trimmed from for dewstack's cells, so the
+runtime work is a second call site, not new plumbing.
 
 **Shared setup.** `{{include: setup/load_readings.py}}` inside a cell,
 spliced in at build time. Preserve verbatim; optionally show the included
@@ -60,6 +95,36 @@ Name the columns you want, separated by commas, in place of `*`.
 `dl-answer` is the other. The blank lines inside are required for the
 markdown within to render. These are the whole of the practice-problem
 syntax; a problem is `**2.**` followed by prose, then a fold.
+
+**Staged hints — a second, fence-based fold**, added `5b4bfaa`
+(2026-09-07) and reworked into its final fence form by `d2a21ed`
+(2026-09-10). Not the same thing as the `dl-hint` fold above, and not a
+replacement for it — a staged hint waits for a real attempt (errors, a
+repeated identical error, an unchanged run, or a failing `expect:`)
+before it appears at all, where a hand-written `dl-hint` fold is always
+there to open. Its own fence:
+
+````markdown
+```hint
+after: 3 errors
+title: Let's slow down a moment…
+
+Check that every column name matches the table exactly, including case.
+```
+````
+
+`for:` is optional (defaults to the exec cell immediately above it in
+the source — `for:` names one explicitly, needed only when a hint
+doesn't directly follow its cell); `after:` and `title:` are each
+optional too, defaulting to `errors:5` and "Let's slow down a moment…".
+Everything after the header lines is the hint's own markdown body. It
+compiles to `<details class="dl-hint dl-hint-staged" data-cell="..."
+data-after="..." hidden>` — a third fold shape, alongside `dl-hint` and
+`dl-answer`, that dewnote's block splitter already passes through safely
+as an opaque fence (its round-trip guarantee never depended on knowing
+what a fence's info string means), but that `render-block.ts` currently
+shows as a plain, unstyled code block rather than a fold, since nothing
+reads the fence's `hint` info word yet (§8 has the plan).
 
 **Notes.** `<aside class="dl-note" id="...">`, lifted out of the body into
 the reference panel by the build. Built, currently unused by any tutorial.
@@ -84,7 +149,65 @@ next, series navigation, the reference panel.
 `matplotlib` baseline; `packages:` adds more. Output rendering lives in
 `assets/tutorial_tools.py`.
 
-## 2. dewstack
+**Live-preview site cells**, added `4ac0176`/later commits through
+2026-09-11 as dewlab's own answer to the web track dewstack's merge is
+retiring (see §2's new header) — not a copy of dewstack's `site=name`
+spelling, and deliberately so: dewlab's own authoring editor keeps only
+the *first word* of a fence's info string on a round trip, so an
+identity carried in the info string (`site=hero`) would come back inert.
+The grouping key instead lives on a header line, the same place every
+other exec-family fence already keeps its own identity:
+
+````markdown
+```html site
+id: hero-markup
+site: hero
+<button>Hover me</button>
+```
+
+```css site
+id: hero-style
+site: hero
+.btn { padding: 0.5rem 1rem; }
+```
+````
+
+Fence language is one of `html`, `css`, `js` (`SITE_LANGS`); `id:` is
+required (cells and panes share one id namespace — a build fails if any
+two collide) and `site:` is the grouping key. Panes are grouped by
+*consecutive* fences sharing the same `site:` value — nothing else may
+sit between them, and the same `site:` name may not reappear later in
+the document once its run has ended (the same "keep it together" rule
+dewstack's own `site=` enforced). At most one pane per language per
+site; panes are otherwise optional (an HTML+CSS site with no JS pane is
+normal). A `js site` pane gets a Run button and a console; `html site`
+and `css site` panes stay live, rebuilding the preview on every edit.
+This is exactly the block-model gap plan §6 step 3 named and deliberately
+deferred ("`site=`/`app=` cells... need consecutive-fence grouping
+dewnote's block model doesn't have yet") — now with a real, stable target
+grammar to build it against, since dewlab settled its own spelling rather
+than dewstack's (§8 has the plan).
+
+## 2. dewstack — being retired into dewlab, 2026-09-10 onward
+
+`deweydex/dewlab@planning/DEWSTACK_MERGE.md` (written 2026-09-10) records
+Josh's decision to fold dewstack's two live tracks — `data` and `web` —
+into dewlab itself as `database-methods` and `web-authoring`, rebuilt
+against dewlab's own conventions rather than imported, and to retire
+dewstack as a hosted site once both have run in front of a class. As of
+2026-09-12 both tracks are staged, ported, and merged to dewlab's `main`
+(`planning/DEWSTACK_MERGE.md` §9's own ledger) — not yet linked from
+dewlab's homepage, but no longer "coming soon" as engineering. This
+section stays as the record of dewstack's *own* grammar — still real for
+as long as dewstack itself is live, and the shape dewnote's dialect
+converter (§5) needs to read *from* for exactly this migration — but it
+is no longer a second dialect dewnote should treat as an equally live
+authoring target the way §1 is. Where dewstack and dewlab now both have
+an answer to the same problem (SQL cells, site cells), dewlab's own
+spelling in §1 is the one to write new tutorials in, in dewnote or
+anywhere else — dewstack's spelling below is legacy dewstack could not
+avoid once it existed, and it was never adopted by dewlab in the first
+place, for reasons §1 gives at each entry.
 
 **File layout.** `tutorials/<module>/<slug>/<slug>.md`, optional
 `<slug>.glossary.yaml`. Same `order.yaml` convention as dewlab.
@@ -162,9 +285,18 @@ Block by block, with a report of what did not map:
 
 | From | To | Rule |
 |---|---|---|
-| dewlab `python exec` with `id: x` | dewstack | `py cell=x`; `hint:` has no home, report it |
+| dewlab `python exec` with `id: x` | dewstack | `py cell=x`; `hint:`, `expect:`, `name:` have no home, report each |
 | dewstack `py cell=x` | dewlab | `python exec` with `id: x` |
-| dewstack `sql`, `site=`, `app=`, `sql-check` | dewlab | no equivalent; keep as illustrative fences, report |
+| dewstack `sql cell=x` | dewlab | `sql exec` with a fresh `id:` (dewstack's per-cell named database has no dewlab equivalent — dewlab's cells all share one `db` — report the name lost); `persist` has no home either, report it |
+| dewstack `sql-check` | dewlab | no equivalent; keep as illustrative fence, report |
+| dewstack `html/css/js site=name` | dewlab | `html/css/js site`, each pane getting its own fresh `id: <name>-<language>` and `site: <name>` |
+| dewstack `html/css/js app=name` | dewlab | no equivalent (dewlab has no full-stack track yet — `planning/DEWSTACK_MERGE.md` §2 in dewlab defers this); keep as illustrative fences, report |
+| dewlab `sql exec` | dewstack | no equivalent (dewstack's SQL cells are per-name databases dewlab's shared-`db` model can't address as one); keep as illustrative fence, report |
+| dewlab `hint` fence | dewstack | no equivalent (dewstack has no staged-hint mechanism); keep as illustrative fence, report |
+| dewlab `html/css/js site` | dewstack | `html/css/js site=<name>` (`id:` has no home — `site=name`'s own info string is the whole identity there — dropped, reported); a pane with no `site:` at all has nothing to carry over, kept as illustrative, reported |
 | either | plain | drop attributes, keep language |
 | dewlab front matter | dewstack | drop `year`, `covers`, `practice_*`; keep the rest |
 | dewstack front matter | dewlab | add `year` (ask), `covers` empty |
+
+All of the above is implemented in `dialect-convert.ts` as of plan §8's
+own items 1-3.
