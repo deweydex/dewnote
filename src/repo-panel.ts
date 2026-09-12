@@ -31,10 +31,15 @@ import {
   type RepoFile,
   type RepoRef,
 } from "./github.ts";
+import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 
 export interface RepoPanelHost {
   getSource(): string;
   loadDocument(source: string, name: string): void;
+  /** §5.10's own front-matter index, handed the same list every time
+   * loadRepoFiles rebuilds it — optional, since a caller with no link
+   * picker (a test host, say) has nothing to do with it. */
+  onIndexChange?(index: FileIndexEntry[]): void;
 }
 
 export interface RepoPanel {
@@ -228,6 +233,27 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   }
   searchInput.addEventListener("input", renderFiles);
 
+  /** §5.10's own index, over the repository this time — one
+   * getFileContent per markdown file, the only way to read front matter
+   * through the REST API at all (there is no "just the first few lines"
+   * endpoint). A real cost for a large repository, same as
+   * folder-panel.ts's own version of this, and the same "one file's
+   * failure doesn't fail the rest" handling. */
+  async function refreshIndex(repo: RepoRef, ref: string, token: string) {
+    if (!host.onIndexChange) return;
+    const entries = await Promise.all(
+      files.map(async (file) => {
+        try {
+          const { content } = await getFileContent(repo, file.path, ref, token);
+          return { path: file.path, content };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    host.onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
+  }
+
   async function loadRepoFiles() {
     const token = currentToken();
     const repo = currentRepo();
@@ -239,13 +265,15 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       repoStatus.textContent = "Enter an owner and repo.";
       return;
     }
-    saveRepoSettings({ owner: repo.owner, repo: repo.repo, base: baseInput.value.trim() || "main", branch: settings.branch });
+    const ref = baseInput.value.trim() || "main";
+    saveRepoSettings({ owner: repo.owner, repo: repo.repo, base: ref, branch: settings.branch });
     loadButton.disabled = true;
     repoStatus.textContent = "Loading…";
     try {
-      files = await listMarkdownFiles(repo, baseInput.value.trim() || "main", token);
+      files = await listMarkdownFiles(repo, ref, token);
       repoStatus.textContent = `${files.length} markdown file${files.length === 1 ? "" : "s"}.`;
       renderFiles();
+      await refreshIndex(repo, ref, token);
     } catch (err) {
       repoStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {

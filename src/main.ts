@@ -1,7 +1,7 @@
 import "katex/dist/katex.min.css";
 import "./theme/dewlab-tokens.css";
 import "./app.css";
-import { mountDocument, type MountedDocument } from "./app.ts";
+import { mountDocument, setFileIndex, type MountedDocument } from "./app.ts";
 import { applySettings, loadSettings } from "./settings.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountFileBar } from "./file-bar.ts";
@@ -50,13 +50,14 @@ const fileBar = mountFileBar({
     current = mountDocument(page, source);
   },
 });
-mountFolderPanel(fileBar);
+mountFolderPanel(fileBar, setFileIndex);
 mountRepoPanel({
   getSource: () => current.getSource(),
   loadDocument(source, _name) {
     current.destroy();
     current = mountDocument(page, source);
   },
+  onIndexChange: setFileIndex,
 });
 mountDialectPanel({
   getSource: () => current.getSource(),
@@ -74,6 +75,7 @@ mountCommandPalette();
 interface DewnoteTestHook {
   mount(source: string): void;
   getSource(): string;
+  setFileIndex(index: Parameters<typeof setFileIndex>[0]): void;
 }
 (window as unknown as { __dewnote: DewnoteTestHook }).__dewnote = {
   mount(source: string): void {
@@ -83,4 +85,5 @@ interface DewnoteTestHook {
   getSource(): string {
     return current.getSource();
   },
+  setFileIndex,
 };
