@@ -556,3 +556,81 @@ its own rather than only ever firing as Stop's fallback).
 additive whenever palettes for them exist — the color-mix seam above is
 exactly the thing that makes adding one later cheap rather than another
 five-call-site hunt.*
+
+**25 — The front-matter form (decision 11) ships scoped down to what
+doesn't need a multi-file index, rather than waiting for step 4.** Josh's
+own "let's build what we can now" pointed at this as the one item from
+the settings-panel discussion's list that was actually buildable today;
+the rest of decision 11 — an autocomplete picker for `module` and
+`series` drawn from every other file already on disk — needs step 4's
+folder-opening concept to exist first, since there is no "other files"
+to pick from before then (§5.10 says so directly). Splitting it this way
+rather than waiting for the whole thing is the same call as decision 21's
+own SQL persist and decision 24's own settings panel: ship the slice that
+stands on its own, name the rest as still open, rather than blocking a
+real improvement on a dependency that doesn't exist yet.
+
+What decision 3 ("a dialect is data, not a code path") makes this cheap:
+`src/frontmatter-fields.ts` is one data table per dialect — the exact
+field list `DIALECTS.md` already names as required or optional for
+dewlab and dewstack — and `app.ts`'s form-building code reads that table
+rather than branching on dialect name anywhere. Plain markdown's own
+"arbitrary keys" dialect (DIALECTS.md §3) gets an empty table, which is
+also the signal `renderBlockWrapper` uses to skip the form and fall back
+to the plain raw-YAML editor — there is no fixed schema to build a form
+from, so there is no form, not an empty one.
+
+Two things stayed intentionally narrow rather than being built out
+further this slice. First, only a plain scalar field (string, number,
+boolean) gets a row at all — `isScalarField` in the same module is the
+gate — so a list or nested mapping (`packages`, `covers`,
+`practice_for`, `practice_across`) never gets a row the form would have
+to half-understand; the form's own "Edit raw YAML" footer button is the
+one and only way to reach those, by switching to the exact CodeMirror
+editor every other block already has for its raw source (`app.ts`'s
+`frontMatterRawMode`), not a second, form-specific text editor. Second,
+"+ Add field" only exists for a `select`-kind optional field (today,
+only `status`) — a select always has a first option to seed itself with,
+where a hypothetical optional text field would have nothing non-empty to
+add itself with, since `setFrontMatterField` already uses an empty
+string as its own "field is not set" sentinel (clearing a field to empty
+removes its line; that is the whole of decision 1's discipline for this
+function, and giving "+ Add" a different empty-string meaning here would
+split that in two). Neither dialect has an optional text field today, so
+this is a documented gap waiting for one to exist, not a missing feature
+anyone has asked for.
+
+`setFrontMatterField` (`src/frontmatter.ts`) is the one new piece of
+front-matter-parsing code, and it earns its own care: it finds the one
+line a key already owns (or decides there isn't one), edits or removes
+or appends that single line, then reconstructs the block by finding
+exactly where the raw YAML body sits inside the original fence text and
+splicing the new body back into the same opening and closing
+delimiters — never touching a byte outside the one line that changed,
+and returning the original text completely unchanged (not merely
+equivalent) when the new value is identical to what was already there.
+`src/frontmatter.test.ts` checks the byte-exact side of this directly,
+line by untouched line, the same discipline `roundtrip.test.ts` already
+holds `blocks.ts` to.
+
+The commit path needed something genuinely new, not reused: every other
+editable block commits from a live `EditorView`'s current text on blur,
+but a plain HTML form field has no `EditorView` behind it to read from.
+`commitFrontMatterField` is the dedicated path this needs — call
+`setFrontMatterField` for the one key that changed, reparse, and patch
+just that one block in place exactly the way `commit()` already does for
+a shape-preserving edit (which editing a single scalar field always is),
+falling back to a full rebuild only in the shape-changed case `commit()`
+itself also falls back for. Committing on each field's own `change`
+event, not on every keystroke, is a plain HTML form's native "the reader
+moved on" signal — no debouncing invented to approximate it.
+*Cost to change: low. The scalar-only and select-only-"+Add" narrowings
+are both named gaps with a clear trigger for revisiting them (a dialect
+gaining a scalar list field with real values behind it; an optional text
+field being added to either dialect's own list) rather than an assumption
+baked in anywhere language can't reach. The index-backed picker itself,
+when step 4 exists, replaces `module`/`series`'s plain text inputs with
+whatever picker component gets built then — a swap inside
+`frontmatter-fields.ts`/`app.ts`'s row-building code, not a rethink of
+`setFrontMatterField` or the commit path, both of which are unaffected by
+where a field's value ends up coming from.*
