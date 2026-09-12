@@ -12,6 +12,7 @@ import texmath from "markdown-it-texmath";
 import katex from "katex";
 import type { Block } from "./blocks.ts";
 import type { DialectName } from "./dialect.ts";
+import { parseHintFence } from "./cell.ts";
 
 const md = new MarkdownIt({ html: true, linkify: true }).use(texmath, {
   engine: katex,
@@ -103,4 +104,22 @@ function renderFold(block: Block): string {
 
 function escapeAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+/** A staged-hint fence's own preview (DIALECTS.md §1, cell.ts's own
+ * `parseHintFence`) — the same `<details class="dl-hint dl-hint-staged">`
+ * shape dewlab's own `render_staged_hint()` builds, minus the `hidden`
+ * attribute and its trigger data: dewnote is an authoring surface, not
+ * the reading page, and has no trigger logic (errors, same-errors, an
+ * unchanged run) to earn the reveal a real reader's page would gate on —
+ * showing the hint's own title and body openly is the honest choice, not
+ * a simulation of a mechanism this editor doesn't have. Called from
+ * app.ts alongside a fence's own live editor, never in place of it —
+ * unlike a fold block, a fence never loses its "always a live editor"
+ * state (plan §5.1, decision 15); this is a read-only preview shown
+ * beside it, not a render/edit toggle. */
+export function renderHintFencePreview(block: Block): string {
+  const hint = parseHintFence(block);
+  const bodyHtml = hint.body ? md.render(hint.body) : "";
+  return `<details class="dl-hint dl-hint-staged" open><summary>${md.utils.escapeHtml(hint.title)}</summary>${bodyHtml}</details>`;
 }

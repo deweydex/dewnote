@@ -173,3 +173,52 @@ export function declaredPackages(fields: Record<string, unknown>): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
 }
+
+/** dewlab's own staged-hint fence (DIALECTS.md §1, `d2a21ed`) — a
+ * `for:`/`after:`/`title:` header, the same shape dewlab's own
+ * `parse_hint()` reads, followed by the hint's own markdown body. */
+export interface HintFenceInfo {
+  /** The exec cell this hint belongs to, from an explicit `for:` line.
+   * No default: dewlab's own build falls back to "the exec cell
+   * immediately above this fence in the source," but that's a
+   * document-wide notion dewnote's own per-fence parsing has no access
+   * to here — a real, narrower gap than dewlab's own, left null rather
+   * than guessed at (see cell.ts's own `parseHintFence` for where a
+   * caller with the surrounding document could still work it out). */
+  for: string | null;
+  after: string;
+  title: string;
+  body: string;
+}
+
+const HINT_HEADER_RE = /^\s*(for|after|title)\s*:\s*(.*)$/;
+export const DEFAULT_HINT_AFTER = "errors:5";
+export const DEFAULT_HINT_TITLE = "Let’s slow down a moment…";
+
+/** Whether a fence is a staged-hint fence — its first info word is
+ * literally "hint", the same test dewlab's own `extract_blocks()` runs
+ * (`info and info[0] == "hint"`). */
+export function isHintFence(info: string): boolean {
+  return info.trim().split(/\s+/)[0] === "hint";
+}
+
+/** Reads a staged-hint fence's own header lines and body, defaults
+ * (`errors:5`, dewlab's own default title) included, so a caller with no
+ * header lines at all still gets something meaningful to show. */
+export function parseHintFence(block: Block): HintFenceInfo {
+  const lines = fenceBody(block.text).split("\n");
+  const header: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length) {
+    const match = HINT_HEADER_RE.exec(lines[i]!);
+    if (!match || match[1]! in header) break;
+    header[match[1]!] = match[2]!.trim();
+    i++;
+  }
+  return {
+    for: header["for"] ?? null,
+    after: header["after"] || DEFAULT_HINT_AFTER,
+    title: header["title"] || DEFAULT_HINT_TITLE,
+    body: lines.slice(i).join("\n").trim(),
+  };
+}

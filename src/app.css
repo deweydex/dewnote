@@ -155,6 +155,24 @@ body {
 .dn-sql-panel {
   margin: 0 0 0.9rem;
 }
+
+/* A staged-hint fence's own read-only preview — the same accent colour
+ * .dn-block-fold's own dl-hint fold already borrows from dewlab, shown
+ * open (dewnote has no reader-side trigger to gate it on) rather than
+ * hidden the way a real reading page's copy is. */
+.dn-hint-preview {
+  margin: 0 0 0.9rem;
+}
+.dn-hint-preview details {
+  border-left: 3px solid var(--dl-orange);
+  padding-left: 0.8rem;
+}
+.dn-hint-preview summary {
+  cursor: default;
+  color: var(--dl-muted);
+  font-family: var(--dl-mono);
+  font-size: 0.85em;
+}
 .dn-sql-restore {
   align-items: center;
   gap: 0.5rem;

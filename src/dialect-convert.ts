@@ -8,11 +8,12 @@
 // no home, reported; dewstack's own per-cell database name becomes the
 // new id); dewlab's own `sql exec` has no dewstack equivalent going the
 // other way (dewstack's SQL cells are per-name databases, dewlab's share
-// one); dewstack's `sql-check`, `site=`, `app=` (plan §8 item 3 still
-// pending for `site=`/dewlab's own `html/css/js site`) have no dewlab
-// equivalent yet and become illustrative fences, reported; either
-// dialect dropped to plain markdown keeps the language and drops the
-// attribute.
+// one); dewlab's own staged-hint fence has no dewstack equivalent either
+// (no staged-hint mechanism there); dewstack's `sql-check`, `site=`,
+// `app=` (plan §8 item 3 still pending for `site=`/dewlab's own
+// `html/css/js site`) have no dewlab equivalent yet and become
+// illustrative fences, reported; either dialect dropped to plain
+// markdown keeps the language and drops the attribute.
 //
 // Unlike blocks.ts's own round trip, or jupyter.ts's notebook import,
 // this is not lossless by design — DIALECTS.md §5 names exactly what
@@ -25,7 +26,7 @@
 
 import { load as parseYaml, dump as dumpYaml } from "js-yaml";
 import { parseDocument, type Block } from "./blocks.ts";
-import { execCellLanguage, isRunnableFence, parseCellSource, parseSqlCellInfo } from "./cell.ts";
+import { execCellLanguage, isHintFence, isRunnableFence, parseCellSource, parseSqlCellInfo } from "./cell.ts";
 import type { DialectName } from "./dialect.ts";
 
 export interface ConversionResult {
@@ -58,6 +59,10 @@ function convertFence(block: Block, from: DialectName, to: DialectName, report: 
   const backticks = "`".repeat(block.fence?.length ?? 3);
 
   if (from === "dewlab" && to === "dewstack") {
+    if (isHintFence(info)) {
+      report.push(`fence "${info}": dewlab's staged hint has no dewstack equivalent (no staged-hint mechanism there) — kept as illustrative code`);
+      return fence(backticks, "hint", fenceBody(block.text));
+    }
     if (!isRunnableFence(info)) return block.text;
     if (execCellLanguage(info) === "sql") {
       // dewlab's sql exec cells share one page-wide `db`; dewstack's own

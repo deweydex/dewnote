@@ -779,23 +779,31 @@ both runs its actual code, not its header line.
    `python exec` cell run afterward on the same page can see whatever
    that query left behind (dewlab's own shared-namespace behaviour).
 
-2. **The `hint` fence.** DIALECTS.md §1 has the grammar
+2. **The `hint` fence — built, in a shape corrected once actually
+   building it met decision 15.** DIALECTS.md §1 has the grammar
    (`for:`/`after:`/`title:`, defaulting to the cell just above, `errors:5`,
-   and dewlab's own default title). Round-trips safely today as an opaque
-   fence; the gap is only in rendering and dialect conversion.
-   `render-block.ts` should recognise a fence whose info string is
-   exactly `hint` and render it as a fold matching the *look* of a
-   `dl-hint` fold (dewnote is an authoring tool, not the runtime — it has
-   no reader-side trigger logic to reproduce, no `errors`/`same-errors`
-   count to track, so showing the hint's body openly in the editor's own
-   preview, labelled as a staged hint, is the honest thing to do; hidden
-   until a trigger fires is a *reading*-page behaviour, not an authoring
-   one). `dialect-convert.ts` needs a rule for it (DIALECTS.md §5:
-   dewstack has no equivalent, so either direction through dewstack drops
-   it as illustrative and reports). *Done when* a fixtures document with
-   a `hint` fence shows its title and body in dewnote's preview, and
-   converting that document to dewstack reports the drop rather than
-   silently keeping a fence dewstack's own build would reject.
+   and dewlab's own default title). Round-trips safely as an opaque
+   fence, unchanged. The plan as first written here said `render-block.ts`
+   should render a `hint` fence as a fold "matching the look of a
+   `dl-hint` fold" — which turned out to conflict with decision 15's own
+   rule that a fence never gets a rendered/blurred state at all, folds
+   included; giving one fence kind a render/edit toggle no other fence
+   has would be a real architectural exception, not a rendering detail.
+   Built instead: the fence stays a live editor like every other (its
+   `for:`/`after:`/`title:` headers and body all directly editable,
+   headers included, the same as any exec cell's own), and
+   `render-block.ts`'s new `renderHintFencePreview` builds a read-only
+   preview — the same `<details class="dl-hint dl-hint-staged">` markup
+   dewlab's own build emits, open rather than hidden (no reader-side
+   trigger to gate a reveal on) — shown *beside* the editor, the same way
+   a cell's own Run bar and output sit beside its code rather than
+   replacing it. `dialect-convert.ts` gained the rule DIALECTS.md §5
+   names: dewstack has no equivalent, so either direction through
+   dewstack drops it as illustrative and reports. *Done when* a fixtures
+   document with a `hint` fence shows its title and body in dewnote's own
+   preview alongside the still-editable fence, and converting that
+   document to dewstack reports the drop rather than silently keeping a
+   fence dewstack's own build would reject.
 
 3. **`html site`/`css site`/`js site` cells.** This is plan §6 step 3's
    own long-deferred "`site=`/`app=` cells... need consecutive-fence
