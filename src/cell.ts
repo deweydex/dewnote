@@ -1,20 +1,31 @@
-// Parses a dewlab-style exec cell's body — the `id:` and optional `hint:`
-// header lines DIALECTS.md documents (`HEADER_RE`,
-// `^\s*(id|hint)\s*:\s*(.*)$`), followed by the code itself — out of a
-// fence block's raw text. blocks.ts deliberately never does this itself:
-// it only needs a fence's own info string to split the document
-// correctly, and the header lines are a rendering/running concern, not
-// a document-model one.
+// Parses a dewlab-style exec cell's body — the `id:`, `hint:`, `expect:`
+// and `name:` header lines DIALECTS.md documents (`HEADER_RE`, matching
+// dewlab's own `d2a21ed`), followed by the code itself — out of a fence
+// block's raw text. blocks.ts deliberately never does this itself: it
+// only needs a fence's own info string to split the document correctly,
+// and the header lines are a rendering/running concern, not a
+// document-model one.
+//
+// `expect:` and `name:` are read and preserved verbatim but not acted on
+// — dewnote has no reader-side trigger logic to evaluate `expect:`
+// against (that's a staged hint's business, plan §8 item 2) and `name:`
+// is reserved on dewlab's own side for a feature dewnote doesn't need to
+// know about yet. What matters here is only that *not* recognising them
+// used to mean their line fell through into `code` — a real bug, not a
+// missing feature: `expect: len(readings) == 4` is not valid Python, and
+// dewnote would hand it straight to Pyodide on Run.
 
 import type { Block } from "./blocks.ts";
 
 export interface CellSource {
   id: string | null;
   hint: string | null;
+  expect: string | null;
+  name: string | null;
   code: string;
 }
 
-const HEADER_RE = /^\s*(id|hint)\s*:\s*(.*)$/;
+const HEADER_RE = /^\s*(id|hint|expect|name)\s*:\s*(.*)$/;
 
 /** Everything between the opening ```lang info line and the closing ```
  * line, exactly as blocks.ts sees it — a fence block's own text always
@@ -31,15 +42,30 @@ function parseHeaderAndCode(body: string): CellSource {
   const lines = body.split("\n");
   let id: string | null = null;
   let hint: string | null = null;
+  let expect: string | null = null;
+  let name: string | null = null;
   let i = 0;
   while (i < lines.length) {
     const match = HEADER_RE.exec(lines[i]!);
     if (!match) break;
-    if (match[1] === "id") id = match[2]!.trim();
-    else hint = match[2]!.trim();
+    const key = match[1]!;
+    const value = match[2]!;
+    // `name:`, uniquely among these four keys, collides with real code: a
+    // type-annotated first line of a cell's own body — `name: str = "Ada"`
+    // — is indistinguishable from the header by shape alone. dewlab's own
+    // fix (`ca6e16e`, 2026-09-07) is the same rule ported verbatim: `=`
+    // never appears in a genuine name (a short label), so its presence
+    // means this was never the header. `expect:` keeps matching even with
+    // `=` in it, since a real expectation legitimately uses one
+    // (`expect: total == 6`).
+    if (key === "name" && value.includes("=")) break;
+    if (key === "id") id = value.trim();
+    else if (key === "hint") hint = value.trim();
+    else if (key === "expect") expect = value.trim();
+    else name = value.trim();
     i++;
   }
-  return { id, hint, code: lines.slice(i).join("\n") };
+  return { id, hint, expect, name, code: lines.slice(i).join("\n") };
 }
 
 export function parseCellSource(block: Block): CellSource {
