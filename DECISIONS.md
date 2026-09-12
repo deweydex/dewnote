@@ -896,3 +896,27 @@ call sites (the extension wiring in `renderBlockWrapper`,
 owning its old body directly. The `suppressBlurCommit` guard is worth
 keeping regardless of the slash menu's own fate — it fixes a real class
 of bug in `teardownLiveViews`, not a workaround tied to this feature.*
+
+**31 — The starter document is dewlab, not plain markdown.** Decision
+29's own "still open" note asked this directly: `main.ts`'s
+`STARTER_DOCUMENT` carried no `year:` or `module_title:`, so
+`detectDialect` read it as plain and a first-time reader never saw the
+per-field form, dialect-aware preview styling, or anything else gated
+on a real dialect — the very things most worth showing in a first five
+minutes, and dewnote's own default *texture* is already dewlab's
+regardless of a document's front matter (§5.3), so the front matter
+staying dialect-less was a gap, not a neutral default. Answered
+directly rather than picked unilaterally, choosing this over dewstack
+or a first-open dialect chooser. `module: getting-started`,
+`module_title: "Getting Started"`, `year: "2026"`,
+`series: first-notebook`, `version: 1` were added to the starter's own
+front matter — plausible, harmless placeholder values in the same shape
+real dewlab tutorials use (`fixtures/dewlab/*.md`'s own quoting
+conventions), not a real module a document could actually collide with.
+A reader who wants plain markdown instead loses nothing: the
+dialect-convert panel (⇄, already built) drops every one of these
+fields in one click, the same as converting any real dewlab document
+down to plain.
+*Cost to change: low. Six front-matter lines in one template literal —
+reverting is deleting them, and nothing else reads STARTER_DOCUMENT's
+own field values by name.*
