@@ -53,9 +53,11 @@ function convertFence(block: Block, from: DialectName, to: DialectName, report: 
 
   if (from === "dewlab" && to === "dewstack") {
     if (!isRunnableFence(info)) return block.text;
-    const { id, hint, code } = parseCellSource(block);
+    const { id, hint, expect, name, code } = parseCellSource(block);
     const cellName = id ?? "cell";
     if (hint) report.push(`"${cellName}": hint: has no home in dewstack — dropped ("${hint}")`);
+    if (expect) report.push(`"${cellName}": expect: has no home in dewstack — dropped ("${expect}")`);
+    if (name) report.push(`"${cellName}": name: has no home in dewstack — dropped ("${name}")`);
     return fence(backticks, `py cell=${cellName}`, code);
   }
 

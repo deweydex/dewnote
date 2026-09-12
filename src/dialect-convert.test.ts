@@ -18,6 +18,16 @@ describe("dewlab -> dewstack", () => {
     expect(report).toEqual(['"x": hint: has no home in dewstack — dropped ("try again")']);
   });
 
+  test("expect: and name: also have no home in dewstack, each reported on its own line", () => {
+    const source = "```python exec\nid: x\nexpect: total == 6\nname: totals\n1 + 1\n```\n";
+    const { markdown, report } = convertDialect(source, "dewlab", "dewstack");
+    expect(markdown).toBe("```py cell=x\n1 + 1\n```\n");
+    expect(report).toEqual([
+      '"x": expect: has no home in dewstack — dropped ("total == 6")',
+      '"x": name: has no home in dewstack — dropped ("totals")',
+    ]);
+  });
+
   test("an illustrative (non-exec) fence is unaffected", () => {
     const source = "```python\n1 + 1\n```\n";
     const { markdown, report } = convertDialect(source, "dewlab", "dewstack");

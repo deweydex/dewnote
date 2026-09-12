@@ -17,20 +17,22 @@ function fenceBlock(source: string) {
   return block;
 }
 
+const NO_HEADERS = { hint: null, expect: null, name: null };
+
 describe("parseCellSource", () => {
   test("reads an id and hint header off the fence body", () => {
     const block = fenceBlock("```python exec\nid: totals\nhint: sum the list\nprint(sum(xs))\n```\n");
-    expect(parseCellSource(block)).toEqual({ id: "totals", hint: "sum the list", code: "print(sum(xs))" });
+    expect(parseCellSource(block)).toEqual({ id: "totals", hint: "sum the list", expect: null, name: null, code: "print(sum(xs))" });
   });
 
   test("works with just an id, no hint", () => {
     const block = fenceBlock("```python exec\nid: totals\nprint(1)\n```\n");
-    expect(parseCellSource(block)).toEqual({ id: "totals", hint: null, code: "print(1)" });
+    expect(parseCellSource(block)).toEqual({ id: "totals", ...NO_HEADERS, code: "print(1)" });
   });
 
   test("is fine with no header lines at all", () => {
     const block = fenceBlock("```python exec\nprint(1)\n```\n");
-    expect(parseCellSource(block)).toEqual({ id: null, hint: null, code: "print(1)" });
+    expect(parseCellSource(block)).toEqual({ id: null, ...NO_HEADERS, code: "print(1)" });
   });
 
   test("keeps multi-line code intact, headers and all", () => {
@@ -40,12 +42,30 @@ describe("parseCellSource", () => {
 
   test("does not treat a code line that merely contains a colon as a header", () => {
     const block = fenceBlock("```python exec\nid: c\nd = {'a': 1}\n```\n");
-    expect(parseCellSource(block)).toEqual({ id: "c", hint: null, code: "d = {'a': 1}" });
+    expect(parseCellSource(block)).toEqual({ id: "c", ...NO_HEADERS, code: "d = {'a': 1}" });
   });
 
   test("stops reading headers at the first non-header line, even if a later line looks like one", () => {
     const block = fenceBlock("```python exec\nid: c\nprint('id: not a header')\n```\n");
-    expect(parseCellSource(block)).toEqual({ id: "c", hint: null, code: "print('id: not a header')" });
+    expect(parseCellSource(block)).toEqual({ id: "c", ...NO_HEADERS, code: "print('id: not a header')" });
+  });
+
+  // dewlab's own header grammar as of d2a21ed (2026-09-10) — DIALECTS.md
+  // §1. Not recognising these used to mean the line fell through into
+  // `code`, and `expect: len(xs) == 4` is not valid Python.
+  test("reads expect: and name: headers, in either order, without swallowing them into code", () => {
+    const block = fenceBlock("```python exec\nid: c\nexpect: total == 6\nname: totals\nprint(total)\n```\n");
+    expect(parseCellSource(block)).toEqual({ id: "c", hint: null, expect: "total == 6", name: "totals", code: "print(total)" });
+  });
+
+  test("a name: line containing = is real code, not a header — dewlab's own ca6e16e fix", () => {
+    const block = fenceBlock('```python exec\nid: c\nname: str = "Ada"\nprint(name)\n```\n');
+    expect(parseCellSource(block)).toEqual({ id: "c", ...NO_HEADERS, code: 'name: str = "Ada"\nprint(name)' });
+  });
+
+  test("an expect: line may itself contain =, and still reads as a header", () => {
+    const block = fenceBlock("```python exec\nid: c\nexpect: total == 6\nprint(total)\n```\n");
+    expect(parseCellSource(block).expect).toBe("total == 6");
   });
 });
 
@@ -58,7 +78,7 @@ describe("parseCellSourceFromFenceText", () => {
   test("reads a live editor's un-committed text directly, no trailing newline required", () => {
     expect(parseCellSourceFromFenceText("```python exec\nid: c\nprint(1)\n```")).toEqual({
       id: "c",
-      hint: null,
+      ...NO_HEADERS,
       code: "print(1)",
     });
   });
