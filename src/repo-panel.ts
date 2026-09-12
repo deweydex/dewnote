@@ -243,11 +243,16 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
    * through the REST API at all (there is no "just the first few lines"
    * endpoint). A real cost for a large repository, same as
    * folder-panel.ts's own version of this, and the same "one file's
-   * failure doesn't fail the rest" handling. */
-  async function refreshIndex(repo: RepoRef, ref: string, token: string) {
+   * failure doesn't fail the rest" handling. Takes `markdownFiles`
+   * explicitly rather than reading the shared `files` — that list also
+   * carries `.order.yaml` files now (loadRepoFiles's own comment
+   * explains why), and an order file has no front matter worth indexing
+   * at all, so fetching its content again here would spend a real API
+   * call on a bare `{path}` entry. */
+  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[]) {
     if (!host.onIndexChange) return;
     const entries = await Promise.all(
-      files.map(async (file) => {
+      markdownFiles.map(async (file) => {
         try {
           const { content } = await getFileContent(repo, file.path, ref, token);
           return { path: file.path, content };
@@ -259,12 +264,11 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     host.onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
   }
 
-  /** Mirrors refreshIndex's own shape, over `.order.yaml` files instead
-   * of markdown — order files are typically few, so no attempt is made
-   * to fold this into the same tree walk as the markdown index. */
-  async function refreshSeries(repo: RepoRef, ref: string, token: string) {
+  /** Mirrors refreshIndex's own shape, over the `.order.yaml` files
+   * loadRepoFiles's own tree walk already listed — no separate fetch of
+   * the tree a second time just for this. */
+  async function refreshSeries(repo: RepoRef, ref: string, token: string, orderFiles: RepoFile[]) {
     if (!host.onSeriesChange) return;
-    const orderFiles = await listOrderFiles(repo, ref, token);
     const entries = await Promise.all(
       orderFiles.map(async (file) => {
         try {
@@ -294,11 +298,19 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     loadButton.disabled = true;
     repoStatus.textContent = "Loading…";
     try {
-      files = await listMarkdownFiles(repo, ref, token);
-      repoStatus.textContent = `${files.length} markdown file${files.length === 1 ? "" : "s"}.`;
+      // Listed separately (github.ts's own two functions, one tree fetch
+      // each), but merged into one browsable/searchable list: an
+      // `.order.yaml` file is a plain text file like any other, and
+      // opening one hands it to the same editor and push path every
+      // other file already gets — the whole-file source view (Cmd+/)
+      // shows its raw YAML untouched by any markdown rendering, exactly
+      // what hand-editing a reading order actually wants, no new UI.
+      const [markdownFiles, orderFiles] = await Promise.all([listMarkdownFiles(repo, ref, token), listOrderFiles(repo, ref, token)]);
+      files = [...markdownFiles, ...orderFiles];
+      repoStatus.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${orderFiles.length} order file${orderFiles.length === 1 ? "" : "s"}.`;
       renderFiles();
-      await refreshIndex(repo, ref, token);
-      await refreshSeries(repo, ref, token);
+      await refreshIndex(repo, ref, token, markdownFiles);
+      await refreshSeries(repo, ref, token, orderFiles);
     } catch (err) {
       repoStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {

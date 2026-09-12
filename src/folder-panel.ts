@@ -149,11 +149,15 @@ export function mountFolderPanel(
    * reading an individual file (permissions, a file removed mid-scan)
    * just leave that one file out of the index rather than failing the
    * whole folder open — the file list itself (already built) still
-   * works regardless. */
-  async function refreshIndex() {
+   * works regardless. Takes `markdownFiles` explicitly rather than
+   * reading the shared `files` — that list also carries `.order.yaml`
+   * files now (the click handler's own comment explains why), and an order
+   * file has no front matter worth indexing at all, so reading its
+   * content again here would only ever produce a bare `{path}` entry. */
+  async function refreshIndex(markdownFiles: FolderFile[]) {
     if (!onIndexChange) return;
     const entries = await Promise.all(
-      files.map(async (file) => {
+      markdownFiles.map(async (file) => {
         try {
           return { path: file.path, content: await readFile(file.handle) };
         } catch {
@@ -164,12 +168,12 @@ export function mountFolderPanel(
     onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
   }
 
-  /** Mirrors refreshIndex's own shape, over `.order.yaml` files instead
-   * of markdown — order files are typically few, so no attempt is made
-   * to fold this into the same pass over `files`. */
-  async function refreshSeries(root: Parameters<typeof listOrderFiles>[0]) {
+  /** Mirrors refreshIndex's own shape, over the `.order.yaml` files
+   * `openButton`'s own click handler already listed — order files are
+   * typically few, so no attempt is made to fold this into the same pass
+   * as `refreshIndex`. */
+  async function refreshSeries(orderFiles: FolderFile[]) {
     if (!onSeriesChange) return;
-    const orderFiles = await listOrderFiles(root);
     const entries = await Promise.all(
       orderFiles.map(async (file) => {
         try {
@@ -189,11 +193,20 @@ export function mountFolderPanel(
     openButton.textContent = `Open folder… (${folderName})`;
     status.textContent = "Reading folder…";
     try {
-      files = await listMarkdownFiles(root);
-      status.textContent = `${files.length} markdown file${files.length === 1 ? "" : "s"} in "${folderName}".`;
+      // Listed and read separately (folder-store.ts's own two functions,
+      // one walk each), but merged into one browsable/searchable list:
+      // an `.order.yaml` file is a plain text file like any other, and
+      // opening one hands it to the same editor and Save path every
+      // other file already gets — the whole-file source view (Cmd+/)
+      // shows its raw YAML untouched by any markdown rendering, which is
+      // exactly what hand-editing a reading order (inserting a slug,
+      // reordering two lines) actually wants, with no new UI needed.
+      const [markdownFiles, orderFiles] = await Promise.all([listMarkdownFiles(root), listOrderFiles(root)]);
+      files = [...markdownFiles, ...orderFiles];
+      status.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${orderFiles.length} order file${orderFiles.length === 1 ? "" : "s"}, in "${folderName}".`;
       renderFiles();
-      await refreshIndex();
-      await refreshSeries(root);
+      await refreshIndex(markdownFiles);
+      await refreshSeries(orderFiles);
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : String(err);
     }

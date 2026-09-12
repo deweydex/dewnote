@@ -842,6 +842,33 @@ project; if they are not delightful, nothing after them will rescue it.
    store-agnostic "open this path" hook neither `folder-panel.ts` nor
    `repo-panel.ts` exposes today); reordering a series or creating a new
    one.
+
+   **`.order.yaml` files made openable**, one of a short, deliberately
+   ordered follow-up list raised discussing the series view directly
+   (a version-disambiguation fix elsewhere in this same list, tracked
+   separately): neither `folder-panel.ts` nor `repo-panel.ts` listed an order
+   file in the ordinary browsable/searchable list at all — it was read
+   separately, for the series view alone, which meant the only way to
+   actually reorder a series (insert a tutorial, delete one, move a
+   line) was leaving dewnote entirely. `folder-store.ts`'s and
+   `github.ts`'s own `listOrderFiles` (already built for the series
+   view) are now called alongside `listMarkdownFiles` in both panels'
+   own open/load flow, and merged into the one list a reader browses and
+   clicks — an order file is a plain text file like any other, and
+   clicking it hands it to the exact same editor and Save/push path
+   every markdown file already gets. The whole-file source view (Cmd+/,
+   this section's own earlier item) turns out to be exactly the right
+   tool for this: it shows the raw YAML untouched by any markdown
+   rendering, so inserting a slug or reordering two lines is "edit a
+   line, close" through machinery that already existed, no new UI
+   required. Kept out of the front-matter index and out of
+   `link-picker.ts`'s search deliberately — an order file has no
+   front-matter fields worth indexing, so folding it into that pass
+   would only ever produce a bare, useless entry (and, on the repository
+   store, spend a real API call fetching one). *Done when* an
+   `.order.yaml` file appears in the file list, opens with its real
+   content, and a hand-edit round-trips through Save (the folder store)
+   or Push (the repository store) the same as any tutorial.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.

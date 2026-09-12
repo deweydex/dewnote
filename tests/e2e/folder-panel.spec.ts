@@ -70,6 +70,7 @@ async function stubDirectoryPicker(page: Page) {
 
     const root = fakeDirHandle("tutorials", {
       "README.md": fakeFileHandle("README.md", "# Read Me\n\nTop level.\n"),
+      "a-series.order.yaml": fakeFileHandle("a-series.order.yaml", "series: A Series\norder:\n  - a-rule\n"),
       content: fakeDirHandle("content", {
         "a-rule.md": fakeFileHandle("a-rule.md", "# A Rule\n\nWhere it lives.\n"),
       }),
@@ -93,13 +94,39 @@ test("opening a folder lists its markdown files recursively, and search filters 
   await page.locator(".dn-folder-toggle").click();
   await page.locator(".dn-folder-open").click();
 
-  await expect(page.locator(".dn-folder-status").first()).toHaveText('2 markdown files in "tutorials".');
+  await expect(page.locator(".dn-folder-status").first()).toHaveText('2 markdown files, 1 order file, in "tutorials".');
   const items = page.locator(".dn-folder-file");
-  await expect(items).toHaveCount(2);
+  await expect(items).toHaveCount(3);
 
   await page.locator(".dn-folder-search").fill("content");
   await expect(page.locator(".dn-folder-file")).toHaveCount(1);
   await expect(page.locator(".dn-folder-file")).toHaveText("content/a-rule.md");
+});
+
+// Step 4's own follow-up, raised alongside the series view: an
+// .order.yaml file is now just another file in the browsable list —
+// opening one hands it to the same editor and Save path every markdown
+// file already gets, so hand-editing a reading order needs no UI this
+// repo doesn't already have.
+test("an .order.yaml file opens and saves through the ordinary file bar, same as any markdown file", async ({ page }) => {
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+  await page.locator(".dn-folder-file", { hasText: "a-series.order.yaml" }).click();
+
+  await expect(page.locator(".dn-file-name")).toHaveText("a-series.order.yaml");
+  await expect(page.locator(".dn-file-status")).toHaveText("saved");
+
+  await page.keyboard.press("ControlOrMeta+/");
+  const editor = page.locator(".dn-source-editor .cm-content");
+  await expect(editor).toContainText("series: A Series");
+  await editor.click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type("\n  - a-new-tutorial");
+  await page.locator(".dn-source-close").click();
+
+  await expect(page.locator(".dn-file-status")).toHaveText("unsaved");
+  await page.locator(".dn-file-save").click();
+  await expect(page.locator(".dn-file-status")).toHaveText("saved");
 });
 
 test("opening a file renders it in the editor and hands Save to the file bar as a real handle", async ({ page }) => {
@@ -130,7 +157,7 @@ test("opening a file renders it in the editor and hands Save to the file bar as 
 test("opening a folder builds the file index the link picker searches", async ({ page }) => {
   await page.locator(".dn-folder-toggle").click();
   await page.locator(".dn-folder-open").click();
-  await expect(page.locator(".dn-folder-file")).toHaveCount(2);
+  await expect(page.locator(".dn-folder-file")).toHaveCount(3);
   await page.locator(".dn-folder-close").click();
 
   const gap = page.locator(".dn-add-gap").first();
