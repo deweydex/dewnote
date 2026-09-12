@@ -22,6 +22,7 @@ const COMMANDS: Command[] = [
   { id: "repo", label: "GitHub repository…", selector: ".dn-repo-toggle" },
   { id: "dialect", label: "Convert dialect…", selector: ".dn-dialect-toggle" },
   { id: "outline", label: "Outline", selector: ".dn-outline-toggle" },
+  { id: "source", label: "Whole-file source", selector: ".dn-source-toggle" },
   { id: "settings", label: "Settings", selector: ".dn-settings-toggle" },
 ];
 
