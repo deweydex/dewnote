@@ -614,6 +614,46 @@ body {
   }
 }
 
+/* A prose block's own slash-command menu (buildSlashMenu) — same shape
+   as .dn-add-menu (a real popover, absent rather than hidden while
+   closed) but left-anchored under the editor rather than centred under
+   a "+" button, since it opens from wherever the reader is typing, not
+   a fixed point between two blocks. */
+.dn-slash-menu {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 5;
+  flex-direction: column;
+  min-width: 8rem;
+  margin-top: 0.2rem;
+  padding: 0.25rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 6px;
+  background: var(--dl-panel-bg);
+  box-shadow: 0 4px 16px var(--dl-shadow);
+}
+.dn-slash-menu.is-open {
+  display: flex;
+}
+.dn-slash-menu button {
+  border: none;
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-mono);
+  font-size: 0.78em;
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.dn-slash-menu button.is-selected,
+.dn-slash-menu button:hover {
+  background: var(--dl-cell-bg);
+  color: var(--dl-orange);
+}
+
 /* --------------------------------------------------------- file bar */
 
 .dn-file-bar {

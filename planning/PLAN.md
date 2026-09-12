@@ -627,6 +627,33 @@ project; if they are not delightful, nothing after them will rescue it.
    just-added hint keeps both, and a rename is refused, confirmed, or
    applied exactly as DIALECTS.md's own contract requires.
 
+   **Seventh slice built** (`app.ts`'s `buildSlashMenu`, `spliceNewBlock`,
+   `replaceBlockViaSlash`, decision 30): a prose block's own keyboard
+   equivalent to the "+" menu, requested directly rather than found —
+   typing "/" in an otherwise-empty block (fresh from "+ Paragraph," or
+   one cleared back to nothing) opens a small filtered menu of Code
+   cell, Math, or Hint; arrow keys move the selection, Enter or a click
+   confirms, Escape dismisses and stays dismissed until the text stops
+   looking like a slash command. Image and Link stay "+"-menu only —
+   both are async with a real blur mid-flight that Cell/Math/Hint's
+   synchronous path never has to survive. `insertAfter` itself is now a
+   three-line wrapper around the shared `spliceNewBlock`, generalised
+   with a `deleteCount` so the slash menu's own confirm can replace the
+   block it was typed into rather than insert after it. Also fixed
+   alongside it, not scoped to the slash menu alone: `teardownLiveViews`
+   destroying a view that currently holds DOM focus — something no
+   *other* caller of it ever does, since a click on the "+" menu, the
+   delete button, or a drag handle is never itself inside the block it
+   acts on — fired that view's own blur synchronously, reentering
+   `commit()` mid-teardown and silently discarding the whole edit with
+   no thrown error. `suppressBlurCommit` closes that gap generally, not
+   just for this one caller. *Done when* the same three kinds the "+"
+   menu offers a `NEW_BLOCK_SPEC` for round-trip through the slash menu
+   identically, Escape and a non-matching filter both leave the block as
+   ordinary prose, and the new block's own live editor is focused with
+   no second click needed — all seven confirmed in
+   `tests/e2e/slash-menu.spec.ts`.
+
    (This section's own "still open" list, several entries of which had
    already been closed by later steps — an image and a link in the add
    menu, drag reorder, the front-matter form, the whole-file view itself,
@@ -646,7 +673,11 @@ project; if they are not delightful, nothing after them will rescue it.
    and the rest stay raw-YAML-only) — this needs a real index of
    existing values to seed a text field with, the way `status`'s select
    seeds itself from its own fixed options, and is its own small slice,
-   not folded into this one.
+   not folded into this one; the slash menu (seventh slice) offers Code
+   cell, Math, and Hint but not Image or Link, deliberately — both need
+   the confirm to survive an async file-picker/search-overlay wait with
+   the block still focused underneath it, a real design question of its
+   own rather than a rename of `replaceBlockViaSlash`.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as

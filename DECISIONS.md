@@ -824,3 +824,75 @@ is still open; see `planning/PLAN.md` §6, step 8.
 *Cost to change: low. One `if` in `renderBlockWrapper`, one CSS rule,
 and a caption string with no state of its own — removing it is deleting
 those three things, nothing else reads `.dn-frontmatter-plain-caption`.*
+
+**30 — A prose block's own slash command, alongside the "+" menu, not
+instead of it.** Requested directly: "let's use slash commands to help
+with cells and code insertions etc." Typing "/" in a block that holds
+nothing else (fresh from the "+" menu's own "Paragraph," or an existing
+block cleared back to empty) opens a small menu of the same three kinds
+the "+" menu itself offers that have nowhere near them to race: Code
+cell, Math, Hint. Filtered as more letters follow ("/c" narrows to
+"Code cell"), arrow keys move the selection, Enter or a click confirms,
+Escape dismisses — and stays dismissed through further keystrokes that
+would otherwise still match, until the text stops looking like a slash
+command at all (a `dismissed` flag `sync` itself clears, not just the
+menu's own visibility). Deliberately whole-block, not per-line the way
+Notion's own slash menu is: a block already holding real prose that
+happens to contain a literal "/" is not offering to replace itself,
+only a block that is nothing else yet reads as one — the check is
+against the block's *entire* text (trailing newlines from the "+"
+menu's own placeholder stripped first), not the current line. Scoped to
+`block.kind === "prose"` only, in `renderBlockWrapper`; front matter's
+raw-YAML fallback and a fold's raw HTML have no business turning into a
+code cell mid-edit.
+
+Image and Link stay "+"-menu only, not offered here — both are async
+(a file picker, a search overlay) with a real blur in the middle of
+that wait, unlike Cell/Math/Hint's synchronous, direct-to-`NEW_BLOCK_SPEC`
+path; extending the slash menu to them is choosing to solve that race
+first, not free once the machinery already exists for the other three.
+
+Confirming a selection reuses exactly the machinery the "+" menu's own
+`insertAfter` already had, refactored rather than duplicated:
+`spliceNewBlock(spliceIndex, deleteCount, spec)` is `insertAfter`'s own
+former body, generalised with a `deleteCount` — 0 for "+" (insert after
+an existing block), 1 for the slash menu's own `replaceBlockViaSlash`
+(replace the very block being typed into, since there is nothing in it
+worth keeping). `insertAfter` itself is now three lines calling it.
+
+A real, reentrancy bug surfaced building this, not from inspection: the
+slash menu's own confirm runs from inside the block's own CodeMirror
+keymap dispatch (Enter), and `spliceNewBlock`'s `teardownLiveViews()`
+call destroys that same view as part of the structural rebuild every
+insert path already takes. Destroying a view that currently holds DOM
+focus — which never happens on any *other* teardownLiveViews caller,
+since a click on the "+" menu, the delete button, or a drag handle
+never has focus inside the block it's acting on — fires that view's own
+`blur` DOM event synchronously as part of `EditorView.destroy()`, which
+`mountEditor`'s own blur handler was treating exactly like a genuine,
+user-initiated blur: calling `commit()` for a block already mid-teardown,
+reading `blockTexts()` against a `doc` this function hadn't finished
+reassigning yet, and overwriting `source` with a stale reconstruction —
+the whole splice, silently discarded, with no thrown error to point at
+it (found only by tracing `commit()`'s own call stack, which named
+`EditorView.destroy()` as the caller). Fixed at `teardownLiveViews()`
+itself, not in the slash menu: a module-level `suppressBlurCommit` flag,
+set for the exact span of its own destroy loop, that `mountEditor`'s
+blur handler checks before calling `commit()`. This is a latent hazard
+every future feature that programmatically replaces the currently-
+focused block inherits protection from, not a slash-menu-specific patch.
+
+`buildSlashMenu` also exposed a second, smaller gap while testing
+against the *realistic* entry point (typing over the "+" menu's own
+pre-selected "New paragraph.", not hand-clearing a block with
+Ctrl+A+Delete): the block's own trailing `"\n\n"` survives a selection
+replace, so the live text right after typing "/c" is `"/c\n\n"`, not
+`"/c"` — `sync`'s own match against the *whole* string needed trailing
+newlines stripped first, or the menu never opened at all outside a
+manufactured, fully-emptied block.
+*Cost to change: low, for the menu itself — `buildSlashMenu` and its two
+call sites (the extension wiring in `renderBlockWrapper`,
+`replaceBlockViaSlash`) come out cleanly, and `insertAfter` reverts to
+owning its old body directly. The `suppressBlurCommit` guard is worth
+keeping regardless of the slash menu's own fate — it fixes a real class
+of bug in `teardownLiveViews`, not a workaround tied to this feature.*
