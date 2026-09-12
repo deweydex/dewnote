@@ -673,13 +673,26 @@ body {
   font-style: italic;
 }
 
+/* ------------------------------------------------------------ icon rail */
+
+/* The one shared home for every panel's toggle button (icon-rail.ts) —
+   replaces eight independently hand-picked `top: Nrem` offsets (and one
+   toggle stranded on the opposite side of the screen) with a single flex
+   column that lays its children out itself. Each toggle keeps its own
+   class, shape and colour; only its position now comes from here. */
+.dn-icon-rail {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
 /* ------------------------------------------------------------ repository */
 
 .dn-repo-toggle {
-  position: fixed;
-  top: 3.3rem;
-  left: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -888,10 +901,6 @@ body {
 /* --------------------------------------------------------------- folder */
 
 .dn-folder-toggle {
-  position: fixed;
-  top: 3.3rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1040,10 +1049,6 @@ body {
 /* -------------------------------------------------------- dialect convert */
 
 .dn-dialect-toggle {
-  position: fixed;
-  top: 5.6rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1168,10 +1173,6 @@ body {
 /* ---------------------------------------------------------- link check */
 
 .dn-linkcheck-toggle {
-  position: fixed;
-  top: 12.5rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1275,10 +1276,6 @@ body {
 /* ----------------------------------------------------------- outline */
 
 .dn-source-toggle {
-  position: fixed;
-  top: 10.2rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1363,10 +1360,6 @@ body {
 /* ------------------------------------------------------------- series */
 
 .dn-series-toggle {
-  position: fixed;
-  top: 14.8rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1466,10 +1459,6 @@ body {
 }
 
 .dn-outline-toggle {
-  position: fixed;
-  top: 7.9rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1580,10 +1569,6 @@ body {
 /* ---------------------------------------------------------- settings */
 
 .dn-settings-toggle {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;

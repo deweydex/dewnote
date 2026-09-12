@@ -10,6 +10,7 @@ import { chooseFolder, listMarkdownFiles, listOrderFiles, readFile, supportsDire
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseSeriesFiles, type Series } from "./series.ts";
+import { iconRail } from "./icon-rail.ts";
 
 export interface FolderPanel {
   destroy(): void;
@@ -47,6 +48,7 @@ export function mountFolderPanel(
   toggle.className = "dn-folder-toggle";
   toggle.setAttribute("aria-label", "Folder");
   toggle.setAttribute("aria-expanded", "false");
+  toggle.title = "Folder";
   toggle.textContent = "▤";
 
   const supported = supportsDirectoryPicker();
@@ -199,7 +201,8 @@ export function mountFolderPanel(
     }
   });
 
-  document.body.append(toggle, panel);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(panel);
   renderFiles();
 
   return {

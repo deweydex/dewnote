@@ -767,3 +767,32 @@ called them. Reverting to one CodeMirror instance per fence, if that
 ever seemed better, is un-doing the `fenceCodeViews` split and its one
 call site in `renderBlockWrapper` — contained, not spread through the
 file.*
+
+**28 — Every panel's toggle button lives in one shared icon rail
+(`icon-rail.ts`), not `document.body` directly.** Eight panels
+(`settings-panel.ts`, `folder-panel.ts`, `repo-panel.ts`,
+`series-panel.ts`, `dialect-panel.ts`, `outline-panel.ts`,
+`source-view.ts`, `link-check.ts`) each mount completely independently
+from `main.ts`, with no shared parent. Each one had also picked its own
+`position: fixed; top: Nrem` offset by hand, one panel author at a
+time — eight numbers, each the "next free slot" down the right edge,
+with `.dn-repo-toggle` left on the *left* edge, an inconsistency with
+no reason behind it beyond whoever wrote that panel reaching for the
+opposite side. `icon-rail.ts` is one lazily-created, memoised
+`<div class="dn-icon-rail">`, `position: fixed` itself and laid out as
+a flex column; every panel appends its toggle button there instead
+(`iconRail().appendChild(toggle)`), and the panel or overlay itself
+still goes straight to `document.body` as before — only the toggle
+moves. Each `-toggle` CSS rule dropped its own `position`/`top`/
+`left`/`right`/`z-index` and kept everything else (shape, colour,
+opacity, hover state) untouched, and every toggle also gained a
+`title` attribute mirroring its existing `aria-label` — the "unlabeled
+glyph buttons" half of the toolbar problem, not just the scattered
+layout. No button's class name changed, so none of the many existing
+Playwright tests that select a toggle by its exact class needed to
+change; the full suite passed unmodified. `.dn-repo-toggle` now sits in
+the same rail as the other seven, in main.ts's own mount order.
+*Cost to change: low. `icon-rail.ts` is a dozen lines with one exported
+function; reverting to per-panel fixed positioning is deleting the file
+and putting each panel's own `top`/`left`/`right` back, one rule at a
+time, with no other file depending on the rail's own internals.*

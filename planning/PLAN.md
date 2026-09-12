@@ -948,7 +948,7 @@ project; if they are not delightful, nothing after them will rescue it.
    and a copy into the tutorial folder, link picker, the live-preview
    decorations if step 2's block editing still wants them.
 
-   **Built**, across four slices: the outline rail (`src/outline-panel.ts`,
+   **Built**, across five slices: the outline rail (`src/outline-panel.ts`,
    #24) reads headings straight out of the document's own prose blocks —
    not a second markdown parse of the rendered HTML — and a click scrolls
    the matching block into view, using nothing of `app.ts` beyond the
@@ -967,7 +967,15 @@ project; if they are not delightful, nothing after them will rescue it.
    bare path for one without; with no index yet (nothing opened) it
    falls back to typing a link by hand, since a URL to somewhere else
    entirely is too common a case for a slug-only picker to leave with no
-   way in.
+   way in. A shared icon rail (`src/icon-rail.ts`, decision 28) replaced
+   the eight independent `position: fixed; top: Nrem` offsets each panel
+   toggle had picked for itself one at a time — one hand-spaced number
+   per panel, with the repository toggle left on the opposite edge of
+   the screen from the rest for no reason beyond who wrote it. Every
+   toggle now appends into one flex-column container instead of
+   `document.body` directly, keeps its own class name (so no existing
+   Playwright selector needed to change) and gained a `title` tooltip
+   alongside its existing `aria-label`.
 
    Still open: **"a copy into the tutorial folder"** is this step's own
    line, not yet true — a picked image is inlined as a `data:` URI, never

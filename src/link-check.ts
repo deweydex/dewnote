@@ -25,6 +25,7 @@
 // automatically on save is a follow-up, not a cut corner.
 
 import type { FileIndexEntry } from "./file-index.ts";
+import { iconRail } from "./icon-rail.ts";
 
 export interface BrokenLink {
   slug: string;
@@ -70,6 +71,7 @@ export function mountLinkCheckPanel(host: LinkCheckHost): LinkCheckPanel {
   toggle.className = "dn-linkcheck-toggle";
   toggle.setAttribute("aria-label", "Check links");
   toggle.setAttribute("aria-expanded", "false");
+  toggle.title = "Check links";
   toggle.textContent = "🔗";
 
   const panel = document.createElement("div");
@@ -133,7 +135,8 @@ export function mountLinkCheckPanel(host: LinkCheckHost): LinkCheckPanel {
     toggle.setAttribute("aria-expanded", String(!panel.hidden));
   });
 
-  document.body.append(toggle, panel);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(panel);
 
   return {
     destroy() {
