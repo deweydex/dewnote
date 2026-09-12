@@ -166,6 +166,40 @@ test("a real exec cell runs in a real browser: output, errors, and shared state"
     await expect(output).toContainText("Notebook");
   });
 
+  await test.step("a sql exec cell runs against the one shared db, and a python exec cell after it sees the same connection", async () => {
+    // Plan §8 item 1's own "done when": dewlab's sql exec (DIALECTS.md
+    // §1), not dewstack's `sql cell=name` — one page-wide connection
+    // every exec cell shares, not a per-name one. wrapSqlExecCode
+    // (cell.ts) is what turns the fence's raw SQL into the Python
+    // app.ts actually sends; this only ever exercises that through the
+    // real Run button, never by calling it directly.
+    await mount(
+      page,
+      "```sql exec\nid: seed\nCREATE TABLE widgets (name TEXT);\nINSERT INTO widgets VALUES ('gizmo'), ('gadget');\n```\n\n```python exec\nid: reader\nimport pandas as pd\npd.read_sql('SELECT name FROM widgets ORDER BY name', db)\n```\n",
+    );
+    const cells = page.locator(".dn-block-fence");
+
+    await cells.nth(0).locator(".dn-cell-run").click();
+    await expect(cells.nth(0).locator(".dn-cell-output")).toContainText("2 rows affected", {
+      timeout: COLD_BOOT_TIMEOUT,
+    });
+
+    await cells.nth(1).locator(".dn-cell-run").click();
+    const output = cells.nth(1).locator(".dn-cell-output");
+    await expect(output.locator("table")).toBeVisible({ timeout: COLD_BOOT_TIMEOUT });
+    await expect(output).toContainText("gadget");
+    await expect(output).toContainText("gizmo");
+  });
+
+  await test.step("a sql exec SELECT's own result renders as a real table, the same trailing-value path any other cell's DataFrame takes", async () => {
+    await mount(page, "```sql exec\nid: query\nCREATE TABLE t (n INTEGER);\nINSERT INTO t VALUES (1), (2), (3);\nSELECT * FROM t;\n```\n");
+    await page.locator(".dn-block-fence .dn-cell-run").click();
+    const output = page.locator(".dn-cell-output");
+    await expect(output.locator("table")).toBeVisible({ timeout: COLD_BOOT_TIMEOUT });
+    await expect(output).toContainText("1");
+    await expect(output).toContainText("3");
+  });
+
   await test.step("Run saves a persist cell's script, and Reset clears it", async () => {
     // The banner itself (shown/hidden, and what clicking it does to the
     // editor) is pure DOM/localStorage and covered without any Pyodide
