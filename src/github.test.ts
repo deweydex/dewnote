@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { fromBase64, listMarkdownFiles, toBase64 } from "./github.ts";
+import { fromBase64, listMarkdownFiles, listOrderFiles, toBase64 } from "./github.ts";
 
 describe("toBase64/fromBase64", () => {
   test("round-trips plain ASCII", () => {
@@ -95,5 +95,30 @@ describe("listMarkdownFiles", () => {
     expect(files.map((f) => f.path).sort()).toEqual(["README.md", "content/a.md", "content/sub/b.md"]);
     // One recursive probe plus one call per directory (root, content, sub) — never silently incomplete.
     expect(calls).toHaveLength(4);
+  });
+});
+
+describe("listOrderFiles", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function respond(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  }
+
+  test("filters to .order.yaml blobs instead of .md, same tree shape", async () => {
+    globalThis.fetch = (async (_input: RequestInfo | URL) =>
+      respond({
+        truncated: false,
+        tree: [
+          { path: "tutorials/data/filtering.order.yaml", type: "blob", sha: "s1" },
+          { path: "tutorials/data/filtering/filtering.md", type: "blob", sha: "s2" },
+        ],
+      })) as typeof fetch;
+
+    const files = await listOrderFiles({ owner: "dewlab", repo: "dewlab" }, "main", "tok");
+    expect(files).toEqual([{ path: "tutorials/data/filtering.order.yaml", sha: "s1" }]);
   });
 });

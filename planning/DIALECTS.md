@@ -20,8 +20,18 @@ Everything is CommonMark underneath. A dialect is the set of additions.
 **File layout.** `tutorials/<module>/<slug>/<slug>.md`, with optional
 `<slug>-practice.md`, `<slug>.glossary.yaml`, frozen `v<version>.md`
 releases, and images beside it. Reading order is
-`tutorials/<module>/<series>.order.yaml`, one slug per line, never a
-front matter field.
+`tutorials/<module>/<series>.order.yaml`, never a front matter field —
+checked directly against dewlab's own `build.py` (`order_files()`,
+`series_titles()`) rather than assumed: it's a real two-key mapping,
+`series: <human title>` and `order:` as a YAML list of slugs, one per
+line, not the flat "one slug per line" file this section first
+described. A module may also carry a `series.yaml` (`order:` a list of
+series names) chaining several series' own glossaries together for
+cross-series reference accumulation, and `tutorials/modules.yaml`
+(`order:` a list of module names) orders the modules themselves —
+both optional, and neither built into dewnote's own series view (plan
+§6 step 4) yet, which groups by module alphabetically and lists each
+series independently rather than reading either chain.
 
 **Front matter.** Required: `title`, `slug`, `module`, `module_title`,
 `year`, `series`, `version` (`2026.09.04.1` form). Optional: `status`

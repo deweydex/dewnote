@@ -24,6 +24,7 @@ import {
   getFileContent,
   GithubApiError,
   listMarkdownFiles,
+  listOrderFiles,
   loadToken,
   openPullRequest,
   putFileContent,
@@ -32,6 +33,7 @@ import {
   type RepoRef,
 } from "./github.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
+import { parseSeriesFiles, type Series } from "./series.ts";
 
 export interface RepoPanelHost {
   getSource(): string;
@@ -40,6 +42,9 @@ export interface RepoPanelHost {
    * loadRepoFiles rebuilds it — optional, since a caller with no link
    * picker (a test host, say) has nothing to do with it. */
   onIndexChange?(index: FileIndexEntry[]): void;
+  /** series.ts's own read of every `.order.yaml` file in the repository,
+   * handed the same way, for series-panel.ts. */
+  onSeriesChange?(series: Series[]): void;
 }
 
 export interface RepoPanel {
@@ -254,6 +259,25 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     host.onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
   }
 
+  /** Mirrors refreshIndex's own shape, over `.order.yaml` files instead
+   * of markdown — order files are typically few, so no attempt is made
+   * to fold this into the same tree walk as the markdown index. */
+  async function refreshSeries(repo: RepoRef, ref: string, token: string) {
+    if (!host.onSeriesChange) return;
+    const orderFiles = await listOrderFiles(repo, ref, token);
+    const entries = await Promise.all(
+      orderFiles.map(async (file) => {
+        try {
+          const { content } = await getFileContent(repo, file.path, ref, token);
+          return { path: file.path, content };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    host.onSeriesChange(parseSeriesFiles(entries.filter((e): e is { path: string; content: string } => e !== null)));
+  }
+
   async function loadRepoFiles() {
     const token = currentToken();
     const repo = currentRepo();
@@ -274,6 +298,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       repoStatus.textContent = `${files.length} markdown file${files.length === 1 ? "" : "s"}.`;
       renderFiles();
       await refreshIndex(repo, ref, token);
+      await refreshSeries(repo, ref, token);
     } catch (err) {
       repoStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {
