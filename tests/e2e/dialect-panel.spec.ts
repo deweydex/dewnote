@@ -53,3 +53,27 @@ test("converting dewlab to dewstack rewrites the fence and reports the dropped h
   await expect(report).toHaveCount(1);
   await expect(report).toContainText("hint: has no home in dewstack");
 });
+
+test("converting a dewstack site=name pair to dewlab gives each pane its own id, and the result groups into one live preview", async ({ page }) => {
+  await page.evaluate(() => {
+    (window as unknown as { __dewnote: { mount(source: string): void } }).__dewnote.mount(
+      "```html site=widget\n<div id=\"x\">hi</div>\n```\n\n```css site=widget\n#x{color:red}\n```\n",
+    );
+  });
+
+  await page.locator(".dn-dialect-toggle").click();
+  await page.locator(".dn-dialect-panel select").first().selectOption("dewstack");
+  await page.locator(".dn-dialect-panel select").nth(1).selectOption("dewlab");
+  await page.locator(".dn-dialect-convert").click();
+
+  const source = await page.evaluate(() => (window as unknown as { __dewnote: { getSource(): string } }).__dewnote.getSource());
+  expect(source).toContain("id: widget-html\nsite: widget");
+  expect(source).toContain("id: widget-css\nsite: widget");
+
+  // The converted panes still group into exactly one live preview, the
+  // same as if they had been authored in dewlab's own grammar directly.
+  await expect(page.locator(".dn-site-preview")).toHaveCount(1);
+  const frame = page.frameLocator(".dn-site-frame");
+  await expect(frame.locator("#x")).toHaveText("hi");
+  await expect(frame.locator("#x")).toHaveCSS("color", "rgb(255, 0, 0)");
+});

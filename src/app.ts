@@ -44,13 +44,18 @@ import {
   execCellLanguage,
   isHintFence,
   isRunnableFence,
+  isSitePaneFence,
   parseCellSourceFromFenceText,
+  parseSitePaneInfo,
   parseSqlCellInfo,
   sqlPersistStorageKey,
   sqlScriptFromFenceText,
   wrapSqlExecCode,
+  type SitePaneInfo,
   type SqlCellInfo,
 } from "./cell.ts";
+import { findSiteGroups, siteGroupContaining, type SiteGroup, type SitePane } from "./site-cell.ts";
+import { mountSite, type SiteMountOptions } from "./runtime/site-relay.ts";
 import {
   canStop,
   ensureBooted,
@@ -192,7 +197,16 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     const newSource = currentSource();
     const newDoc = parseDocument(newSource);
 
-    if (!sameShape(doc, newDoc)) {
+    // A site pane's own live preview lives on a *different* block's
+    // wrapper (its group's last pane — see buildSiteGroupPreview), which
+    // the single-block patch below never touches. Forcing the full
+    // rebuild here, the same path a structural change already takes, is
+    // what makes editing any pane actually refresh the shared preview —
+    // a small, deliberate cost, not an oversight.
+    const editedBlock = doc.blocks[changedIndex];
+    const editedIsSitePane = editedBlock?.kind === "fence" && isSitePaneFence(editedBlock.fence?.info ?? "");
+
+    if (!sameShape(doc, newDoc) || editedIsSitePane) {
       source = newSource;
       teardownLiveViews();
       doc = newDoc;
@@ -762,6 +776,79 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return container;
   }
 
+  /** A small label above a site pane's own live editor, since three
+   * fences in a row otherwise look identical until you read their info
+   * strings — the same reason a cell's Run bar names nothing but a
+   * site pane genuinely needs a "which language, which site" hint a
+   * plain code fence doesn't. */
+  function buildSitePaneLabel(info: SitePaneInfo): HTMLElement {
+    const label = document.createElement("div");
+    label.className = "dn-site-pane-label";
+    label.textContent = `${info.language} · site: ${info.site || "(none)"}`;
+    return label;
+  }
+
+  /** A site group's one shared live preview — HTML and CSS rebuild it
+   * immediately (site-relay.ts's own `update`); a `js` pane, if the
+   * group has one, gets its own Run button, since JS only ever runs on
+   * an explicit click (plan §5.4's own convention, DIALECTS.md §2).
+   * Reads every pane's *current, committed* body straight from `doc`,
+   * which commit()'s own forced full-render for a site pane guarantees
+   * is fresh by the time this runs — never blockTexts()'s live,
+   * uncommitted text, since a pane that's still focused hasn't been
+   * parsed into a body yet. */
+  function buildSiteGroupPreview(group: SiteGroup): HTMLElement {
+    const container = document.createElement("div");
+    container.className = "dn-site-preview";
+
+    const header = document.createElement("div");
+    header.className = "dn-site-preview-header";
+    header.textContent = `Preview — site: ${group.site || "(none)"}`;
+    container.appendChild(header);
+
+    function bodyOf(pane: SitePane | undefined): string {
+      return pane ? parseSitePaneInfo(doc.blocks[pane.blockIndex]!).body : "";
+    }
+    function currentBodies(): SiteMountOptions {
+      return { html: bodyOf(group.panes.html), css: bodyOf(group.panes.css), js: bodyOf(group.panes.js) };
+    }
+
+    if (group.panes.js) {
+      const runBar = document.createElement("div");
+      runBar.className = "dn-site-run-bar";
+      const runButton = document.createElement("button");
+      runButton.type = "button";
+      runButton.className = "dn-site-run";
+      runButton.textContent = "Run";
+      runButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        consoleOutput.replaceChildren();
+        mount.update(currentBodies());
+        mount.run();
+      });
+      runBar.appendChild(runButton);
+      container.appendChild(runBar);
+    }
+
+    const frameHost = document.createElement("div");
+    frameHost.className = "dn-site-frame-host";
+    container.appendChild(frameHost);
+
+    const consoleOutput = document.createElement("div");
+    consoleOutput.className = "dn-site-console";
+    container.appendChild(consoleOutput);
+
+    const mount = mountSite(frameHost, (message) => {
+      const line = document.createElement("div");
+      line.className = `dn-site-console-line dn-site-console-${message.level}`;
+      line.textContent = message.text;
+      consoleOutput.appendChild(line);
+    });
+    mount.update(currentBodies());
+
+    return container;
+  }
+
   function renderBlockWrapper(block: Block, index: number): HTMLElement {
     const wrapper = document.createElement("div");
     wrapper.className = `dn-block dn-block-${block.kind}`;
@@ -821,6 +908,14 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       if (isRunnableFence(info)) wrapper.appendChild(buildCellRunner(index, view, info));
       else if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
       else if (isHintFence(info)) wrapper.appendChild(buildHintPreview(block));
+      else if (isSitePaneFence(info)) {
+        wrapper.appendChild(buildSitePaneLabel(parseSitePaneInfo(block)));
+        const group = siteGroupContaining(findSiteGroups(doc.blocks), index);
+        // Only the group's *last* pane hosts the shared preview — three
+        // panes sharing one site get exactly one preview between them,
+        // not one each.
+        if (group && group.endIndex === index) wrapper.appendChild(buildSiteGroupPreview(group));
+      }
       return wrapper;
     }
 

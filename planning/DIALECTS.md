@@ -289,17 +289,14 @@ Block by block, with a report of what did not map:
 | dewstack `py cell=x` | dewlab | `python exec` with `id: x` |
 | dewstack `sql cell=x` | dewlab | `sql exec` with a fresh `id:` (dewstack's per-cell named database has no dewlab equivalent — dewlab's cells all share one `db` — report the name lost); `persist` has no home either, report it |
 | dewstack `sql-check` | dewlab | no equivalent; keep as illustrative fence, report |
-| dewstack `html/css/js site=name` | dewlab | `html/css/js site` with a fresh shared `id:` per pane and `site: <name>` |
+| dewstack `html/css/js site=name` | dewlab | `html/css/js site`, each pane getting its own fresh `id: <name>-<language>` and `site: <name>` |
 | dewstack `html/css/js app=name` | dewlab | no equivalent (dewlab has no full-stack track yet — `planning/DEWSTACK_MERGE.md` §2 in dewlab defers this); keep as illustrative fences, report |
 | dewlab `sql exec` | dewstack | no equivalent (dewstack's SQL cells are per-name databases dewlab's shared-`db` model can't address as one); keep as illustrative fence, report |
 | dewlab `hint` fence | dewstack | no equivalent (dewstack has no staged-hint mechanism); keep as illustrative fence, report |
+| dewlab `html/css/js site` | dewstack | `html/css/js site=<name>` (`id:` has no home — `site=name`'s own info string is the whole identity there — dropped, reported); a pane with no `site:` at all has nothing to carry over, kept as illustrative, reported |
 | either | plain | drop attributes, keep language |
 | dewlab front matter | dewstack | drop `year`, `covers`, `practice_*`; keep the rest |
 | dewstack front matter | dewlab | add `year` (ask), `covers` empty |
 
-The rows above splitting out `sql cell=`, `sql-check`, `site=`, and
-`app=` into their own lines, plus the two new dewlab-only rows with no
-dewstack equivalent, are §8's own addition, written against dewlab's
-2026-09 changes — not yet implemented in `dialect-convert.ts`, which
-still has dewstack `sql`/`site=`/`app=` all falling through to one "no
-equivalent, illustrative" rule regardless of direction.
+All of the above is implemented in `dialect-convert.ts` as of plan §8's
+own items 1-3.

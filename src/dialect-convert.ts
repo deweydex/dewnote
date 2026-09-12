@@ -9,11 +9,14 @@
 // new id); dewlab's own `sql exec` has no dewstack equivalent going the
 // other way (dewstack's SQL cells are per-name databases, dewlab's share
 // one); dewlab's own staged-hint fence has no dewstack equivalent either
-// (no staged-hint mechanism there); dewstack's `sql-check`, `site=`,
-// `app=` (plan §8 item 3 still pending for `site=`/dewlab's own
-// `html/css/js site`) have no dewlab equivalent yet and become
-// illustrative fences, reported; either dialect dropped to plain
-// markdown keeps the language and drops the attribute.
+// (no staged-hint mechanism there); dewstack `html/css/js site=name`
+// becomes dewlab `html/css/js site` (a fresh `${name}-${language}` id
+// per pane, `site:` keeping the name); dewlab's own site fence goes back
+// the other way too (`id:` has no home in `site=name`'s own identity
+// model, dropped); dewstack's `sql-check` and `app=` have no dewlab
+// equivalent yet and become illustrative fences, reported; either
+// dialect dropped to plain markdown keeps the language and drops the
+// attribute.
 //
 // Unlike blocks.ts's own round trip, or jupyter.ts's notebook import,
 // this is not lossless by design — DIALECTS.md §5 names exactly what
@@ -26,7 +29,7 @@
 
 import { load as parseYaml, dump as dumpYaml } from "js-yaml";
 import { parseDocument, type Block } from "./blocks.ts";
-import { execCellLanguage, isHintFence, isRunnableFence, parseCellSource, parseSqlCellInfo } from "./cell.ts";
+import { execCellLanguage, isHintFence, isRunnableFence, isSitePaneFence, parseCellSource, parseSitePaneInfo, parseSqlCellInfo } from "./cell.ts";
 import type { DialectName } from "./dialect.ts";
 
 export interface ConversionResult {
@@ -38,6 +41,7 @@ export interface ConversionResult {
 }
 
 const PY_CELL_RE = /^py\s+cell=([a-z0-9-]+)\s*$/;
+const SITE_EQ_RE = /^(html|css|js)\s+site=([a-z0-9-]+)\s*$/;
 
 /** The same "everything between the fence lines" extraction cell.ts's
  * own sqlScriptFromFenceText and jupyter.ts's fenceBodyVerbatim both
@@ -62,6 +66,15 @@ function convertFence(block: Block, from: DialectName, to: DialectName, report: 
     if (isHintFence(info)) {
       report.push(`fence "${info}": dewlab's staged hint has no dewstack equivalent (no staged-hint mechanism there) — kept as illustrative code`);
       return fence(backticks, "hint", fenceBody(block.text));
+    }
+    if (isSitePaneFence(info)) {
+      const pane = parseSitePaneInfo(block);
+      if (!pane.site) {
+        report.push(`fence "${info}": no site: name to carry over to dewstack's site=name — kept as illustrative code`);
+        return fence(backticks, pane.language, pane.body);
+      }
+      if (pane.id) report.push(`"${pane.id}": id: has no home in dewstack's site=name (the name itself is the whole identity there) — dropped`);
+      return fence(backticks, `${pane.language} site=${pane.site}`, pane.body);
     }
     if (!isRunnableFence(info)) return block.text;
     if (execCellLanguage(info) === "sql") {
@@ -103,7 +116,20 @@ function convertFence(block: Block, from: DialectName, to: DialectName, report: 
       usedSqlIds.add(sqlInfo.name);
       return fence(backticks, "sql exec", `id: ${sqlInfo.name}\n${fenceBody(block.text)}`);
     }
-    const isOtherDewstackCell = /^sql-check\b/.test(info) || /\b(?:site|app)=/.test(info);
+    const siteEq = SITE_EQ_RE.exec(info.trim());
+    if (siteEq) {
+      const language = siteEq[1]!;
+      const name = siteEq[2]!;
+      // dewstack's own uniqueness rule (build.py: "site editor blocks
+      // named X are not consecutive" fails the build otherwise) already
+      // guarantees one name is never reused for a second, separate
+      // group elsewhere in the document — combined with language, which
+      // is always different within one group's own panes, `${name}-
+      // ${language}` is unique across the whole document without
+      // needing usedSqlIds's own collision tracking.
+      return fence(backticks, `${language} site`, `id: ${name}-${language}\nsite: ${name}\n${fenceBody(block.text)}`);
+    }
+    const isOtherDewstackCell = /^sql-check\b/.test(info) || /\bapp=/.test(info);
     if (isOtherDewstackCell) {
       report.push(`fence "${info}": no dewlab equivalent — kept as illustrative code`);
       const language = info.split(/\s+/)[0] || "text";
