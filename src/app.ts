@@ -141,6 +141,13 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   const liveViews = new Map<number, EditorView>();
   const blockElements: HTMLElement[] = [];
   let focusedProseIndex: number | null = null;
+  /** The one block, if any, currently armed for drag reorder — set by
+   * clicking its own grip handle, never by hovering or focusing the
+   * block itself. A block is draggable only while armed (renderBlockWrapper
+   * sets `wrapper.draggable` from this), so dragging never fires by
+   * accident while selecting text or clicking through the document the
+   * way an always-draggable block would invite. */
+  let armedIndex: number | null = null;
 
   /** Every block's current text — a live editor's content where one is
    * mounted, the block's own text otherwise — joined in order. */
@@ -299,6 +306,12 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return doc.blocks[index]!.kind !== "frontmatter" && index < doc.blocks.length - 1;
   }
 
+  /** Keyboard reorder — ArrowUp/ArrowDown on an armed block's own grip
+   * handle. Re-arms the block at its new position afterward, since
+   * render() tears down and rebuilds every wrapper (including the grip
+   * that has focus), and a keyboard user pressing the arrow again
+   * expects the same block still armed under their finger, not the one
+   * that used to be at this index. */
   function moveBlock(index: number, delta: -1 | 1) {
     const parts = blockTexts();
     const [moved] = parts.splice(index, 1);
@@ -307,6 +320,43 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     teardownLiveViews();
     doc = parseDocument(source);
     render();
+    setArmed(index + delta);
+    blockElements[index + delta]?.querySelector<HTMLElement>(".dn-block-grip")?.focus();
+  }
+
+  /** Drag reorder's own move — dropping block `fromIndex` onto block
+   * `toIndex`. Clamped to never land above front matter (canMoveUp's own
+   * rule, expressed differently here since drag has no "one step at a
+   * time" adjacent-index shape to check against). */
+  function moveBlockTo(fromIndex: number, toIndex: number) {
+    const minIndex = doc.blocks[0]?.kind === "frontmatter" ? 1 : 0;
+    if (fromIndex < minIndex || fromIndex === toIndex) return;
+    const parts = blockTexts();
+    const [moved] = parts.splice(fromIndex, 1);
+    let target = toIndex > fromIndex ? toIndex - 1 : toIndex;
+    if (target < minIndex) target = minIndex;
+    parts.splice(target, 0, moved!);
+    source = parts.join("");
+    teardownLiveViews();
+    doc = parseDocument(source);
+    render();
+  }
+
+  /** Arms exactly one block for drag reorder at a time — arming a second
+   * disarms the first, the same "one thing open" rule closeOpenAddMenus
+   * already keeps for the add menus. */
+  function setArmed(index: number | null) {
+    if (armedIndex !== null && blockElements[armedIndex]) {
+      blockElements[armedIndex]!.classList.remove("is-armed");
+      blockElements[armedIndex]!.draggable = false;
+      blockElements[armedIndex]!.querySelector(".dn-block-grip")?.setAttribute("aria-pressed", "false");
+    }
+    armedIndex = index;
+    if (index !== null && blockElements[index]) {
+      blockElements[index]!.classList.add("is-armed");
+      blockElements[index]!.draggable = true;
+      blockElements[index]!.querySelector(".dn-block-grip")?.setAttribute("aria-pressed", "true");
+    }
   }
 
   function mountEditor(host: HTMLElement, index: number, text: string, extensions: Extension[]): EditorView {
@@ -381,30 +431,36 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   /** Move and delete apply to every block kind, fences included — a code
    * cell is as reorderable and removable as a paragraph, even though it
    * has no rendered state to click into the way the others do. */
+  /** A single grip, not up/down arrows — clicking it arms the block for
+   * drag reorder (setArmed), and once armed, ArrowUp/ArrowDown on the
+   * grip itself move it exactly as the old buttons did, so keyboard
+   * reorder loses nothing by losing the arrows. */
   function buildToolbar(index: number): HTMLElement {
     const toolbar = document.createElement("div");
     toolbar.className = "dn-block-toolbar";
 
-    const moveUp = document.createElement("button");
-    moveUp.type = "button";
-    moveUp.className = "dn-block-move";
-    moveUp.setAttribute("aria-label", "Move this block up");
-    moveUp.textContent = "▲";
-    moveUp.disabled = !canMoveUp(index);
-    moveUp.addEventListener("click", (event) => {
+    const grip = document.createElement("button");
+    grip.type = "button";
+    grip.className = "dn-block-grip";
+    grip.setAttribute("aria-label", "Drag to reorder, or arm and use the arrow keys");
+    grip.setAttribute("aria-pressed", String(index === armedIndex));
+    grip.textContent = "⠿";
+    grip.addEventListener("click", (event) => {
       event.stopPropagation();
-      moveBlock(index, -1);
+      setArmed(armedIndex === index ? null : index);
     });
-
-    const moveDown = document.createElement("button");
-    moveDown.type = "button";
-    moveDown.className = "dn-block-move";
-    moveDown.setAttribute("aria-label", "Move this block down");
-    moveDown.textContent = "▼";
-    moveDown.disabled = !canMoveDown(index);
-    moveDown.addEventListener("click", (event) => {
-      event.stopPropagation();
-      moveBlock(index, 1);
+    grip.addEventListener("keydown", (event) => {
+      if (armedIndex !== index) return;
+      if (event.key === "ArrowUp" && canMoveUp(index)) {
+        event.preventDefault();
+        moveBlock(index, -1);
+      } else if (event.key === "ArrowDown" && canMoveDown(index)) {
+        event.preventDefault();
+        moveBlock(index, 1);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        setArmed(null);
+      }
     });
 
     const deleteButton = document.createElement("button");
@@ -417,7 +473,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       deleteBlock(index);
     });
 
-    toolbar.append(moveUp, moveDown, deleteButton);
+    toolbar.append(grip, deleteButton);
     return toolbar;
   }
 
@@ -660,9 +716,46 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
     if (block.kind === "frontmatter") {
       // Front matter always stays first — no move controls at all, per
-      // canMoveUp/canMoveDown, so it never gets a toolbar either.
+      // canMoveUp/canMoveDown, so it never gets a toolbar (and so never a
+      // grip to arm) either. Still a valid drop target, though — dropping
+      // onto it is how a block gets moved to the very top of the body —
+      // moveBlockTo's own minIndex clamp is what keeps it from landing
+      // *above* front matter instead.
+      wrapper.addEventListener("dragover", (event) => {
+        if (armedIndex === null) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      });
+      wrapper.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const from = Number(event.dataTransfer?.getData("text/plain"));
+        if (Number.isNaN(from)) return;
+        moveBlockTo(from, index);
+        setArmed(null);
+      });
     } else {
       wrapper.appendChild(buildToolbar(index));
+      wrapper.draggable = index === armedIndex;
+      // dragover must call preventDefault for drop to fire at all — the
+      // browser's default is "this isn't a drop target." Gated on
+      // armedIndex, not on wrapper.draggable, since the *target* wrapper
+      // being dragged over is never itself the draggable one.
+      wrapper.addEventListener("dragover", (event) => {
+        if (armedIndex === null) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      });
+      wrapper.addEventListener("dragstart", (event) => {
+        event.dataTransfer?.setData("text/plain", String(index));
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      });
+      wrapper.addEventListener("drop", (event) => {
+        event.preventDefault();
+        const from = Number(event.dataTransfer?.getData("text/plain"));
+        if (Number.isNaN(from)) return;
+        moveBlockTo(from, index);
+        setArmed(null);
+      });
     }
 
     if (block.kind === "fence") {
@@ -718,10 +811,23 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   // ever fires for a click genuinely elsewhere.
   document.addEventListener("click", closeOpenAddMenus);
 
+  /** A click anywhere outside the armed block disarms it, the same
+   * "elsewhere means done with this" rule closeOpenAddMenus follows —
+   * the grip's own click handler stops propagation, so arming or
+   * disarming via the grip itself never reaches this. */
+  function disarmOnOutsideClick(event: MouseEvent) {
+    if (armedIndex === null) return;
+    const armedWrapper = blockElements[armedIndex];
+    if (armedWrapper && event.target instanceof Node && armedWrapper.contains(event.target)) return;
+    setArmed(null);
+  }
+  document.addEventListener("click", disarmOnOutsideClick);
+
   return {
     getSource: currentSource,
     destroy() {
       document.removeEventListener("click", closeOpenAddMenus);
+      document.removeEventListener("click", disarmOnOutsideClick);
       teardownLiveViews();
       container.innerHTML = "";
     },

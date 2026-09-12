@@ -110,7 +110,7 @@ body {
   opacity: 1;
   pointer-events: auto;
 }
-.dn-block-move,
+.dn-block-grip,
 .dn-block-delete {
   width: 1.5rem;
   height: 1.5rem;
@@ -123,17 +123,30 @@ body {
   font-size: 0.7em;
   line-height: 1;
 }
-.dn-block-move:hover {
+.dn-block-grip:hover {
   color: var(--dl-orange);
   border-color: var(--dl-orange);
 }
-.dn-block-move:disabled {
-  opacity: 0.35;
-  cursor: default;
+.dn-block-grip[aria-pressed="true"] {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+  background: var(--dl-rule);
+  cursor: grab;
 }
 .dn-block-delete:hover {
   color: var(--dl-error-fg);
   border-color: var(--dl-error-fg);
+}
+
+/* A block only becomes draggable once its own grip arms it (app.ts's
+ * armedIndex) — this outline is the only visual sign that dragging is
+ * live right now, since draggable="true" itself has no rendered form of
+ * its own until a drag actually starts. */
+.dn-block.is-armed {
+  outline: 2px solid var(--dl-orange);
+  outline-offset: 2px;
+  border-radius: 4px;
+  cursor: grab;
 }
 
 /* -------------------------------------------------------- runnable cells */

@@ -121,20 +121,50 @@ test("a fence can be deleted like any other block, not just a prose one", async 
   expect(finalSource).toBe("One.\n\n\nThree.\n");
 });
 
-test("move up and move down reorder blocks, and are disabled at the ends", async ({ page }) => {
+test("the grip arms a block, and arrow keys reorder it while armed", async ({ page }) => {
   await mount(page, "One.\n\nTwo.\n\nThree.\n");
   const blocks = page.locator(".dn-block");
-
-  await expect(blocks.nth(0).locator(".dn-block-move[aria-label='Move this block up']")).toBeDisabled();
-  await expect(blocks.nth(2).locator(".dn-block-move[aria-label='Move this block down']")).toBeDisabled();
+  const grip = (n: number) => blocks.nth(n).locator(".dn-block-grip");
 
   await blocks.nth(1).hover();
-  await blocks.nth(1).locator(".dn-block-move[aria-label='Move this block up']").click();
-  expect(await getSource(page)).toBe("Two.\n\nOne.\n\nThree.\n");
+  await expect(grip(1)).toHaveAttribute("aria-pressed", "false");
+  await grip(1).click();
+  await expect(grip(1)).toHaveAttribute("aria-pressed", "true");
+  await expect(blocks.nth(1)).toHaveClass(/is-armed/);
 
-  await blocks.nth(0).hover();
-  await blocks.nth(0).locator(".dn-block-move[aria-label='Move this block down']").click();
+  await grip(1).press("ArrowUp");
+  expect(await getSource(page)).toBe("Two.\n\nOne.\n\nThree.\n");
+  // moveBlock re-arms the block at its new position and refocuses its grip.
+  await expect(blocks.nth(0)).toHaveClass(/is-armed/);
+  await expect(grip(0)).toBeFocused();
+
+  await grip(0).press("ArrowDown");
   expect(await getSource(page)).toBe("One.\n\nTwo.\n\nThree.\n");
+
+  await grip(1).press("Escape");
+  await expect(blocks.nth(1)).not.toHaveClass(/is-armed/);
+});
+
+test("clicking outside the armed block disarms it", async ({ page }) => {
+  await mount(page, "One.\n\nTwo.\n");
+  const blocks = page.locator(".dn-block");
+  await blocks.nth(0).hover();
+  await blocks.nth(0).locator(".dn-block-grip").click();
+  await expect(blocks.nth(0)).toHaveClass(/is-armed/);
+
+  await page.locator("body").click({ position: { x: 5, y: 5 } });
+  await expect(blocks.nth(0)).not.toHaveClass(/is-armed/);
+});
+
+test("dragging an armed block onto another drops it in just before the target", async ({ page }) => {
+  await mount(page, "One.\n\nTwo.\n\nThree.\n");
+  const blocks = page.locator(".dn-block");
+  await blocks.nth(0).hover();
+  await blocks.nth(0).locator(".dn-block-grip").click();
+  await expect(blocks.nth(0)).toHaveClass(/is-armed/);
+
+  await blocks.nth(0).dragTo(blocks.nth(2));
+  expect(await getSource(page)).toBe("Two.\n\nOne.\n\nThree.\n");
 });
 
 test("front matter never gets move controls, and nothing can be moved above it", async ({ page }) => {
@@ -151,9 +181,14 @@ test("front matter never gets move controls, and nothing can be moved above it",
   const frontMatterBlock = page.locator(".dn-block-frontmatter");
   await expect(frontMatterBlock.locator(".dn-block-toolbar")).toHaveCount(0);
 
+  // "One." can still be armed and dragged, but dropping it onto front
+  // matter — or anywhere above it — clamps to right after front matter,
+  // per moveBlockTo's own minIndex rule, so nothing actually moves here.
   const firstProse = page.locator(".dn-block-prose", { hasText: "One." });
   await firstProse.hover();
-  await expect(firstProse.locator(".dn-block-move[aria-label='Move this block up']")).toBeDisabled();
+  await firstProse.locator(".dn-block-grip").click();
+  await firstProse.dragTo(frontMatterBlock);
+  expect(await getSource(page)).toBe("---\ntitle: A doc\n---\nOne.\n\nTwo.\n");
 });
 
 test("the add control offers more than a paragraph — a code cell is live and focused as soon as it's added", async ({
