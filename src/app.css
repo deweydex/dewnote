@@ -951,6 +951,92 @@ body {
 
 /* ----------------------------------------------------------- outline */
 
+.dn-source-toggle {
+  position: fixed;
+  top: 10.2rem;
+  right: 1rem;
+  z-index: 10;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--dl-cell-border);
+  background: var(--dl-panel-bg);
+  color: var(--dl-muted);
+  font-size: 0.85em;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.1s;
+}
+.dn-source-toggle:hover,
+.dn-source-toggle:focus-visible {
+  opacity: 1;
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+  outline: none;
+}
+
+.dn-source-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--dl-shadow);
+  align-items: center;
+  justify-content: center;
+  padding: 6vh 4vw;
+}
+.dn-source-overlay:not([hidden]) {
+  display: flex;
+}
+
+.dn-source-box {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 60rem;
+  height: 100%;
+  background: var(--dl-panel-bg);
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px var(--dl-shadow);
+  font-family: var(--dl-font-family);
+  overflow: hidden;
+}
+
+.dn-source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--dl-rule);
+}
+.dn-source-header h2 {
+  margin: 0;
+  font-size: 1.1em;
+  color: var(--dl-heading);
+}
+.dn-source-close {
+  border: none;
+  background: none;
+  color: var(--dl-muted);
+  font-size: 1.2em;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+}
+.dn-source-close:hover {
+  color: var(--dl-orange);
+}
+
+.dn-source-editor {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 0.9em;
+}
+.dn-source-editor .cm-editor {
+  height: 100%;
+}
+
 .dn-outline-toggle {
   position: fixed;
   top: 7.9rem;

@@ -9,6 +9,7 @@ import { mountRepoPanel } from "./repo-panel.ts";
 import { mountFolderPanel } from "./folder-panel.ts";
 import { mountDialectPanel } from "./dialect-panel.ts";
 import { mountOutlinePanel } from "./outline-panel.ts";
+import { mountSourceView } from "./source-view.ts";
 import { mountCommandPalette } from "./command-palette.ts";
 
 // Applied before the document mounts, not after, so there is never a
@@ -67,6 +68,13 @@ mountDialectPanel({
   },
 });
 mountOutlinePanel({ getSource: () => current.getSource() });
+mountSourceView({
+  getSource: () => current.getSource(),
+  loadDocument(source, _name) {
+    current.destroy();
+    current = mountDocument(page, source);
+  },
+});
 mountCommandPalette();
 
 // Playwright (tests/e2e/) drives this same built page directly rather than
