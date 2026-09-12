@@ -9,6 +9,7 @@ import { mountRepoPanel } from "./repo-panel.ts";
 import { mountFolderPanel } from "./folder-panel.ts";
 import { mountDialectPanel } from "./dialect-panel.ts";
 import { mountOutlinePanel } from "./outline-panel.ts";
+import { mountSourceView } from "./source-view.ts";
 import { mountLinkCheckPanel } from "./link-check.ts";
 import { mountCommandPalette } from "./command-palette.ts";
 
@@ -68,6 +69,13 @@ mountDialectPanel({
   },
 });
 mountOutlinePanel({ getSource: () => current.getSource() });
+mountSourceView({
+  getSource: () => current.getSource(),
+  loadDocument(source, _name) {
+    current.destroy();
+    current = mountDocument(page, source);
+  },
+});
 mountLinkCheckPanel({ getSource: () => current.getSource(), getFileIndex });
 mountCommandPalette();
 
