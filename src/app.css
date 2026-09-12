@@ -71,6 +71,15 @@ body {
   font-size: 0.78em;
 }
 
+/* A blank-line block (render-block.ts's BLANK_LINE_PREVIEW) reuses every
+ * other prose block's own hover-toolbar and click-to-edit path — this only
+ * has to give it a real, hoverable height, quiet enough that it doesn't
+ * read as a mistake in the layout. */
+.dn-blank-line {
+  margin: 0;
+  min-height: 1.2em;
+}
+
 /* The front-matter form (decision 11) — one row per dialect field, styled
  * after the settings panel's own row/control look (.dn-settings-row) so
  * the two per-field forms this editor has feel like the same idiom. */

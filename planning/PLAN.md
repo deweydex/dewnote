@@ -741,9 +741,67 @@ project; if they are not delightful, nothing after them will rescue it.
    mounting, the files rail, the series view from `order.yaml`, new
    tutorial from a template, new series. *Done when* a module folder from
    dewlab can be opened in Chrome and worked on for an afternoon.
+
+   **First slice built** (`src/store.ts`, `src/file-bar.ts`, #18): the
+   quiet file bar every later panel is modelled on — a filename control
+   (Open, the current name, Save), mounted the same fixed, always-there
+   way `settings-panel.ts` mounts its own gear icon. `OpenedDocument`
+   is one type with a nullable `handle` rather than two document types
+   with duplicated plumbing: `showOpenFilePicker()` (Chrome, Edge) keeps
+   a real, writable `FileSystemFileHandle` and Save writes straight back
+   to it; the `<input type=file>` fallback (Safari, per decision 5, which
+   has no File System Access API at all) has no such handle, and Save
+   downloads instead. Dropping a file anywhere on the page opens it
+   either way.
+
+   **Second slice built** (`src/folder-store.ts`, `src/folder-panel.ts`,
+   #20): mounting a real local folder — `~/dewlab/tutorials/`, say —
+   rather than one file at a time, again Chrome/Edge only (the toggle
+   itself disabled and saying so on Safari), via the directory picker's
+   own recursive walk (`DirectoryLike`, a minimal shape of
+   `FileSystemDirectoryHandle` kept exercisable against a hand-built fake
+   in tests without a real browser). Search filters the listed markdown
+   files by path; opening one hands the file bar exactly the single-file
+   case the first slice already built — a name, content, a real writable
+   handle — so Save and the dirty indicator needed no second
+   implementation. §5.10's own file-front-matter index
+   (`src/file-index.ts`) is built here too: one pass over every listed
+   file's front matter (never the body, so a large folder stays fast),
+   feeding `link-picker.ts`'s search and, once a folder is open, the
+   front-matter form's `module`/`series` autocomplete (decision 25). *Done
+   when*, satisfied: a dewlab module folder opens in Chrome, its files
+   list and search, and one opens, edits and saves through the same bar
+   a single dropped file already uses.
+
+   Still open: no OPFS private-vault mode (decision 5's own "browser
+   store" half beyond a folder or a single file); no series view built
+   from `order.yaml`; no "new tutorial from a template" or "new series"
+   affordance; the index is built once, on open, not refreshed on save
+   (§5.10's own other half) — a folder edited entirely through dewnote
+   itself stays accurate, since every edit still round-trips through the
+   same in-memory document, but a file changed by some other program
+   while the folder stays open would not be picked up until it's
+   reopened.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.
+
+   **First slice built** (`src/github.ts`, `src/repo-panel.ts`, #19): a
+   thin `fetch` client against GitHub's REST API, in FAQ's own shape
+   (plain fetch, SHA-conflict semantics) rather than an SDK — read a
+   repository's markdown tree, fetch one file's content and SHA, write it
+   back as a commit on a working branch (never straight to the base
+   branch), open a draft pull request as the way to hand the change back.
+   The token lives in `localStorage`, scoped to this app's origin, never
+   written to a file (decision 5.7, carried over from FAQ and dewlab). A
+   push that lands on a 409 — another dewnote tab, or a commit made
+   straight on GitHub, changed the file since it was opened — shows both
+   versions rather than picking one, FAQ's own rule: the reader chooses
+   to keep their edit and overwrite, or take the remote copy and lose
+   theirs, but nothing is ever silently clobbered. Deliberately not
+   built in this slice: any front-matter index or module/series picker
+   (needed step 4's fuller multi-file concept, since built separately)
+   and any OPFS or local-clone mode — the REST API only.
 
    **Link checking built** (`src/link-check.ts`), the one item in this
    step's own line that stayed unbuilt after browse/edit/push (#19):
@@ -768,12 +826,102 @@ project; if they are not delightful, nothing after them will rescue it.
    document says so rather than showing nothing.
 6. **Exports.** Jupyter out and in, dialect conversion, HTML page.
    *Done when* a tutorial survives markdown → ipynb → markdown unchanged.
+
+   **First slice built** (`src/export-html.ts`, #21): §5.8's own "the
+   rendered document with the stylesheet and KaTeX CSS inlined, cells
+   shown with their last output, no runtime — a page to send to
+   someone," scoped to what the document model can actually give it. A
+   cell's last output lives only in the live worker and the live DOM for
+   as long as a page stays open (`runtime/pyodide-engine.ts`'s own
+   namespace) — never written back into the block text the way an edit
+   is — so this exports the rendered *source* faithfully (prose, maths,
+   folds) and a fence as a plain, labelled code block: the same honest
+   illustrative treatment a fold's own quoted code already gets
+   (decision 23), not a captured run this architecture has nowhere to
+   keep between a Run click and a later export.
+
+   **Second slice built** (`src/jupyter.ts`, #22): nbformat 4.5, in and
+   out, made genuinely lossless rather than merely plausible — every
+   exported code cell also carries `metadata.dewnote.raw`, the block's
+   own exact original text straight from `blocks.ts`, and import plays
+   that back verbatim when it's present (always, for a document dewnote
+   itself exported) rather than reconstructing a fence's bytes from
+   parsed pieces (id, hint, info, header order) and hoping nothing was
+   unusual — the same "never reconstruct what you can just keep"
+   discipline `blocks.ts`'s own round-trip guarantee already runs on. A
+   notebook with no such metadata (authored directly in Jupyter) falls
+   back to a best-effort reconstruction instead, since there is no
+   original text to play back. Left out, honestly rather than by
+   oversight: dewstack's SQL, `py cell=`, and `site=`/`app=` cells
+   export as illustrative code, never marked runnable — this only knows
+   dewlab's `exec` convention.
+
+   **Third slice built** (`src/dialect-convert.ts`, `src/dialect-panel.ts`,
+   #23): DIALECTS.md §5's own conversion table, followed directly rather
+   than re-derived, applied block by block with a report of what didn't
+   map — dewlab's `hint:`/`expect:`/`name:` have no home in dewstack's
+   `py cell=x` and are reported dropped; dewstack's `persist` has no home
+   going the other way; dewlab's own staged-hint fence and `sql exec`
+   have no dewstack equivalent at all; dewstack's `sql-check` and `app=`
+   become illustrative fences on the way to dewlab, reported; either
+   dialect dropped to plain markdown keeps the language and drops the
+   attribute. `dialect-panel.ts` makes the table reachable without a
+   terminal, a real dialog rather than a hover reveal since reading the
+   report after converting is the whole point of having one. *Done
+   when*, satisfied: a tutorial survives markdown → ipynb → markdown
+   unchanged (the raw-metadata round trip is exactly why), and a
+   documented, reported gap — not a silent one — is what happens when a
+   dialect genuinely has no equivalent for something.
+
+   Still open: HTML export has no live Python output at all, by design
+   (decision 23's own "illustrative" treatment, not a gap this step
+   could close without the document model itself holding a cell's last
+   run); the ipynb export's own dewlab-only "which fence is runnable"
+   rule means a dewstack tutorial's SQL and site cells round-trip as
+   inert code in a notebook, never as something Jupyter itself could run.
 7. **The Mac app.** Tauri shell, native store, keychain, file watching,
    run the build and open the result. *Done when* the app opens a folder
    from Finder and saves back to it.
+
+   Not started. The only one of steps 1-6 and 8 with nothing built yet.
 8. **Finish.** Command palette, outline rail, images with an `alt` prompt
    and a copy into the tutorial folder, link picker, the live-preview
    decorations if step 2's block editing still wants them.
+
+   **Built**, across four slices: the outline rail (`src/outline-panel.ts`,
+   #24) reads headings straight out of the document's own prose blocks —
+   not a second markdown parse of the rendered HTML — and a click scrolls
+   the matching block into view, using nothing of `app.ts` beyond the
+   `data-index` attribute every block wrapper already carries. The
+   command palette (`src/command-palette.ts`, #25) is deliberately not a
+   second implementation of what a rail already does: every command is
+   "find the button that rail already put in the DOM and click it," so
+   the palette is the one place that has to know every rail's toggle
+   exists, and none of them have to know the palette exists. Images with
+   an `alt` prompt (`app.ts`'s own `pickImageFile`/`readAsDataUrl`, #26)
+   insert a picked file inline as a `data:` URI. The link picker
+   (`src/link-picker.ts`, shipped alongside the front-matter index in
+   #28) is a self-contained async prompt over `file-index.ts`'s own
+   search by title or path, inserting dewlab/dewstack's own
+   `[text](tutorial:slug)` convention for an entry with a slug, or its
+   bare path for one without; with no index yet (nothing opened) it
+   falls back to typing a link by hand, since a URL to somewhere else
+   entirely is too common a case for a slug-only picker to leave with no
+   way in.
+
+   Still open: **"a copy into the tutorial folder"** is this step's own
+   line, not yet true — a picked image is inlined as a `data:` URI, never
+   saved as a real file alongside the document the way a dewlab tutorial
+   image (`![alt](name.png)`, a bare file name resolved against the
+   tutorial's own folder, DIALECTS.md §1) actually needs; a document
+   exported or pushed today carries every image's full bytes inline
+   rather than a real, reusable file. The live-preview decorations
+   remain exactly as conditional as this line always named them ("if
+   step 2's block editing still wants them") — not attempted, and
+   folding a fence's own raw syntax out of its blurred view (the
+   "cleanest and simplest editing experience" workstream this section's
+   own step 2 entry is heading toward) may turn out to be the same piece
+   of work under a different name, not two.
 
 The generated parts of a page (table of contents, previous and next,
 series navigation) are rendered in the preview from headings and from

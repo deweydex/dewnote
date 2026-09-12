@@ -25,13 +25,26 @@ const md = new MarkdownIt({ html: true, linkify: true }).use(texmath, {
  * (skip texmath, since decision-worthy "$ renders as text" behaviour, per
  * DIALECTS.md §2) belongs to this function once dewstack fixtures need it
  * rendered rather than just round-tripped. */
+/** A prose block that is nothing but a blank line — the orphan `blocks.ts`
+ * itself documents: a fence, fold or front-matter block doesn't absorb a
+ * trailing blank run the way a real paragraph does, so the blank line right
+ * after one becomes its own block. `md.render()` of pure whitespace is the
+ * empty string, which collapses to zero height in the DOM — present in the
+ * document, byte for byte, but with no surface a mouse can ever hover to
+ * reach its own delete button. A single non-breaking space gives it that
+ * surface back, through the exact same hover-toolbar/click-to-edit path
+ * every other block already has, rather than a new mechanism of its own. */
+const BLANK_LINE_PREVIEW = '<p class="dn-blank-line">&nbsp;</p>';
+
 export function renderBlockPreview(block: Block, _dialect: DialectName): string {
   switch (block.kind) {
     case "frontmatter":
       return renderFrontMatterPreview(block);
     case "prose":
-    case "math":
-      return md.render(block.text);
+    case "math": {
+      const html = md.render(block.text);
+      return html.trim() === "" ? BLANK_LINE_PREVIEW : html;
+    }
     case "fold":
       return renderFold(block);
     case "fence":
