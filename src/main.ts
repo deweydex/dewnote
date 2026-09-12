@@ -19,9 +19,23 @@ import { mountCommandPalette } from "./command-palette.ts";
 // choice takes effect (decision 7, dewstack's own "FAQ's way").
 applySettings(loadSettings());
 
+// dewlab, not plain markdown: dewnote's own default texture is already
+// dewlab's (§5.3), and a first-time reader who never sets year: or
+// module_title: never sees the per-field form (decision 11) or any
+// other dialect-aware polish gated on a real dialect — the very things
+// most worth showing in a first five minutes (decision 29's own note).
+// A reader who wants plain markdown instead is one click away: the
+// dialect-convert panel (⇄) already converts a dewlab document down to
+// plain, dropping these fields rather than asking anyone to type a
+// blank set by hand.
 const STARTER_DOCUMENT = `---
 title: Untitled
 slug: untitled
+module: getting-started
+module_title: "Getting Started"
+year: "2026"
+series: first-notebook
+version: 1
 ---
 
 # Untitled

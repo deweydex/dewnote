@@ -33,6 +33,7 @@
 import { createFile, openPath } from "./active-store.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
 import type { Series } from "./series.ts";
+import { iconRail } from "./icon-rail.ts";
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -66,6 +67,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   toggle.className = "dn-series-toggle";
   toggle.setAttribute("aria-label", "Series");
   toggle.setAttribute("aria-expanded", "false");
+  toggle.title = "Series";
   toggle.textContent = "☰";
 
   const panel = document.createElement("div");
@@ -226,7 +228,8 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     if (!panel.hidden) render();
   });
 
-  document.body.append(toggle, panel);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(panel);
 
   return {
     setSeries(next) {

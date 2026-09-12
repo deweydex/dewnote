@@ -53,9 +53,9 @@ export function renderBlockPreview(block: Block, _dialect: DialectName): string 
 }
 
 function renderFrontMatterPreview(block: Block): string {
-  // The full per-field form (decision 11) is later work; for now the
-  // rendered state is a quiet summary and the source itself is reached
-  // the same way every other block's source is — see app.ts.
+  // The blurred state is always this quiet summary, whether a dialect's
+  // full per-field form (decision 11) or the plain raw-YAML editor is
+  // what focusing it actually opens — see app.ts's own dialect check.
   const raw = block.text.replace(/^---\r?\n/, "").replace(/\r?\n---\r?\n?$/, "");
   const fieldCount = raw.split(/\r?\n/).filter((line) => /^[A-Za-z_][\w-]*:/.test(line)).length;
   const label = fieldCount === 1 ? "1 field" : `${fieldCount} fields`;

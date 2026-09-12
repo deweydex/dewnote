@@ -19,6 +19,7 @@ import {
   type Settings,
 } from "./settings.ts";
 import { restartInterpreter, setPyodideBase } from "./runtime/pyodide-engine.ts";
+import { iconRail } from "./icon-rail.ts";
 
 function row(labelText: string, control: HTMLElement): HTMLLabelElement {
   const label = document.createElement("label");
@@ -59,9 +60,10 @@ export interface SettingsPanel {
  * this call (mirroring the `applySettings(loadSettings())` call main.ts
  * makes before first paint — that one avoids the flash; this one keeps
  * the panel's own controls in sync with it), and wires every control to
- * update, apply, and save on change. Appended to `document.body`
- * directly rather than `#dn-page`, since a document's own remount
- * (main.ts's `__dewnote.mount`) has no reason to tear this down too. */
+ * update, apply, and save on change. The toggle joins the shared icon
+ * rail; the panel itself is appended to `document.body` directly rather
+ * than `#dn-page`, since a document's own remount (main.ts's
+ * `__dewnote.mount`) has no reason to tear this down too. */
 export function mountSettingsPanel(): SettingsPanel {
   let settings = loadSettings();
 
@@ -76,6 +78,7 @@ export function mountSettingsPanel(): SettingsPanel {
   toggle.className = "dn-settings-toggle";
   toggle.setAttribute("aria-label", "Settings");
   toggle.setAttribute("aria-expanded", "false");
+  toggle.title = "Settings";
   toggle.textContent = "⚙";
 
   const panel = document.createElement("div");
@@ -227,7 +230,8 @@ export function mountSettingsPanel(): SettingsPanel {
   });
   panel.appendChild(resetButton);
 
-  document.body.append(toggle, panel);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(panel);
   applySettings(settings);
   setPyodideBase(settings.pyodideBase);
 

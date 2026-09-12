@@ -33,6 +33,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { sourceLanguageExtension } from "./lang.ts";
+import { iconRail } from "./icon-rail.ts";
 
 export interface SourceViewHost {
   getSource(): string;
@@ -50,6 +51,7 @@ export function mountSourceView(host: SourceViewHost): SourceViewPanel {
   toggle.className = "dn-source-toggle";
   toggle.setAttribute("aria-label", "Whole-file source");
   toggle.setAttribute("aria-expanded", "false");
+  toggle.title = "Whole-file source";
   toggle.textContent = "</>";
 
   const overlay = document.createElement("div");
@@ -131,7 +133,8 @@ export function mountSourceView(host: SourceViewHost): SourceViewPanel {
   }
   document.addEventListener("keydown", onGlobalKeydown);
 
-  document.body.append(toggle, overlay);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(overlay);
 
   return {
     destroy() {

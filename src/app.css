@@ -71,6 +71,12 @@ body {
   font-size: 0.78em;
 }
 
+.dn-frontmatter-plain-caption {
+  color: var(--dl-muted);
+  font-size: 0.85em;
+  margin: 0 0 0.4rem;
+}
+
 /* A blank-line block (render-block.ts's BLANK_LINE_PREVIEW) reuses every
  * other prose block's own hover-toolbar and click-to-edit path — this only
  * has to give it a real, hoverable height, quiet enough that it doesn't
@@ -608,6 +614,46 @@ body {
   }
 }
 
+/* A prose block's own slash-command menu (buildSlashMenu) — same shape
+   as .dn-add-menu (a real popover, absent rather than hidden while
+   closed) but left-anchored under the editor rather than centred under
+   a "+" button, since it opens from wherever the reader is typing, not
+   a fixed point between two blocks. */
+.dn-slash-menu {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 5;
+  flex-direction: column;
+  min-width: 8rem;
+  margin-top: 0.2rem;
+  padding: 0.25rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 6px;
+  background: var(--dl-panel-bg);
+  box-shadow: 0 4px 16px var(--dl-shadow);
+}
+.dn-slash-menu.is-open {
+  display: flex;
+}
+.dn-slash-menu button {
+  border: none;
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-mono);
+  font-size: 0.78em;
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.dn-slash-menu button.is-selected,
+.dn-slash-menu button:hover {
+  background: var(--dl-cell-bg);
+  color: var(--dl-orange);
+}
+
 /* --------------------------------------------------------- file bar */
 
 .dn-file-bar {
@@ -673,13 +719,26 @@ body {
   font-style: italic;
 }
 
+/* ------------------------------------------------------------ icon rail */
+
+/* The one shared home for every panel's toggle button (icon-rail.ts) —
+   replaces eight independently hand-picked `top: Nrem` offsets (and one
+   toggle stranded on the opposite side of the screen) with a single flex
+   column that lays its children out itself. Each toggle keeps its own
+   class, shape and colour; only its position now comes from here. */
+.dn-icon-rail {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
 /* ------------------------------------------------------------ repository */
 
 .dn-repo-toggle {
-  position: fixed;
-  top: 3.3rem;
-  left: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -888,10 +947,6 @@ body {
 /* --------------------------------------------------------------- folder */
 
 .dn-folder-toggle {
-  position: fixed;
-  top: 3.3rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1064,10 +1119,6 @@ body {
 /* -------------------------------------------------------- dialect convert */
 
 .dn-dialect-toggle {
-  position: fixed;
-  top: 5.6rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1192,10 +1243,6 @@ body {
 /* ---------------------------------------------------------- link check */
 
 .dn-linkcheck-toggle {
-  position: fixed;
-  top: 12.5rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1299,10 +1346,6 @@ body {
 /* ----------------------------------------------------------- outline */
 
 .dn-source-toggle {
-  position: fixed;
-  top: 10.2rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1387,10 +1430,6 @@ body {
 /* ------------------------------------------------------------- series */
 
 .dn-series-toggle {
-  position: fixed;
-  top: 14.8rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1559,10 +1598,6 @@ body {
 }
 
 .dn-outline-toggle {
-  position: fixed;
-  top: 7.9rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
@@ -1673,10 +1708,6 @@ body {
 /* ---------------------------------------------------------- settings */
 
 .dn-settings-toggle {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 10;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
