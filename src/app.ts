@@ -37,6 +37,8 @@ import { parseDocument, serialize, type Block, type Document } from "./blocks.ts
 import { detectDialect } from "./dialect.ts";
 import { renderBlockPreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
+import type { FileIndexEntry } from "./file-index.ts";
+import { pickLink } from "./link-picker.ts";
 import {
   declaredPackages,
   isRunnableFence,
@@ -67,14 +69,28 @@ export interface MountedDocument {
 
 const BASE_EXTENSIONS: Extension[] = [history(), keymap.of([...defaultKeymap, ...historyKeymap])];
 
-type AddKind = "paragraph" | "cell" | "math" | "hint" | "image";
+type AddKind = "paragraph" | "cell" | "math" | "hint" | "image" | "link";
 const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
   { kind: "paragraph", label: "Paragraph" },
   { kind: "cell", label: "Code cell" },
   { kind: "math", label: "Math" },
   { kind: "hint", label: "Hint" },
   { kind: "image", label: "Image" },
+  { kind: "link", label: "Link" },
 ];
+
+/** Set by main.ts whenever folder-panel.ts or repo-panel.ts (re)builds
+ * its own file-index.ts index — a module-level singleton rather than
+ * something threaded through mountDocument, since there is only ever one
+ * store open and one document mounted at a time (the same reasoning
+ * window.__dewnote's own test hook already relies on). Starts empty, so
+ * a document opened before any folder or repository is opened still
+ * gets a working link picker — DIALECTS.md never had a `tutorial:` link
+ * depend on the index existing, only on it being helpful when it does. */
+let sharedFileIndex: FileIndexEntry[] = [];
+export function setFileIndex(index: FileIndexEntry[]): void {
+  sharedFileIndex = index;
+}
 
 /** file-bar.ts's own promptForNotebookFile follows the same shape: an
  * `<input type=file>` never attached to the DOM, clicked once and
@@ -201,7 +217,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * cell forms, not dewlab's one), and this is the same universal set
    * regardless of the open document's dialect until that per-dialect
    * module exists. */
-  const NEW_BLOCK_SPEC: Record<Exclude<AddKind, "image">, () => { text: string; anchor: number; head: number }> = {
+  const NEW_BLOCK_SPEC: Record<Exclude<AddKind, "image" | "link">, () => { text: string; anchor: number; head: number }> = {
     paragraph: () => ({ text: "New paragraph.\n\n", anchor: 0, head: "New paragraph.".length }),
     cell: () => {
       const text = `\`\`\`python exec\nid: ${generateCellId()}\n\n\`\`\`\n\n`;
@@ -262,7 +278,26 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     render();
   }
 
-  function insertAfter(afterIndex: number | null, kind: Exclude<AddKind, "image">) {
+  /** Also async, like insertImageAfter, and for the same reason it isn't
+   * in NEW_BLOCK_SPEC — pickLink is a whole search overlay, not a
+   * synchronous placeholder. Resolves to the finished `[text](target)`
+   * markdown already, so this only has to splice it in; sharedFileIndex
+   * is whatever main.ts last set from an opened folder or repository,
+   * empty until then. */
+  async function insertLinkAfter(afterIndex: number | null) {
+    const markdown = await pickLink(sharedFileIndex);
+    if (!markdown) return;
+    const text = `${markdown}\n\n`;
+    const parts = blockTexts();
+    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
+    parts.splice(newIndex, 0, text);
+    source = parts.join("");
+    teardownLiveViews();
+    doc = parseDocument(source);
+    render();
+  }
+
+  function insertAfter(afterIndex: number | null, kind: Exclude<AddKind, "image" | "link">) {
     const spec = NEW_BLOCK_SPEC[kind]();
     const parts = blockTexts();
     const newIndex = afterIndex === null ? 0 : afterIndex + 1;
@@ -411,6 +446,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       item.addEventListener("click", () => {
         closeOpenAddMenus();
         if (kind === "image") insertImageAfter(afterIndex);
+        else if (kind === "link") insertLinkAfter(afterIndex);
         else insertAfter(afterIndex, kind);
       });
       menu.appendChild(item);

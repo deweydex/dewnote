@@ -1237,3 +1237,115 @@ body {
   background: var(--dl-rule);
   color: var(--dl-orange);
 }
+
+/* ------------------------------------------------------------- link picker */
+
+.dn-link-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--dl-shadow);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.dn-link-box {
+  width: 28rem;
+  max-width: 90vw;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--dl-panel-bg);
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px var(--dl-shadow);
+  font-family: var(--dl-font-family);
+  padding: 0.75rem 1rem 1rem;
+}
+
+.dn-link-search {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+  border-bottom: 1px solid var(--dl-rule);
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 1em;
+  padding: 0.4rem 0.2rem;
+}
+.dn-link-search:focus {
+  outline: none;
+}
+
+.dn-link-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.2rem 0;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+.dn-link-item button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.9em;
+  padding: 0.4rem 0.2rem;
+  cursor: pointer;
+}
+.dn-link-item button:hover {
+  color: var(--dl-orange);
+}
+.dn-link-empty {
+  color: var(--dl-muted);
+  font-size: 0.85em;
+  padding: 0.3rem 0.2rem;
+}
+
+.dn-link-hint {
+  font-size: 0.8em;
+  color: var(--dl-muted);
+  margin: 0.5rem 0 0.4rem;
+  border-top: 1px solid var(--dl-rule);
+  padding-top: 0.5rem;
+}
+
+.dn-link-custom-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.dn-link-custom-row input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--dl-font-family);
+  font-size: 0.9em;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+  padding: 0.3rem 0.4rem;
+}
+
+.dn-link-insert {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.9em;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+.dn-link-insert:hover {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}

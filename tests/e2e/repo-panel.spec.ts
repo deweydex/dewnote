@@ -149,6 +149,26 @@ test("loading a repository lists only its markdown files, and search filters the
   await expect(page.locator(".dn-repo-file")).toHaveText("content/tutorials/sub/b-page.md");
 });
 
+// file-index.ts's own side: loading a repository builds the front-matter
+// index (plan §5.10) the link picker searches, one getFileContent per
+// markdown file (repo-panel.ts's own refreshIndex) — checked through the
+// link picker itself, the only observable consumer.
+test("loading a repository builds the file index the link picker searches", async ({ page }) => {
+  await setup(page, DEFAULT_OPTS);
+  await page.locator(".dn-repo-load").click();
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files.");
+  await page.locator(".dn-repo-close").click();
+
+  const gap = page.locator(".dn-add-gap").first();
+  await gap.hover();
+  await gap.locator(".dn-add-btn").click();
+  await gap.locator(".dn-add-menu button", { hasText: "Link" }).click();
+
+  const items = page.locator(".dn-link-item button");
+  await expect(items).toHaveCount(2);
+  await expect(items).toContainText(["content/tutorials/a-rule.md", "content/tutorials/sub/b-page.md"]);
+});
+
 test("opening a file renders its real content in the editor", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();

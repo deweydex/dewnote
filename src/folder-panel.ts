@@ -8,6 +8,7 @@
 
 import { chooseFolder, listMarkdownFiles, readFile, supportsDirectoryPicker, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
+import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 
 export interface FolderPanel {
   destroy(): void;
@@ -25,8 +26,12 @@ function textInput(placeholder: string): HTMLInputElement {
 /** Mounted once, independently of any particular document. Takes the
  * file bar itself, not a `{getSource, loadDocument}` host — opening a
  * folder file is adopting it into the file bar's own Save/dirty
- * machinery, not a second way of driving the editor. */
-export function mountFolderPanel(fileBar: FileBar): FolderPanel {
+ * machinery, not a second way of driving the editor. `onIndexChange`,
+ * when given, is handed plan §5.10's own front-matter index every time
+ * it's (re)built — main.ts wires it to app.ts's setFileIndex so the link
+ * picker (link-picker.ts) has something to search once a folder is
+ * open. */
+export function mountFolderPanel(fileBar: FileBar, onIndexChange?: (index: FileIndexEntry[]) => void): FolderPanel {
   let files: FolderFile[] = [];
   let folderName = "";
 
@@ -131,6 +136,27 @@ export function mountFolderPanel(fileBar: FileBar): FolderPanel {
     }
   }
 
+  /** §5.10's own "this is a real cost, not a free improvement" — every
+   * markdown file's content is read once, right here, so the index has
+   * something to search before the reader ever opens one of them. Errors
+   * reading an individual file (permissions, a file removed mid-scan)
+   * just leave that one file out of the index rather than failing the
+   * whole folder open — the file list itself (already built) still
+   * works regardless. */
+  async function refreshIndex() {
+    if (!onIndexChange) return;
+    const entries = await Promise.all(
+      files.map(async (file) => {
+        try {
+          return { path: file.path, content: await readFile(file.handle) };
+        } catch {
+          return null;
+        }
+      }),
+    );
+    onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
+  }
+
   openButton.addEventListener("click", async () => {
     const root = await chooseFolder();
     if (!root) return;
@@ -141,6 +167,7 @@ export function mountFolderPanel(fileBar: FileBar): FolderPanel {
       files = await listMarkdownFiles(root);
       status.textContent = `${files.length} markdown file${files.length === 1 ? "" : "s"} in "${folderName}".`;
       renderFiles();
+      await refreshIndex();
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : String(err);
     }

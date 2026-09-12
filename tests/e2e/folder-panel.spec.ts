@@ -122,3 +122,23 @@ test("opening a file renders it in the editor and hands Save to the file bar as 
   await page.locator(".dn-file-save").click();
   await expect(page.locator(".dn-file-status")).toHaveText("saved");
 });
+
+// file-index.ts's own side: opening a folder builds the front-matter
+// index (plan §5.10) that link-picker.ts searches — checked here through
+// the link picker itself, since that's the only observable consumer, not
+// by reaching into folder-panel.ts's internals.
+test("opening a folder builds the file index the link picker searches", async ({ page }) => {
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+  await expect(page.locator(".dn-folder-file")).toHaveCount(2);
+  await page.locator(".dn-folder-close").click();
+
+  const gap = page.locator(".dn-add-gap").first();
+  await gap.hover();
+  await gap.locator(".dn-add-btn").click();
+  await gap.locator(".dn-add-menu button", { hasText: "Link" }).click();
+
+  const items = page.locator(".dn-link-item button");
+  await expect(items).toHaveCount(2);
+  await expect(items).toContainText(["README.md", "content/a-rule.md"]);
+});
