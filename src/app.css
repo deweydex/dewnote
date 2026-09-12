@@ -1367,3 +1367,78 @@ body {
   color: var(--dl-orange);
   border-color: var(--dl-orange);
 }
+
+/* -------------------------------------------------------------- site cells */
+
+.dn-site-pane-label {
+  color: var(--dl-muted);
+  font-family: var(--dl-mono);
+  font-size: 0.78em;
+  margin-bottom: 0.2rem;
+}
+
+.dn-site-preview {
+  margin: 0.4rem 0 0.9rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.dn-site-preview-header {
+  padding: 0.3rem 0.6rem;
+  background: var(--dn-cell-bg);
+  color: var(--dl-muted);
+  font-family: var(--dl-mono);
+  font-size: 0.78em;
+  border-bottom: 1px solid var(--dl-cell-border);
+}
+
+.dn-site-run-bar {
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid var(--dl-cell-border);
+}
+.dn-site-run {
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.85em;
+  padding: 0.2rem 0.7rem;
+  cursor: pointer;
+}
+.dn-site-run:hover {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}
+
+.dn-site-frame-host {
+  height: 16rem;
+}
+.dn-site-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #fff;
+}
+
+.dn-site-console {
+  font-family: var(--dl-mono);
+  font-size: 0.78em;
+  max-height: 6rem;
+  overflow-y: auto;
+}
+.dn-site-console:empty {
+  display: none;
+}
+.dn-site-console-line {
+  padding: 0.2rem 0.6rem;
+  border-top: 1px solid var(--dl-rule);
+  white-space: pre-wrap;
+}
+.dn-site-console-error {
+  color: var(--dl-error-fg);
+}
+.dn-site-console-warn {
+  color: var(--dl-orange);
+}

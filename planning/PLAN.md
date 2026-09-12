@@ -805,33 +805,72 @@ both runs its actual code, not its header line.
    document to dewstack reports the drop rather than silently keeping a
    fence dewstack's own build would reject.
 
-3. **`html site`/`css site`/`js site` cells.** This is plan §6 step 3's
+3. **`html site`/`css site`/`js site` cells — built, with the grouping
+   in a different file than first planned.** This is plan §6 step 3's
    own long-deferred "`site=`/`app=` cells... need consecutive-fence
    grouping dewnote's block model doesn't have yet" — postponed there
    for exactly the reason DIALECTS.md §1 now gives in full: dewlab
    settled its own spelling only in 2026-09, so there was no stable
-   target to build against before now. The real new work is in
-   `blocks.ts`: recognising a *run* of consecutive `html site`/`css
-   site`/`js site` fences sharing one `site:` value as a single group,
-   the way dewlab's own `extract_blocks()` does (adjacency broken by any
-   other content; two panes of the same language for one `site:` is an
-   error there and should be one here too). Above that, `cell.ts` reads
-   `id:`/`site:` off the header (a second header grammar, `SITE_HEADER_RE`
-   in dewlab, alongside the exec-cell one); a new runtime module —
-   `mount(container, {html, css, js})` returning `{run, destroy}`, in
-   dewlab's own words for the shape it settled on — drives a sandboxed
-   `srcdoc` iframe the same way dewstack's SQL/exec runtime already
-   proved out for dewnote (`assets/runtime/pyodide-engine.ts` is the
-   precedent for "one runtime module, one clear interface", not a
-   template to copy from since this is JS/CSS/HTML, not Python); `js
-   site` panes get a Run button and a console relay, `html site`/`css
-   site` panes rebuild live. `dialect-convert.ts` gains the dewstack
-   `site=name` → dewlab `html/css/js site` rule DIALECTS.md §5 now
-   names, generating a fresh `id:` per pane. *Done when* a fixtures page
-   with a two-pane (`html site`+`css site`) group renders a live preview
-   in dewnote the way it would on dewlab's own built page, editing either
-   pane updates the preview, and a `js site` pane's Run button actually
-   runs its script in the sandboxed frame.
+   target to build against before now. The plan as first written here
+   said the grouping work belongs in `blocks.ts`; built instead in a new
+   `site-cell.ts`, because deciding which fences group together means
+   reading a `site:` header *inside* a fence's own body, and `blocks.ts`
+   only ever looks at a fence's info string to split the document
+   correctly (`cell.ts`'s own header comment already states this as the
+   general rule for every other fence kind's header lines — grouping is
+   the same rule, applied to a decision about several fences instead of
+   one). `site-cell.ts`'s `findSiteGroups` walks `doc.blocks` directly:
+   consecutive `html site`/`css site`/`js site` fences sharing one
+   `site:` value group (a blank-only prose block between two panes
+   doesn't break it — an ordinary blank line between two fences is its
+   own orphan prose block, per `blocks.ts`'s own trailing-blank-line
+   rule, not real content); a second pane of a language already claimed
+   starts a fresh group instead of overwriting the first. `cell.ts` reads
+   `id:`/`site:` off the header (`SITE_HEADER_RE`, alongside the
+   exec-cell one); `runtime/site-relay.ts`'s `mountSite` — dewlab's own
+   words for the shape (`DEWSTACK_MERGE.md` §3: "`mount(container,
+   {html, css, js})` returning `{run, destroy}`") — drives a sandboxed
+   `srcdoc` iframe, HTML/CSS rebuilding immediately, a `js site` pane
+   running only on an explicit Run click with its console relayed back
+   through `postMessage`. `app.ts` renders every pane as its own live
+   editor, same as any other fence, with the group's one shared preview
+   hosted after its *last* pane; editing any pane forces a full
+   `render()` on blur (`commit()`'s own new check) rather than the
+   single-block patch every other fence gets, since the preview lives on
+   a different block's wrapper than whichever pane just changed — the
+   one deliberate extra cost this feature has that no other fence kind
+   does. `dialect-convert.ts` gained both directions DIALECTS.md §5 now
+   names: dewstack `site=name` → dewlab `html/css/js site` (a fresh
+   `<name>-<language>` id per pane); dewlab's own site fence back to
+   dewstack (`id:` dropped, reported — `site=name`'s own info string is
+   the whole identity there).
+
+   A real, separately-found bug along the way, not part of the plan as
+   written: `runtime/site-relay.ts` builds the sandboxed frame's own
+   `<script>` tag as a JS string inside dewnote's *own* bundle — which is
+   itself one `<script type="module">` element in `index.html`. The
+   browser's HTML parser ends that outer element on the first literal
+   closing-script-tag text it finds anywhere in its raw content, JS
+   string literals included; the standard `<\/script>` escape in the
+   TypeScript source wasn't enough on its own, because Bun's minifier
+   normalises that escaped slash to a bare one (a legitimate
+   simplification on its own — the two are always equivalent JS
+   escapes), quietly reintroducing the exact literal text the escape was
+   there to avoid. Found by a real build breaking every page load with a
+   `SyntaxError: Unexpected end of input` pointing at `index.html`
+   itself, the outer script element cut off mid-file — not assumed,
+   caught because this step's own e2e suite runs the actual built app the
+   same as every other step's does. Fixed by building the tag's angle
+   bracket from `String.fromCharCode(60)` at runtime instead of writing
+   it as source text at all, immune to a minifier's escape-normalising
+   the way a plain backslash trick is not.
+
+   *Done when* a fixtures page with a two-pane (`html site`+`css site`)
+   group renders a live preview in dewnote the way it would on dewlab's
+   own built page, editing either pane updates the preview, and a
+   `js site` pane's Run button actually runs its script in the sandboxed
+   frame — all true, checked directly against the real built app, not
+   only against `bun test`.
 
 Order matters here more than usual: item 0 is a real bug fix and costs
 almost nothing, so it goes first regardless of what else is picked up.

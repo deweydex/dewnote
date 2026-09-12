@@ -43,6 +43,21 @@ describe("dewlab -> dewstack", () => {
     expect(report[0]).toContain("no dewstack equivalent");
   });
 
+  test("html/css/js site converts to dewstack's site=name, dropping id: since site=name is the whole identity there", () => {
+    const source = "```html site\nid: hero-markup\nsite: hero\n<button></button>\n```\n";
+    const { markdown, report } = convertDialect(source, "dewlab", "dewstack");
+    expect(markdown).toBe("```html site=hero\n<button></button>\n```\n");
+    expect(report).toEqual(['"hero-markup": id: has no home in dewstack\'s site=name (the name itself is the whole identity there) — dropped']);
+  });
+
+  test("a site pane with no site: name at all has nothing to carry over, kept as illustrative, reported", () => {
+    const source = "```html site\n<button></button>\n```\n";
+    const { markdown, report } = convertDialect(source, "dewlab", "dewstack");
+    expect(markdown).toBe("```html\n<button></button>\n```\n");
+    expect(report.length).toBe(1);
+    expect(report[0]).toContain("no site: name");
+  });
+
   test("a staged-hint fence has no dewstack equivalent — kept as illustrative, reported", () => {
     const source = "```hint\nafter: 3 errors\ntitle: Slow down\n\nCheck your work.\n```\n";
     const { markdown, report } = convertDialect(source, "dewlab", "dewstack");
@@ -71,19 +86,21 @@ describe("dewstack -> dewlab", () => {
     expect(report).toEqual([]);
   });
 
-  test("sql-check, site=, and app= fences have no dewlab equivalent and become illustrative, reported", () => {
-    const cases = [
-      "```sql-check db=orders task=check_totals\n```\n",
-      "```html site=widget\n<div></div>\n```\n",
-      "```js app=dashboard\nconsole.log(1);\n```\n",
-    ];
+  test("sql-check and app= fences have no dewlab equivalent and become illustrative, reported", () => {
+    const cases = ["```sql-check db=orders task=check_totals\n```\n", "```js app=dashboard\nconsole.log(1);\n```\n"];
     for (const source of cases) {
       const { markdown, report } = convertDialect(source, "dewstack", "dewlab");
-      expect(markdown).not.toContain("site=");
       expect(markdown).not.toContain("app=");
       expect(report.length).toBe(1);
       expect(report[0]).toContain("no dewlab equivalent");
     }
+  });
+
+  test("html/css/js site=name fences become dewlab's own site fence, one fresh id per pane", () => {
+    const source = "```html site=widget\n<div></div>\n```\n\n```css site=widget\n.x{}\n```\n";
+    const { markdown, report } = convertDialect(source, "dewstack", "dewlab");
+    expect(markdown).toBe("```html site\nid: widget-html\nsite: widget\n<div></div>\n```\n\n```css site\nid: widget-css\nsite: widget\n.x{}\n```\n");
+    expect(report).toEqual([]);
   });
 
   test("sql cell=x becomes sql exec, using the database name as the new id", () => {

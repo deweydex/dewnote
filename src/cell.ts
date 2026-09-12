@@ -222,3 +222,54 @@ export function parseHintFence(block: Block): HintFenceInfo {
     body: lines.slice(i).join("\n").trim(),
   };
 }
+
+/** dewlab's own native site-editor fence (DIALECTS.md §1) — `html
+ * site`/`css site`/`js site`, an `id:`/`site:` header the same shape
+ * every other exec-family fence uses, in place of dewstack's
+ * `site=name` (which puts the identity in the info string itself,
+ * something dewlab's own authoring editor can't round-trip — DIALECTS.md
+ * §1's own note). Consecutive fences sharing one `site:` value group
+ * into one editor; site-cell.ts owns that grouping, this module only
+ * parses one pane at a time. */
+export type SiteLanguage = "html" | "css" | "js";
+const SITE_LANGUAGES = new Set<string>(["html", "css", "js"]);
+
+export interface SitePaneInfo {
+  language: SiteLanguage;
+  id: string | null;
+  site: string | null;
+  body: string;
+}
+
+const SITE_HEADER_RE = /^\s*(id|site)\s*:\s*(.*)$/;
+
+/** dewlab's own `len(info) >= 2 and info[1] == "site"` check — the
+ * fence's first word must be one of the three site languages and its
+ * second word must be literally "site". */
+export function isSitePaneFence(info: string): boolean {
+  const words = info.trim().split(/\s+/);
+  return words.length >= 2 && words[1] === "site" && SITE_LANGUAGES.has(words[0]!);
+}
+
+/** Reads a site pane's own `id:`/`site:` header and body. Only
+ * meaningful for a fence `isSitePaneFence` already said yes to — the
+ * language comes from the fence's own first info word, not re-validated
+ * here. */
+export function parseSitePaneInfo(block: Block): SitePaneInfo {
+  const language = (block.fence?.info.trim().split(/\s+/)[0] ?? "html") as SiteLanguage;
+  const lines = fenceBody(block.text).split("\n");
+  const header: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length) {
+    const match = SITE_HEADER_RE.exec(lines[i]!);
+    if (!match || match[1]! in header) break;
+    header[match[1]!] = match[2]!.trim();
+    i++;
+  }
+  return {
+    language,
+    id: header["id"] ?? null,
+    site: header["site"] ?? null,
+    body: lines.slice(i).join("\n"),
+  };
+}

@@ -5,9 +5,11 @@ import {
   execCellLanguage,
   isHintFence,
   isRunnableFence,
+  isSitePaneFence,
   parseCellSource,
   parseCellSourceFromFenceText,
   parseHintFence,
+  parseSitePaneInfo,
   parseSqlCellInfo,
   sqlPersistStorageKey,
   sqlScriptFromFenceText,
@@ -227,5 +229,34 @@ describe("parseHintFence", () => {
   test("a hint with no header lines at all is still read correctly, body only", () => {
     const block = fenceBlock("```hint\nJust the body, no headers.\n```\n");
     expect(parseHintFence(block).body).toBe("Just the body, no headers.");
+  });
+});
+
+describe("isSitePaneFence", () => {
+  test("is true for html/css/js site, and false for anything else", () => {
+    expect(isSitePaneFence("html site")).toBe(true);
+    expect(isSitePaneFence("css site")).toBe(true);
+    expect(isSitePaneFence("js site")).toBe(true);
+    expect(isSitePaneFence("html")).toBe(false);
+    expect(isSitePaneFence("python exec")).toBe(false);
+    expect(isSitePaneFence("site html")).toBe(false);
+    expect(isSitePaneFence("")).toBe(false);
+  });
+});
+
+describe("parseSitePaneInfo", () => {
+  test("reads id:, site:, and the body beneath them", () => {
+    const block = fenceBlock("```html site\nid: hero-markup\nsite: hero\n<button>Hover me</button>\n```\n");
+    expect(parseSitePaneInfo(block)).toEqual({ language: "html", id: "hero-markup", site: "hero", body: "<button>Hover me</button>" });
+  });
+
+  test("reads the language from the fence's own first word", () => {
+    const block = fenceBlock("```css site\nid: hero-style\nsite: hero\n.btn { color: red; }\n```\n");
+    expect(parseSitePaneInfo(block).language).toBe("css");
+  });
+
+  test("id and site are null when absent, body is whatever remains", () => {
+    const block = fenceBlock("```js site\nconsole.log(1);\n```\n");
+    expect(parseSitePaneInfo(block)).toEqual({ language: "js", id: null, site: null, body: "console.log(1);" });
   });
 });
