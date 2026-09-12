@@ -26,46 +26,129 @@ export interface CellSource {
 }
 
 const HEADER_RE = /^\s*(id|hint|expect|name)\s*:\s*(.*)$/;
+export type CellHeaderKey = "id" | "hint" | "expect" | "name";
 
-/** Everything between the opening ```lang info line and the closing ```
- * line, exactly as blocks.ts sees it — a fence block's own text always
- * starts and ends with fence lines (blocks.ts's own invariant), so this
- * holds for every fence block it ever produces. */
-function fenceBody(fenceText: string): string {
+/** A fence block's own text always starts and ends with fence lines
+ * (blocks.ts's own invariant); `bodyEnd` is the closing fence line's own
+ * index, skipping back over any blank lines directly before it, so both
+ * reading and editing the header agree on exactly where the body ends. */
+function fenceBoundaries(fenceText: string): { lines: string[]; bodyEnd: number } {
   const lines = fenceText.split("\n");
   let end = lines.length - 1;
   while (end > 0 && lines[end] === "") end--;
-  return lines.slice(1, end).join("\n");
+  return { lines, bodyEnd: end };
+}
+
+function fenceBody(fenceText: string): string {
+  const { lines, bodyEnd } = fenceBoundaries(fenceText);
+  return lines.slice(1, bodyEnd).join("\n");
+}
+
+/** Where a fence body's header lines end and its real code starts —
+ * shared by both reading (`parseHeaderAndCode`) and editing
+ * (`setCellHeaderField`), so the two can never disagree about which line
+ * is which. `name:`, uniquely among these four keys, collides with real
+ * code: a type-annotated first line of a cell's own body —
+ * `name: str = "Ada"` — is indistinguishable from the header by shape
+ * alone. dewlab's own fix (`ca6e16e`, 2026-09-07) is the same rule ported
+ * verbatim: `=` never appears in a genuine name (a short label), so its
+ * presence means this was never the header. `expect:` keeps matching
+ * even with `=` in it, since a real expectation legitimately uses one
+ * (`expect: total == 6`). */
+function headerLineCount(bodyLines: string[]): number {
+  let i = 0;
+  while (i < bodyLines.length) {
+    const match = HEADER_RE.exec(bodyLines[i]!);
+    if (!match) break;
+    if (match[1] === "name" && match[2]!.includes("=")) break;
+    i++;
+  }
+  return i;
 }
 
 function parseHeaderAndCode(body: string): CellSource {
   const lines = body.split("\n");
+  const headerCount = headerLineCount(lines);
   let id: string | null = null;
   let hint: string | null = null;
   let expect: string | null = null;
   let name: string | null = null;
-  let i = 0;
-  while (i < lines.length) {
-    const match = HEADER_RE.exec(lines[i]!);
-    if (!match) break;
+  for (let i = 0; i < headerCount; i++) {
+    const match = HEADER_RE.exec(lines[i]!)!;
     const key = match[1]!;
-    const value = match[2]!;
-    // `name:`, uniquely among these four keys, collides with real code: a
-    // type-annotated first line of a cell's own body — `name: str = "Ada"`
-    // — is indistinguishable from the header by shape alone. dewlab's own
-    // fix (`ca6e16e`, 2026-09-07) is the same rule ported verbatim: `=`
-    // never appears in a genuine name (a short label), so its presence
-    // means this was never the header. `expect:` keeps matching even with
-    // `=` in it, since a real expectation legitimately uses one
-    // (`expect: total == 6`).
-    if (key === "name" && value.includes("=")) break;
-    if (key === "id") id = value.trim();
-    else if (key === "hint") hint = value.trim();
-    else if (key === "expect") expect = value.trim();
-    else name = value.trim();
-    i++;
+    const value = match[2]!.trim();
+    if (key === "id") id = value;
+    else if (key === "hint") hint = value;
+    else if (key === "expect") expect = value;
+    else name = value;
   }
-  return { id, hint, expect, name, code: lines.slice(i).join("\n") };
+  return { id, hint, expect, name, code: lines.slice(headerCount).join("\n") };
+}
+
+/** Sets one header field's value inside a fence's own text, touching only
+ * that field's line — every other line, including the code, is untouched
+ * byte for byte, the same discipline `frontmatter.ts`'s
+ * `setFrontMatterField` holds itself to (decision 1). An empty `value`
+ * removes the line if it exists; `id` is required (DIALECTS.md §1) and
+ * this is never called to clear it — the header form only ever offers a
+ * clear button for `hint`/`expect`/`name`. Returns the input completely
+ * unchanged when the new value is identical to what was already there. */
+export function setCellHeaderField(fenceText: string, key: CellHeaderKey, value: string): string {
+  const { lines, bodyEnd } = fenceBoundaries(fenceText);
+  const bodyLines = lines.slice(1, bodyEnd);
+  const headerCount = headerLineCount(bodyLines);
+  const headerLines = bodyLines.slice(0, headerCount);
+  const codeLines = bodyLines.slice(headerCount);
+
+  const keyRe = new RegExp(`^(\\s*${key}\\s*:)(.*)$`);
+  const lineIndex = headerLines.findIndex((line) => keyRe.test(line));
+  const newHeaderLines = headerLines.slice();
+
+  if (lineIndex === -1) {
+    if (value === "") return fenceText;
+    newHeaderLines.push(`${key}: ${value}`);
+  } else if (value === "") {
+    newHeaderLines.splice(lineIndex, 1);
+  } else {
+    const match = keyRe.exec(headerLines[lineIndex]!)!;
+    newHeaderLines[lineIndex] = `${match[1]} ${value}`;
+  }
+
+  if (newHeaderLines.join("\n") === headerLines.join("\n")) return fenceText;
+
+  const newBodyLines = [...newHeaderLines, ...codeLines];
+  return [lines[0], ...newBodyLines, ...lines.slice(bodyEnd)].join("\n");
+}
+
+/** Replaces just a fence's own code — everything after its header lines —
+ * keeping the opening fence line and every header line exactly as they
+ * are. This is `setCellHeaderField`'s mirror image: where that touches
+ * one header line and leaves the code alone, this touches the code and
+ * leaves every header line alone. Used to fold a live, still-focused code
+ * editor's current text back into the block's full fence text without
+ * needing that editor to know the header exists at all. */
+export function replaceCellCode(fenceText: string, newCode: string): string {
+  const { lines, bodyEnd } = fenceBoundaries(fenceText);
+  const bodyLines = lines.slice(1, bodyEnd);
+  const headerCount = headerLineCount(bodyLines);
+  const headerLines = bodyLines.slice(0, headerCount);
+  const codeLines = bodyLines.slice(headerCount);
+
+  // No-op guard, same discipline as setCellHeaderField: an untouched code
+  // editor (mounted with exactly this fence's own parsed code, never
+  // edited) must reproduce the original bytes exactly, not an
+  // "equivalent" reconstruction — which matters here because "" is
+  // ambiguous. parseHeaderAndCode collapses both a body with no code
+  // lines at all and one with a single blank code line to the same
+  // code: "", so comparing against *this* fenceText's own codeLines,
+  // rather than reconstructing unconditionally, is what keeps a
+  // never-edited cell of either shape byte-exact instead of drifting to
+  // whichever shape a bare `newCode === ""` guess would pick.
+  if (newCode === codeLines.join("\n")) return fenceText;
+
+  const newCodeLines = newCode === "" ? [] : newCode.split("\n");
+  const newBodyLines = [...headerLines, ...newCodeLines];
+  return [lines[0], ...newBodyLines, ...lines.slice(bodyEnd)].join("\n");
 }
 
 export function parseCellSource(block: Block): CellSource {

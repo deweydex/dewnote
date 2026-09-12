@@ -11,6 +11,8 @@ import {
   parseHintFence,
   parseSitePaneInfo,
   parseSqlCellInfo,
+  replaceCellCode,
+  setCellHeaderField,
   sqlPersistStorageKey,
   sqlScriptFromFenceText,
   wrapSqlExecCode,
@@ -87,6 +89,93 @@ describe("parseCellSourceFromFenceText", () => {
       ...NO_HEADERS,
       code: "print(1)",
     });
+  });
+});
+
+const CELL_FENCE = "```python exec\nid: filter-evening\nhint: Try it first.\nreadings\n```\n";
+
+describe("setCellHeaderField", () => {
+  test("updates an existing header field's value, touching only that line", () => {
+    const result = setCellHeaderField(CELL_FENCE, "hint", "A new hint.");
+    expect(result).toBe("```python exec\nid: filter-evening\nhint: A new hint.\nreadings\n```\n");
+  });
+
+  test("adds a field that wasn't present, just before the code", () => {
+    const noExpect = "```python exec\nid: c\nreadings\n```\n";
+    const result = setCellHeaderField(noExpect, "expect", "len(readings) > 0");
+    expect(result).toBe("```python exec\nid: c\nexpect: len(readings) > 0\nreadings\n```\n");
+  });
+
+  test("clears an existing optional field by removing its line", () => {
+    const result = setCellHeaderField(CELL_FENCE, "hint", "");
+    expect(result).toBe("```python exec\nid: filter-evening\nreadings\n```\n");
+  });
+
+  test("clearing a field that was never present is a no-op", () => {
+    expect(setCellHeaderField(CELL_FENCE, "expect", "")).toBe(CELL_FENCE);
+  });
+
+  test("setting a field to the value it already has is a no-op, byte for byte", () => {
+    expect(setCellHeaderField(CELL_FENCE, "hint", "Try it first.")).toBe(CELL_FENCE);
+  });
+
+  test("never touches the code, whatever it contains", () => {
+    const withHeaderLikeCode = "```python exec\nid: c\nname: str = \"Ada\"\n```\n";
+    const result = setCellHeaderField(withHeaderLikeCode, "hint", "A hint.");
+    // "name: str = ..." is real code (the `=` disambiguation), not a
+    // header field — it must survive untouched, and the new hint line
+    // lands after id, before that code line.
+    expect(result).toBe('```python exec\nid: c\nhint: A hint.\nname: str = "Ada"\n```\n');
+  });
+
+  test("preserves everything up to and including the colon, one space before the new value", () => {
+    // Matches setFrontMatterField's own convention: the key's exact
+    // spelling and any space before the colon survive untouched; the gap
+    // between colon and value normalises to one space on an edit, the
+    // same as every other field this form ever writes.
+    const loose = "```python exec\nid  :   c\nreadings\n```\n";
+    const result = setCellHeaderField(loose, "id", "renamed");
+    expect(result).toBe("```python exec\nid  : renamed\nreadings\n```\n");
+  });
+
+});
+
+describe("replaceCellCode", () => {
+  test("replaces the code, keeping every header line untouched", () => {
+    const result = replaceCellCode(CELL_FENCE, "readings[readings > 0]");
+    expect(result).toBe("```python exec\nid: filter-evening\nhint: Try it first.\nreadings[readings > 0]\n```\n");
+  });
+
+  test("multi-line code round-trips through as multiple lines", () => {
+    const result = replaceCellCode(CELL_FENCE, "a = 1\nb = 2\na + b");
+    expect(result).toBe("```python exec\nid: filter-evening\nhint: Try it first.\na = 1\nb = 2\na + b\n```\n");
+  });
+
+  test("agrees with parseCellSourceFromFenceText: reading back what was just written returns the same code", () => {
+    const written = replaceCellCode(CELL_FENCE, "new code here");
+    expect(parseCellSourceFromFenceText(written).code).toBe("new code here");
+    expect(parseCellSourceFromFenceText(written).hint).toBe("Try it first.");
+  });
+
+  test("an untouched cell with no code lines at all round-trips byte for byte", () => {
+    // parseHeaderAndCode reads *both* "no code lines at all" and "one
+    // blank code line" as code: "" — mounting this fence's own parsed
+    // code (here, "") into a live editor and immediately writing it back
+    // unedited must reproduce this exact fence, not the other shape "".
+    const noCodeAtAll = "```python exec\nid: x\n```\n";
+    expect(parseCellSourceFromFenceText(noCodeAtAll).code).toBe("");
+    expect(replaceCellCode(noCodeAtAll, "")).toBe(noCodeAtAll);
+  });
+
+  test("an untouched cell with a single blank code line round-trips byte for byte too", () => {
+    const oneBlankLine = "```python exec\nid: x\n\n```\n";
+    expect(parseCellSourceFromFenceText(oneBlankLine).code).toBe("");
+    expect(replaceCellCode(oneBlankLine, "")).toBe(oneBlankLine);
+  });
+
+  test("clearing real code back down to nothing removes the line entirely, not a blank one", () => {
+    const result = replaceCellCode(CELL_FENCE, "");
+    expect(result).toBe("```python exec\nid: filter-evening\nhint: Try it first.\n```\n");
   });
 });
 

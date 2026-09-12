@@ -278,6 +278,109 @@ body {
 
 /* -------------------------------------------------------- runnable cells */
 
+/* A runnable fence's own split chrome (decision 27): one bordered box
+ * holding the compact header bar and the code-only editor, so the two
+ * read as one cell rather than two stacked boxes. `.dn-cell-code` strips
+ * `.dn-block-source`'s own border/background — the box around both
+ * already carries them — so nothing doubles up. */
+.dn-cell-box {
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dn-cell-bg);
+  overflow: hidden;
+  margin: 0.9rem 0;
+}
+.dn-cell-box .dn-cell-code {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
+}
+
+.dn-cell-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.7rem;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 1px solid var(--dl-cell-border);
+  font-family: var(--dl-mono);
+  font-size: 0.78em;
+}
+.dn-cell-lang {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--dl-type-python);
+}
+.dn-cell-lang-sql {
+  color: var(--dl-type-sql);
+}
+.dn-cell-header-field {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.dn-cell-header-label {
+  flex: 0 0 auto;
+  color: var(--dl-muted);
+}
+/* Borderless and transparent at rest — the same "quiet by default"
+ * treatment the block toolbar's hover-reveal already gives every other
+ * piece of chrome — so the common case (just id, one short word) costs
+ * almost no visual weight; hovering or focusing is what says "you can
+ * type here." */
+.dn-cell-header-input {
+  flex: 1 1 auto;
+  min-width: 3rem;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--dl-fg);
+  font-family: inherit;
+  font-size: 1em;
+  padding: 0.05rem 0.3rem;
+}
+.dn-cell-header-input:hover,
+.dn-cell-header-input:focus {
+  border-color: var(--dl-cell-border);
+  background: var(--dl-bg);
+  outline: none;
+}
+.dn-cell-header-clear {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  color: var(--dl-muted);
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+.dn-cell-header-clear:hover {
+  color: var(--dl-orange);
+}
+.dn-cell-header-add-row {
+  display: flex;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+.dn-cell-header-add {
+  border: 1px dashed var(--dl-cell-border);
+  border-radius: 3px;
+  background: none;
+  color: var(--dl-muted);
+  font-family: inherit;
+  font-size: 0.95em;
+  padding: 0.05rem 0.4rem;
+  cursor: pointer;
+}
+.dn-cell-header-add:hover {
+  color: var(--dl-fg);
+  border-color: var(--dl-orange);
+}
+
 /* A staged-hint fence's own read-only preview — the same accent colour
  * .dn-block-fold's own dl-hint fold already borrows from dewlab, shown
  * open (dewnote has no reader-side trigger to gate it on) rather than
