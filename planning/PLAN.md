@@ -738,3 +738,105 @@ Still open:
   first sketch built on that premise (three presets, one settings rail);
   whether it should grow more presets or fewer is a question about how
   much choice is actually wanted, not one research can answer.
+
+## 8. dewlab's own 2026-09 changes, and what they mean for dewnote
+
+Written 2026-09-12, after dewlab's own `planning/DEWSTACK_MERGE.md`
+(2026-09-10) and the commits either side of it. `DIALECTS.md` §§1-2, 5
+are already updated against these; this section is the order of work to
+close the gap they describe. Not started yet — a plan, the way this
+document's own header describes itself, not a record of what's built.
+
+**0. A correctness fix, ahead of everything else here.** `cell.ts`'s
+header parser only recognises `id:`/`hint:` (`HEADER_RE` there); dewlab's
+own now recognises `id:`/`hint:`/`expect:`/`name:` (`d2a21ed`,
+2026-09-10). Opening a real dewlab tutorial that uses `expect:` or
+`name:` today has that line fall through into the cell's own *code* —
+harmless for the round-trip (blocks.ts still preserves it byte for byte,
+same as it always has), but wrong the moment Run is clicked, since
+`parseCellSourceFromFenceText` hands that line to Pyodide as Python and
+`expect: len(readings) == 4` is not valid Python. *Done when* `cell.ts`
+recognises all four header keys, preserves `expect:`/`name:` verbatim
+(dewnote does not evaluate `expect:` yet — that's item 3 below, or later
+— it only has to stop swallowing the line), and a fixtures document using
+both runs its actual code, not its header line.
+
+1. **`sql exec` cells.** DIALECTS.md §1 has the full grammar and the
+   runtime shape (`_run_sql_cell(db, script)` wrapped around the fence's
+   raw SQL, run through the same Pyodide exec pipeline every `python
+   exec` cell already uses, against one page-wide shared connection
+   seeded the first time a page needs it — not dewstack's per-name
+   database model dewnote's existing dewstack SQL support already
+   handles separately in `dewnote_sql_tools.py`). Needs: `cell.ts` to
+   read a fence's language word (`python` vs `sql`, mirroring dewlab's
+   own `CELL_TYPES`) rather than assuming every exec cell is Python;
+   `lang.ts` to highlight a `sql exec` fence as SQL; a shared-`db`
+   seed-on-first-use in `pyodide-engine.ts`/`dewnote_tools.py`, ported
+   from dewlab's own `SEED_SQL_DB_SOURCE`; the SQL-wrapping call site in
+   `app.ts`'s cell runner, alongside the Python case it already has, not
+   replacing it. *Done when* a `sql exec` cell in the fixtures folder
+   runs its query against the shared `db` and shows a real table, and a
+   `python exec` cell run afterward on the same page can see whatever
+   that query left behind (dewlab's own shared-namespace behaviour).
+
+2. **The `hint` fence.** DIALECTS.md §1 has the grammar
+   (`for:`/`after:`/`title:`, defaulting to the cell just above, `errors:5`,
+   and dewlab's own default title). Round-trips safely today as an opaque
+   fence; the gap is only in rendering and dialect conversion.
+   `render-block.ts` should recognise a fence whose info string is
+   exactly `hint` and render it as a fold matching the *look* of a
+   `dl-hint` fold (dewnote is an authoring tool, not the runtime — it has
+   no reader-side trigger logic to reproduce, no `errors`/`same-errors`
+   count to track, so showing the hint's body openly in the editor's own
+   preview, labelled as a staged hint, is the honest thing to do; hidden
+   until a trigger fires is a *reading*-page behaviour, not an authoring
+   one). `dialect-convert.ts` needs a rule for it (DIALECTS.md §5:
+   dewstack has no equivalent, so either direction through dewstack drops
+   it as illustrative and reports). *Done when* a fixtures document with
+   a `hint` fence shows its title and body in dewnote's preview, and
+   converting that document to dewstack reports the drop rather than
+   silently keeping a fence dewstack's own build would reject.
+
+3. **`html site`/`css site`/`js site` cells.** This is plan §6 step 3's
+   own long-deferred "`site=`/`app=` cells... need consecutive-fence
+   grouping dewnote's block model doesn't have yet" — postponed there
+   for exactly the reason DIALECTS.md §1 now gives in full: dewlab
+   settled its own spelling only in 2026-09, so there was no stable
+   target to build against before now. The real new work is in
+   `blocks.ts`: recognising a *run* of consecutive `html site`/`css
+   site`/`js site` fences sharing one `site:` value as a single group,
+   the way dewlab's own `extract_blocks()` does (adjacency broken by any
+   other content; two panes of the same language for one `site:` is an
+   error there and should be one here too). Above that, `cell.ts` reads
+   `id:`/`site:` off the header (a second header grammar, `SITE_HEADER_RE`
+   in dewlab, alongside the exec-cell one); a new runtime module —
+   `mount(container, {html, css, js})` returning `{run, destroy}`, in
+   dewlab's own words for the shape it settled on — drives a sandboxed
+   `srcdoc` iframe the same way dewstack's SQL/exec runtime already
+   proved out for dewnote (`assets/runtime/pyodide-engine.ts` is the
+   precedent for "one runtime module, one clear interface", not a
+   template to copy from since this is JS/CSS/HTML, not Python); `js
+   site` panes get a Run button and a console relay, `html site`/`css
+   site` panes rebuild live. `dialect-convert.ts` gains the dewstack
+   `site=name` → dewlab `html/css/js site` rule DIALECTS.md §5 now
+   names, generating a fresh `id:` per pane. *Done when* a fixtures page
+   with a two-pane (`html site`+`css site`) group renders a live preview
+   in dewnote the way it would on dewlab's own built page, editing either
+   pane updates the preview, and a `js site` pane's Run button actually
+   runs its script in the sandboxed frame.
+
+Order matters here more than usual: item 0 is a real bug fix and costs
+almost nothing, so it goes first regardless of what else is picked up.
+Items 1-3 are independent of each other and can be built in any order —
+listed here in the order dewlab itself built them (data track before web
+track), not because dewnote must follow the same sequence.
+
+**Left open, on purpose:** `sql-check` (dewstack) and `app=` (dewstack's
+full-stack track) both stay unbuilt, matching dewlab's own choice not to
+port them yet (`DEWSTACK_MERGE.md` §2 in dewlab: full-stack needs both
+tracks live first, and isn't scheduled). `expect:`'s own runtime meaning
+— evaluating it after a run and using the result to drive anything —
+is not proposed here at all; dewnote is an authoring surface, and
+whether an author-side "does this look right" check ever belongs in it
+is a question worth asking Josh directly rather than assuming yes because
+dewlab has it on the reading side.
