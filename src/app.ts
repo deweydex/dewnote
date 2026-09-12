@@ -610,6 +610,25 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     output.insertAdjacentHTML("beforeend", event.markup);
   }
 
+  /** The shared shell every fence's below-editor "extra stuff" is built
+   * on — a cell's Run bar and output, a SQL cell's restore banner and
+   * output, a staged hint's read-only preview, a site group's live
+   * preview. Grew up as four separate ad-hoc `<div>` trees across four
+   * separate PRs; each kind keeps its own class (`dn-cell-panel`, and so
+   * on) for its own look and for the tests that already select by it —
+   * this only carries what all four genuinely share (the CSS to match,
+   * on `.dn-fence-panel`), so a spacing change happens once instead of
+   * four times over. `children` is filtered for `null`/`undefined` so a
+   * caller can pass an optional part (a restore banner, a Run bar that
+   * only exists when a group has a `js` pane) inline rather than
+   * building the array up with conditional `.push`es. */
+  function buildFencePanel(modifierClass: string, ...children: (HTMLElement | null | undefined)[]): HTMLElement {
+    const panel = document.createElement("div");
+    panel.className = `dn-fence-panel ${modifierClass}`;
+    for (const child of children) if (child) panel.appendChild(child);
+    return panel;
+  }
+
   /** A runnable fence (isRunnableFence) gets a Run/Stop bar and an output
    * area under its editor. Run reads the fence's *live* text — not
    * `block.text`, which is only as fresh as this fence's last blur — so
@@ -619,9 +638,6 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * page without it there is no way to interrupt a running cell, a
    * documented gap, not a bug here. */
   function buildCellRunner(index: number, view: EditorView, info: string): HTMLElement {
-    const panel = document.createElement("div");
-    panel.className = "dn-cell-panel";
-
     const bar = document.createElement("div");
     bar.className = "dn-cell-runner";
 
@@ -686,8 +702,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     });
 
     bar.append(runButton, stopButton);
-    panel.append(bar, output);
-    return panel;
+    return buildFencePanel("dn-cell-panel", bar, output);
   }
 
   /** A dewstack SQL cell (parseSqlCellInfo) gets a Run/Reset bar and an
@@ -710,9 +725,6 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * A visible "Restore saved work" banner turns that into a choice
    * instead of a surprise. */
   function buildSqlCellRunner(index: number, view: EditorView, info: SqlCellInfo): HTMLElement {
-    const panel = document.createElement("div");
-    panel.className = "dn-sql-panel";
-
     const restoreBar = document.createElement("div");
     restoreBar.className = "dn-sql-restore";
     restoreBar.hidden = true;
@@ -812,8 +824,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     });
 
     bar.append(runButton, resetButton);
-    panel.append(restoreBar, bar, output);
-    return panel;
+    return buildFencePanel("dn-sql-panel", restoreBar, bar, output);
   }
 
   /** One field's row in the front-matter form: a label, its control (a
@@ -969,8 +980,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * decision 15). render-block.ts's renderHintFencePreview builds the
    * actual markup; this only hosts it. */
   function buildHintPreview(block: Block): HTMLElement {
-    const container = document.createElement("div");
-    container.className = "dn-hint-preview";
+    const container = buildFencePanel("dn-hint-preview");
     container.innerHTML = renderHintFencePreview(block);
     return container;
   }
@@ -997,13 +1007,9 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * uncommitted text, since a pane that's still focused hasn't been
    * parsed into a body yet. */
   function buildSiteGroupPreview(group: SiteGroup): HTMLElement {
-    const container = document.createElement("div");
-    container.className = "dn-site-preview";
-
     const header = document.createElement("div");
     header.className = "dn-site-preview-header";
     header.textContent = `Preview — site: ${group.site || "(none)"}`;
-    container.appendChild(header);
 
     function bodyOf(pane: SitePane | undefined): string {
       return pane ? parseSitePaneInfo(doc.blocks[pane.blockIndex]!).body : "";
@@ -1012,8 +1018,9 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       return { html: bodyOf(group.panes.html), css: bodyOf(group.panes.css), js: bodyOf(group.panes.js) };
     }
 
+    let runBar: HTMLElement | null = null;
     if (group.panes.js) {
-      const runBar = document.createElement("div");
+      runBar = document.createElement("div");
       runBar.className = "dn-site-run-bar";
       const runButton = document.createElement("button");
       runButton.type = "button";
@@ -1026,16 +1033,13 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
         mount.run();
       });
       runBar.appendChild(runButton);
-      container.appendChild(runBar);
     }
 
     const frameHost = document.createElement("div");
     frameHost.className = "dn-site-frame-host";
-    container.appendChild(frameHost);
 
     const consoleOutput = document.createElement("div");
     consoleOutput.className = "dn-site-console";
-    container.appendChild(consoleOutput);
 
     const mount = mountSite(frameHost, (message) => {
       const line = document.createElement("div");
@@ -1045,7 +1049,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     });
     mount.update(currentBodies());
 
-    return container;
+    return buildFencePanel("dn-site-preview", header, runBar, frameHost, consoleOutput);
   }
 
   function renderBlockWrapper(block: Block, index: number): HTMLElement {

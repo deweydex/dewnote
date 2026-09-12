@@ -911,7 +911,54 @@ Order matters here more than usual: item 0 is a real bug fix and costs
 almost nothing, so it goes first regardless of what else is picked up.
 Items 1-3 are independent of each other and can be built in any order —
 listed here in the order dewlab itself built them (data track before web
-track), not because dewnote must follow the same sequence.
+track), not because dewnote must follow the same sequence. Item 4 depends
+on all three existing first — there is nothing to consolidate a shared
+shell out of until the panels it draws from are real.
+
+4. **One shared shell for a fence's below-editor panels — built, this
+   project's own idea rather than dewlab's, deferred to land after items
+   0-3 rather than guessed at ahead of them.** Raised while planning this
+   section: "let's make a plan for all but the panels, I think we can do
+   better than panels after we have everything in place." By the time
+   items 0-3 landed, four of these existed — a runnable cell's Run/Stop
+   bar and output, a dewstack SQL cell's restore banner and output, a
+   staged hint's read-only preview, a site group's live preview — each
+   built in its own PR, each its own ad-hoc `<div>` tree with its own CSS
+   namespace (`dn-cell-*`, `dn-sql-*`, `dn-hint-*`, `dn-site-*`) and no
+   shared rule at all, so a spacing or border change meant four edits, by
+   hand, which is exactly what happened once per feature this section.
+   `app.ts` gained one shared `buildFencePanel(modifierClass, ...children)`
+   — a thin `<div class="dn-fence-panel {modifierClass}">` that filters
+   out `null`/`undefined` children so a caller can pass an optional part
+   (a restore banner, a Run bar that only exists when a site group has a
+   `js` pane) inline instead of building the child list up with
+   conditional pushes. All four builders now construct on top of it;
+   `app.css` gained one `.dn-fence-panel` rule carrying the spacing every
+   panel already shared, with `.dn-site-preview`'s own border/radius/
+   card look kept as a deliberate per-kind override, not folded in —
+   genuinely different content (an iframe host, not just text) earns a
+   genuinely different look, and forcing one skin onto both was never the
+   point. Every existing per-kind class (`dn-cell-panel`, `dn-hint-preview`,
+   and so on) stays exactly as it was, both for its own styling and
+   because several already carry test coverage by name.
+
+   One design call, made rather than left open: whether a site pane's own
+   label (`html · site: hero`, shown above its editor) belongs in this
+   family too, moved below like everything else, for consistency. Kept
+   above, on purpose — it labels the editor a reader is about to read,
+   the way a tab or filename sits above a file's contents, not a result
+   the editor produced. The four panels this item consolidates all show
+   something that happens *because of* the fence above them; the site
+   label isn't that, and forcing it into the same shell to chase a
+   surface-level consistency would have papered over a real difference
+   in kind rather than removed one.
+
+   *Done when* all four panels build on `buildFencePanel`, `bun test src`
+   and the full e2e suite (`tests/e2e/hint-fence.spec.ts`,
+   `site-cell.spec.ts`, `surface.spec.ts`'s SQL-restore tests,
+   `pyodide.spec.ts`'s cell/SQL-runner tests) still pass unchanged against
+   the same class names, and a spacing change to `.dn-fence-panel` visibly
+   affects all four without touching any of their own files.
 
 **Left open, on purpose:** `sql-check` (dewstack) and `app=` (dewstack's
 full-stack track) both stay unbuilt, matching dewlab's own choice not to

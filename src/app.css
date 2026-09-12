@@ -253,20 +253,26 @@ body {
   cursor: grab;
 }
 
-/* -------------------------------------------------------- runnable cells */
+/* ------------------------------------------------------------ fence panels */
 
-.dn-cell-panel,
-.dn-sql-panel {
+/* The shared shell every fence's below-editor "extra stuff" sits in — a
+ * cell's Run bar and output, a SQL cell's restore banner and output, a
+ * staged hint's read-only preview, a site group's live preview
+ * (app.ts's buildFencePanel). Each kind keeps its own class below for
+ * its own look — and for the tests that already select by it — so this
+ * only carries what all four genuinely share; a spacing change happens
+ * once here instead of four times over. `.dn-site-preview` overrides the
+ * top margin for its own card look; the rest, every panel keeps as is. */
+.dn-fence-panel {
   margin: 0 0 0.9rem;
 }
+
+/* -------------------------------------------------------- runnable cells */
 
 /* A staged-hint fence's own read-only preview — the same accent colour
  * .dn-block-fold's own dl-hint fold already borrows from dewlab, shown
  * open (dewnote has no reader-side trigger to gate it on) rather than
  * hidden the way a real reading page's copy is. */
-.dn-hint-preview {
-  margin: 0 0 0.9rem;
-}
 .dn-hint-preview details {
   border-left: 3px solid var(--dl-orange);
   padding-left: 0.8rem;
@@ -1482,7 +1488,7 @@ body {
 }
 
 .dn-site-preview {
-  margin: 0.4rem 0 0.9rem;
+  margin-top: 0.4rem;
   border: 1px solid var(--dl-cell-border);
   border-radius: 4px;
   overflow: hidden;
