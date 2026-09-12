@@ -1438,7 +1438,16 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       }
       // Plain markdown (no dialect field list to build a form from) or
       // the form's own "Edit raw YAML" toggle: falls through to the same
-      // raw-source editor every other block already uses, just below.
+      // raw-source editor every other block already uses, just below. Only
+      // the first case gets a caption — a dewlab/dewstack author who
+      // clicked "Edit raw YAML" already knows what they asked for.
+      if (fieldList.length === 0) {
+        const caption = document.createElement("p");
+        caption.className = "dn-frontmatter-plain-caption";
+        caption.textContent =
+          "No dewlab or dewstack fields recognized here, so this is plain YAML — add year: (dewlab) or module_title: (dewstack) for the per-field form instead.";
+        wrapper.appendChild(caption);
+      }
     }
 
     if (index === focusedProseIndex) {

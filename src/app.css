@@ -71,6 +71,12 @@ body {
   font-size: 0.78em;
 }
 
+.dn-frontmatter-plain-caption {
+  color: var(--dl-muted);
+  font-size: 0.85em;
+  margin: 0 0 0.4rem;
+}
+
 /* A blank-line block (render-block.ts's BLANK_LINE_PREVIEW) reuses every
  * other prose block's own hover-toolbar and click-to-edit path — this only
  * has to give it a real, hoverable height, quiet enough that it doesn't

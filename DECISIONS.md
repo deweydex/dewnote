@@ -796,3 +796,31 @@ the same rail as the other seven, in main.ts's own mount order.
 function; reverting to per-panel fixed positioning is deleting the file
 and putting each panel's own `top`/`left`/`right` back, one rule at a
 time, with no other file depending on the rail's own internals.*
+
+**29 — Plain markdown's front matter gets a one-line caption explaining
+why it opened as raw YAML, not a form.** Clicking a dewlab/dewstack
+document's front matter opens the per-field form built for decision 11;
+clicking a plain document's own opens the same raw-source editor as any
+other block, with nothing on screen saying why the two look different.
+A reader who has only ever seen the form has no way to tell "this
+document has no recognised dialect" apart from "the form is broken."
+`renderBlockWrapper` now appends a `.dn-frontmatter-plain-caption`
+immediately above the raw editor whenever `frontMatterFieldsFor` returns
+an empty list — never when a dewlab/dewstack author reached the raw
+editor deliberately through the form's own "Edit raw YAML" toggle, since
+that reader already knows what they asked for. The caption names the
+actual fix (`year:` for dewlab, `module_title:` for dewstack), not just
+the absence. Caught while looking at the starter document with fresh
+eyes for workstream 4 (the "first five minutes"): `render-block.ts`'s
+own `renderFrontMatterPreview` still carried a comment calling the
+per-field form "later work," stale since decision 11 shipped it —
+fixed alongside this, since a comment that says a built feature doesn't
+exist yet is worse than the one this replaced it with.
+
+The bigger question workstream 4 opened — whether the starter document
+itself should model a real dialect's front matter rather than staying
+plain, so a first-time reader sees the form and not just this caption —
+is still open; see `planning/PLAN.md` §6, step 8.
+*Cost to change: low. One `if` in `renderBlockWrapper`, one CSS rule,
+and a caption string with no state of its own — removing it is deleting
+those three things, nothing else reads `.dn-frontmatter-plain-caption`.*

@@ -975,7 +975,11 @@ project; if they are not delightful, nothing after them will rescue it.
    toggle now appends into one flex-column container instead of
    `document.body` directly, keeps its own class name (so no existing
    Playwright selector needed to change) and gained a `title` tooltip
-   alongside its existing `aria-label`.
+   alongside its existing `aria-label`. Plain markdown's front matter
+   (decision 29) gained a one-line caption explaining why it opens as
+   raw YAML rather than a form, and naming the fix (`year:` or
+   `module_title:`) instead of only the absence — found looking at the
+   starter document itself with fresh eyes for this same workstream.
 
    Still open: **"a copy into the tutorial folder"** is this step's own
    line, not yet true — a picked image is inlined as a `data:` URI, never
@@ -990,6 +994,21 @@ project; if they are not delightful, nothing after them will rescue it.
    "cleanest and simplest editing experience" workstream this section's
    own step 2 entry is heading toward) may turn out to be the same piece
    of work under a different name, not two.
+
+   A bigger question surfaced but deliberately not decided here:
+   `main.ts`'s `STARTER_DOCUMENT` carries no `year` or `module_title`,
+   so `detectDialect` reads it as plain and a first-time reader never
+   sees the per-field form, dialect-aware preview styling, or anything
+   else gated on a real dialect — the very features most worth showing
+   in a first five minutes. `dialect.ts`'s own comment calls plain "the
+   safe default, since plain markdown is a strict subset of what either
+   site's dialect can hold," and dewlab's own texture is already
+   dewnote's default rendering regardless of a document's front matter
+   (§5.3) — so making the starter document model one specific dialect
+   is a real identity choice (which one, and whether to pre-fill seven
+   required dewlab fields with placeholder values to make its own form
+   render cleanly), not a bug fix, and stayed open rather than picked
+   unilaterally.
 
 The generated parts of a page (table of contents, previous and next,
 series navigation) are rendered in the preview from headings and from
