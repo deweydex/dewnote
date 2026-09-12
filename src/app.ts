@@ -35,9 +35,11 @@ import { EditorSelection, EditorState, type Extension } from "@codemirror/state"
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { parseDocument, serialize, type Block, type Document } from "./blocks.ts";
 import { detectDialect } from "./dialect.ts";
+import { setFrontMatterField } from "./frontmatter.ts";
+import { frontMatterFieldsFor, isScalarField, type FrontMatterFieldSpec } from "./frontmatter-fields.ts";
 import { renderBlockPreview, renderHintFencePreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
-import type { FileIndexEntry } from "./file-index.ts";
+import { distinctValues, type FileIndexEntry } from "./file-index.ts";
 import { pickLink } from "./link-picker.ts";
 import {
   declaredPackages,
@@ -172,6 +174,12 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   const liveViews = new Map<number, EditorView>();
   const blockElements: HTMLElement[] = [];
   let focusedProseIndex: number | null = null;
+  // Front matter's own edit state has two views (decision 11): the
+  // per-field form (the default) or the plain raw-YAML editor every other
+  // block already has. Reset whenever a fresh edit session starts, so
+  // toggling to raw and then blurring away and back always lands on the
+  // form again rather than getting stuck in whichever mode was last left.
+  let frontMatterRawMode = false;
   /** The one block, if any, currently armed for drag reorder — set by
    * clicking its own grip handle, never by hovering or focusing the
    * block itself. A block is draggable only while armed (renderBlockWrapper
@@ -194,6 +202,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     for (const view of liveViews.values()) view.destroy();
     liveViews.clear();
     focusedProseIndex = null;
+    frontMatterRawMode = false;
   }
 
   /** Called on a block's own blur. Patches just that block in place when
@@ -229,6 +238,48 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     const newWrapper = renderBlockWrapper(doc.blocks[changedIndex]!, changedIndex);
     blockElements[changedIndex]!.replaceWith(newWrapper);
     blockElements[changedIndex] = newWrapper;
+  }
+
+  /** The front-matter form's own commit path (decision 11) — there is no
+   * live EditorView backing a plain HTML form field, so this can't go
+   * through `commit()`, but it patches the one changed block the same
+   * way: reparse, and either patch in place (the common case — editing a
+   * scalar field never changes the document's shape) or fall back to a
+   * full rebuild if it somehow did. `setFrontMatterField` itself only
+   * ever touches the one field's line, so every other line's bytes are
+   * untouched (DECISIONS.md 1). Stays on the form (focusedProseIndex is
+   * never changed here) so a field's own row simply shows its new value. */
+  function commitFrontMatterField(index: number, key: string, value: string) {
+    const block = doc.blocks[index]!;
+    const newText = setFrontMatterField(block.text, key, value);
+    if (newText === block.text) return;
+
+    const parts = blockTexts();
+    parts[index] = newText;
+    source = parts.join("");
+    const newDoc = parseDocument(source);
+
+    if (!sameShape(doc, newDoc)) {
+      teardownLiveViews();
+      doc = newDoc;
+      render();
+      return;
+    }
+
+    doc = newDoc;
+    const newWrapper = renderBlockWrapper(doc.blocks[index]!, index);
+    blockElements[index]!.replaceWith(newWrapper);
+    blockElements[index] = newWrapper;
+  }
+
+  /** The form's "Done" button: collapse front matter back to its one-line
+   * summary, the same gate every other block's blurred state uses. */
+  function exitFrontMatterEdit(index: number) {
+    if (focusedProseIndex === index) focusedProseIndex = null;
+    frontMatterRawMode = false;
+    const newWrapper = renderBlockWrapper(doc.blocks[index]!, index);
+    blockElements[index]!.replaceWith(newWrapper);
+    blockElements[index] = newWrapper;
   }
 
   /** A new block's starting text and where the cursor should land, by
@@ -442,6 +493,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   function enterEdit(index: number) {
     if (focusedProseIndex !== null) return; // one non-fence block editable at a time, in this first cut
     focusedProseIndex = index;
+    frontMatterRawMode = false;
     const newWrapper = renderBlockWrapper(doc.blocks[index]!, index);
     blockElements[index]!.replaceWith(newWrapper);
     blockElements[index] = newWrapper;
@@ -782,6 +834,153 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return buildFencePanel("dn-sql-panel", restoreBar, bar, output);
   }
 
+  /** One field's row in the front-matter form: a label, its control (a
+   * text input or, for `status`, a dialect-aware select), and — for an
+   * optional field only, never a required one — a button to clear it back
+   * out of the document entirely. Commits on `change`, not on every
+   * keystroke, matching a plain HTML form's own native "did the reader
+   * move on" signal rather than trying to debounce keystrokes ourselves. */
+  function buildFrontMatterRow(index: number, field: FrontMatterFieldSpec, currentValue: unknown): HTMLElement {
+    const row = document.createElement("label");
+    row.className = "dn-frontmatter-row";
+
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "dn-frontmatter-label";
+    labelSpan.textContent = field.required ? field.label : `${field.label} (optional)`;
+    row.appendChild(labelSpan);
+
+    const stringValue = currentValue === undefined || currentValue === null ? "" : String(currentValue);
+    let control: HTMLInputElement | HTMLSelectElement;
+    if (field.kind === "select") {
+      const select = document.createElement("select");
+      for (const option of field.options ?? []) {
+        const optionEl = document.createElement("option");
+        optionEl.value = option.value;
+        optionEl.textContent = option.label;
+        select.appendChild(optionEl);
+      }
+      select.value = stringValue;
+      control = select;
+    } else {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = stringValue;
+      // Decision 11's own "picker over the index, not free text": a
+      // native <datalist> suggests every distinct value already in use
+      // elsewhere, typing anything else still works (the "new" escape
+      // hatch, for free — a datalist never restricts input to its own
+      // options), and an empty index just leaves this an ordinary text
+      // field, same as before the index existed.
+      if (field.indexedAs) {
+        const suggestions = distinctValues(sharedFileIndex, field.indexedAs);
+        if (suggestions.length > 0) {
+          const datalistId = `dn-frontmatter-list-${field.key}-${index}`;
+          const datalist = document.createElement("datalist");
+          datalist.id = datalistId;
+          for (const value of suggestions) {
+            const option = document.createElement("option");
+            option.value = value;
+            datalist.appendChild(option);
+          }
+          input.setAttribute("list", datalistId);
+          row.appendChild(datalist);
+        }
+      }
+      control = input;
+    }
+    control.addEventListener("change", () => commitFrontMatterField(index, field.key, control.value));
+    row.appendChild(control);
+
+    if (!field.required) {
+      const clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "dn-frontmatter-clear";
+      clearButton.setAttribute("aria-label", `Remove ${field.label}`);
+      clearButton.textContent = "×";
+      clearButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        commitFrontMatterField(index, field.key, "");
+      });
+      row.appendChild(clearButton);
+    }
+
+    return row;
+  }
+
+  /** The front-matter form itself (decision 11): one row per dialect field
+   * that's either required or already present with a scalar value, a
+   * "+ field" button for every optional field that's still absent, and a
+   * footer offering the raw-YAML fallback (for the list/mapping fields —
+   * dewlab's `packages`, `covers`, and the rest — this form has no row
+   * for) plus Done to collapse back to the one-line summary. Only ever
+   * called with a non-empty `fields` list — a dialect with none (plain
+   * markdown) has nothing here to build a form from, so its front matter
+   * goes straight to the raw editor instead; see renderBlockWrapper. */
+  function buildFrontMatterForm(index: number, docFields: Record<string, unknown>, fieldList: FrontMatterFieldSpec[]): HTMLElement {
+    const form = document.createElement("div");
+    form.className = "dn-frontmatter-form";
+
+    const hiddenOptional: FrontMatterFieldSpec[] = [];
+    for (const field of fieldList) {
+      const present = isScalarField(docFields, field.key);
+      if (!field.required && !present) {
+        hiddenOptional.push(field);
+        continue;
+      }
+      form.appendChild(buildFrontMatterRow(index, field, docFields[field.key]));
+    }
+
+    // Only a select-kind field has a non-empty value to seed itself with
+    // on "+Add" — see the click handler below for why a text-kind optional
+    // field (none exist in either dialect's list today) isn't offered one.
+    const addableOptional = hiddenOptional.filter((field) => field.kind === "select");
+    if (addableOptional.length > 0) {
+      const addRow = document.createElement("div");
+      addRow.className = "dn-frontmatter-add-row";
+      for (const field of addableOptional) {
+        const addButton = document.createElement("button");
+        addButton.type = "button";
+        addButton.className = "dn-frontmatter-add-field";
+        addButton.textContent = `+ ${field.label}`;
+        addButton.addEventListener("click", () => {
+          // A select field has a sensible non-empty default to add with
+          // (its first option) — an empty value is setFrontMatterField's
+          // own "not set" sentinel, so a hypothetical optional text field
+          // has nothing to seed it with yet and isn't offered a "+" button
+          // (see the filter below); today's only optional field is
+          // `status`, always a select, so this always has a real value.
+          commitFrontMatterField(index, field.key, field.options?.[0]?.value ?? "");
+        });
+        addRow.appendChild(addButton);
+      }
+      form.appendChild(addRow);
+    }
+
+    const footer = document.createElement("div");
+    footer.className = "dn-frontmatter-footer";
+
+    const rawToggle = document.createElement("button");
+    rawToggle.type = "button";
+    rawToggle.className = "dn-frontmatter-raw-toggle";
+    rawToggle.textContent = "Edit raw YAML";
+    rawToggle.addEventListener("click", () => {
+      frontMatterRawMode = true;
+      const newWrapper = renderBlockWrapper(doc.blocks[index]!, index);
+      blockElements[index]!.replaceWith(newWrapper);
+      blockElements[index] = newWrapper;
+    });
+
+    const doneButton = document.createElement("button");
+    doneButton.type = "button";
+    doneButton.className = "dn-frontmatter-done";
+    doneButton.textContent = "Done";
+    doneButton.addEventListener("click", () => exitFrontMatterEdit(index));
+
+    footer.append(rawToggle, doneButton);
+    form.appendChild(footer);
+    return form;
+  }
+
   /** A staged-hint fence's own read-only preview, shown alongside its
    * live editor — never in place of it, unlike a fold block, since a
    * fence never loses its "always a live editor" state (plan §5.1,
@@ -928,6 +1127,17 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
         if (group && group.endIndex === index) wrapper.appendChild(buildSiteGroupPreview(group));
       }
       return wrapper;
+    }
+
+    if (block.kind === "frontmatter" && index === focusedProseIndex) {
+      const fieldList = frontMatterFieldsFor(detectDialect(doc.frontMatter));
+      if (fieldList.length > 0 && !frontMatterRawMode) {
+        wrapper.appendChild(buildFrontMatterForm(index, doc.frontMatter.fields, fieldList));
+        return wrapper;
+      }
+      // Plain markdown (no dialect field list to build a form from) or
+      // the form's own "Edit raw YAML" toggle: falls through to the same
+      // raw-source editor every other block already uses, just below.
     }
 
     if (index === focusedProseIndex) {

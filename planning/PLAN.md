@@ -541,7 +541,46 @@ project; if they are not delightful, nothing after them will rescue it.
    specifically so a later preset system has one place to hang colour
    choices, not five.
 
-   **Fourth slice built**: the whole-file source view §5.1 already named
+   **Fourth slice built** (`src/frontmatter.ts`'s `setFrontMatterField`,
+   `src/frontmatter-fields.ts`, `app.ts`'s front-matter branch of
+   `renderBlockWrapper`): decision 11's per-field form, scoped down to what
+   doesn't need step 4's file index. A dewlab or dewstack document's front
+   matter (detected the same way `detectDialect` always has) now opens to
+   a form built straight from `frontMatterFieldsFor(dialect)` — one row
+   per required scalar field, an optional field (`status`, a dialect-aware
+   live/archived or live/draft `<select>`) shown only once it exists, a
+   "+ Status" button to add it, and a "×" to remove it. Editing commits on
+   a field's own `change` event through a new `commitFrontMatterField`,
+   which patches just the one block the same way `commit()` already does
+   for a live editor, except there is no `EditorView` behind a plain HTML
+   field to read from. `setFrontMatterField` touches only the one line
+   that changed — every other line's bytes, key order and quoting are
+   untouched, `src/frontmatter.test.ts` checks this directly, not only
+   `commit()`'s own shape check. A list or nested mapping (`packages`,
+   `covers`, `practice_for`, `practice_across`) gets no row: an
+   "Edit raw YAML" toggle in the form's footer falls back to the exact
+   flat-CodeMirror editor every other block already uses, so those fields
+   stay reachable without the form pretending to understand them. A
+   "Done" button collapses back to the one-line summary. Plain markdown's
+   front matter (`frontMatterFieldsFor("plain")` is empty — arbitrary
+   keys, no fixed schema per DIALECTS.md §3) skips the form entirely and
+   opens straight to the raw editor, as before.
+
+   `module` and `series` started this slice as plain text, since step 4's
+   file index didn't exist yet when this slice began; by the time it
+   merged, a separate line of concurrent work (step 5.10/8, below) had
+   landed `file-index.ts` on `main`. With the blocker gone, finishing
+   decision 11 properly took one more step rather than shipping the
+   second-best version: both fields now carry `indexedAs` in
+   `frontmatter-fields.ts`, and `app.ts` attaches a plain `<datalist>` —
+   populated from `distinctValues(sharedFileIndex, ...)`, the same shared
+   index `link-picker.ts` already reads — to each one's text input. A
+   `<datalist>` suggests, never restricts, so it is decision 11's own
+   "picker... with a 'new' escape hatch" without a custom overlay
+   component; an empty index (nothing opened yet) just leaves the field
+   an ordinary text input.
+
+   **Fifth slice built**: the whole-file source view §5.1 already named
    as the third option's own upgrade path — `src/source-view.ts`, a
    Cmd+/ overlay showing the entire document in one CodeMirror instance,
    fence markers and front matter included, the same `sourceLanguageExtension`
@@ -563,28 +602,25 @@ project; if they are not delightful, nothing after them will rescue it.
    the document byte for byte, and an edit made in the whole-file view
    shows up in the ordinary block surface once closed.
 
-   (This section's own "still open" list below, several entries of
-   which had already been closed by later steps — an image in the add
-   menu by step 8's third slice, drag reorder by its own dedicated
-   slice — is corrected here rather than left further out of date, since
-   this entry is already touching it.)
+   (This section's own "still open" list, several entries of which had
+   already been closed by later steps — an image and a link in the add
+   menu, drag reorder, the front-matter form, the whole-file view itself —
+   is corrected below rather than left further out of date.)
 
-   Still open: named aesthetic presets, as above; the add menu is
-   the same four kinds regardless of dialect, not yet reading dewstack's
+   Still open: named aesthetic presets, as above; the add menu's six
+   kinds are the same regardless of dialect, not yet reading dewstack's
    five cell forms or knowing it has no maths, which decision 3 already
    promises a dialect module rather than this; a fence shows its full raw
    text, fence markers included, rather than the site's bordered cell
    chrome with the fence syntax hidden — the live-preview decoration work
    §5.1 already named as the upgrade path, not a new gap; an orphan blank
    block, once one exists, has no way to be reached or cleaned up through
-   the UI; the front-matter form (decision 11) is still the flat one-line
-   summary and raw-YAML editing this section originally shipped with —
-   the per-field form with dialect-aware fields and an index-backed
-   module/series picker needs step 4's multi-file folder concept to be
-   more than free text, and is its own slice, not folded into this one;
-   `tutorial:` links round-trip and render fine as ordinary markdown
-   links already, but the link picker (step 8) has the same multi-file
-   dependency as the front-matter picker and waits on the same thing.
+   the UI; there is no "+ Add field" for an optional front-matter field a
+   dialect doesn't already give a fixed spot to (dewlab's `packages`,
+   `covers`, and the rest stay raw-YAML-only) — this needs a real index
+   of existing values to seed a text field with, the way `status`'s
+   select seeds itself from its own fixed options, and is its own small
+   slice, not folded into this one.
 3. **Cells that run.** Worker runtime, output rendering, Stop, SQL,
    iframe preview for the web cells, hints and answers as folds. *Done
    when* the tutorials in the fixtures folder run the same in dewnote as

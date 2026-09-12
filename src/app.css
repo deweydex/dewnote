@@ -71,6 +71,110 @@ body {
   font-size: 0.78em;
 }
 
+/* The front-matter form (decision 11) — one row per dialect field, styled
+ * after the settings panel's own row/control look (.dn-settings-row) so
+ * the two per-field forms this editor has feel like the same idiom. */
+.dn-frontmatter-form {
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dn-cell-bg);
+  padding: 0.75rem 0.9rem;
+  margin: 0.9rem 0;
+  font-size: 0.85em;
+}
+
+.dn-frontmatter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.4rem 0;
+}
+.dn-frontmatter-label {
+  flex: 0 0 9rem;
+  color: var(--dl-muted);
+}
+.dn-frontmatter-row select,
+.dn-frontmatter-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--dl-font-family);
+  font-size: 0.95em;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+  padding: 0.25rem 0.4rem;
+}
+
+.dn-frontmatter-clear {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  color: var(--dl-muted);
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+}
+.dn-frontmatter-clear:hover {
+  color: var(--dl-orange);
+}
+
+.dn-frontmatter-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+.dn-frontmatter-add-field {
+  border: 1px dashed var(--dl-cell-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--dl-muted);
+  font-size: 0.85em;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+}
+.dn-frontmatter-add-field:hover {
+  color: var(--dl-fg);
+  border-color: var(--dl-orange);
+}
+
+.dn-frontmatter-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--dl-rule);
+}
+.dn-frontmatter-raw-toggle {
+  border: none;
+  background: none;
+  color: var(--dl-muted);
+  font-size: 0.8em;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.dn-frontmatter-raw-toggle:hover {
+  color: var(--dl-orange);
+}
+.dn-frontmatter-done {
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.85em;
+  padding: 0.3rem 0.9rem;
+  cursor: pointer;
+}
+.dn-frontmatter-done:hover {
+  border-color: var(--dl-orange);
+  color: var(--dl-orange);
+}
+
 /* A fold's own disclosure keeps its native look; only its accent colour
  * (dl-hint vs dl-answer) borrows the cell-type hues dewlab already uses
  * for the same two classes. */
