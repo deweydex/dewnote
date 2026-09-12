@@ -87,3 +87,42 @@ export async function readFile(handle: FileSystemFileHandle): Promise<string> {
   const file = await handle.getFile();
   return file.text();
 }
+
+/** Creates a new file at `relativePath` under `root`, creating any
+ * missing intermediate directories along the way (`getDirectoryHandle`'s
+ * own `{ create: true }`) — the write half of what `walk` above does for
+ * reading. Real `FileSystemDirectoryHandle`, not `DirectoryLike`: the
+ * read-only walk only ever needed `entries()`, but creating a file for
+ * real needs the browser's own directory- and file-handle methods, which
+ * a hand-built fake can still provide (cast `as unknown as
+ * FileSystemDirectoryHandle` in a test, the same cast this file's own
+ * tests already use for `FileSystemHandle`) without this needing a
+ * second, parallel minimal interface.
+ *
+ * Fails rather than silently overwriting if a file already exists at
+ * that exact path — a caller creating something new getting back
+ * someone else's file instead, unannounced, is exactly the silent data
+ * loss this project's rules elsewhere refuse to risk (folder-panel.ts's
+ * own SQL-cell-restore banner, dewnote's push-conflict UI). */
+export async function createFile(root: FileSystemDirectoryHandle, relativePath: string, content: string): Promise<FolderFile> {
+  const segments = relativePath.split("/").filter(Boolean);
+  const fileName = segments.pop();
+  if (!fileName) throw new Error(`"${relativePath}" has no file name.`);
+
+  let dir = root;
+  for (const segment of segments) {
+    dir = await dir.getDirectoryHandle(segment, { create: true });
+  }
+
+  const alreadyExists = await dir
+    .getFileHandle(fileName)
+    .then(() => true)
+    .catch(() => false);
+  if (alreadyExists) throw new Error(`"${relativePath}" already exists.`);
+
+  const handle = await dir.getFileHandle(fileName, { create: true });
+  const writable = await handle.createWritable();
+  await writable.write(content);
+  await writable.close();
+  return { path: relativePath, handle };
+}

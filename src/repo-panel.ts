@@ -34,6 +34,7 @@ import {
 } from "./github.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseSeriesFiles, type Series } from "./series.ts";
+import { setActiveStore } from "./active-store.ts";
 import { iconRail } from "./icon-rail.ts";
 
 export interface RepoPanelHost {
@@ -311,6 +312,20 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       files = [...markdownFiles, ...orderFiles];
       repoStatus.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${orderFiles.length} order file${orderFiles.length === 1 ? "" : "s"}.`;
       renderFiles();
+      // active-store.ts's own "open this path" hook — the repository's
+      // own version of the same registration folder-panel.ts makes,
+      // reusing openRepoFile itself (the branch/token/ref it needs are
+      // read fresh from the form on every call, the same as loadRepoFiles
+      // itself already does, so a later change to any of them is seen
+      // without registering again).
+      setActiveStore({
+        async openPath(path) {
+          const file = files.find((f) => f.path === path);
+          if (!file) return false;
+          await openRepoFile(file);
+          return true;
+        },
+      });
       await refreshIndex(repo, ref, token, markdownFiles);
       await refreshSeries(repo, ref, token, orderFiles);
     } catch (err) {

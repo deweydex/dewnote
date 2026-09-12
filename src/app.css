@@ -1492,6 +1492,59 @@ body {
   color: var(--dl-orange);
 }
 
+.dn-series-create {
+  margin-bottom: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--dl-rule);
+}
+.dn-series-create-heading {
+  margin: 0 0 0.4rem;
+  font-size: 0.78em;
+  font-family: var(--dl-mono);
+  color: var(--dl-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.dn-series-create-field {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.4rem;
+  font-family: var(--dl-font-family);
+  font-size: 0.9em;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+  padding: 0.25rem 0.4rem;
+}
+.dn-series-create-button {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.9em;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+.dn-series-create-button:hover:not(:disabled) {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}
+.dn-series-create-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dn-series-create-status {
+  min-height: 1.2em;
+  margin: 0.4rem 0 0;
+  font-size: 0.85em;
+  color: var(--dl-muted);
+}
+
 .dn-series-empty {
   color: var(--dl-muted);
   font-size: 0.9em;
@@ -1526,6 +1579,22 @@ body {
 .dn-series-list li {
   padding: 0.15rem 0;
   color: var(--dl-fg);
+}
+.dn-series-link {
+  border: none;
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 1em;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+.dn-series-link:hover,
+.dn-series-link:focus-visible {
+  color: var(--dl-orange);
+  text-decoration: underline;
+  outline: none;
 }
 
 .dn-outline-toggle {

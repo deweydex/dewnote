@@ -58,12 +58,36 @@ async function stubDirectoryPicker(page: Page) {
       };
     }
 
+    // getDirectoryHandle/getFileHandle mutate the same `entries` record
+    // `entries()` itself iterates — so a file or directory created
+    // through one is visible through the other on the very next walk,
+    // the same as a real filesystem, letting createFile's own directory-
+    // creation-on-demand and the "already exists" check below be
+    // exercised for real rather than assumed to work against the fake.
     function fakeDirHandle(name: string, entries: Record<string, unknown>) {
       return {
         kind: "directory",
         name,
         async *entries() {
           for (const [key, value] of Object.entries(entries)) yield [key, value];
+        },
+        async getDirectoryHandle(childName: string, options?: { create?: boolean }) {
+          let child = entries[childName];
+          if (!child) {
+            if (!options?.create) throw new Error(`"${childName}" not found`);
+            child = fakeDirHandle(childName, {});
+            entries[childName] = child;
+          }
+          return child;
+        },
+        async getFileHandle(childName: string, options?: { create?: boolean }) {
+          let child = entries[childName];
+          if (!child) {
+            if (!options?.create) throw new Error(`"${childName}" not found`);
+            child = fakeFileHandle(childName, "");
+            entries[childName] = child;
+          }
+          return child;
         },
       };
     }
@@ -74,7 +98,7 @@ async function stubDirectoryPicker(page: Page) {
     // as a real filesystem, letting the Refresh test below simulate a
     // change made outside dewnote between an open and a refresh.
     const contentEntries: Record<string, unknown> = {
-      "a-rule.md": fakeFileHandle("a-rule.md", "# A Rule\n\nWhere it lives.\n"),
+      "a-rule.md": fakeFileHandle("a-rule.md", "---\ntitle: A Rule\nslug: a-rule\n---\n\n# A Rule\n\nWhere it lives.\n"),
     };
 
     const root = fakeDirHandle("tutorials", {
@@ -205,5 +229,61 @@ test("opening a folder builds the file index the link picker searches", async ({
 
   const items = page.locator(".dn-link-item button");
   await expect(items).toHaveCount(2);
-  await expect(items).toContainText(["README.md", "content/a-rule.md"]);
+  await expect(items).toContainText(["README.md", "A Rule"]);
+});
+
+// active-store.ts's own "open this path" hook, exercised through the
+// series panel — a series listing a real, indexed slug is a real
+// clickable button there, opening the exact file this folder already
+// has, the same as clicking it directly in this rail's own file list.
+test("the series panel can open a listed tutorial by clicking it", async ({ page }) => {
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+  await expect(page.locator(".dn-folder-file")).toHaveCount(3);
+  await page.locator(".dn-folder-close").click();
+
+  await page.locator(".dn-series-toggle").click();
+  await expect(page.locator(".dn-series-module h3")).toHaveText("(no module)");
+  const link = page.locator(".dn-series-link", { hasText: "A Rule" });
+  await expect(link).toBeVisible();
+  await link.click();
+
+  await expect(page.locator("h1")).toHaveText("A Rule");
+  await expect(page.locator(".dn-block-render").filter({ hasText: "Where it lives." })).toBeVisible();
+});
+
+// active-store.ts's own createFile, exercised through the series
+// panel's "New series" form — a real write through folder-store.ts's
+// own createFile, creating a genuinely new file (and, when a module is
+// given, a genuinely new directory) rather than editing one that
+// already exists.
+test("the series panel can create a new series, which then appears in the series list", async ({ page }) => {
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+  await page.locator(".dn-folder-close").click();
+
+  await page.locator(".dn-series-toggle").click();
+  await page.locator(".dn-series-create-field[placeholder^='Module']").fill("a-new-module");
+  await page.locator(".dn-series-create-field[placeholder='series-slug']").fill("a-new-series");
+  await page.locator(".dn-series-create-field[placeholder='Series title']").fill("A New Series");
+  await page.locator(".dn-series-create-button").click();
+
+  await expect(page.locator(".dn-series-create-status")).toHaveText("Created a-new-module/a-new-series.order.yaml.");
+  await expect(page.locator(".dn-series-block h4", { hasText: "A New Series" })).toBeVisible();
+
+  // The fields clear on success, ready for the next one.
+  await expect(page.locator(".dn-series-create-field[placeholder^='Module']")).toHaveValue("");
+});
+
+test("creating a series with a slug already in use reports the real error, rather than silently overwriting it", async ({ page }) => {
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+  await page.locator(".dn-folder-close").click();
+
+  await page.locator(".dn-series-toggle").click();
+  await page.locator(".dn-series-create-field[placeholder='series-slug']").fill("a-series");
+  await page.locator(".dn-series-create-field[placeholder='Series title']").fill("Duplicate");
+  await page.locator(".dn-series-create-button").click();
+
+  await expect(page.locator(".dn-series-create-status")).toHaveText('"a-series.order.yaml" already exists.');
 });

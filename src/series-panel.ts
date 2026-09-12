@@ -13,10 +13,12 @@
 // title where the slug is actually indexed and the bare slug otherwise
 // (an order file naming a tutorial not yet opened, or not part of this
 // folder at all, is a real and unremarkable case — dewlab's own build
-// would fail on it, but this is a viewer, not a build). Deliberately not
-// clickable: opening one by a click needs a store-agnostic "open this
-// path" hook neither folder-panel.ts nor repo-panel.ts exposes today,
-// real plumbing left for later rather than rushed here.
+// would fail on it, but this is a viewer, not a build). An indexed entry
+// is a real, clickable button, opening it through active-store.ts's own
+// "open this path" hook — the same routing folder-panel.ts's and
+// repo-panel.ts's own file lists use, just reached from here instead. A
+// slug with nothing indexed for it renders as plain text: there is no
+// path to send anywhere.
 //
 // A slug can index to more than one file — dewlab's own versioned
 // releases (`status`/`version` in front matter, `build.py`'s
@@ -25,11 +27,24 @@
 // is what picks the one build.py itself would call `is_default` (the
 // newest live version, or the newest version at all if none is live);
 // picking whichever entry happened to be indexed first, as this used to,
-// would show an archived or superseded title as often as the real one.
+// would show an archived or superseded title (and open its path) as
+// often as the real one.
 
+import { createFile, openPath } from "./active-store.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
 import type { Series } from "./series.ts";
 import { iconRail } from "./icon-rail.ts";
+
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function textInput(placeholder: string): HTMLInputElement {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = placeholder;
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  return input;
+}
 
 export interface SeriesPanel {
   /** Replaces the whole series list — called every time folder-panel.ts
@@ -79,6 +94,77 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   header.append(heading, closeButton);
   panel.appendChild(header);
 
+  // "New series" — plan §6 step 4's own other still-open item, next to
+  // this one. Only ever writes through active-store.ts's own
+  // createFile, so it works or fails exactly the way any other write
+  // through that hook would (today: a local folder, since
+  // repo-panel.ts doesn't implement createFile yet) — this has no
+  // separate knowledge of which store is actually open. The module
+  // field is left for the reader to fill in or leave blank rather than
+  // detected automatically: whether the currently open folder already
+  // *is* one module's own directory, or is the whole multi-module
+  // tutorials/ tree, isn't something order.yaml data alone can tell
+  // apart reliably (a folder with no series in it yet looks the same
+  // either way) — the reader already knows which case they're in.
+  const createSection = document.createElement("section");
+  createSection.className = "dn-series-create";
+  const createHeading = document.createElement("h3");
+  createHeading.className = "dn-series-create-heading";
+  createHeading.textContent = "New series";
+  createSection.appendChild(createHeading);
+
+  const moduleInput = textInput("Module (leave blank if already inside one)");
+  moduleInput.className = "dn-series-create-field";
+  const slugInput = textInput("series-slug");
+  slugInput.className = "dn-series-create-field";
+  const titleInput = textInput("Series title");
+  titleInput.className = "dn-series-create-field";
+  createSection.append(moduleInput, slugInput, titleInput);
+
+  const createButton = document.createElement("button");
+  createButton.type = "button";
+  createButton.className = "dn-series-create-button";
+  createButton.textContent = "Create";
+  createSection.appendChild(createButton);
+
+  const createStatus = document.createElement("p");
+  createStatus.className = "dn-series-create-status";
+  createSection.appendChild(createStatus);
+  panel.appendChild(createSection);
+
+  createButton.addEventListener("click", async () => {
+    const module = moduleInput.value.trim();
+    const slug = slugInput.value.trim();
+    const title = titleInput.value.trim();
+    if (!SLUG_RE.test(slug)) {
+      createStatus.textContent = "Series slug must be lowercase letters, digits, and hyphens.";
+      return;
+    }
+    if (!title) {
+      createStatus.textContent = "Enter a series title.";
+      return;
+    }
+    const path = module ? `${module}/${slug}.order.yaml` : `${slug}.order.yaml`;
+    // js-yaml isn't reached for here — build.py's own order files never
+    // need more than one string field and one empty list, and dumping
+    // through a full YAML serialiser for that would risk quoting a
+    // title differently than a human would type it by hand.
+    const content = `series: ${title}\norder: []\n`;
+    createButton.disabled = true;
+    createStatus.textContent = "Creating…";
+    try {
+      await createFile(path, content);
+      createStatus.textContent = `Created ${path}.`;
+      moduleInput.value = "";
+      slugInput.value = "";
+      titleInput.value = "";
+    } catch (err) {
+      createStatus.textContent = err instanceof Error ? err.message : String(err);
+    } finally {
+      createButton.disabled = false;
+    }
+  });
+
   const body = document.createElement("div");
   panel.appendChild(body);
 
@@ -86,10 +172,6 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   empty.className = "dn-series-empty";
   empty.textContent = "No order.yaml files found — open a folder or repository with any.";
   panel.appendChild(empty);
-
-  function titleFor(slug: string): string {
-    return defaultEntryFor(getFileIndex(), slug)?.title ?? slug;
-  }
 
   function render() {
     body.replaceChildren();
@@ -119,8 +201,18 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
         const list = document.createElement("ol");
         list.className = "dn-series-list";
         for (const slug of one.order) {
+          const entry = defaultEntryFor(getFileIndex(), slug);
           const item = document.createElement("li");
-          item.textContent = titleFor(slug);
+          if (entry) {
+            const link = document.createElement("button");
+            link.type = "button";
+            link.className = "dn-series-link";
+            link.textContent = entry.title ?? slug;
+            link.addEventListener("click", () => void openPath(entry.path));
+            item.appendChild(link);
+          } else {
+            item.textContent = slug;
+          }
           list.appendChild(item);
         }
         seriesBlock.appendChild(list);

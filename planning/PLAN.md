@@ -938,6 +938,64 @@ project; if they are not delightful, nothing after them will rescue it.
    every other conditional control here already has. *Done when*
    clicking Refresh, after a file is added to the folder outside
    dewnote, shows the new file without dewnote's own picker reopening.
+
+   **The store-agnostic "open this path" hook built** (`src/active-store.ts`),
+   the gap raised discussing the series view directly that this whole
+   follow-up list traced back to: opening a listed tutorial with a
+   click needed some way for a third module (`series-panel.ts`) to say
+   "open this path" without knowing or caring whether a folder or a
+   repository is actually open. Deliberately thin rather than a real
+   unification of the two stores' own read/write semantics, which
+   genuinely differ (a folder writes straight back through a real
+   handle; a repository commits to a branch, with its own conflict UI)
+   and shouldn't be flattened into one shape just to look uniform.
+   `ActiveStore` is one method, `openPath(path): Promise<boolean>`; a
+   module-level `setActiveStore`/`openPath` pair, the same
+   one-registration-at-a-time shape `app.ts`'s own `sharedFileIndex`
+   already has, since there is only ever one store open at a time here.
+   `folder-panel.ts` and `repo-panel.ts` each register themselves once a
+   folder or repository is actually opened, both by reusing their own
+   existing `openFolderFile`/`openRepoFile` — a call through
+   `active-store.ts` is exactly a click on that same file in either
+   panel's own list, not a second "open a file" implementation.
+   `series-panel.ts`'s own list items are real buttons now wherever
+   `defaultEntryFor` resolves a slug to an indexed file, calling
+   `openPath` with that entry's own path; a slug nothing indexes stays
+   plain text, since there is no path to send anywhere. *Done when*
+   clicking a series entry that resolves to a real, indexed file opens
+   it into the editor, the same as clicking it directly in whichever
+   rail's own file list it came from.
+
+   **"New series" built, folder store only** — one of the two
+   remaining named items on step 4's own line (a new tutorial from a
+   template is the other, still open). `active-store.ts` gained a
+   second, optional capability: `createFile(path, content)`, thrown
+   with a real message on failure rather than a boolean, since unlike
+   `openPath`'s "nothing there" this is a real error a reader needs to
+   see and act on. `folder-store.ts`'s own new `createFile` is the write
+   half of the walk `listMarkdownFiles`/`listOrderFiles` already do for
+   reading — `getDirectoryHandle(..., {create: true})` down to wherever
+   the new file belongs, creating any missing module folder on the way,
+   then a real `getFileHandle`/`createWritable` write, refusing outright
+   if something's already there rather than silently overwriting it.
+   `repo-panel.ts` doesn't implement this yet — creating a file on a
+   working branch is its own real scope (which branch, whether it needs
+   a commit of its own before whatever's already open there), not
+   guessed at here.
+
+   `series-panel.ts` gained the form itself: module (optional), series
+   slug, title. The module field is left for the reader to fill in or
+   leave blank on purpose, not detected automatically — whether the
+   currently open folder already *is* one module's own directory, or
+   the whole multi-module `tutorials/` tree, isn't something the
+   `order.yaml` files already open can tell apart reliably on their own
+   (an empty folder looks the same either way), and the reader already
+   knows which case they're in. *Done when* creating a series with a
+   real folder open writes a real `<series>.order.yaml` (nested under a
+   fresh module directory if one was given) and the new series appears
+   in the list without reopening the folder; creating one with the same
+   path as an existing file reports that plainly rather than
+   overwriting it.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.
