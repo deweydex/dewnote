@@ -996,6 +996,48 @@ project; if they are not delightful, nothing after them will rescue it.
    in the list without reopening the folder; creating one with the same
    path as an existing file reports that plainly rather than
    overwriting it.
+
+   **"New tutorial" built, folder store only** — the other named item
+   on step 4's own line, closing it out alongside "New series." Same
+   `active-store.ts` `createFile` hook, this time reached from
+   `folder-panel.ts` itself rather than `series-panel.ts`, since
+   writing a real tutorial's front matter needs `folderName` (the
+   already-open folder's own name) in a way "New series" never did: read
+   directly against DIALECTS.md §1 rather than guessed, dewlab's real
+   layout is `tutorials/<module>/<slug>/<slug>.md`, and `module` is a
+   *required* front-matter field that must equal the file's own parent
+   folder — so leaving the module field blank here doesn't mean "no
+   module" the way it harmlessly could for a series path, it means "use
+   whichever folder is already open," and `folderName` supplies that
+   value rather than writing a blank one dewlab's own build would
+   reject. The other five required fields (`title`, `slug`,
+   `module_title`, `year`, `series`) are a form the same shape as "New
+   series"'s own; `version` isn't a form field at all, since
+   DIALECTS.md's own `2026.09.04.1` form is a release date no reader
+   would type by hand for something with no prior release — a small
+   `todayVersion()` helper stamps today's date with a fresh `.1`
+   instead, computed at create time so a panel left open overnight still
+   stamps the day it's actually used on. The written body is a
+   deliberately minimal scaffold (a heading and one `python exec` cell,
+   the same prose main.ts's own starter document already uses) rather
+   than anything richer — there is no second "real" template to choose
+   between yet, and inventing one unasked would be exactly the kind of
+   guessed-at scope this plan keeps refusing to add. *Done when* creating
+   a tutorial with a real folder open writes a real
+   `<module>/<slug>/<slug>.md` with dewlab's required front matter filled
+   in (module inferred from the open folder when left blank) and the new
+   file appears in the file list, openable like any other, without
+   reopening the folder; creating one at a path that already exists
+   reports that plainly rather than overwriting it.
+
+   Deliberately not built, and not silently narrowed into this: creating
+   a tutorial on the repository store (`repo-panel.ts` still has no
+   `createFile` at all, the same still-open item "New series" already
+   named); adding the new tutorial's own slug into any series'
+   `order.yaml` automatically — a real, separate editability question
+   (inserting into an existing reading order) this session's own
+   three-part breakdown named and deferred, not something a "new
+   tutorial" form should quietly reach into on its own.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.
