@@ -1101,10 +1101,32 @@ project; if they are not delightful, nothing after them will rescue it.
      browsable list, openable and hand-editable through the whole-file
      source view (Cmd+/) — inserting, deleting, or reordering a slug is
      already possible without leaving dewnote, just as raw YAML rather
-     than a dedicated control. Whether a friendlier UI (drag-reorder,
-     an "add to this series" button next to a freshly created tutorial)
-     is worth building over an already-working hand-edit path is a real
-     product question — ask before assuming the answer is yes.
+     than a dedicated control. Decided (decision 34): build the
+     dedicated control. This one was an open product question until
+     dewlab's own `editor.html` came back into the picture — its
+     drag-and-drop series reorder is one of two concrete things it still
+     does that dewnote doesn't, and closing that gap is the point, not
+     a UI nicety weighed on its own merits. *Done when* dragging a
+     tutorial card within a series' listing (`series-panel.ts`) writes
+     the reordered `order:` list back to the real `.order.yaml`, on
+     whichever store is open, byte-identical apart from the reordered
+     lines.
+   - **A structural-validity preview before a commit or push.** New,
+     from decision 34: dewlab's own `editor.html` runs one before a
+     commit — cell counts, heading levels, syntax errors, an unclosed
+     code fence, a duplicate cell id — checked structurally rather than
+     caught only by opening the file and reading it (dewlab's
+     `planning/EDITOR.md` §3). dewnote has no equivalent. `blocks.ts`'s
+     round-trip guarantee preserves whatever text was there, well-formed
+     or not, and nothing today tells an author before they push that a
+     fence never closed or two cells on the page share an id. Build it
+     as a real check over the document already in memory — no second
+     parser, no second renderer, the same discipline dewlab's own
+     decision 7.11 already states for a preview — reachable from both
+     the folder and repository stores rather than duplicated per store.
+     *Done when* a fixtures document with a deliberately unclosed fence
+     and a duplicate cell id reports both before a save or push actually
+     goes through, and a clean document reports nothing.
    - **Refreshing the index and series view on save, not just on
      Refresh.** Still open, carried over from before PR #43: saving a
      file inside dewnote updates the in-memory document but not the
@@ -1364,8 +1386,16 @@ Still open:
   what dewlab already accepts? The second is smaller and needs no change
   to any site.
 - **What this retires.** dewlab's `editor.html` overlaps step 5 entirely;
-  dewmini's file mounting overlaps step 4. Retiring the first once dewnote
-  reaches step 5 seems right. dewmini stays, since it is for students.
+  dewmini's file mounting overlaps step 4. Decided (decision 34, asked
+  directly rather than assumed): dewnote replaces it rather than the two
+  being maintained side by side — dewnote's own mission, portable by
+  token and reaching dewstack too, is what `editor.html` was never built
+  to be, and two authors is not enough to carry two editors that both
+  write the same files. `editor.html` stays standing, unlinked from
+  anywhere a student sees, until step 4's series drag-reorder and the new
+  structural-validity preview above actually close the gap; then it
+  retires cleanly, the way dewlab's own Mini IDE did. dewmini stays
+  either way, since it is for students.
 - **Signing the Mac build.** Not needed for one user. Say when a second
   appears.
 - **How many design directions to carry forward.** §5.3 already treats

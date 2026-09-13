@@ -1036,3 +1036,38 @@ comment on why this was left out to begin with.
 nothing elsewhere depends on repo-panel.ts implementing `createFile`
 beyond the generic `active-store.ts` wrapper every caller already goes
 through.*
+
+**34 — dewnote is the replacement for dewlab's `editor.html`, not a
+companion to it; two concrete items close the remaining gap.** Raised
+directly, not found by accident: dewlab already ships its own
+browser-based authoring editor (Milkdown/Crepe, `assets/editor.js`,
+`planning/EDITOR.md` and `REPO_AND_EDITOR.md` in dewlab), built for a
+course maintainer to reorder a series, edit a tutorial's content and
+front matter, and open a pull request — the same ground decisions 32 and
+33 already build toward here, from a different direction. dewlab's own
+editor is scoped to one repository with a token living in one browser's
+`localStorage`; dewnote's own mission is broader on purpose — one editor,
+reachable from any machine with a token, for dewlab and dewstack both —
+and that is the actual case for choosing one tool over keeping two authors
+in sync across two editors that both write the same files. `editor.html`
+is not deleted now: it costs nothing to leave standing, and it is never
+linked from anywhere a student sees. Checked against dewlab's own record
+rather than assumed, one of what looked like three gaps is already
+closed here — a cell id rename is confirmed before a genuine change and
+refused on collision or an empty value (decision 27), "the same warning
+dewlab's own authoring editor gives." Two are real and now plan items
+(plan §6 step 4's own list, and a new entry beside it): a series'
+drag-reorder, writing `<series>.order.yaml` back out, rather than the
+hand-edited raw YAML the whole-file source view already allows; and a
+structural-validity preview before a commit or push — cell counts,
+heading levels, an unclosed fence, a duplicate cell id — which dewnote
+has no equivalent of today, since `blocks.ts`'s round-trip guarantee
+preserves whatever text was there, well-formed or not, and says nothing
+about whether it actually is. Once both exist, `editor.html` has nothing
+left it does that dewnote doesn't, and retiring it becomes a clean, later
+call — the same shape dewlab's own Mini IDE retirement took, stood down
+once nothing depended on it rather than deleted on a plan to.
+*Cost to change: low. Neither open item touches the round-trip guarantee
+or the block model — a drag-reorder UI writes the same file the raw
+editor already can, and a structural preview reads the already-parsed
+document without changing how anything is stored.*
