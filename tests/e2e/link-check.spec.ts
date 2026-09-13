@@ -27,7 +27,7 @@ const test = base.extend<{ failOnConsoleErrors: void }>({
 
 type TestHook = {
   mount(source: string): void;
-  setFileIndex(index: { path: string; title?: string; slug?: string }[]): void;
+  setFileIndex(index: { path: string; title?: string; slug?: string; module?: string; series?: string }[]): void;
 };
 
 test.beforeEach(async ({ page }) => {
@@ -62,6 +62,26 @@ test("with every link resolving, the report says so instead of listing nothing s
   await page.locator(".dn-linkcheck-run").click();
 
   await expect(page.locator(".dn-linkcheck-report li")).toHaveText("No broken links found.");
+});
+
+test("checks module: and series: links too, against distinct values in the index, not just tutorial: slugs", async ({ page }) => {
+  await page.evaluate(() => {
+    const hook = window as unknown as { __dewnote: TestHook };
+    hook.__dewnote.setFileIndex([
+      { path: "tutorials/a.md", slug: "filtering", module: "computational-methods", series: "core" },
+    ]);
+    hook.__dewnote.mount(
+      "See the [module](module:computational-methods), the [series](series:core), and [a typo'd module](module:computationl-methods).\n",
+    );
+  });
+
+  await page.locator(".dn-linkcheck-toggle").click();
+  await page.locator(".dn-linkcheck-run").click();
+
+  const report = page.locator(".dn-linkcheck-report li");
+  await expect(report).toHaveCount(1);
+  await expect(report).toContainText("a typo'd module");
+  await expect(report).toContainText("module:computationl-methods");
 });
 
 test("the command palette can open the link checker too", async ({ page }) => {

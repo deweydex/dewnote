@@ -557,10 +557,16 @@ project; if they are not delightful, nothing after them will rescue it.
    that changed — every other line's bytes, key order and quoting are
    untouched, `src/frontmatter.test.ts` checks this directly, not only
    `commit()`'s own shape check. A list or nested mapping (`packages`,
-   `covers`, `practice_for`, `practice_across`) gets no row: an
+   `covers`, `practice_across`) gets no row: an
    "Edit raw YAML" toggle in the form's footer falls back to the exact
    flat-CodeMirror editor every other block already uses, so those fields
-   stay reachable without the form pretending to understand them. A
+   stay reachable without the form pretending to understand them.
+   `practice_for` (decision 33, later than this slice) is the one
+   exception — a scalar, unlike its `practice_across` sibling, so it gets
+   a row like any other text field, and was what first exercised the "+
+   field" mechanism's *text*-field path (until then only ever exercised
+   by `status`, a select) — the same reveal-an-empty-row-first-then-commit
+   sequence a select's own immediate-commit never needed. A
    "Done" button collapses back to the one-line summary. Plain markdown's
    front matter (`frontMatterFieldsFor("plain")` is empty — arbitrary
    keys, no fixed schema per DIALECTS.md §3) skips the form entirely and
@@ -1178,6 +1184,29 @@ project; if they are not delightful, nothing after them will rescue it.
    showing next to "mine." *Done when* a document typed fresh in dewnote
    reaches a real branch and a draft PR with no file ever having been
    opened first, confirmed in `tests/e2e/repo-panel.spec.ts`.
+
+   **`module:`/`series:` links added** to the picker and checker
+   (decision 33), reusing `tutorial:`'s own convention exactly — checked
+   against `distinctValues`, since neither has a single file that "is"
+   it the way a tutorial's own slug does. Not yet a `build.py`-resolved
+   scheme the way `tutorial:` is (DIALECTS.md §1 now says so plainly);
+   added ahead of that for the pages/cards work a home page linking to
+   "the whole Computational Methods module" will actually need
+   somewhere to put that link before dewlab's own build can resolve it.
+
+   **`createFile` implemented** (decision 33's own fourth item, found
+   resyncing this branch rather than planned): concurrent work
+   (step 4's own #44/#45/#47) had landed `active-store.ts`'s store-agnostic
+   `createFile`, with `repo-panel.ts` explicitly left as the one store not
+   implementing it yet — the very gap `module:`/`series:`'s own "New file"
+   work above had just closed a *different*, disconnected way. Closed
+   properly rather than left as two mechanisms: `repo-panel.ts` now
+   registers `createFile` alongside its own `openPath`, reusing the same
+   `ensureBranch`/`putFileContent`-with-no-sha pair, so "New series" and
+   "New tutorial" both work against an open GitHub repository the same
+   as they already did against a local folder. Deliberately inert on
+   `opened`/the push section — a side-action create should never repoint
+   whatever the reader already has open for editing.
 6. **Exports.** Jupyter out and in, dialect conversion, HTML page.
    *Done when* a tutorial survives markdown → ipynb → markdown unchanged.
 
