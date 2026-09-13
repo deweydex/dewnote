@@ -1038,6 +1038,88 @@ project; if they are not delightful, nothing after them will rescue it.
    (inserting into an existing reading order) this session's own
    three-part breakdown named and deferred, not something a "new
    tutorial" form should quietly reach into on its own.
+
+   **Outstanding on this step, written up 2026-09-13 for whoever picks
+   the next one up** — each scoped to stand on its own, without needing
+   this session's own conversation for context. Read against the actual
+   code and DIALECTS.md before starting any of these, not against this
+   summary alone.
+
+   - **Repo-store file creation.** `repo-panel.ts` still has no
+     `createFile`, named as deferred in both "New series" and "New
+     tutorial" above rather than guessed at. Today, clicking either
+     Create button with a GitHub repository (not a local folder) open
+     throws `active-store.ts`'s own "Creating a file isn't supported by
+     whatever's open right now — try a local folder." — both forms are
+     otherwise fully built and only need this one implementation to
+     work identically against a repository. Real design questions, not
+     yet answered: which branch to commit the new file to (`repo-panel.ts`
+     already commits saved edits somewhere — read that path first rather
+     than inventing a second one); whether creating a file needs its own
+     commit immediately, or can be staged and ride along with whatever
+     the reader pushes next; and how "already exists" is even checked
+     against GitHub's contents API (a 404 on a HEAD/GET, most likely,
+     mirroring `folder-store.ts`'s own refuse-rather-than-overwrite
+     check) rather than a real filesystem `getFileHandle`. *Done when*
+     "New series" and "New tutorial" both work against an opened GitHub
+     repository the same way they already work against a folder,
+     refusing rather than overwriting a path that already exists there.
+     The most natural next slice — it directly completes work already
+     landed (#44, #45) rather than opening new scope.
+   - **Practice pages.** DIALECTS.md §1 names `<slug>-practice.md` and
+     the front-matter fields `practice_for`/`practice_across`; nothing in
+     dewnote creates, indexes, or links one today — `file-index.ts`
+     reads neither field, and "New tutorial" has no "add a practice
+     page" option. Needs a real design pass before any code: read how
+     `practice_for`/`practice_across` are actually used in dewlab's own
+     `build.py` (the same "checked directly against the real build,
+     never assumed" discipline `series.ts` and this step's version
+     disambiguation both already followed) before deciding whether a
+     practice page needs its own front-matter block mirroring the
+     parent tutorial's, or something thinner, and whether
+     `file-index.ts` needs a `practiceFor` lookup the shape
+     `defaultEntryFor` already has for versions.
+   - **Versioned releases.** `defaultEntryFor` already picks the right
+     file among several sharing a slug (version disambiguation, done)
+     — but nothing creates a new one. There is no "freeze this tutorial
+     as a `v<version>.md` release and keep editing the live file"
+     workflow at all; "New tutorial" only ever creates a brand-new slug,
+     never a new version of an existing one. Real, separate scope, and
+     the same "read `build.py`'s own release handling first" rule
+     applies: does freezing copy the current content into a sibling
+     `v<old-version>.md`, bump `version:` in the live file's own front
+     matter, both, or something else the real build expects?
+   - **A friendlier way to reorder a series.** The older "reordering a
+     series or creating a new one" line is now half done, not fully
+     open: since PR #43, an `.order.yaml` file is a plain file in the
+     browsable list, openable and hand-editable through the whole-file
+     source view (Cmd+/) — inserting, deleting, or reordering a slug is
+     already possible without leaving dewnote, just as raw YAML rather
+     than a dedicated control. Whether a friendlier UI (drag-reorder,
+     an "add to this series" button next to a freshly created tutorial)
+     is worth building over an already-working hand-edit path is a real
+     product question — ask before assuming the answer is yes.
+   - **Refreshing the index and series view on save, not just on
+     Refresh.** Still open, carried over from before PR #43: saving a
+     file inside dewnote updates the in-memory document but not the
+     shared file index or series view — a reader who changes a
+     tutorial's own `series:`/`module:` front matter and saves won't see
+     the series view reflect it until they click the folder rail's
+     Refresh button by hand (or, on the repository store, reload it).
+     *Done when* saving a file refreshes the same index/series state a
+     manual Refresh already rebuilds.
+   - **OPFS private-vault mode.** decision 5's own "browser store" half
+     beyond a folder or a single file — entirely unbuilt, and untouched
+     by anything in this step so far. Large, separate scope: a virtual
+     filesystem backing store, with its own import/export story, not an
+     extension of `folder-store.ts`.
+   - **`series.yaml`/`modules.yaml` chaining.** Both real dewlab files
+     (`series.yaml`'s cross-series glossary chaining, `modules.yaml`'s
+     module display order), found reading `build.py` but explicitly not
+     needed by anything the series view does today, which groups
+     modules alphabetically and lists each series independently. Worth
+     building only once some later feature actually needs either
+     ordering — there's no reason to build it ahead of that need.
 5. **GitHub.** Token, open a repository, edit, commit to a branch, draft
    PR, link checking against real slugs. *Done when* a change to dewlab
    goes from dewnote to a PR without a terminal.
