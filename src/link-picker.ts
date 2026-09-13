@@ -6,7 +6,22 @@
 // markdown to insert (or null on cancel) rather than inserting anything
 // itself — app.ts still owns where in the document that markdown lands.
 
-import type { FileIndexEntry } from "./file-index.ts";
+import { distinctValues, type FileIndexEntry } from "./file-index.ts";
+
+/** One pickable thing in the overlay's own list — a real file (`tutorial`,
+ * or a bare path for one with no slug) or a name several files share
+ * (`module`/`series`, decision 33's own `distinctValues`-backed pair,
+ * link-check.ts's own set to validate either against). Unified into one
+ * flat, searchable list rather than three separate ones: there are
+ * usually a handful of modules and series next to potentially hundreds
+ * of tutorials, and a reader typing "computational" to find either kind
+ * shouldn't have to know which list it's in first. */
+interface PickerItem {
+  label: string;
+  searchText: string;
+  target: string;
+  kind: "tutorial" | "module" | "series";
+}
 
 /** dewlab and dewstack's own convention (plan §6 step 2's note: "tutorial:
  * links round-trip and render fine as ordinary markdown links already") —
@@ -16,6 +31,26 @@ import type { FileIndexEntry } from "./file-index.ts";
  * an entry with no slug in its front matter. */
 function targetFor(entry: FileIndexEntry): string {
   return entry.slug ? `tutorial:${entry.slug}` : entry.path;
+}
+
+function itemsFor(index: FileIndexEntry[]): PickerItem[] {
+  const tutorials: PickerItem[] = index.map((entry) => {
+    const label = entry.title ?? entry.path;
+    return { label, searchText: `${label} ${entry.path}`.toLowerCase(), target: targetFor(entry), kind: "tutorial" as const };
+  });
+  const modules: PickerItem[] = distinctValues(index, "module").map((name) => ({
+    label: name,
+    searchText: name.toLowerCase(),
+    target: `module:${name}`,
+    kind: "module" as const,
+  }));
+  const series: PickerItem[] = distinctValues(index, "series").map((name) => ({
+    label: name,
+    searchText: name.toLowerCase(),
+    target: `series:${name}`,
+    kind: "series" as const,
+  }));
+  return [...tutorials, ...modules, ...series];
 }
 
 /**
@@ -52,10 +87,12 @@ export function pickLink(index: FileIndexEntry[]): Promise<string | null> {
       if (event.target === overlay) finish(null);
     });
 
+    const items = itemsFor(index);
+
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.className = "dn-link-search";
-    searchInput.placeholder = "Search tutorials by title…";
+    searchInput.placeholder = "Search tutorials, modules, or series…";
     box.appendChild(searchInput);
 
     const list = document.createElement("ul");
@@ -64,22 +101,30 @@ export function pickLink(index: FileIndexEntry[]): Promise<string | null> {
 
     function renderList() {
       const query = searchInput.value.trim().toLowerCase();
-      const matches = query
-        ? index.filter((e) => (e.title ?? e.path).toLowerCase().includes(query) || e.path.toLowerCase().includes(query))
-        : index;
+      const matches = query ? items.filter((item) => item.searchText.includes(query)) : items;
       list.replaceChildren();
-      for (const entry of matches.slice(0, 100)) {
+      for (const item of matches.slice(0, 100)) {
         const li = document.createElement("li");
         li.className = "dn-link-item";
         const button = document.createElement("button");
         button.type = "button";
-        const label = entry.title ?? entry.path;
-        button.textContent = label;
-        button.addEventListener("click", () => finish(`[${label}](${targetFor(entry)})`));
+        // A tutorial needs no badge — it's the common case, and its own
+        // title already reads as a document, not a category. A module or
+        // series shares its name with nothing else in this list visually,
+        // so the badge is what tells them apart from a tutorial titled
+        // the same as a module by coincidence.
+        if (item.kind !== "tutorial") {
+          const badge = document.createElement("span");
+          badge.className = "dn-link-item-kind";
+          badge.textContent = item.kind === "module" ? "Module" : "Series";
+          button.appendChild(badge);
+        }
+        button.appendChild(document.createTextNode(item.label));
+        button.addEventListener("click", () => finish(`[${item.label}](${item.target})`));
         li.appendChild(button);
         list.appendChild(li);
       }
-      if (index.length > 0 && matches.length === 0) {
+      if (items.length > 0 && matches.length === 0) {
         const empty = document.createElement("li");
         empty.className = "dn-link-empty";
         empty.textContent = "No matches — use a custom link below.";

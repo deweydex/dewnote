@@ -316,6 +316,56 @@ test("pushing a new file to a path that already has one reports it plainly, not 
   await expect(page.locator(".dn-repo-conflict")).toBeHidden();
 });
 
+// decision 33: active-store.ts's own createFile, the mechanism
+// series-panel.ts's "New series" and folder-panel.ts's "New tutorial"
+// both already write through against a local folder — this is the
+// same interface implemented against a GitHub repository instead.
+test("the series panel's own 'New series' writes through this panel's createFile, onto the working branch", async ({ page }) => {
+  const { putBodies } = await setup(page, DEFAULT_OPTS);
+  await page.locator(".dn-repo-load").click();
+
+  await page.locator(".dn-series-toggle").click();
+  await page.locator(".dn-series-create-field[placeholder='series-slug']").fill("new-series");
+  await page.locator(".dn-series-create-field[placeholder='Series title']").fill("New Series");
+  await page.locator(".dn-series-create-button").click();
+
+  await expect(page.locator(".dn-series-create-status")).toHaveText("Created new-series.order.yaml.");
+  expect(putBodies).toHaveLength(1);
+  expect(putBodies[0]).not.toHaveProperty("sha");
+  expect(putBodies[0]!["message"]).toBe("Add new-series.order.yaml from dewnote");
+  const content = Buffer.from(putBodies[0]!["content"] as string, "base64").toString("utf-8");
+  expect(content).toBe("series: New Series\norder: []\n");
+});
+
+test("createFile against a repository reports a real collision error, the same as it would for a local folder", async ({ page }) => {
+  await setup(page, { ...DEFAULT_OPTS, newFileAlreadyExists: true });
+  await page.locator(".dn-repo-load").click();
+
+  await page.locator(".dn-series-toggle").click();
+  await page.locator(".dn-series-create-field[placeholder='series-slug']").fill("a-series");
+  await page.locator(".dn-series-create-field[placeholder='Series title']").fill("Duplicate");
+  await page.locator(".dn-series-create-button").click();
+
+  await expect(page.locator(".dn-series-create-status")).not.toHaveText(/^Created/);
+});
+
+test("createFile never disturbs an already-open file's own push target", async ({ page }) => {
+  await setup(page, DEFAULT_OPTS);
+  await page.locator(".dn-repo-load").click();
+  await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
+  await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
+
+  await page.locator(".dn-series-toggle").click();
+  await page.locator(".dn-series-create-field[placeholder='series-slug']").fill("new-series");
+  await page.locator(".dn-series-create-field[placeholder='Series title']").fill("New Series");
+  await page.locator(".dn-series-create-button").click();
+  await expect(page.locator(".dn-series-create-status")).toHaveText("Created new-series.order.yaml.");
+
+  // Still pointed at a-rule.md, not silently repointed at the series file.
+  await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
+  await expect(page.locator("h1")).toHaveText("A Rule");
+});
+
 test("starting a new file with no owner/repo, or no path, is refused with a clear status instead of a silent no-op", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
 

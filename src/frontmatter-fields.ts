@@ -2,19 +2,20 @@
 // and in what order — decision 11, built as data rather than a code path
 // per decision 3. Only a scalar field (string/number/boolean) gets a row
 // here; a list or nested mapping (dewlab's `packages`, `covers`,
-// `practice_for`, `practice_across` — see DIALECTS.md §1) has no row and
-// stays reachable only through the form's raw-YAML fallback in app.ts.
+// `practice_across` — see DIALECTS.md §1) has no row and stays reachable
+// only through the form's raw-YAML fallback in app.ts. `practice_for` is
+// the one exception decision 33 carves out: unlike those, it's a single
+// flat slug, not a list, so it gets a row of its own like any other text
+// field.
 //
-// `module` and `series` carry `indexedAs`, naming which of file-index.ts's
-// `distinctValues` fields a text field's row should offer as autocomplete
-// suggestions — decision 11's own "module and series fields are a picker
-// over it, not free text," now that the index (§5.10) exists. A plain
-// HTML `<datalist>` is the picker: type anything (the "new" escape hatch
-// decision 11 names, for free, since a datalist never restricts input to
-// its own options) or pick a suggestion. `practice_for`/`practice_across`
-// are lists, not scalars, so they stay out of this form entirely (see
-// above) — decision 11's own mention of them belongs to the raw-YAML
-// fallback, not a row here.
+// `module`/`series`/`practice_for` all carry `indexedAs`, naming which of
+// file-index.ts's `distinctValues` fields a text field's row should offer
+// as autocomplete suggestions — decision 11's own "module and series
+// fields are a picker over it, not free text," now that the index (§5.10)
+// exists, extended by decision 33 to `practice_for`'s own "which tutorial
+// slug." A plain HTML `<datalist>` is the picker: type anything (the
+// "new" escape hatch decision 11 names, for free, since a datalist never
+// restricts input to its own options) or pick a suggestion.
 
 import type { DialectName } from "./dialect.ts";
 
@@ -29,7 +30,7 @@ export interface FrontMatterFieldSpec {
    * field with no meaningful cross-file index — title and slug are each
    * unique per document, so suggesting one from elsewhere would suggest
    * the wrong document's own value. */
-  indexedAs?: "module" | "series";
+  indexedAs?: "module" | "series" | "slug";
 }
 
 const DEWLAB_FIELDS: FrontMatterFieldSpec[] = [
@@ -50,6 +51,9 @@ const DEWLAB_FIELDS: FrontMatterFieldSpec[] = [
       { value: "archived", label: "Archived" },
     ],
   },
+  // Optional, and absent from the vast majority of tutorials (a practice
+  // page's own field, not an ordinary tutorial's) — decision 33.
+  { key: "practice_for", label: "Practice for", required: false, kind: "text", indexedAs: "slug" },
 ];
 
 const DEWSTACK_FIELDS: FrontMatterFieldSpec[] = [

@@ -956,3 +956,118 @@ own label before the underlying bug was found).
 compatible with every existing call (an edit still always passes one);
 the "New file" section is one field, one button, and one click handler,
 none of it touched by anything else in the file.*
+
+**33 — `practice_for` gets a real field; `module:`/`series:` join
+`tutorial:` as linkable kinds.** Both requested directly, ahead of the
+larger dewlab pages/cards plan, as small independent wins. Research into
+dewlab's own `practice_for`/`practice_across` first: a practice page is a
+tutorial in every mechanical sense (same required fields, same cells),
+plus one extra field naming what it practises — `practice_for` a single
+flat slug, `practice_across` a list of them for a page spanning several
+tutorials. Only the first fits this form: a scalar field gets a row the
+same as any other; `practice_across` stays raw-YAML-only, alongside
+`covers`/`packages`, since a real list editor is more machinery than
+this pass needs for the rarer case.
+
+`practice_for` also exposed a real gap in decision 11's own "+ field"
+mechanism: it only ever handled a *select* field, since a select has a
+sensible non-empty default to seed itself with the instant it's added,
+and a text field does not — the comment explaining this even said so
+("a hypothetical optional text field... isn't offered one"), never
+exercised because no optional text field had existed until now. Fixed
+by giving "+" a second behaviour: a text field's own click reveals an
+empty, focused row instead of committing anything, and only the row's
+own existing `change` handler (the same one every other field already
+has) writes a value once there is one. A new `revealedOptionalTextFields`
+set tracks which fields are showing despite having nothing committed
+yet — reset at the same three points `frontMatterRawMode` already is,
+so a fresh edit session never inherits a stale reveal. The clear button
+(×) now checks whether a value was ever actually committed before
+deciding whether to call `commitFrontMatterField` (whose own no-op guard
+would otherwise silently swallow the "nothing to clear yet" case,
+leaving the empty row on screen with no way back to "+ field") or just
+un-reveal and re-render directly.
+
+`module:`/`series:` links reuse `tutorial:`'s own convention exactly —
+dewnote never resolves any of the three to a real URL itself, that's
+build.py's job, so extending it cost nothing architecturally. The two
+new kinds check against `distinctValues`, not any one file's own front
+matter, since a module or series has no single file that "is" it, the
+same set link-picker.ts's own picker offers so the two can never
+silently disagree about what counts as real. The picker folds all three
+kinds into one flat, searchable list rather than three separate ones — a
+handful of modules and series next to potentially hundreds of tutorials
+— with a small kind badge on the two that aren't tutorials, since that's
+the one visual cue needed to tell "computational-methods the module"
+from a same-named tutorial, and a tutorial's own title already reads as
+a document without one.
+*Cost to change: low. `practice_for` is one line in `DEWLAB_FIELDS`; the
+"+ field" generalisation is additive (a select field's own path is
+untouched); `module:`/`series:` are two more cases in one regex and one
+more branch in `itemsFor`, nothing that touches how `tutorial:` itself
+is built or checked.*
+
+A fourth thing surfaced resyncing this branch, not from this decision's
+own plan: concurrent work (#44/#45/#47) had landed `active-store.ts`'s
+`createFile`, a store-agnostic "create a new file" hook `folder-panel.ts`'s
+"New tutorial" and `series-panel.ts`'s "New series" both already write
+through — with `repo-panel.ts` explicitly left unimplemented, the same
+gap decision 32 closed a *different* way (a bespoke "New file path" field
+and button, wired to `putFileContent` directly, with no connection to
+`active-store.ts` at all). Left alone, "New series" while a GitHub
+repository is the open store would have thrown "not supported" forever,
+and repo-panel.ts would have carried two unrelated "create a file"
+mechanisms side by side. `repo-panel.ts` now also implements
+`createFile`, reusing the exact `ensureBranch`/`putFileContent`-with-no-sha
+pair decision 32 already built, registered alongside its own `openPath`
+the same `setActiveStore` call already makes. Deliberately does not
+touch `opened`/`renderPush`/`repoStatus` — a reader using "New series"
+as a side action while a real edit is already open in this same panel
+should never have that edit's own push target silently swapped out
+from under them, confirmed directly in
+`tests/e2e/repo-panel.spec.ts`. Writes straight to the working branch,
+never the base `ref` this panel browses, so the created file
+deliberately does not appear in the browsable list the way a folder's
+own new file immediately would — reopening it through this same panel
+afterward is real, separate scope, matching `active-store.ts`'s own
+comment on why this was left out to begin with.
+*Cost to change: low. One more case in the object passed to
+`setActiveStore`, built entirely from functions this file already had —
+nothing elsewhere depends on repo-panel.ts implementing `createFile`
+beyond the generic `active-store.ts` wrapper every caller already goes
+through.*
+
+**34 — dewnote is the replacement for dewlab's `editor.html`, not a
+companion to it; two concrete items close the remaining gap.** Raised
+directly, not found by accident: dewlab already ships its own
+browser-based authoring editor (Milkdown/Crepe, `assets/editor.js`,
+`planning/EDITOR.md` and `REPO_AND_EDITOR.md` in dewlab), built for a
+course maintainer to reorder a series, edit a tutorial's content and
+front matter, and open a pull request — the same ground decisions 32 and
+33 already build toward here, from a different direction. dewlab's own
+editor is scoped to one repository with a token living in one browser's
+`localStorage`; dewnote's own mission is broader on purpose — one editor,
+reachable from any machine with a token, for dewlab and dewstack both —
+and that is the actual case for choosing one tool over keeping two authors
+in sync across two editors that both write the same files. `editor.html`
+is not deleted now: it costs nothing to leave standing, and it is never
+linked from anywhere a student sees. Checked against dewlab's own record
+rather than assumed, one of what looked like three gaps is already
+closed here — a cell id rename is confirmed before a genuine change and
+refused on collision or an empty value (decision 27), "the same warning
+dewlab's own authoring editor gives." Two are real and now plan items
+(plan §6 step 4's own list, and a new entry beside it): a series'
+drag-reorder, writing `<series>.order.yaml` back out, rather than the
+hand-edited raw YAML the whole-file source view already allows; and a
+structural-validity preview before a commit or push — cell counts,
+heading levels, an unclosed fence, a duplicate cell id — which dewnote
+has no equivalent of today, since `blocks.ts`'s round-trip guarantee
+preserves whatever text was there, well-formed or not, and says nothing
+about whether it actually is. Once both exist, `editor.html` has nothing
+left it does that dewnote doesn't, and retiring it becomes a clean, later
+call — the same shape dewlab's own Mini IDE retirement took, stood down
+once nothing depended on it rather than deleted on a plan to.
+*Cost to change: low. Neither open item touches the round-trip guarantee
+or the block model — a drag-reorder UI writes the same file the raw
+editor already can, and a structural preview reads the already-parsed
+document without changing how anything is stored.*

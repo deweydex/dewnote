@@ -2019,6 +2019,20 @@ body {
 .dn-link-item button:hover {
   color: var(--dl-orange);
 }
+/* A module: or series: item's own badge (decision 33) — never on a
+   tutorial, the common case, whose own title already reads as a
+   document rather than a category. */
+.dn-link-item-kind {
+  display: inline-block;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 999px;
+  color: var(--dl-muted);
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
 .dn-link-empty {
   color: var(--dl-muted);
   font-size: 0.85em;

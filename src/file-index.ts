@@ -113,8 +113,13 @@ export function defaultEntryFor(index: FileIndexEntry[], slug: string): FileInde
 
 /** §5.10's own module/series pickers read from these — every distinct
  * value actually in use, sorted, so a picker offers `computational-methods`
- * once rather than once per tutorial that names it. */
-export function distinctValues(index: FileIndexEntry[], field: "module" | "series"): string[] {
+ * once rather than once per tutorial that names it. `"slug"` is the same
+ * mechanism for a different purpose: not "which values repeat," since a
+ * slug is unique per tutorial, but "every real slug this index knows
+ * about" — `practice_for`'s own datalist, so naming which tutorial a
+ * practice page is for offers real choices rather than free text with
+ * nothing to check it against. */
+export function distinctValues(index: FileIndexEntry[], field: "module" | "series" | "slug"): string[] {
   const values = new Set<string>();
   for (const entry of index) {
     const value = entry[field];

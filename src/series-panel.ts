@@ -97,8 +97,8 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   // "New series" — plan §6 step 4's own other still-open item, next to
   // this one. Only ever writes through active-store.ts's own
   // createFile, so it works or fails exactly the way any other write
-  // through that hook would (today: a local folder, since
-  // repo-panel.ts doesn't implement createFile yet) — this has no
+  // through that hook would — a local folder, or (decision 33) a
+  // GitHub repository's own working branch — this has no
   // separate knowledge of which store is actually open. The module
   // field is left for the reader to fill in or leave blank rather than
   // detected automatically: whether the currently open folder already

@@ -374,6 +374,30 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           await openRepoFile(file);
           return true;
         },
+        // decision 33: closes the gap series-panel.ts's own "New series"
+        // named directly ("today: a local folder, since repo-panel.ts
+        // doesn't implement createFile yet"). Deliberately does not
+        // touch `opened`/renderPush/repoStatus — a reader clicking "New
+        // series" while a real edit is already open in this same panel
+        // should never have that edit's own push target silently
+        // swapped out from under them; the caller (series-panel.ts's own
+        // status line) is what reports success or failure here, the same
+        // as it already does for a local folder. Writes straight to the
+        // working branch, not the base `ref` this panel browses — a
+        // freshly created file exists only there until a PR merges it,
+        // so it deliberately never appears in `files`/the browsable list
+        // the way a folder's own newly created file immediately would;
+        // opening it back up through this same panel is follow-up scope,
+        // not silently promised here.
+        async createFile(path, content) {
+          const token = currentToken();
+          if (!token) throw new Error("Enter a GitHub token first.");
+          const repo = currentRepo();
+          const branch = branchInput.value.trim() || "dewnote-edits";
+          const base = baseInput.value.trim() || "main";
+          await ensureBranch(repo, branch, base, token);
+          await putFileContent(repo, path, content, undefined, branch, `Add ${path} from dewnote`, token);
+        },
       });
       await refreshIndex(repo, ref, token, markdownFiles);
       await refreshSeries(repo, ref, token, orderFiles);
