@@ -24,30 +24,43 @@
 // covers the same need without that coupling; wiring it to fire
 // automatically on save is a follow-up, not a cut corner.
 
-import type { FileIndexEntry } from "./file-index.ts";
+import { distinctValues, type FileIndexEntry } from "./file-index.ts";
 import { iconRail } from "./icon-rail.ts";
 
+export type LinkKind = "tutorial" | "module" | "series";
+
 export interface BrokenLink {
-  slug: string;
+  kind: LinkKind;
+  /** The name after the colon — a slug for `tutorial:`, a module or
+   * series name for the other two. */
+  target: string;
   /** The link's own visible text, so a report can name which link is
-   * broken rather than only which slug. */
+   * broken rather than only which target. */
   text: string;
 }
 
-const TUTORIAL_LINK_RE = /\[([^\]]*)\]\(tutorial:([^)#\s]+)(?:#[^)]*)?\)/g;
+const LINK_RE = /\[([^\]]*)\]\((tutorial|module|series):([^)#\s]+)(?:#[^)]*)?\)/g;
 
-/** Every `tutorial:slug` link in `source` whose slug matches no entry in
- * `index` — a link to a document that doesn't exist, or hasn't been
- * indexed yet (an unopened folder or repository leaves `index` empty,
- * which reports every such link as broken; the caller already knows
- * this, the same way link-picker.ts's own empty-index case is a real,
- * expected state rather than an error). */
+/** Every `tutorial:slug`, `module:name`, or `series:name` link in `source`
+ * whose target matches nothing in `index` — a link to a document, module,
+ * or series that doesn't exist, or hasn't been indexed yet (an unopened
+ * folder or repository leaves `index` empty, which reports every such
+ * link as broken; the caller already knows this, the same way
+ * link-picker.ts's own empty-index case is a real, expected state rather
+ * than an error). `module:`/`series:` are checked against
+ * `distinctValues`, the same set link-picker.ts's own picker offers —
+ * there is no single file a module or series "is," only tutorials that
+ * name it. */
 export function findBrokenLinks(source: string, index: FileIndexEntry[]): BrokenLink[] {
-  const knownSlugs = new Set(index.flatMap((entry) => (entry.slug ? [entry.slug] : [])));
+  const known: Record<LinkKind, Set<string>> = {
+    tutorial: new Set(index.flatMap((entry) => (entry.slug ? [entry.slug] : []))),
+    module: new Set(distinctValues(index, "module")),
+    series: new Set(distinctValues(index, "series")),
+  };
   const broken: BrokenLink[] = [];
-  for (const match of source.matchAll(TUTORIAL_LINK_RE)) {
-    const [, text, slug] = match;
-    if (!knownSlugs.has(slug!)) broken.push({ slug: slug!, text: text! });
+  for (const match of source.matchAll(LINK_RE)) {
+    const [, text, kind, target] = match as unknown as [string, string, LinkKind, string];
+    if (!known[kind].has(target)) broken.push({ kind, target, text });
   }
   return broken;
 }
@@ -100,7 +113,7 @@ export function mountLinkCheckPanel(host: LinkCheckHost): LinkCheckPanel {
 
   const hint = document.createElement("p");
   hint.className = "dn-linkcheck-hint";
-  hint.textContent = "Checks every tutorial:slug link against the open folder or repository's own index.";
+  hint.textContent = "Checks every tutorial:, module:, and series: link against the open folder or repository's own index.";
   panel.appendChild(hint);
 
   const checkButton = document.createElement("button");
@@ -124,7 +137,8 @@ export function mountLinkCheckPanel(host: LinkCheckHost): LinkCheckPanel {
     } else {
       for (const link of broken) {
         const item = document.createElement("li");
-        item.textContent = `"${link.text}" → tutorial:${link.slug} — no document with this slug in the index`;
+        const noun = link.kind === "tutorial" ? "document with this slug" : `${link.kind} with this name`;
+        item.textContent = `"${link.text}" → ${link.kind}:${link.target} — no ${noun} in the index`;
         report.appendChild(item);
       }
     }

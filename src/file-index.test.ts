@@ -53,6 +53,19 @@ describe("distinctValues", () => {
     ]);
     expect(distinctValues(index, "module")).toEqual(["computational-methods", "data-wrangling"]);
   });
+
+  // decision 33: practice_for's own datalist — unlike module/series,
+  // every entry's slug is already unique on its own, so "distinct" here
+  // just means "every real slug this index has," not "every value more
+  // than one file shares."
+  test("collects every real slug, sorted, when asked for slug", () => {
+    const index = buildFileIndex([
+      { path: "a.md", content: "---\nslug: filter-evening\n---\n" },
+      { path: "b.md", content: "---\nslug: filter-morning\n---\n" },
+      { path: "c.md", content: "No front matter.\n" },
+    ]);
+    expect(distinctValues(index, "slug")).toEqual(["filter-evening", "filter-morning"]);
+  });
 });
 
 describe("defaultEntryFor", () => {

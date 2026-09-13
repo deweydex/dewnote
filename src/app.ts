@@ -203,6 +203,15 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   // toggling to raw and then blurring away and back always lands on the
   // form again rather than getting stuck in whichever mode was last left.
   let frontMatterRawMode = false;
+  /** decision 33: an optional *text* field's own "+ field" button reveals
+   * an empty row to type into rather than committing a value immediately
+   * the way an optional *select* field's own "+" already does (a select
+   * always has a first option to seed itself with; a text field has
+   * nothing sensible to seed with, so there is nothing to commit yet).
+   * Keyed by field name, reset at the same three points frontMatterRawMode
+   * is — a fresh edit session should never inherit a previous one's
+   * still-empty revealed row. */
+  let revealedOptionalTextFields = new Set<string>();
   /** The one block, if any, currently armed for drag reorder — set by
    * clicking its own grip handle, never by hovering or focusing the
    * block itself. A block is draggable only while armed (renderBlockWrapper
@@ -258,6 +267,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     suppressBlurCommit = false;
     focusedProseIndex = null;
     frontMatterRawMode = false;
+    revealedOptionalTextFields = new Set();
   }
 
   /** The common tail of every commit path that patches one block in
@@ -336,6 +346,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   function exitFrontMatterEdit(index: number) {
     if (focusedProseIndex === index) focusedProseIndex = null;
     frontMatterRawMode = false;
+    revealedOptionalTextFields = new Set();
     rerenderBlock(index);
   }
 
@@ -598,6 +609,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     if (focusedProseIndex !== null) return; // one non-fence block editable at a time, in this first cut
     focusedProseIndex = index;
     frontMatterRawMode = false;
+    revealedOptionalTextFields = new Set();
     rerenderBlock(index);
   }
 
@@ -1278,6 +1290,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     row.appendChild(labelSpan);
 
     const stringValue = currentValue === undefined || currentValue === null ? "" : String(currentValue);
+    const wasPresent = typeof currentValue === "string" || typeof currentValue === "number" || typeof currentValue === "boolean";
     let control: HTMLInputElement | HTMLSelectElement;
     if (field.kind === "select") {
       const select = document.createElement("select");
@@ -1316,6 +1329,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       }
       control = input;
     }
+    control.dataset["field"] = field.key;
     control.addEventListener("change", () => commitFrontMatterField(index, field.key, control.value));
     row.appendChild(control);
 
@@ -1327,7 +1341,14 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       clearButton.textContent = "×";
       clearButton.addEventListener("click", (event) => {
         event.preventDefault();
-        commitFrontMatterField(index, field.key, "");
+        // decision 33: an optional text field revealed but never actually
+        // filled in has nothing for commitFrontMatterField to do (its own
+        // no-op guard means it wouldn't even re-render) — un-revealing it
+        // directly is what makes × collapse the row back to "+ field" in
+        // that case, not just when a real value is being cleared out.
+        revealedOptionalTextFields.delete(field.key);
+        if (wasPresent) commitFrontMatterField(index, field.key, "");
+        else rerenderBlock(index);
       });
       row.appendChild(clearButton);
     }
@@ -1351,33 +1372,39 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     const hiddenOptional: FrontMatterFieldSpec[] = [];
     for (const field of fieldList) {
       const present = isScalarField(docFields, field.key);
-      if (!field.required && !present) {
+      if (!field.required && !present && !revealedOptionalTextFields.has(field.key)) {
         hiddenOptional.push(field);
         continue;
       }
       form.appendChild(buildFrontMatterRow(index, field, docFields[field.key]));
     }
 
-    // Only a select-kind field has a non-empty value to seed itself with
-    // on "+Add" — see the click handler below for why a text-kind optional
-    // field (none exist in either dialect's list today) isn't offered one.
-    const addableOptional = hiddenOptional.filter((field) => field.kind === "select");
-    if (addableOptional.length > 0) {
+    if (hiddenOptional.length > 0) {
       const addRow = document.createElement("div");
       addRow.className = "dn-frontmatter-add-row";
-      for (const field of addableOptional) {
+      for (const field of hiddenOptional) {
         const addButton = document.createElement("button");
         addButton.type = "button";
         addButton.className = "dn-frontmatter-add-field";
         addButton.textContent = `+ ${field.label}`;
         addButton.addEventListener("click", () => {
-          // A select field has a sensible non-empty default to add with
-          // (its first option) — an empty value is setFrontMatterField's
-          // own "not set" sentinel, so a hypothetical optional text field
-          // has nothing to seed it with yet and isn't offered a "+" button
-          // (see the filter below); today's only optional field is
-          // `status`, always a select, so this always has a real value.
-          commitFrontMatterField(index, field.key, field.options?.[0]?.value ?? "");
+          if (field.kind === "select") {
+            // A select field has a sensible non-empty default to add with
+            // (its first option) — an empty value is setFrontMatterField's
+            // own "not set" sentinel, so this commits a real line straight
+            // away, the same as picking any other value later would.
+            commitFrontMatterField(index, field.key, field.options?.[0]?.value ?? "");
+            return;
+          }
+          // decision 33: a text field has nothing sensible to seed itself
+          // with, so "+" reveals an empty row to type into instead of
+          // committing anything yet — buildFrontMatterRow's own `change`
+          // handler is what actually writes a value, once there is one.
+          revealedOptionalTextFields.add(field.key);
+          rerenderBlock(index);
+          queueMicrotask(() => {
+            blockElements[index]?.querySelector<HTMLInputElement>(`input[data-field="${field.key}"]`)?.focus();
+          });
         });
         addRow.appendChild(addButton);
       }

@@ -36,9 +36,21 @@ series independently rather than reading either chain.
 **Front matter.** Required: `title`, `slug`, `module`, `module_title`,
 `year`, `series`, `version` (`2026.09.04.1` form). Optional: `status`
 (`live` or `archived`), `packages` (a list, e.g. `[sympy]`),
-`practice_for`, `practice_across`, `covers` (sections mapped to learning
-outcomes). Slug must equal the file name; module must equal the parent
-folder.
+`practice_for` (a single tutorial slug — a practice page names the one
+tutorial it practises), `practice_across` (a list of slugs, for a mixed
+set spanning several tutorials instead), `covers` (sections mapped to
+learning outcomes). A practice page is a tutorial in every other
+mechanical sense — same required fields, same cells — and dewlab's own
+`build.py` forbids one from also setting `covers`, or from naming
+another practice page as what it practises. Slug must equal the file
+name; module must equal the parent folder.
+
+The front-matter form (decision 11) has a row for `practice_for` —
+scalar, and decision 33 gave the "+ field" mechanism its first optional
+*text* field to handle — with autocomplete over every real slug the open
+folder or repository's own index knows. `practice_across`, `covers`, and
+`packages` stay raw-YAML-only: each is a list or mapping, not the single
+value a form row edits directly.
 
 **Cells.** Two cell languages as of `d2a21ed` (2026-09-10), both exec
 fences sharing one header grammar: `python exec` and `sql exec`.
@@ -142,6 +154,20 @@ the reference panel by the build. Built, currently unused by any tutorial.
 **Links.** `[text](tutorial:slug#anchor)`, resolved at build time; a dead
 slug or anchor fails the build. The editor should offer a picker over real
 slugs and anchors and check links on save.
+
+decision 33 adds `module:name` and `series:name` alongside it in the
+editor's own picker and link checker — checked against every real
+module/series name the open folder or repository's index already
+knows, the same way `tutorial:` is checked against real slugs. These are
+**not yet** a `build.py`-resolved scheme the way `tutorial:` is; nothing
+in dewlab's own build knows what to do with one today. They exist ahead
+of that on purpose, for the pages/cards work discussed alongside decision
+32's own new-file support (a home page linking to "the whole
+Computational Methods module" needs somewhere to put that link before
+dewlab's build can resolve it) — a real `module:`/`series:` link in a
+tutorial pushed to dewlab today round-trips and checks out fine inside
+dewnote, but stays inert on the actual built site until `build.py` grows
+a matching resolver.
 
 **Images.** `![alt](name.png)`, a bare file name resolved against the
 tutorial's folder; `alt` is required. Built, currently unused.

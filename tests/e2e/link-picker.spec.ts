@@ -100,6 +100,66 @@ test("with no index yet, a custom link can still be inserted directly", async ({
   expect(source).toContain("[dewlab](https://dewlab.example/)");
 });
 
+test("module and series values from the index are offered alongside tutorials, each badged", async ({ page }) => {
+  await mount(page, "One.\n\nTwo.\n");
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __dewnote: TestHook & { setFileIndex(index: { path: string; title?: string; slug?: string; module?: string; series?: string }[]): void };
+      }
+    ).__dewnote.setFileIndex([
+      { path: "tutorials/a.md", title: "Filtering", slug: "filtering", module: "computational-methods", series: "core" },
+      { path: "tutorials/b.md", title: "Grouping", slug: "grouping", module: "computational-methods", series: "advanced" },
+    ]);
+  });
+
+  await openLinkPicker(page, 1);
+  // Two tutorials, one module (shared by both), two series.
+  await expect(page.locator(".dn-link-item button")).toHaveCount(5);
+
+  const moduleItem = page.locator(".dn-link-item button", { hasText: "computational-methods" });
+  await expect(moduleItem.locator(".dn-link-item-kind")).toHaveText("Module");
+  await expect(page.locator(".dn-link-item button", { hasText: "Filtering" }).locator(".dn-link-item-kind")).toHaveCount(0);
+
+  await page.locator(".dn-link-search").fill("computational");
+  await expect(page.locator(".dn-link-item button")).toHaveCount(1);
+  await moduleItem.click();
+
+  const source = await getSource(page);
+  expect(source).toContain("[computational-methods](module:computational-methods)");
+});
+
+test("search is case-insensitive and matches a series name shared by several tutorials, not just a title", async ({ page }) => {
+  await mount(page, "One.\n");
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __dewnote: TestHook & { setFileIndex(index: { path: string; title?: string; slug?: string; module?: string; series?: string }[]): void };
+      }
+    ).__dewnote.setFileIndex([
+      { path: "tutorials/a.md", title: "Filtering Rows", slug: "filtering", module: "computational-methods", series: "core" },
+      { path: "tutorials/b.md", title: "Web Basics", slug: "web-basics", module: "web-authoring", series: "core" },
+    ]);
+  });
+
+  await openLinkPicker(page, 0);
+  // Two tutorials, two modules, and one series — both tutorials share
+  // "core", so it appears exactly once, not twice.
+  await expect(page.locator(".dn-link-item button")).toHaveCount(5);
+
+  // Uppercase query, matches the lowercase "core" series exactly once —
+  // not the two tutorials that merely belong to it.
+  await page.locator(".dn-link-search").fill("CORE");
+  await expect(page.locator(".dn-link-item button")).toHaveCount(1);
+  await expect(page.locator(".dn-link-item-kind")).toHaveText("Series");
+
+  // A tutorial's own title still matches too, same as before this
+  // picker also had modules and series to search.
+  await page.locator(".dn-link-search").fill("Filtering");
+  await expect(page.locator(".dn-link-item button")).toHaveCount(1);
+  await expect(page.locator(".dn-link-item button")).toHaveText("Filtering Rows");
+});
+
 test("Escape cancels the picker without inserting anything", async ({ page }) => {
   await mount(page, "One.\n");
   await openLinkPicker(page, 0);

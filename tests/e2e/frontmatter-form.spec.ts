@@ -261,3 +261,114 @@ test("module and series offer autocomplete suggestions once a folder's own index
   await moduleInput.blur();
   expect(await getSource(page)).toContain("module: brand-new-module\n");
 });
+
+// decision 33: practice_for is the one optional *text* field in either
+// dialect's list, so it's the only thing exercising the "+ field" reveal
+// path status's own tests (above) never touch — a select field commits
+// a real default the instant it's added; a text field has nothing to
+// seed itself with, so "+" only reveals an empty row.
+test("practice_for starts hidden behind a + button, and adding it reveals an empty, focused row", async ({ page }) => {
+  await mount(page, DEWLAB_DOC);
+  await page.locator(".dn-block-frontmatter .dn-block-render").click();
+
+  const form = page.locator(".dn-frontmatter-form");
+  await expect(form.locator(".dn-frontmatter-row", { hasText: "Practice for" })).toHaveCount(0);
+
+  await form.locator(".dn-frontmatter-add-field", { hasText: "Practice for" }).click();
+  const row = form.locator(".dn-frontmatter-row", { hasText: "Practice for" });
+  await expect(row).toBeVisible();
+  const input = row.locator('input[type="text"]');
+  await expect(input).toHaveValue("");
+  await expect(input).toBeFocused();
+
+  // Nothing has actually been written yet — revealing the row is not
+  // the same as committing a value to it.
+  expect(await getSource(page)).not.toContain("practice_for");
+});
+
+test("clearing a revealed-but-empty practice_for row collapses it back to the + button, with nothing ever committed", async ({
+  page,
+}) => {
+  await mount(page, DEWLAB_DOC);
+  await page.locator(".dn-block-frontmatter .dn-block-render").click();
+  const form = page.locator(".dn-frontmatter-form");
+  await form.locator(".dn-frontmatter-add-field", { hasText: "Practice for" }).click();
+
+  await form.locator(".dn-frontmatter-row", { hasText: "Practice for" }).locator(".dn-frontmatter-clear").click();
+
+  await expect(form.locator(".dn-frontmatter-row", { hasText: "Practice for" })).toHaveCount(0);
+  await expect(form.locator(".dn-frontmatter-add-field", { hasText: "Practice for" })).toBeVisible();
+  expect(await getSource(page)).not.toContain("practice_for");
+});
+
+test("typing a practice_for value commits it, and clearing it afterward removes the line and re-collapses", async ({
+  page,
+}) => {
+  await mount(page, DEWLAB_DOC);
+  await page.locator(".dn-block-frontmatter .dn-block-render").click();
+  const form = page.locator(".dn-frontmatter-form");
+  await form.locator(".dn-frontmatter-add-field", { hasText: "Practice for" }).click();
+
+  const row = form.locator(".dn-frontmatter-row", { hasText: "Practice for" });
+  await row.locator('input[type="text"]').fill("filter-morning");
+  await row.locator('input[type="text"]').blur();
+  expect(await getSource(page)).toContain("practice_for: filter-morning\n");
+
+  await row.locator(".dn-frontmatter-clear").click();
+  expect(await getSource(page)).not.toContain("practice_for");
+  await expect(form.locator(".dn-frontmatter-row", { hasText: "Practice for" })).toHaveCount(0);
+});
+
+test("practice_for offers autocomplete over every real slug in the open folder's index", async ({ page }) => {
+  await page.addInitScript(() => {
+    function fakeFileHandle(name: string, content: string) {
+      return {
+        kind: "file",
+        name,
+        async getFile() {
+          return { text: async () => content };
+        },
+      };
+    }
+    function fakeDirHandle(name: string, entries: Record<string, unknown>) {
+      return {
+        kind: "directory",
+        name,
+        async *entries() {
+          for (const [key, value] of Object.entries(entries)) yield [key, value];
+        },
+      };
+    }
+    const root = fakeDirHandle("tutorials", {
+      "first.md": fakeFileHandle(
+        "first.md",
+        "---\ntitle: First\nslug: filter-morning\nmodule: pandas-basics\nmodule_title: Pandas basics\nyear: \"2026\"\nseries: core\nversion: 2026.09.04.1\n---\n\nBody.\n",
+      ),
+      "second.md": fakeFileHandle(
+        "second.md",
+        "---\ntitle: Second\nslug: filter-evening\nmodule: pandas-basics\nmodule_title: Pandas basics\nyear: \"2026\"\nseries: core\nversion: 2026.09.04.1\n---\n\nBody.\n",
+      ),
+    });
+    (window as unknown as { showDirectoryPicker: () => Promise<unknown> }).showDirectoryPicker = async () => root;
+  });
+  await page.goto(BUILT_APP);
+  await expect(page.locator(".dn-block").first()).toBeVisible();
+
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+  await expect(page.locator(".dn-folder-file")).toHaveCount(2);
+  await page.locator(".dn-folder-close").click();
+
+  await mount(page, DEWLAB_DOC);
+  await page.locator(".dn-block-frontmatter .dn-block-render").click();
+  const form = page.locator(".dn-frontmatter-form");
+  await form.locator(".dn-frontmatter-add-field", { hasText: "Practice for" }).click();
+
+  const input = form.locator(".dn-frontmatter-row", { hasText: "Practice for" }).locator('input[type="text"]');
+  const listId = await input.getAttribute("list");
+  expect(listId).toBeTruthy();
+  const options = await page
+    .locator(`datalist#${listId} option`)
+    .evaluateAll((els) => els.map((el) => (el as HTMLOptionElement).value));
+  expect(options).toEqual(["filter-evening", "filter-morning"]);
+});
