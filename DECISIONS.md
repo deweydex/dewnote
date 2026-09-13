@@ -920,3 +920,39 @@ down to plain.
 *Cost to change: low. Six front-matter lines in one template literal —
 reverting is deleting them, and nothing else reads STARTER_DOCUMENT's
 own field values by name.*
+
+**32 — The repository panel can push a brand-new file, not only edit an
+existing one.** Every push in `repo-panel.ts` required `opened` to
+already carry a real file's own sha, which only ever existed because
+`openRepoFile` had fetched it from something GitHub already knew about —
+a document composed in dewnote from nothing (the starter document, or
+anything typed fresh) had no way into a repository at all. `putFileContent`
+(`github.ts`) now takes `sha: string | undefined` and builds its request
+body accordingly: with a sha, the request is unchanged; without one, the
+`sha` key is left out of the JSON entirely, not sent as an explicit
+`null` — GitHub's own create-vs-update branch keys off whether the field
+is present, not its value. A new "New file path" field and "Start new
+file" button set `opened` to that path with no sha, touching nothing
+else — the editor keeps whatever the reader already composed, and a
+later push (whenever it happens) is what actually reaches GitHub.
+
+Two failure shapes needed separating, not folding into one: a 409 (an
+existing file's sha no longer matches — decision 5.7's own conflict,
+"show both, never pick") only ever applies to an edit, since a new-file
+push carries no sha to mismatch against. A new-file push that turns out
+to collide with something already at that path gets GitHub's real 422
+instead, reported as a plain message naming the path and branch — there
+is no "theirs" to diff against the reader's own draft the way an edit's
+own conflict has, so building that UI for a case with nothing to
+compare would be solving the wrong problem. A successful create leaves
+`opened.file.sha` set from the response, so a second push to the same
+session's new file is an ordinary edit from then on — `renderPush`'s own
+button text ("Push new file to X" vs "Push to X") is what makes that
+visible, and needed calling again after a successful push to actually
+update, a real gap the first cut of this left (the button stayed
+"Push new file…" forever, caught by a test asserting the second push's
+own label before the underlying bug was found).
+*Cost to change: low. `putFileContent`'s wider `sha` type is backwards
+compatible with every existing call (an edit still always passes one);
+the "New file" section is one field, one button, and one click handler,
+none of it touched by anything else in the file.*

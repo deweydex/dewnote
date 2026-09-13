@@ -13,14 +13,14 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html");
 
 // A 404 checking whether the working branch already exists
-// (ensureBranch's own "does this ref exist" probe) and a 409 on a
-// conflicting push are both Chromium's own devtools noise for any
-// non-2xx fetch, not an application error — the code treats both as
-// normal, handled outcomes (branchSha returns null; putFileContent's
-// caller shows the conflict UI), so they're filtered here rather than
-// silencing console errors generally the way the other specs in this
-// folder do not.
-const EXPECTED_CONSOLE_NOISE = /Failed to load resource: the server responded with a status of (404|409)/;
+// (ensureBranch's own "does this ref exist" probe), a 409 on a
+// conflicting push, and a 422 on a new-file push whose path already has
+// something there (decision 32) are all Chromium's own devtools noise
+// for any non-2xx fetch, not an application error — the code treats all
+// three as normal, handled outcomes, so they're filtered here rather
+// than silencing console errors generally the way the other specs in
+// this folder do not.
+const EXPECTED_CONSOLE_NOISE = /Failed to load resource: the server responded with a status of (404|409|422)/;
 
 const test = base.extend<{ failOnConsoleErrors: void }>({
   failOnConsoleErrors: [
@@ -58,14 +58,22 @@ interface MockOptions {
    * after that succeeds — simulating a conflict that clears once the
    * reader picks a version and retries. */
   conflictOnFirstPush?: boolean;
+  /** decision 32: a PUT with no `sha` in its body (repo-panel.ts's own
+   * "start a new file") gets GitHub's real 422 back, as if something
+   * were already sitting at that path — every other PUT still succeeds. */
+  newFileAlreadyExists?: boolean;
 }
 
 /** Stubs the exact GitHub calls this slice makes, keyed by method + a
  * pattern against the path. Anything unmatched 404s loudly rather than
  * hitting the real network — a route this test doesn't expect is a bug
- * in the test, not something to fall through on. */
-async function mockGithub(page: Page, opts: MockOptions) {
+ * in the test, not something to fall through on. Returns every PUT's own
+ * decoded request body, in order, so a test can check exactly what a
+ * push actually sent (whether `sha` was included at all) without
+ * reaching into repo-panel.ts's own state. */
+async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: Record<string, unknown>[] }> {
   let putCalls = 0;
+  const putBodies: Record<string, unknown>[] = [];
   await page.route("https://api.github.com/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -103,8 +111,13 @@ async function mockGithub(page: Page, opts: MockOptions) {
 
     if (method === "PUT" && /\/contents\//.test(path)) {
       putCalls += 1;
+      const body = req.postDataJSON() as Record<string, unknown>;
+      putBodies.push(body);
       if (opts.conflictOnFirstPush && putCalls === 1) {
         return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ message: "sha does not match" }) });
+      }
+      if (opts.newFileAlreadyExists && !("sha" in body)) {
+        return route.fulfill({ status: 422, contentType: "application/json", body: JSON.stringify({ message: '"sha" wasn\'t supplied.' }) });
       }
       return fulfillJson(route, 200, { content: { sha: `new-sha-${putCalls}` } });
     }
@@ -115,11 +128,12 @@ async function mockGithub(page: Page, opts: MockOptions) {
 
     throw new Error(`repo-panel.spec.ts: unexpected GitHub call ${method} ${path}`);
   });
+  return { putBodies };
 }
 
-async function setup(page: Page, opts: MockOptions) {
+async function setup(page: Page, opts: MockOptions): Promise<{ putBodies: Record<string, unknown>[] }> {
   // Stubbed before navigation, so anything main.ts fires on load is covered too.
-  await mockGithub(page, opts);
+  const mock = await mockGithub(page, opts);
   // window.open would try to pop a real tab; no-op it before any click reaches it.
   await page.addInitScript(() => {
     (window as unknown as { open: () => null }).open = () => null;
@@ -131,6 +145,7 @@ async function setup(page: Page, opts: MockOptions) {
   const ownerRepo = page.locator(".dn-repo-owner-row input");
   await ownerRepo.nth(0).fill("dewlab");
   await ownerRepo.nth(1).fill("dewlab");
+  return mock;
 }
 
 const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n", fileSha: "file-sha-1" };
@@ -256,4 +271,62 @@ test("a conflicting push can also discard mine and load theirs into the editor",
 
   await expect(page.locator(".dn-block-render").filter({ hasText: "Someone else's edit, already on the branch." })).toBeVisible();
   await expect(page.locator(".dn-repo-conflict")).toBeHidden();
+});
+
+// Decision 32: the counterpart to every test above — none of them ever
+// open a file first, since a document composed in dewnote from nothing
+// (the starter document, untouched here) had no way into a repository
+// at all before this.
+test("starting a new file points a push at a path with no existing sha, and creates it", async ({ page }) => {
+  const { putBodies } = await setup(page, DEFAULT_OPTS);
+
+  await page.locator(".dn-repo-new-file-path").fill("tutorials/brand-new.md");
+  await page.locator(".dn-repo-new-file").click();
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("Ready to push a new file at tutorials/brand-new.md.");
+  await expect(page.locator(".dn-repo-push")).toHaveText("Push new file to dewnote-edits");
+
+  await page.locator(".dn-repo-push").click();
+  const pushStatus = page.locator(".dn-repo-section", { has: page.locator(".dn-repo-push") }).locator(".dn-repo-status");
+  await expect(pushStatus).toHaveText("Pushed to dewnote-edits.");
+  await expect(page.locator(".dn-repo-pr")).toBeVisible();
+
+  expect(putBodies).toHaveLength(1);
+  expect(putBodies[0]).not.toHaveProperty("sha");
+  expect(putBodies[0]!["message"]).toBe("Add tutorials/brand-new.md from dewnote");
+
+  // The push just gave this path a real sha (decision 32's own "upgrade"
+  // from create to edit) — pushing again is now an ordinary edit, sha
+  // included, not a second create.
+  await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
+  await page.locator(".dn-repo-push").click();
+  await expect(pushStatus).toHaveText("Pushed to dewnote-edits.");
+  expect(putBodies).toHaveLength(2);
+  expect(putBodies[1]).toHaveProperty("sha", "new-sha-1");
+});
+
+test("pushing a new file to a path that already has one reports it plainly, not as a diff conflict", async ({ page }) => {
+  await setup(page, { ...DEFAULT_OPTS, newFileAlreadyExists: true });
+
+  await page.locator(".dn-repo-new-file-path").fill("tutorials/a-rule.md");
+  await page.locator(".dn-repo-new-file").click();
+  await page.locator(".dn-repo-push").click();
+
+  const pushStatus = page.locator(".dn-repo-section", { has: page.locator(".dn-repo-push") }).locator(".dn-repo-status");
+  await expect(pushStatus).toContainText("A file already exists at tutorials/a-rule.md on dewnote-edits");
+  await expect(page.locator(".dn-repo-conflict")).toBeHidden();
+});
+
+test("starting a new file with no owner/repo, or no path, is refused with a clear status instead of a silent no-op", async ({ page }) => {
+  await setup(page, DEFAULT_OPTS);
+
+  const ownerRepo = page.locator(".dn-repo-owner-row input");
+  await ownerRepo.nth(0).fill("");
+  await page.locator(".dn-repo-new-file-path").fill("tutorials/brand-new.md");
+  await page.locator(".dn-repo-new-file").click();
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("Enter an owner and repo.");
+
+  await ownerRepo.nth(0).fill("dewlab");
+  await page.locator(".dn-repo-new-file-path").fill("");
+  await page.locator(".dn-repo-new-file").click();
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("Enter a path for the new file.");
 });

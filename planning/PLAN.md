@@ -980,6 +980,22 @@ project; if they are not delightful, nothing after them will rescue it.
    list already in memory. *Done when* a document with both a real and
    a broken `tutorial:` link reports only the broken one, and a clean
    document says so rather than showing nothing.
+
+   **New-file push built** (`src/github.ts`'s `putFileContent`,
+   `src/repo-panel.ts`'s "New file" field, decision 32): the first
+   slice's own push always required a real file's sha, which only ever
+   existed because `openRepoFile` had fetched it — a document composed
+   in dewnote from nothing had no way into a repository at all until
+   now. `putFileContent` takes an optional sha and omits the field
+   entirely from the request when there isn't one, GitHub's own signal
+   to create rather than update; a new "New file path" field and "Start
+   new file" button point a later push at that path without touching the
+   editor's own content. A 409 (an edit's sha no longer matches) and a
+   422 (a new file's path already has something there) are reported
+   differently on purpose — only the first has a real "theirs" worth
+   showing next to "mine." *Done when* a document typed fresh in dewnote
+   reaches a real branch and a draft PR with no file ever having been
+   opened first, confirmed in `tests/e2e/repo-panel.spec.ts`.
 6. **Exports.** Jupyter out and in, dialect conversion, HTML page.
    *Done when* a tutorial survives markdown → ipynb → markdown unchanged.
 

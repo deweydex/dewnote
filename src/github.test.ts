@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { fromBase64, listMarkdownFiles, listOrderFiles, toBase64 } from "./github.ts";
+import { fromBase64, listMarkdownFiles, listOrderFiles, putFileContent, toBase64 } from "./github.ts";
 
 describe("toBase64/fromBase64", () => {
   test("round-trips plain ASCII", () => {
@@ -120,5 +120,65 @@ describe("listOrderFiles", () => {
 
     const files = await listOrderFiles({ owner: "dewlab", repo: "dewlab" }, "main", "tok");
     expect(files).toEqual([{ path: "tutorials/data/filtering.order.yaml", sha: "s1" }]);
+  });
+});
+
+describe("putFileContent", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  function respond(body: unknown, status = 200): Response {
+    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  }
+
+  // decision 32: a brand-new file has no sha to match against yet — the
+  // request body itself has to leave the field out entirely, not send it
+  // as an explicit `null` or `undefined`, since GitHub's own "create"
+  // vs. "update" branch keys off whether the JSON key is present at all.
+  test("with no sha given, the request body omits the field entirely", async () => {
+    let sentBody: Record<string, unknown> | null = null;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sentBody = JSON.parse(String(init?.body));
+      return respond({ content: { sha: "new-sha" } });
+    }) as typeof fetch;
+
+    const result = await putFileContent(
+      { owner: "dewlab", repo: "dewlab" },
+      "tutorials/new.md",
+      "# New\n",
+      undefined,
+      "dewnote-edits",
+      "Add tutorials/new.md from dewnote",
+      "tok",
+    );
+    expect(result).toEqual({ sha: "new-sha" });
+    expect(sentBody).not.toBeNull();
+    expect(Object.keys(sentBody!)).not.toContain("sha");
+  });
+
+  test("with a sha given, the request body includes it, matching the existing blob", async () => {
+    let sentBody: Record<string, unknown> | null = null;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sentBody = JSON.parse(String(init?.body));
+      return respond({ content: { sha: "updated-sha" } });
+    }) as typeof fetch;
+
+    await putFileContent(
+      { owner: "dewlab", repo: "dewlab" },
+      "tutorials/existing.md",
+      "# Existing\n",
+      "old-sha",
+      "dewnote-edits",
+      "Edit tutorials/existing.md from dewnote",
+      "tok",
+    );
+    expect(sentBody!).toEqual({
+      message: "Edit tutorials/existing.md from dewnote",
+      content: toBase64("# Existing\n"),
+      branch: "dewnote-edits",
+      sha: "old-sha",
+    });
   });
 });

@@ -217,28 +217,36 @@ export interface PutFileResult {
 }
 
 /**
- * Writes `content` to `path` on `branch`, matching `sha` — GitHub's own
- * optimistic-concurrency check, which is what turns "someone else (or a
- * second dewnote tab) changed this file since it was opened" into a
- * clear 409 rather than a silent overwrite. This function does not catch
- * that error; the caller reports it, since recovering from it (FAQ's
- * "show both, never pick") is real UI work this slice doesn't build yet.
+ * Writes `content` to `path` on `branch`. With `sha` given, this matches
+ * it against the blob already there — GitHub's own optimistic-concurrency
+ * check, which is what turns "someone else (or a second dewnote tab)
+ * changed this file since it was opened" into a clear 409 rather than a
+ * silent overwrite. This function does not catch that error; the caller
+ * reports it, since recovering from it (FAQ's "show both, never pick") is
+ * real UI work repo-panel.ts does for an edit to an already-open file.
+ *
+ * With `sha` omitted, this is instead a brand-new file: GitHub creates
+ * the blob at `path` if nothing is there yet, or answers 422 ("sha"
+ * wasn't supplied) if something already is — repo-panel.ts's own "start
+ * a new file" flow reports that 422 distinctly, since there is no
+ * existing edit's "mine" to compare it against the way a real 409 has.
  */
 export async function putFileContent(
   repo: RepoRef,
   path: string,
   content: string,
-  sha: string,
+  sha: string | undefined,
   branch: string,
   message: string,
   token: string,
 ): Promise<PutFileResult> {
-  const data = await apiJson<{ content: { sha: string } }>(token, "PUT", `/repos/${repo.owner}/${repo.repo}/contents/${path}`, {
+  const body: { message: string; content: string; branch: string; sha?: string } = {
     message,
     content: toBase64(content),
-    sha,
     branch,
-  });
+  };
+  if (sha !== undefined) body.sha = sha;
+  const data = await apiJson<{ content: { sha: string } }>(token, "PUT", `/repos/${repo.owner}/${repo.repo}/contents/${path}`, body);
   return { sha: data.content.sha };
 }
 
