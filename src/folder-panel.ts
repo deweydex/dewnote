@@ -10,12 +10,14 @@ import { chooseFolder, createFile, listMarkdownFiles, listOrderFiles, readFile, 
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseSeriesFiles, type Series } from "./series.ts";
-import { setActiveStore } from "./active-store.ts";
+import { createFile as createActiveFile, setActiveStore } from "./active-store.ts";
 import { iconRail } from "./icon-rail.ts";
 
 export interface FolderPanel {
   destroy(): void;
 }
+
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function textInput(placeholder: string): HTMLInputElement {
   const input = document.createElement("input");
@@ -24,6 +26,19 @@ function textInput(placeholder: string): HTMLInputElement {
   input.autocomplete = "off";
   input.spellcheck = false;
   return input;
+}
+
+/** dewlab's own `version` form (DIALECTS.md §1: `2026.09.04.1`) —
+ * today's date plus a `.1` release counter, since a freshly created
+ * tutorial has no prior release to be the second of. Computed at create
+ * time rather than once at mount, so a panel left open overnight still
+ * stamps the day it's actually used on. */
+function todayVersion(): string {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}.${mm}.${dd}.1`;
 }
 
 /** Mounted once, independently of any particular document. Takes the
@@ -121,6 +136,119 @@ export function mountFolderPanel(
   status.className = "dn-folder-hint dn-folder-status";
   openSection.appendChild(status);
   panel.appendChild(openSection);
+
+  // "New tutorial" — the other named item on step 4's own line, next to
+  // series-panel.ts's "New series". DIALECTS.md §1's real layout is
+  // `tutorials/<module>/<slug>/<slug>.md`, so the module field is the
+  // same "leave blank if the open folder already is one module's own
+  // directory" case series creation already has — but here module is a
+  // *required* front-matter field (build.py rejects a tutorial without
+  // one), and it must equal the file's own parent folder, so a blank
+  // field doesn't mean "no module": it means "use the folder that's
+  // already open," and `folderName` fills that in. `version` isn't a
+  // form field at all — DIALECTS.md's own `2026.09.04.1` form is a
+  // release date no reader would type by hand for a brand-new file, so
+  // `todayVersion()` stamps today's date with a fresh `.1` instead, the
+  // only sane default for something that has no prior release to be the
+  // second of. Written through `active-store.ts`'s own generic
+  // `createFile`, not `folder-store.ts` directly, for the same reason
+  // series-panel.ts does: this has no separate knowledge of which store
+  // is actually open, and folder-panel.ts's own registered handler
+  // (above) already re-runs `loadFromRoot` afterward.
+  const tutorialSection = document.createElement("section");
+  tutorialSection.className = "dn-folder-section dn-folder-create";
+  const tutorialHeading = document.createElement("h3");
+  tutorialHeading.className = "dn-folder-create-heading";
+  tutorialHeading.textContent = "New tutorial";
+  tutorialSection.appendChild(tutorialHeading);
+
+  const tutorialModuleInput = textInput("Module (leave blank if already inside one)");
+  tutorialModuleInput.className = "dn-folder-create-field";
+  const tutorialSlugInput = textInput("tutorial-slug");
+  tutorialSlugInput.className = "dn-folder-create-field";
+  const tutorialTitleInput = textInput("Title");
+  tutorialTitleInput.className = "dn-folder-create-field";
+  const tutorialModuleTitleInput = textInput("Module title (e.g. Getting Started)");
+  tutorialModuleTitleInput.className = "dn-folder-create-field";
+  const tutorialSeriesInput = textInput("Series slug (matches a .order.yaml)");
+  tutorialSeriesInput.className = "dn-folder-create-field";
+  const tutorialYearInput = textInput("Year");
+  tutorialYearInput.className = "dn-folder-create-field";
+  tutorialYearInput.value = String(new Date().getFullYear());
+  tutorialSection.append(
+    tutorialModuleInput,
+    tutorialSlugInput,
+    tutorialTitleInput,
+    tutorialModuleTitleInput,
+    tutorialSeriesInput,
+    tutorialYearInput,
+  );
+
+  const tutorialCreateButton = document.createElement("button");
+  tutorialCreateButton.type = "button";
+  tutorialCreateButton.className = "dn-folder-create-button";
+  tutorialCreateButton.textContent = "Create";
+  tutorialCreateButton.disabled = true;
+  tutorialCreateButton.title = "Open a folder first.";
+  tutorialSection.appendChild(tutorialCreateButton);
+
+  const tutorialStatus = document.createElement("p");
+  tutorialStatus.className = "dn-folder-create-status";
+  tutorialSection.appendChild(tutorialStatus);
+  panel.appendChild(tutorialSection);
+
+  tutorialCreateButton.addEventListener("click", async () => {
+    const module = tutorialModuleInput.value.trim();
+    const slug = tutorialSlugInput.value.trim();
+    const title = tutorialTitleInput.value.trim();
+    const moduleTitle = tutorialModuleTitleInput.value.trim();
+    const series = tutorialSeriesInput.value.trim();
+    const year = tutorialYearInput.value.trim();
+    if (!SLUG_RE.test(slug)) {
+      tutorialStatus.textContent = "Tutorial slug must be lowercase letters, digits, and hyphens.";
+      return;
+    }
+    if (!title || !moduleTitle || !series || !year) {
+      tutorialStatus.textContent = "Title, module title, series, and year are all required.";
+      return;
+    }
+    const effectiveModule = module || folderName;
+    const path = module ? `${module}/${slug}/${slug}.md` : `${slug}/${slug}.md`;
+    const content = `---
+title: ${title}
+slug: ${slug}
+module: ${effectiveModule}
+module_title: ${moduleTitle}
+year: "${year}"
+series: ${series}
+version: ${todayVersion()}
+---
+
+# ${title}
+
+Start writing.
+
+\`\`\`python exec
+id: ${slug}-first-cell
+1 + 1
+\`\`\`
+`;
+    tutorialCreateButton.disabled = true;
+    tutorialStatus.textContent = "Creating…";
+    try {
+      await createActiveFile(path, content);
+      tutorialStatus.textContent = `Created ${path}.`;
+      tutorialModuleInput.value = "";
+      tutorialSlugInput.value = "";
+      tutorialTitleInput.value = "";
+      tutorialModuleTitleInput.value = "";
+      tutorialSeriesInput.value = "";
+    } catch (err) {
+      tutorialStatus.textContent = err instanceof Error ? err.message : String(err);
+    } finally {
+      tutorialCreateButton.disabled = false;
+    }
+  });
 
   const searchSection = document.createElement("section");
   searchSection.className = "dn-folder-section";
@@ -243,6 +371,8 @@ export function mountFolderPanel(
     folderName = root.name;
     openButton.textContent = `Open folder… (${folderName})`;
     refreshButton.disabled = false;
+    tutorialCreateButton.disabled = false;
+    tutorialCreateButton.title = "";
     // active-store.ts's own "open this path" hook — registered once a
     // folder is actually open, not at mount time (nothing to open yet),
     // and closing over the live `files` binding rather than a snapshot,

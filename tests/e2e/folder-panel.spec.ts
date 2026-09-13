@@ -287,3 +287,63 @@ test("creating a series with a slug already in use reports the real error, rathe
 
   await expect(page.locator(".dn-series-create-status")).toHaveText('"a-series.order.yaml" already exists.');
 });
+
+// active-store.ts's own createFile again, this time through the folder
+// rail's own "New tutorial" form — the other named item on step 4's own
+// line, alongside "New series" above. Writes a real file at DIALECTS.md
+// §1's own layout (`<module>/<slug>/<slug>.md`) with dewlab's required
+// front matter fields filled in, then re-runs the folder's own load pass
+// so the new file is immediately visible and openable, same as any file
+// already there.
+test("the folder rail can create a new tutorial from a template, which then appears in the file list and opens", async ({
+  page,
+}) => {
+  await page.locator(".dn-folder-toggle").click();
+  await expect(page.locator(".dn-folder-create-button")).toBeDisabled();
+
+  await page.locator(".dn-folder-open").click();
+  await expect(page.locator(".dn-folder-create-button")).toBeEnabled();
+
+  await page.locator(".dn-folder-create-field[placeholder='Module (leave blank if already inside one)']").fill("a-module");
+  await page.locator(".dn-folder-create-field[placeholder='tutorial-slug']").fill("a-tutorial");
+  await page.locator(".dn-folder-create-field[placeholder='Title']").fill("A Tutorial");
+  await page.locator(".dn-folder-create-field[placeholder='Module title (e.g. Getting Started)']").fill("A Module");
+  await page.locator(".dn-folder-create-field[placeholder='Series slug (matches a .order.yaml)']").fill("a-series");
+  await page.locator(".dn-folder-create-button").click();
+
+  await expect(page.locator(".dn-folder-create-status")).toHaveText("Created a-module/a-tutorial/a-tutorial.md.");
+  // Fields clear on success, ready for the next one — the year field is
+  // left alone (defaulted, not cleared) since it's still the right value.
+  await expect(page.locator(".dn-folder-create-field[placeholder='tutorial-slug']")).toHaveValue("");
+
+  const item = page.locator(".dn-folder-file", { hasText: "a-module/a-tutorial/a-tutorial.md" });
+  await expect(item).toBeVisible();
+  await item.click();
+  await expect(page.locator("h1")).toHaveText("A Tutorial");
+});
+
+test("creating a tutorial at a path that already exists reports the real error, rather than silently overwriting it", async ({
+  page,
+}) => {
+  await page.locator(".dn-folder-toggle").click();
+  await page.locator(".dn-folder-open").click();
+
+  await page.locator(".dn-folder-create-field[placeholder='tutorial-slug']").fill("a-rule");
+  await page.locator(".dn-folder-create-field[placeholder='Title']").fill("A Rule");
+  await page.locator(".dn-folder-create-field[placeholder='Module title (e.g. Getting Started)']").fill("Content");
+  await page.locator(".dn-folder-create-field[placeholder='Series slug (matches a .order.yaml)']").fill("a-series");
+  // Left blank: the module field means "use the already-open folder's
+  // own name" here — that folder is "tutorials", not "content", so this
+  // deliberately doesn't collide with the existing content/a-rule.md.
+  // A genuine collision needs the same module/slug twice.
+  await page.locator(".dn-folder-create-button").click();
+  await expect(page.locator(".dn-folder-create-status")).toHaveText("Created a-rule/a-rule.md.");
+
+  await page.locator(".dn-folder-create-field[placeholder='tutorial-slug']").fill("a-rule");
+  await page.locator(".dn-folder-create-field[placeholder='Title']").fill("A Rule Again");
+  await page.locator(".dn-folder-create-field[placeholder='Module title (e.g. Getting Started)']").fill("Content");
+  await page.locator(".dn-folder-create-field[placeholder='Series slug (matches a .order.yaml)']").fill("a-series");
+  await page.locator(".dn-folder-create-button").click();
+
+  await expect(page.locator(".dn-folder-create-status")).toHaveText('"a-rule/a-rule.md" already exists.');
+});
