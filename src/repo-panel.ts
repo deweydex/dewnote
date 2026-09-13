@@ -13,6 +13,14 @@
 // the reader chooses to keep their edit and overwrite, or take the
 // remote copy and lose theirs, but nothing is ever silently clobbered.
 //
+// Decision 32's own slice: a document composed in dewnote from nothing
+// (the starter document, or anything typed fresh) had no way into a
+// repository at all before this — every push here used to require
+// `opened` to already carry a real file's own sha, which only existed
+// because some earlier `openRepoFile` had fetched it. "New file" sets
+// `opened` to a path with no sha instead, and `putFileContent` treats
+// that as GitHub's own create-not-update case.
+//
 // What this slice still does not do, on purpose rather than by
 // oversight: no front-matter index or module/series picker (decision 11
 // — needs step 4's fuller multi-file concept); no OPFS or local-clone
@@ -103,7 +111,11 @@ function textInput(placeholder: string, value: string): HTMLInputElement {
 export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   const settings = loadRepoSettings();
   let files: RepoFile[] = [];
-  let opened: { repo: RepoRef; file: RepoFile; ref: string } | null = null;
+  /** `file.sha` is only absent for a document `startNewFile` just pointed
+   * at a path with nothing there yet (decision 32) — every other path
+   * here (`openRepoFile`, a conflict's own keep/take) always has a real
+   * sha, since it came from a file GitHub already told us about. */
+  let opened: { repo: RepoRef; file: { path: string; sha?: string }; ref: string } | null = null;
 
   const toggle = document.createElement("button");
   toggle.type = "button";
@@ -208,6 +220,43 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   fileList.className = "dn-repo-files";
   searchSection.appendChild(fileList);
   panel.appendChild(searchSection);
+
+  // ----------------------------------------------------------- new file
+  // Decision 32: the counterpart to opening one of the files listed
+  // above. Doesn't touch the editor's own content (host.getSource() at
+  // push time is whatever the reader already composed, starter document
+  // or not) — this only decides where a push, whenever it happens, lands.
+  const newFileSection = document.createElement("section");
+  newFileSection.className = "dn-repo-section";
+  const newFileInput = textInput("tutorials/module/new-tutorial.md", "");
+  newFileInput.className = "dn-repo-new-file-path";
+  newFileSection.appendChild(field("New file path", newFileInput));
+
+  const newFileButton = document.createElement("button");
+  newFileButton.type = "button";
+  newFileButton.className = "dn-repo-new-file";
+  newFileButton.textContent = "Start new file";
+  newFileButton.title = "Points a later push at this path instead of an existing file — nothing is created until you push.";
+  newFileSection.appendChild(newFileButton);
+  panel.appendChild(newFileSection);
+
+  newFileButton.addEventListener("click", () => {
+    const repo = currentRepo();
+    if (!repo.owner || !repo.repo) {
+      repoStatus.textContent = "Enter an owner and repo.";
+      return;
+    }
+    const path = newFileInput.value.trim();
+    if (!path) {
+      repoStatus.textContent = "Enter a path for the new file.";
+      return;
+    }
+    const ref = baseInput.value.trim() || "main";
+    opened = { repo, file: { path }, ref };
+    hideConflict();
+    renderPush();
+    repoStatus.textContent = `Ready to push a new file at ${path}.`;
+  });
 
   function currentRepo(): RepoRef {
     return { owner: ownerInput.value.trim(), repo: repoInput.value.trim() };
@@ -450,6 +499,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       const result = await putFileContent(opened.repo, opened.file.path, mine, theirsSha, branch, `Edit ${opened.file.path} from dewnote`, token);
       opened = { ...opened, file: { path: opened.file.path, sha: result.sha } };
       hideConflict();
+      renderPush();
       pushStatus.textContent = `Pushed to ${branch}.`;
       prButton.hidden = false;
     } catch (err) {
@@ -470,7 +520,8 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   function renderPush() {
     pushSection.hidden = !opened;
     if (!opened) return;
-    pushButton.textContent = `Push to ${branchInput.value.trim() || "dewnote-edits"}`;
+    const branch = branchInput.value.trim() || "dewnote-edits";
+    pushButton.textContent = opened.file.sha ? `Push to ${branch}` : `Push new file to ${branch}`;
   }
   branchInput.addEventListener("input", renderPush);
 
@@ -485,22 +536,31 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     const base = baseInput.value.trim() || "main";
     saveRepoSettings({ owner: opened.repo.owner, repo: opened.repo.repo, base, branch });
     const mine = host.getSource();
+    const isNewFile = !opened.file.sha;
     pushButton.disabled = true;
     pushStatus.textContent = `Pushing to ${branch}…`;
     try {
       await ensureBranch(opened.repo, branch, base, token);
-      const result = await putFileContent(opened.repo, opened.file.path, mine, opened.file.sha, branch, `Edit ${opened.file.path} from dewnote`, token);
+      const message = `${isNewFile ? "Add" : "Edit"} ${opened.file.path} from dewnote`;
+      const result = await putFileContent(opened.repo, opened.file.path, mine, opened.file.sha, branch, message, token);
       opened = { ...opened, file: { path: opened.file.path, sha: result.sha } };
+      renderPush();
       pushStatus.textContent = `Pushed to ${branch}.`;
       prButton.hidden = false;
     } catch (err) {
-      if (err instanceof GithubApiError && err.status === 409) {
+      if (err instanceof GithubApiError && err.status === 409 && !isNewFile) {
         try {
           const theirs = await getFileContent(opened.repo, opened.file.path, branch, token);
           showConflict({ mine, theirsContent: theirs.content, theirsSha: theirs.sha, branch });
         } catch (fetchErr) {
           pushStatus.textContent = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
         }
+      } else if (err instanceof GithubApiError && err.status === 422 && isNewFile) {
+        // No sha was ever fetched for this path, so there is no "theirs"
+        // to show the way an edit's own 409 conflict has — a plain
+        // message and a different path or a real open is the fix here,
+        // not a diff view built for a case with nothing to diff against.
+        pushStatus.textContent = `A file already exists at ${opened.file.path} on ${branch} — pick a different path, or open that file from the list above to edit it instead.`;
       } else {
         pushStatus.textContent = err instanceof Error ? err.message : String(err);
       }

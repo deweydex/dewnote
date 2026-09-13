@@ -844,6 +844,7 @@ body {
 
 .dn-repo-forget,
 .dn-repo-load,
+.dn-repo-new-file,
 .dn-repo-push,
 .dn-repo-pr,
 .dn-repo-conflict-keep,
@@ -859,6 +860,7 @@ body {
 }
 .dn-repo-forget:hover,
 .dn-repo-load:hover,
+.dn-repo-new-file:hover,
 .dn-repo-push:hover,
 .dn-repo-pr:hover,
 .dn-repo-conflict-keep:hover,
@@ -867,6 +869,7 @@ body {
   border-color: var(--dl-orange);
 }
 .dn-repo-load,
+.dn-repo-new-file,
 .dn-repo-push,
 .dn-repo-pr,
 .dn-repo-conflict-keep,
