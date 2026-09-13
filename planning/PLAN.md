@@ -1601,3 +1601,36 @@ is not proposed here at all; dewnote is an authoring surface, and
 whether an author-side "does this look right" check ever belongs in it
 is a question worth asking Josh directly rather than assuming yes because
 dewlab has it on the reading side.
+
+5. **The `` ```card `` fence — built**, dewlab's own newest addition
+   (2026-09-13, decisions 7.159–7.162 there, moving About/home/features
+   out of hardcoded strings and into `pages/*.md`; DIALECTS.md §1's
+   "Hand-written pages" has the full grammar). The same header-line idiom
+   every other exec-family fence already uses, applied to a fourth,
+   non-runnable kind — `cell.ts`'s `isCardFence`/`parseCardFence`,
+   `render-block.ts`'s `renderCardFencePreview` (dewlab's own
+   `.dl-module-card` markup), wired into `app.ts` the same way a staged
+   hint's preview is: the fence stays a live editor, never a render/edit
+   toggle (decision 15 unchanged), with a read-only preview shown beside
+   it. Each card previews on its own — dewlab's build groups adjacent
+   cards into one shared `.dl-module-grid`, a purely cosmetic detail
+   across several fences this editor doesn't reproduce, so a grid of one
+   stands in instead. Named deliberately: dewlab's own `Cell`/
+   `CELL_TYPES` already reserve "cell" for something that runs, so this
+   stays a **card** in every function and type name here, "cell" left
+   free for dewnote's own broader sense of the word. *Done when*,
+   satisfied: `bun test src`, `bun run typecheck`, and the full non-
+   pyodide e2e suite all pass, plus a new `tests/e2e/card-fence.spec.ts`
+   confirming the fence stays editable, its preview shows the right
+   markup (badge, meta, wide class), and an edit to the fence updates the
+   preview once it commits.
+
+   Left open, documented rather than built: the `[[name]]` generated-
+   block marker (today: `[[search-box]]`) round-trips as ordinary prose
+   text — correct, but rendered literally rather than previewed; and a
+   `<div class="dl-hero">`/`<div class="dl-audience">`/`<ul
+   class="dl-feature-list">` section or list wrapper splits into several
+   plain, individually-odd prose blocks under dewnote's own block
+   splitter rather than one cohesive section — also correct by decision
+   1's own guarantee, just not yet given a block kind of its own.
+   DIALECTS.md §1 names both as real, separate scope, not attempted here.

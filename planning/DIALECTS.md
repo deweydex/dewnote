@@ -224,6 +224,91 @@ dewnote's block model doesn't have yet") — now with a real, stable target
 grammar to build it against, since dewlab settled its own spelling rather
 than dewstack's (§8 has the plan).
 
+**Hand-written pages (`pages/`)**, added 2026-09-13 across three of
+dewlab's own decisions (7.159, 7.161, 7.162) that moved the About, home,
+and features pages out of hardcoded HTML strings in `build.py` and into
+real markdown. A page is `pages/<name>.md` — no module, series, or
+version, since it isn't part of the curriculum — with a `title`-only
+front matter block:
+
+```markdown
+---
+title: About this project
+---
+
+# About this project
+
+dewlab is an open educational project...
+```
+
+`read_page()` there converts the body through the same markdown pipeline
+a tutorial's own prose uses, plus two things ordinary prose doesn't have:
+
+A ` ```card ` fence — the header-line idiom every other exec-family fence
+already uses, applied to a fourth, non-runnable kind:
+
+````markdown
+```card
+url: computational-methods.html
+status: beta
+meta: 5N0554 · QQI Level 5
+### Computational Methods and Problem Solving
+We work through matrices, simulation, algorithms and debugging, in Python.
+```
+````
+
+`url:` (required by dewlab's own build; parsed as `null` here rather than
+thrown on, an editor reading a fence mid-edit), `status:`, `meta:`, and
+`wide:` (`true`/`yes`) are all optional header lines, then a markdown
+heading and an optional paragraph. This is the markup a home-page module
+tile used to be hand-written six times over (`.dl-module-card`); adjacent
+cards share one `.dl-module-grid` wrapper automatically on dewlab's own
+build, a purely cosmetic grouping this editor's own preview doesn't
+reproduce — each card previews on its own (`cell.ts`'s `parseCardFence`,
+`render-block.ts`'s `renderCardFencePreview`, wired into `app.ts` the same
+way a staged hint's preview is, decision 15 unchanged: the fence itself
+stays a live editor, never a render/edit toggle).
+
+**Not a cell.** dewlab's own `Cell`/`CELL_TYPES`/`render_cell()` already
+reserve that word for something that runs, with a real saved-progress
+contract behind it (a cell id is a contract — renaming one throws away a
+student's saved work). A card has no output and nothing to save, so it
+stays a **card** throughout dewnote's own code and this document too —
+"cell" is free here for dewnote's own broader sense of the word (any
+boxed, focusable unit, plan §3's own "a cell is a box; a paragraph is
+not"), and a course maintainer is free to call the rendered result a
+"card cell" in conversation without either use stepping on the other.
+
+A `[[name]]` marker is the second new piece — infrastructure a page can
+point at but never author directly, dewlab's own `GENERATED_BLOCKS`
+registry (today: `[[search-box]]`, the site-wide search widget). A
+bracketed marker rather than an HTML comment in the source, specifically
+so a markdown editor renders it as a real, visible, clickable line rather
+than an invisible comment node — dewnote's block splitter has never had
+to render one specially, since a fence's own placeholder convention
+(`<!--dewlab-cell-N-->` and friends) is a build-time-only concern that
+never reaches a page's own source text; a `[[name]]` marker does, and
+today dewnote's block splitter treats it as ordinary prose text — it
+round-trips correctly (nothing here breaks decision 1's guarantee) but
+renders as the literal bracketed text, not a preview of what it stands
+for. Giving it one is real, separate scope, not attempted here.
+
+A `<div class="dl-hero">`/`<div class="dl-audience">`/`<div
+class="dl-attribution">`/`<ul class="dl-feature-list">` section or list
+wrapper is the third — dewlab's own `convert_page_wrapper_bodies()`
+re-converts the markdown inside one a second time, since Python-Markdown
+treats a raw HTML block as opaque through to its closing tag. dewnote's
+own block splitter (`blocks.ts`) has no equivalent special case for these
+wrappers today: a `<div class="dl-audience">` spanning several
+blank-line-separated paragraphs splits into several ordinary prose
+blocks, one of which is just the bare opening tag on its own line and
+another just the closing tag — round-trips byte for byte (blocks.ts's
+own guarantee doesn't depend on understanding what wraps a block), but
+reads as several odd, meaningless one-line "paragraphs" in the editor
+rather than one cohesive section. Documented as a known gap rather than
+worked around, since giving these wrappers their own block kind is real
+design work of its own, not a one-line fix.
+
 ## 2. dewstack — being retired into dewlab, 2026-09-10 onward
 
 `deweydex/dewlab@planning/DEWSTACK_MERGE.md` (written 2026-09-10) records

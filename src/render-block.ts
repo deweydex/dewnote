@@ -12,7 +12,7 @@ import texmath from "markdown-it-texmath";
 import katex from "katex";
 import type { Block } from "./blocks.ts";
 import type { DialectName } from "./dialect.ts";
-import { parseHintFence } from "./cell.ts";
+import { parseCardFence, parseHintFence } from "./cell.ts";
 
 const md = new MarkdownIt({ html: true, linkify: true }).use(texmath, {
   engine: katex,
@@ -135,4 +135,26 @@ export function renderHintFencePreview(block: Block): string {
   const hint = parseHintFence(block);
   const bodyHtml = hint.body ? md.render(hint.body) : "";
   return `<details class="dl-hint dl-hint-staged" open><summary>${md.utils.escapeHtml(hint.title)}</summary>${bodyHtml}</details>`;
+}
+
+/** A ```card fence's own preview — dewlab's own `.dl-module-card` markup
+ * (DIALECTS.md §1, `build.py`'s `render_card()`), shown beside its live
+ * editor the same way a staged hint's is (decision 15: a fence never
+ * loses its live-editor state). A missing `url:`/heading shows a plain
+ * placeholder rather than a broken link or an empty tile — this editor
+ * reads a fence mid-edit, not a finished build, and dewlab's own build
+ * would refuse to publish either gap rather than guess at one. */
+export function renderCardFencePreview(block: Block): string {
+  const card = parseCardFence(block);
+  const classes = card.wide ? "dl-module-card dl-module-card-wide" : "dl-module-card";
+  const heading = card.heading ? md.utils.escapeHtml(card.heading) : "(no heading yet)";
+  const badge = card.status
+    ? `<span class="dl-module-card-badge" data-status="${escapeAttr(card.status)}">${md.utils.escapeHtml(
+        card.status.slice(0, 1).toUpperCase() + card.status.slice(1),
+      )}</span>`
+    : "";
+  const meta = card.meta ? `<span class="dl-module-card-meta">${md.utils.escapeHtml(card.meta)}</span>` : "";
+  const bodyHtml = card.body ? md.render(card.body) : "";
+  const href = card.url ? escapeAttr(card.url) : "#";
+  return `<a class="${classes}" href="${href}"><h3>${heading}${badge}</h3>${meta}${bodyHtml}</a>`;
 }

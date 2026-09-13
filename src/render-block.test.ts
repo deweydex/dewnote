@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseFold, renderBlockPreview, renderHintFencePreview } from "./render-block.ts";
+import { parseFold, renderBlockPreview, renderCardFencePreview, renderHintFencePreview } from "./render-block.ts";
 import { parseDocument } from "./blocks.ts";
 
 function firstBlockOfKind(source: string, kind: string) {
@@ -153,5 +153,43 @@ describe("renderHintFencePreview", () => {
     const html = renderHintFencePreview(block);
     expect(html).toContain("&lt;b&gt;");
     expect(html).not.toContain("<b>&");
+  });
+});
+
+describe("renderCardFencePreview", () => {
+  test("renders dewlab's own .dl-module-card markup, with a status badge and meta line", () => {
+    const block = firstBlockOfKind(
+      "```card\nurl: computational-methods.html\nstatus: beta\nmeta: 5N0554 · QQI Level 5\n### Computational Methods\nWe work through *matrices*.\n```\n",
+      "fence",
+    );
+    const html = renderCardFencePreview(block);
+    expect(html).toContain('<a class="dl-module-card" href="computational-methods.html">');
+    expect(html).toContain("<h3>Computational Methods");
+    expect(html).toContain('<span class="dl-module-card-badge" data-status="beta">Beta</span>');
+    expect(html).toContain('<span class="dl-module-card-meta">5N0554 · QQI Level 5</span>');
+    expect(html).toContain("<em>matrices</em>");
+  });
+
+  test("a wide card gets the wide class and no badge or meta when neither is given", () => {
+    const block = firstBlockOfKind("```card\nurl: features.html\nwide: true\n### What dewlab can do\n```\n", "fence");
+    const html = renderCardFencePreview(block);
+    expect(html).toContain('class="dl-module-card dl-module-card-wide"');
+    expect(html).not.toContain("dl-module-card-badge");
+    expect(html).not.toContain("dl-module-card-meta");
+  });
+
+  test("a missing heading or url shows a placeholder rather than breaking", () => {
+    const block = firstBlockOfKind("```card\nJust prose, no url or heading.\n```\n", "fence");
+    const html = renderCardFencePreview(block);
+    expect(html).toContain("(no heading yet)");
+    expect(html).toContain('href="#"');
+  });
+
+  test("escapes a url and status that happen to contain HTML-significant characters", () => {
+    const block = firstBlockOfKind('```card\nurl: a.html?x="y"&z=1\nstatus: <b>\n### A\n```\n', "fence");
+    const html = renderCardFencePreview(block);
+    expect(html).toContain("&quot;y&quot;");
+    expect(html).toContain("&amp;z=1");
+    expect(html).toContain("&lt;b&gt;");
   });
 });

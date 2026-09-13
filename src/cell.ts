@@ -356,3 +356,76 @@ export function parseSitePaneInfo(block: Block): SitePaneInfo {
     body: lines.slice(i).join("\n"),
   };
 }
+
+/** dewlab's own `` ```card `` fence (DIALECTS.md §1, `build.py`'s
+ * `parse_card()`/`render_card()`) — a hand-written page's clickable tile,
+ * the markup `render_index()` used to write out by hand six times over
+ * before decision 7.161 there gave it a real syntax. `url:`/`status:`/
+ * `meta:`/`wide:` header lines, the same idiom every other exec-family
+ * fence already uses, then a markdown heading and an optional paragraph.
+ *
+ * Not a cell: nothing here runs, and nothing is saved against an id the
+ * way a runnable fence's `id:` is a contract (dewlab's `Cell`/
+ * `CELL_TYPES`/`render_cell()` all reserve "cell" for something with a
+ * saved-progress contract behind it) — so this stays a **card**
+ * throughout dewnote's own code and docs, "cell" left for dewnote's own
+ * broader, non-runnable sense of the word only where nothing already
+ * claims it more narrowly (a course maintainer may still call the
+ * rendered result a "card cell" in conversation; the type and function
+ * names here don't). */
+export interface CardFenceInfo {
+  url: string | null;
+  status: string | null;
+  meta: string | null;
+  wide: boolean;
+  /** `null` when the fence's body doesn't open with a markdown heading —
+   * dewlab's own build fails outright on this; an editor, mid-edit, just
+   * shows a placeholder instead (renderCardFencePreview). */
+  heading: string | null;
+  body: string;
+}
+
+const CARD_HEADER_RE = /^\s*(url|status|meta|wide)\s*:\s*(.*)$/;
+const CARD_HEADING_RE = /^#{1,6}\s*(.+?)\s*#*$/;
+
+/** Whether a fence's info string is exactly `card` — dewlab's own
+ * `extract_page_cards()` check (`info.strip() == "card"`), no room for a
+ * language word the way an exec or site fence's info string has. */
+export function isCardFence(info: string): boolean {
+  return info.trim() === "card";
+}
+
+/** Reads a card fence's own header lines, heading, and body. Leading
+ * blank lines before the heading are skipped, matching dewlab's own
+ * `parse_card()` (`rest.strip("\n")` there). */
+export function parseCardFence(block: Block): CardFenceInfo {
+  const lines = fenceBody(block.text).split("\n");
+  const header: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length) {
+    const match = CARD_HEADER_RE.exec(lines[i]!);
+    if (!match || match[1]! in header) break;
+    header[match[1]!] = match[2]!.trim();
+    i++;
+  }
+  const rest = lines.slice(i);
+  const firstContentLine = rest.findIndex((line) => line.trim() !== "");
+  let heading: string | null = null;
+  let bodyLines = rest;
+  if (firstContentLine !== -1) {
+    const headingMatch = CARD_HEADING_RE.exec(rest[firstContentLine]!);
+    if (headingMatch) {
+      heading = headingMatch[1]!;
+      bodyLines = rest.slice(firstContentLine + 1);
+    }
+  }
+  const wideValue = (header["wide"] ?? "").toLowerCase();
+  return {
+    url: header["url"] ?? null,
+    status: header["status"] || null,
+    meta: header["meta"] || null,
+    wide: wideValue === "true" || wideValue === "yes",
+    heading,
+    body: bodyLines.join("\n").trim(),
+  };
+}
