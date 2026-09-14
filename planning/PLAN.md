@@ -1326,13 +1326,21 @@ project; if they are not delightful, nothing after them will rescue it.
    `module_title:`) instead of only the absence — found looking at the
    starter document itself with fresh eyes for this same workstream.
 
-   Still open: **"a copy into the tutorial folder"** is this step's own
-   line, not yet true — a picked image is inlined as a `data:` URI, never
-   saved as a real file alongside the document the way a dewlab tutorial
-   image (`![alt](name.png)`, a bare file name resolved against the
-   tutorial's own folder, DIALECTS.md §1) actually needs; a document
-   exported or pushed today carries every image's full bytes inline
-   rather than a real, reusable file. The live-preview decorations
+   **"A copy into the tutorial folder" is done** (decision 39). A picked
+   image is written beside the document — `tutorials/<id>/name.png` under
+   dewlab's current layout — and the markdown gets the bare name both
+   builds resolve against that folder. The name is reshaped so markdown
+   can't misread it and stepped past anything already in the folder,
+   read from a real directory listing rather than the panels' own
+   markdown-and-courses file lists. A `data:` URI is still what a
+   document with no folder gets, which is the honest answer rather than
+   a refusal.
+
+   The half that wasn't in this line, and is what makes the rest usable:
+   the preview reads an image's bytes back through the store
+   (`asset-preview.ts`), because this editor is served from somewhere
+   other than the tutorial's folder and would otherwise show every image
+   in every tutorial as broken. The live-preview decorations
    remain exactly as conditional as this line always named them ("if
    step 2's block editing still wants them") — not attempted, and
    folding a fence's own raw syntax out of its blurred view (the

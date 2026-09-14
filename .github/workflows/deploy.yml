@@ -6,14 +6,17 @@
 # planning/PLAN.md) as of the change that added this note — not the
 # design sketch it published as a placeholder before a real app existed.
 #
-# Pages itself has never been turned on for this repository (Settings →
-# Pages → Source: GitHub Actions is a one-time, admin-only toggle;
-# nothing this workflow's own token can do reaches it — actions/configure-
-# pages's own attempt to do so is exactly what was failing here, "Resource
-# not accessible by integration"). Until that toggle happens, "check
-# Pages is enabled" below skips the rest of the job instead of failing
-# it, so a real problem with the build still fails loudly but this
-# expected, one-time gap stops sending a failure email on every push.
+# Pages is on now, and the site is live at
+# https://deweydex.github.io/dewnote/ — "Run actions/deploy-pages" really
+# publishes. It was off for a long time (Settings → Pages → Source:
+# GitHub Actions is a one-time, admin-only toggle that nothing this
+# workflow's own token can reach; actions/configure-pages's own attempt
+# to do it was what failed here, "Resource not accessible by
+# integration"). The "check Pages is enabled" step below is what carried
+# the repository through that: it skips the deploy rather than failing
+# the job, so a real problem with the build still fails loudly while an
+# expected, admin-only gap stops emailing a failure on every push. Kept
+# for a fresh fork, which starts in exactly that state.
 name: publish
 
 on:

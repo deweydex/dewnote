@@ -33,7 +33,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { sourceLanguageExtension } from "./lang.ts";
-import { iconRail } from "./icon-rail.ts";
+import { iconRail, labelToggle } from "./icon-rail.ts";
 
 export interface SourceViewHost {
   getSource(): string;
@@ -133,6 +133,7 @@ export function mountSourceView(host: SourceViewHost): SourceViewPanel {
   }
   document.addEventListener("keydown", onGlobalKeydown);
 
+  labelToggle(toggle, "Source");
   iconRail().appendChild(toggle);
   document.body.appendChild(overlay);
 

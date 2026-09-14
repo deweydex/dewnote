@@ -23,3 +23,19 @@ export function iconRail(): HTMLDivElement {
   document.body.appendChild(rail);
   return rail;
 }
+
+/** Gives a toggle a word to sit under its glyph on the bottom bar.
+ *
+ * A row of eight unlabelled glyphs is a memory test — ▤ and ⌂ and ≡ mean
+ * nothing until you have opened each one and learned it, and on a phone
+ * there is no tooltip to hover for the answer. The label is rendered from
+ * this attribute by CSS (`::after`) rather than as a second element, so
+ * the button stays one node with one accessible name and nothing here
+ * has to know whether the rail is currently a column or a bar.
+ *
+ * Deliberately shorter than the panel's own heading where that heading is
+ * long: this is a tab bar's worth of space, and a word that wraps or
+ * truncates is worse than a shorter word that doesn't. */
+export function labelToggle(toggle: HTMLElement, word: string): void {
+  toggle.dataset["label"] = word;
+}

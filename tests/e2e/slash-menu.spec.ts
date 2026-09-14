@@ -3,6 +3,7 @@
 // reaching for the mouse. Touches no Pyodide worker, so belongs in the
 // suite that runs everywhere, same as surface.spec.ts.
 
+import { pointAt } from "./block-controls.ts";
 import { test as base, expect, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -40,10 +41,9 @@ async function getSource(page: Page): Promise<string> {
  * CodeMirror content host, already focused with "New paragraph."
  * selected (insertAfter's own tail), ready to type over. */
 async function freshParagraph(page: Page) {
-  const gap = page.locator(".dn-add-gap").nth(1);
-  await gap.hover();
-  await gap.locator(".dn-add-btn").click();
-  await gap.locator(".dn-add-menu button", { hasText: "Paragraph" }).click();
+  await pointAt(page, 0);
+  await page.locator(".dn-add-btn").click();
+  await page.locator(".dn-add-menu button", { hasText: "Paragraph" }).click();
   return page.locator(".dn-block-prose .dn-block-source .cm-content").first();
 }
 

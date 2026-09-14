@@ -14,7 +14,7 @@
 // document. Nothing here knows app.ts exists beyond that one selector.
 
 import { parseDocument } from "./blocks.ts";
-import { iconRail } from "./icon-rail.ts";
+import { iconRail, labelToggle } from "./icon-rail.ts";
 
 export interface OutlinePanelHost {
   getSource(): string;
@@ -129,6 +129,7 @@ export function mountOutlinePanel(host: OutlinePanelHost): OutlinePanel {
     if (!panel.hidden) render();
   }, 500);
 
+  labelToggle(toggle, "Outline");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
 

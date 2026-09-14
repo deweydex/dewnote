@@ -6,12 +6,13 @@
 // unchanged, since an opened folder file is exactly the single-file
 // case #18 already built — a name, content, and a real writable handle.
 
-import { chooseFolder, createFile, listCourseFiles, listMarkdownFiles, readFile, supportsDirectoryPicker, writeFile, type FolderFile } from "./folder-store.ts";
+import { chooseFolder, createFile, listCourseFiles, listMarkdownFiles, listNamesIn, readBytesAt, readFile, supportsDirectoryPicker, writeFile, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
 import { createFile as createActiveFile, setActiveStore } from "./active-store.ts";
-import { iconRail } from "./icon-rail.ts";
+import { iconRail, labelToggle } from "./icon-rail.ts";
+import { todayVersion } from "./dialect.ts";
 
 export interface FolderPanel {
   destroy(): void;
@@ -26,19 +27,6 @@ function textInput(placeholder: string): HTMLInputElement {
   input.autocomplete = "off";
   input.spellcheck = false;
   return input;
-}
-
-/** dewlab's own `version` form (DIALECTS.md §1: `2026.09.04.1`) —
- * today's date plus a `.1` release counter, since a freshly created
- * tutorial has no prior release to be the second of. Computed at create
- * time rather than once at mount, so a panel left open overnight still
- * stamps the day it's actually used on. */
-function todayVersion(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}.${mm}.${dd}.1`;
 }
 
 /** Mounted once, independently of any particular document. Takes the
@@ -276,11 +264,20 @@ id: ${id}-first-cell
   }
   searchInput.addEventListener("input", renderFiles);
 
+  /** The folder-relative path of the file this panel last opened, or
+   * null if it hasn't opened one. */
+  let openedPath: string | null = null;
+
   async function openFolderFile(file: FolderFile) {
     status.textContent = `Opening ${file.path}…`;
     try {
       const content = await readFile(file.handle);
       fileBar.open({ name: file.path, content, handle: file.handle });
+      // What "beside this document" means, for an image copied in
+      // (app.ts's insertImageAfter). Set only on a real open from this
+      // folder: a file dropped onto the editor has no folder to sit in,
+      // and must not inherit whichever one was opened before it.
+      openedPath = file.path;
       status.textContent = `Opened ${file.path}.`;
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : String(err);
@@ -420,6 +417,18 @@ id: ${id}-first-cell
         await writeFile(file.handle, content);
         await loadFromRoot(root, folderName, "Refreshing");
       },
+      async createBinaryFile(path, bytes) {
+        await createFile(root, path, bytes);
+        await loadFromRoot(root, folderName, "Refreshing");
+      },
+      // Walked fresh rather than looked up in `files`, which holds only
+      // the markdown and course files this panel lists — an image is
+      // neither, so it was never in there to find.
+      async readBinaryFile(path) {
+        return readBytesAt(root, path);
+      },
+      currentPath: () => openedPath,
+      listNamesIn: (folder) => listNamesIn(root, folder),
     });
     await loadFromRoot(root, folderName, "Reading");
   });
@@ -428,6 +437,7 @@ id: ${id}-first-cell
     if (currentRoot) void loadFromRoot(currentRoot, folderName, "Refreshing");
   });
 
+  labelToggle(toggle, "Folder");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
   renderFiles();

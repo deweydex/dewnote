@@ -47,6 +47,16 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".dn-block").first()).toBeVisible();
 });
 
+
+/** The three export/import buttons live behind the file bar's "⋯" menu
+ * now — five buttons on one bar left the filename as "U…" at phone
+ * width. Each keeps its own class and its own handler; only how many are
+ * on screen at rest changed. */
+async function openFileMenuThen(page: import("@playwright/test").Page, selector: string) {
+  await page.locator(".dn-file-more").click();
+  await page.locator(selector).click();
+}
+
 test("Export HTML downloads a standalone page with real content and the live stylesheet inlined", async ({ page }) => {
   await dropFile(
     page,
@@ -55,7 +65,7 @@ test("Export HTML downloads a standalone page with real content and the live sty
   );
   await expect(page.locator("h1")).toHaveText("A Rule");
 
-  const [download] = await Promise.all([page.waitForEvent("download"), page.locator(".dn-file-export-html").click()]);
+  const [download] = await Promise.all([page.waitForEvent("download"), openFileMenuThen(page, ".dn-file-export-html")]);
   expect(download.suggestedFilename()).toBe("a-rule.html");
 
   const savedPath = await download.path();

@@ -6,6 +6,7 @@
 // already-loaded page through the window.__dewnote hook main.ts exposes
 // for exactly this, rather than needing a second build or harness page.
 
+import { addBlockAfter, arm, deleteBlock, pointAt } from "./block-controls.ts";
 import { test as base, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -98,8 +99,9 @@ test("editing one fence and then focusing a second preserves both, not just the 
 
 test("delete removes exactly the targeted block", async ({ page }) => {
   await mount(page, "One.\n\nTwo.\n\nThree.\n");
-  await page.locator(".dn-block").nth(1).hover();
-  await page.locator(".dn-block").nth(1).locator(".dn-block-delete").click();
+  // Two steps: delete isn't in the resting control set, so a block has
+  // to be armed before it can go.
+  await deleteBlock(page, 1);
 
   const finalSource = await getSource(page);
   expect(finalSource).toBe("One.\n\nThree.\n");
@@ -113,9 +115,7 @@ test("a fence can be deleted like any other block, not just a prose one", async 
   // deletion, checked directly rather than assumed: three newlines
   // between "One." and "Three." after this, not two.
   await mount(page, "One.\n\n```python exec\nid: a\n1\n```\n\nThree.\n");
-  const fenceBlock = page.locator(".dn-block-fence");
-  await fenceBlock.hover();
-  await fenceBlock.locator(".dn-block-delete").click();
+  await deleteBlock(page, 1);
 
   const finalSource = await getSource(page);
   expect(finalSource).toBe("One.\n\n\nThree.\n");
@@ -133,8 +133,9 @@ test("the orphan blank-line block a fence leaves behind is hoverable and deletab
   const box = await blank.boundingBox();
   expect(box?.height).toBeGreaterThan(0);
 
-  await blank.hover();
-  await blank.locator(".dn-block-delete").click();
+  // The blank block is index 1 — the fence, then the blank line it left
+  // behind. Deleting it still means arming it first.
+  await deleteBlock(page, 1);
 
   const finalSource = await getSource(page);
   expect(finalSource).toBe("```python exec\nid: a\n1\n```\nAfter.\n");
@@ -143,46 +144,46 @@ test("the orphan blank-line block a fence leaves behind is hoverable and deletab
 test("the grip arms a block, and arrow keys reorder it while armed", async ({ page }) => {
   await mount(page, "One.\n\nTwo.\n\nThree.\n");
   const blocks = page.locator(".dn-block");
-  const grip = (n: number) => blocks.nth(n).locator(".dn-block-grip");
+  // One grip, wherever the controls currently are — not one per block.
+  const grip = page.locator(".dn-block-grip");
 
-  await blocks.nth(1).hover();
-  await expect(grip(1)).toHaveAttribute("aria-pressed", "false");
-  await grip(1).click();
-  await expect(grip(1)).toHaveAttribute("aria-pressed", "true");
+  await pointAt(page, 1);
+  await expect(grip).toHaveAttribute("aria-pressed", "false");
+  await grip.click();
+  await expect(grip).toHaveAttribute("aria-pressed", "true");
   await expect(blocks.nth(1)).toHaveClass(/is-armed/);
 
-  await grip(1).press("ArrowUp");
+  await grip.press("ArrowUp");
   expect(await getSource(page)).toBe("Two.\n\nOne.\n\nThree.\n");
-  // moveBlock re-arms the block at its new position and refocuses its grip.
+  // moveBlock re-arms the block at its new position and refocuses the grip.
   await expect(blocks.nth(0)).toHaveClass(/is-armed/);
-  await expect(grip(0)).toBeFocused();
+  await expect(grip).toBeFocused();
 
-  await grip(0).press("ArrowDown");
+  await grip.press("ArrowDown");
   expect(await getSource(page)).toBe("One.\n\nTwo.\n\nThree.\n");
 
-  await grip(1).press("Escape");
+  await grip.press("Escape");
   await expect(blocks.nth(1)).not.toHaveClass(/is-armed/);
 });
 
 test("clicking outside the armed block disarms it", async ({ page }) => {
   await mount(page, "One.\n\nTwo.\n");
   const blocks = page.locator(".dn-block");
-  await blocks.nth(0).hover();
-  await blocks.nth(0).locator(".dn-block-grip").click();
-  await expect(blocks.nth(0)).toHaveClass(/is-armed/);
+  await arm(page, 0);
 
   await page.locator("body").click({ position: { x: 5, y: 5 } });
   await expect(blocks.nth(0)).not.toHaveClass(/is-armed/);
 });
 
-test("dragging an armed block onto another drops it in just before the target", async ({ page }) => {
+test("dragging a block by its grip drops it in just before the target", async ({ page }) => {
+  // Arming is no longer a precondition for dragging. It was, because the
+  // whole block used to be the draggable element and a stray drag would
+  // have fought text selection; the grip is a deliberate handle, so it
+  // drags directly.
   await mount(page, "One.\n\nTwo.\n\nThree.\n");
   const blocks = page.locator(".dn-block");
-  await blocks.nth(0).hover();
-  await blocks.nth(0).locator(".dn-block-grip").click();
-  await expect(blocks.nth(0)).toHaveClass(/is-armed/);
-
-  await blocks.nth(0).dragTo(blocks.nth(2));
+  await pointAt(page, 0);
+  await page.locator(".dn-block-grip").dragTo(blocks.nth(2));
   expect(await getSource(page)).toBe("Two.\n\nOne.\n\nThree.\n");
 });
 
@@ -198,15 +199,20 @@ test("front matter never gets move controls, and nothing can be moved above it",
   // blocks rather than test the constraint this test is actually for.
   await mount(page, "---\ntitle: A doc\n---\nOne.\n\nTwo.\n");
   const frontMatterBlock = page.locator(".dn-block-frontmatter");
-  await expect(frontMatterBlock.locator(".dn-block-toolbar")).toHaveCount(0);
 
-  // "One." can still be armed and dragged, but dropping it onto front
-  // matter — or anywhere above it — clamps to right after front matter,
-  // per moveBlockTo's own minIndex rule, so nothing actually moves here.
-  const firstProse = page.locator(".dn-block-prose", { hasText: "One." });
-  await firstProse.hover();
-  await firstProse.locator(".dn-block-grip").click();
-  await firstProse.dragTo(frontMatterBlock);
+  // Pointing at front matter brings the controls, but with no grip: it
+  // stays first, so there is nothing to drag it by. The "+" is still
+  // there, and is how the top of the body is reached.
+  await pointAt(page, 0);
+  await expect(page.locator(".dn-add-btn")).toBeVisible();
+  await expect(page.locator(".dn-block-grip")).toBeHidden();
+  await expect(page.locator(".dn-block-delete")).toBeHidden();
+
+  // "One." can still be dragged, but dropping it onto front matter — or
+  // anywhere above it — clamps to right after front matter, per
+  // moveBlockTo's own minIndex rule, so nothing actually moves here.
+  await pointAt(page, 1);
+  await page.locator(".dn-block-grip").dragTo(frontMatterBlock);
   expect(await getSource(page)).toBe("---\ntitle: A doc\n---\nOne.\n\nTwo.\n");
 });
 
@@ -214,10 +220,7 @@ test("the add control offers more than a paragraph — a code cell is live and f
   page,
 }) => {
   await mount(page, "One.\n\nTwo.\n");
-  const gap = page.locator(".dn-add-gap").nth(1);
-  await gap.hover();
-  await gap.locator(".dn-add-btn").click();
-  await gap.locator(".dn-add-menu button", { hasText: "Code cell" }).click();
+  await addBlockAfter(page, 0, "Code cell");
 
   const finalSource = await getSource(page);
   expect(finalSource).toContain("```python exec\nid: new-cell-1\n");
@@ -228,10 +231,7 @@ test("the add control offers more than a paragraph — a code cell is live and f
 
 test("the add control inserts a new paragraph between the two blocks it sits between", async ({ page }) => {
   await mount(page, "One.\n\nThree.\n");
-  const gap = page.locator(".dn-add-gap").nth(1);
-  await gap.hover(); // the button is opacity:0/pointer-events:none until its gap is hovered
-  await gap.locator(".dn-add-btn").click();
-  await gap.locator(".dn-add-menu button", { hasText: "Paragraph" }).click();
+  await addBlockAfter(page, 0, "Paragraph");
 
   const finalSource = await getSource(page);
   expect(finalSource).toBe("One.\n\nNew paragraph.\n\nThree.\n");

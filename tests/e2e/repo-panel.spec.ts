@@ -5,6 +5,7 @@
 // external service this feature actually talks to intercepted rather
 // than reached over the network.
 
+import { addBlockAfter } from "./block-controls.ts";
 import { test as base, expect, type Page, type Route } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -203,10 +204,7 @@ test("loading a repository builds the file index the link picker searches", asyn
   await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 course file.");
   await page.locator(".dn-repo-close").click();
 
-  const gap = page.locator(".dn-add-gap").first();
-  await gap.hover();
-  await gap.locator(".dn-add-btn").click();
-  await gap.locator(".dn-add-menu button", { hasText: "Link" }).click();
+  await addBlockAfter(page, 0, "Link");
 
   const items = page.locator(".dn-link-item button");
   await expect(items).toHaveCount(2);

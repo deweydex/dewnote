@@ -41,6 +41,9 @@ import { renderBlockPreview, renderCardFencePreview, renderHintFencePreview } fr
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
 import { pickLink } from "./link-picker.ts";
+import { canWriteAssets, createBinaryFile, currentPath, listNamesIn } from "./active-store.ts";
+import { assetNameFor, folderOf, isAssetFile, siblingPath } from "./asset-name.ts";
+import { forgetAssetUrls, resolveSiblingImages } from "./asset-preview.ts";
 import {
   declaredPackages,
   execCellLanguage,
@@ -150,6 +153,10 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+async function readAsBytes(file: File): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await file.arrayBuffer());
+}
+
 // A persisted SQL cell's saved script lives in localStorage, wrapped in
 // try/catch the way dewstack's own save/restore is — private browsing or
 // blocked storage just means this run's script won't be there to offer
@@ -185,6 +192,10 @@ function sameShape(a: Document, b: Document): boolean {
 }
 
 export function mountDocument(container: HTMLElement, initialSource: string): MountedDocument {
+  // A different document means a different folder, and the same bare
+  // image name in it may well mean a different picture — so nothing
+  // cached for the last one carries over (asset-preview.ts).
+  forgetAssetUrls();
   let source = initialSource;
   let doc = parseDocument(source);
   const liveViews = new Map<number, EditorView>();
@@ -411,22 +422,48 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
   /** Not in NEW_BLOCK_SPEC's own synchronous table because picking a
    * file and reading it are both async, unlike every other add-menu
-   * kind. Inlined as a `data:` URI in the markdown itself rather than
-   * saved alongside the document, since no store this file knows about
-   * (browser, folder, or GitHub — src/store.ts, src/folder-store.ts,
-   * src/github.ts) has a "copy this asset next to the document" method
-   * yet; plan §8's own "a copy into the tutorial folder" is still open
-   * for the same reason the link picker is (§6 step 8's own note) —
-   * both need more of the store interface than exists today. Alt text
-   * is asked for the same way DIALECTS.md's own worked examples always
-   * write it: required in the markdown, never left empty by this UI
-   * even though a reader could still hand-edit it away afterwards. */
+   * kind.
+   *
+   * ## A real file beside the document, when there is one
+   *
+   * Both builds resolve an image the same way: the markdown names a bare
+   * file, and the build looks for it in the folder the markdown sits in
+   * — dewlab's `resolve_assets()`, which *fails the build* on a name
+   * with no file behind it, and dewstack's own copy of every
+   * non-`.md`/`.yaml` sibling into the page's output. Under dewlab's
+   * current layout that folder is `tutorials/<id>/`, shared by the
+   * tutorial, its practice page and every frozen release of it, so all
+   * three resolve the same bare name against the same picture.
+   *
+   * So when a store is open and the open document has a path, the bytes
+   * are written next to it and the markdown gets the bare name dewlab
+   * expects. `asset-name.ts` decides the name: reshaped so markdown
+   * can't misread it (`![alt](My Photo (1).png)` ends its link at the
+   * first `)`), and stepped past any name already in that folder, since
+   * a name in use belongs to a picture already on a page.
+   *
+   * ## A `data:` URI when there is nowhere to write
+   *
+   * A document dropped onto the editor has no folder, and neither does
+   * one being written before anything is opened. Inlining is the honest
+   * answer there rather than refusing the image: it renders, it
+   * round-trips, and dewlab's own `EXTERNAL_URL_RE` leaves a `data:` URI
+   * alone rather than failing on it. What it costs is a real file — an
+   * export or a push carries the whole picture inline — so the status
+   * line says which of the two just happened rather than leaving the
+   * reader to find out at build time.
+   *
+   * Alt text is asked for the same way DIALECTS.md's own worked examples
+   * always write it: required in the markdown, never left empty by this
+   * UI even though a reader could still hand-edit it away afterwards.
+   * dewlab's `check_alt_text()` fails the build on an image with no
+   * `alt` at all, and reads an explicit empty one as "decorative". */
   async function insertImageAfter(afterIndex: number | null) {
     const file = await pickImageFile();
     if (!file) return;
-    const dataUrl = await readAsDataUrl(file);
     const alt = window.prompt("Alt text for this image:", "") ?? "";
-    const text = `![${alt}](${dataUrl})\n\n`;
+    const target = await writeImageBeside(file);
+    const text = `![${alt}](${target})\n\n`;
     const parts = blockTexts();
     const newIndex = afterIndex === null ? 0 : afterIndex + 1;
     parts.splice(newIndex, 0, text);
@@ -434,6 +471,29 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     teardownLiveViews();
     doc = parseDocument(source);
     render();
+  }
+
+  /** The bare file name a real copy was written under, or a `data:` URI
+   * when there was nowhere to write one. A failed write falls back to
+   * inlining rather than losing the image the reader just picked — the
+   * picture still lands on the page, and the reason the copy didn't
+   * happen is the one thing worth saying out loud. */
+  async function writeImageBeside(file: File): Promise<string> {
+    if (!canWriteAssets()) return readAsDataUrl(file);
+    const documentPath = currentPath();
+    if (!documentPath) return readAsDataUrl(file);
+
+    const folder = folderOf(documentPath);
+    const taken = (await listNamesIn(folder)).filter(isAssetFile);
+    const name = assetNameFor(file.name, taken);
+    try {
+      await createBinaryFile(siblingPath(documentPath, name), await readAsBytes(file));
+      return name;
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err);
+      window.alert(`Couldn't save the image beside this document (${why}) — it's in the document itself instead, which every build will still render.`);
+      return readAsDataUrl(file);
+    }
   }
 
   /** Also async, like insertImageAfter, and for the same reason it isn't
@@ -535,7 +595,11 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     doc = parseDocument(source);
     render();
     setArmed(index + delta);
-    blockElements[index + delta]?.querySelector<HTMLElement>(".dn-block-grip")?.focus();
+    // The grip is the one in the cluster now, not one inside the block —
+    // `setArmed` has already moved the cluster to the block's new index,
+    // so this is simply "keep the key you were pressing under your
+    // finger" and a second arrow continues the move.
+    grip.focus();
   }
 
   /** Drag reorder's own move — dropping block `fromIndex` onto block
@@ -560,17 +624,15 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * disarms the first, the same "one thing open" rule closeOpenAddMenus
    * already keeps for the add menus. */
   function setArmed(index: number | null) {
-    if (armedIndex !== null && blockElements[armedIndex]) {
-      blockElements[armedIndex]!.classList.remove("is-armed");
-      blockElements[armedIndex]!.draggable = false;
-      blockElements[armedIndex]!.querySelector(".dn-block-grip")?.setAttribute("aria-pressed", "false");
-    }
+    if (armedIndex !== null && blockElements[armedIndex]) blockElements[armedIndex]!.classList.remove("is-armed");
     armedIndex = index;
-    if (index !== null && blockElements[index]) {
-      blockElements[index]!.classList.add("is-armed");
-      blockElements[index]!.draggable = true;
-      blockElements[index]!.querySelector(".dn-block-grip")?.setAttribute("aria-pressed", "true");
-    }
+    if (index !== null && blockElements[index]) blockElements[index]!.classList.add("is-armed");
+    // The grip and the delete button both live in the one cluster now, so
+    // arming is a matter of re-reading it rather than of finding the
+    // right block's own copy. Delete appears here and nowhere else:
+    // arming is what reveals it.
+    if (index !== null) attachControls(index);
+    else if (controlsIndex !== null) attachControls(controlsIndex);
   }
 
   /** `targetMap` defaults to `liveViews` — the generic "this view's own
@@ -618,41 +680,200 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     for (const menu of container.querySelectorAll(".dn-add-menu.is-open")) menu.classList.remove("is-open");
   }
 
-  function addGap(afterIndex: number | null): HTMLElement {
-    const gap = document.createElement("div");
-    gap.className = "dn-add-gap";
+  // ## One set of controls, not one per block
+  //
+  // Every block used to carry its own: a "+" gap above it holding a full
+  // copy of the six-item add menu, and a toolbar holding a grip and a
+  // delete button. For a six-block document that is seven menus and six
+  // toolbars — over fifty buttons in the DOM, almost none of them visible
+  // at any moment, and on a touch screen (where `@media (hover: none)`
+  // reveals them all) six "+" circles running down the middle of the page.
+  //
+  // At most one block is ever being acted on, so there is one cluster and
+  // it moves to whichever block the reader is pointing at. This is the
+  // shape every editor of this kind converged on, and the reason is not
+  // fashion: chrome that repeats per block reads as part of the document,
+  // and chrome that appears at one place reads as a tool.
+  //
+  // It sits in the left margin, outside the column the text runs in. That
+  // keeps it out of the reading line, and it is also what stops it
+  // colliding with the icon rail on the right — on a phone the two used
+  // to overlap, every block's grip sitting underneath a rail button and
+  // flush to the screen edge.
+  //
+  // ## What each control does, and what is deliberately not here
+  //
+  // `+` inserts *after* the block it is attached to. Front matter is
+  // block 0 in every dewlab and dewstack document, so its own "+" is how
+  // the top of the body is reached; a plain markdown file with no front
+  // matter has no way to insert above its first block, which is the one
+  // position this costs, and adding then dragging covers it. A second
+  // permanent "+" pinned above the document to serve that case would put
+  // chrome on every document for the sake of a rare one.
+  //
+  // Delete is not in the resting set. It appears only once a block is
+  // armed — clicking the grip, which already arms for keyboard
+  // reordering. So the resting state is two controls, and deleting a
+  // block is a deliberate two-step rather than a click on a button that
+  // sat one pixel from the drag handle.
+  //
+  // Reordering stays two ways and not three: drag the grip, or arm it and
+  // use the arrow keys. There are no up/down buttons, and adding a pair
+  // per block is exactly the repetition this replaces.
+  const controls = document.createElement("div");
+  controls.className = "dn-block-controls";
+  controls.hidden = true;
 
-    const button = document.createElement("button");
-    button.className = "dn-add-btn";
-    button.type = "button";
-    button.setAttribute("aria-label", "Add a block here");
-    button.textContent = "+";
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.className = "dn-add-btn";
+  addButton.setAttribute("aria-label", "Add a block after this one");
+  addButton.title = "Add a block after this one";
+  addButton.textContent = "+";
 
-    const menu = document.createElement("div");
-    menu.className = "dn-add-menu";
-    for (const { kind, label } of ADD_MENU_ITEMS) {
-      const item = document.createElement("button");
-      item.type = "button";
-      item.textContent = label;
-      item.addEventListener("click", () => {
-        closeOpenAddMenus();
-        if (kind === "image") insertImageAfter(afterIndex);
-        else if (kind === "link") insertLinkAfter(afterIndex);
-        else insertAfter(afterIndex, kind);
-      });
-      menu.appendChild(item);
-    }
-
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const wasOpen = menu.classList.contains("is-open");
+  const addMenu = document.createElement("div");
+  addMenu.className = "dn-add-menu";
+  for (const { kind, label } of ADD_MENU_ITEMS) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.textContent = label;
+    item.addEventListener("click", () => {
       closeOpenAddMenus();
-      if (!wasOpen) menu.classList.add("is-open");
+      const after = controlsIndex;
+      if (kind === "image") void insertImageAfter(after);
+      else if (kind === "link") void insertLinkAfter(after);
+      else insertAfter(after, kind);
     });
+    addMenu.appendChild(item);
+  }
+  addButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const wasOpen = addMenu.classList.contains("is-open");
+    closeOpenAddMenus();
+    if (!wasOpen) addMenu.classList.add("is-open");
+  });
 
-    gap.appendChild(button);
-    gap.appendChild(menu);
-    return gap;
+  const grip = document.createElement("button");
+  grip.type = "button";
+  grip.className = "dn-block-grip";
+  grip.draggable = true;
+  grip.setAttribute("aria-label", "Drag to reorder, or click and use the arrow keys");
+  grip.title = "Drag to move, or click then use the arrow keys";
+  grip.textContent = "⠿";
+  grip.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const target = heldIndex ?? controlsIndex;
+    heldIndex = null;
+    if (target === null) return;
+    setArmed(armedIndex === target ? null : target);
+  });
+  // The block the grip was on when it was pressed.
+  //
+  // Set on pointerdown, not dragstart, and that is the whole point: the
+  // cluster follows the pointer, and by the time `dragstart` fires the
+  // pointer has already travelled far enough to count as a drag — over
+  // other blocks, each of which would have pulled the cluster along and
+  // left the drag reporting whichever block it happened to be passing.
+  // Pressing is when the reader chose a block; everything after that
+  // reads from here.
+  grip.addEventListener("pointerdown", () => {
+    heldIndex = controlsIndex;
+  });
+  // A press that never became a drag.
+  window.addEventListener("pointerup", releaseGrip);
+  grip.addEventListener("dragstart", (event) => {
+    const from = heldIndex ?? controlsIndex;
+    if (from === null) {
+      event.preventDefault();
+      return;
+    }
+    event.dataTransfer?.setData("text/plain", String(from));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+    draggingIndex = from;
+  });
+  grip.addEventListener("dragend", () => {
+    draggingIndex = null;
+    heldIndex = null;
+  });
+  grip.addEventListener("keydown", (event) => {
+    if (armedIndex === null || armedIndex !== controlsIndex) return;
+    if (event.key === "ArrowUp" && canMoveUp(armedIndex)) {
+      event.preventDefault();
+      moveBlock(armedIndex, -1);
+    } else if (event.key === "ArrowDown" && canMoveDown(armedIndex)) {
+      event.preventDefault();
+      moveBlock(armedIndex, 1);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setArmed(null);
+    }
+  });
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "dn-block-delete";
+  deleteButton.setAttribute("aria-label", "Delete this block");
+  deleteButton.title = "Delete this block";
+  deleteButton.textContent = "×";
+  deleteButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (controlsIndex !== null) deleteBlock(controlsIndex);
+  });
+
+  controls.append(addButton, grip, deleteButton, addMenu);
+
+  /** Which block the cluster is currently attached to, or null when it is
+   * parked. Every control reads this rather than closing over an index,
+   * which is what lets one set of handlers serve every block. */
+  let controlsIndex: number | null = null;
+  /** The block currently being dragged by its grip, so a wrapper knows to
+   * accept a drop. Replaces the old rule that a block had to be *armed*
+   * before it could be dragged at all — that existed because the whole
+   * wrapper was draggable and a stray drag would have fought text
+   * selection. The grip is a deliberate target, so it drags directly. */
+  let draggingIndex: number | null = null;
+  /** The block the grip was pressed on, held from pointerdown until the
+   * drag ends or the press is released. While it is set the cluster stays
+   * put — see the pointerdown handler. */
+  let heldIndex: number | null = null;
+  function releaseGrip() {
+    if (draggingIndex === null) heldIndex = null;
+  }
+
+  /** Moves the cluster to `index`, or parks it when null.
+   *
+   * Positioned against the container rather than appended into the block,
+   * so moving it never re-renders anything and never disturbs a live
+   * editor. Front matter gets the "+" but no grip and no delete: it stays
+   * first and is not a block anybody removes. */
+  function attachControls(index: number | null) {
+    // Never while the grip is held. The cluster follows the pointer, and
+    // a pointer on its way to a drop crosses every block in between —
+    // letting it follow would move the grip out from under the drag that
+    // started on it.
+    if (heldIndex !== null || draggingIndex !== null) return;
+    if (index === null || !blockElements[index]) {
+      controls.hidden = true;
+      delete controls.dataset["index"];
+      controlsIndex = null;
+      return;
+    }
+    const wrapper = blockElements[index]!;
+    const isFrontMatter = doc.blocks[index]?.kind === "frontmatter";
+    controlsIndex = index;
+    controls.hidden = false;
+    // Which block these belong to, readable from the DOM. The cluster
+    // glides between blocks rather than jumping, so its pixel position is
+    // mid-transition for a moment after it moves and is not a reliable
+    // answer to "which block is this on" — for a test or for anybody
+    // debugging.
+    controls.dataset["index"] = String(index);
+    controls.style.top = `${wrapper.offsetTop}px`;
+    grip.hidden = isFrontMatter;
+    // Delete is armed-only, and front matter is never armed.
+    deleteButton.hidden = isFrontMatter || armedIndex !== index;
+    grip.setAttribute("aria-pressed", String(armedIndex === index));
+    controls.classList.toggle("is-armed", armedIndex === index);
   }
 
   /** A prose block's own keyboard shortcut for the "+" menu: typing "/"
@@ -769,48 +990,6 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * drag reorder (setArmed), and once armed, ArrowUp/ArrowDown on the
    * grip itself move it exactly as the old buttons did, so keyboard
    * reorder loses nothing by losing the arrows. */
-  function buildToolbar(index: number): HTMLElement {
-    const toolbar = document.createElement("div");
-    toolbar.className = "dn-block-toolbar";
-
-    const grip = document.createElement("button");
-    grip.type = "button";
-    grip.className = "dn-block-grip";
-    grip.setAttribute("aria-label", "Drag to reorder, or arm and use the arrow keys");
-    grip.setAttribute("aria-pressed", String(index === armedIndex));
-    grip.textContent = "⠿";
-    grip.addEventListener("click", (event) => {
-      event.stopPropagation();
-      setArmed(armedIndex === index ? null : index);
-    });
-    grip.addEventListener("keydown", (event) => {
-      if (armedIndex !== index) return;
-      if (event.key === "ArrowUp" && canMoveUp(index)) {
-        event.preventDefault();
-        moveBlock(index, -1);
-      } else if (event.key === "ArrowDown" && canMoveDown(index)) {
-        event.preventDefault();
-        moveBlock(index, 1);
-      } else if (event.key === "Escape") {
-        event.preventDefault();
-        setArmed(null);
-      }
-    });
-
-    const deleteButton = document.createElement("button");
-    deleteButton.type = "button";
-    deleteButton.className = "dn-block-delete";
-    deleteButton.setAttribute("aria-label", "Delete this block");
-    deleteButton.textContent = "×";
-    deleteButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      deleteBlock(index);
-    });
-
-    toolbar.append(grip, deleteButton);
-    return toolbar;
-  }
-
   /** dewlab's own output-event protocol (clear/stream/append), applied to
    * one cell's output area exactly the way dewlab's applyOutputEvent
    * does: "clear" wipes it, "stream" appends running text (coalesced onto
@@ -1534,49 +1713,37 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     wrapper.className = `dn-block dn-block-${block.kind}`;
     wrapper.dataset["index"] = String(index);
 
-    if (block.kind === "frontmatter") {
-      // Front matter always stays first — no move controls at all, per
-      // canMoveUp/canMoveDown, so it never gets a toolbar (and so never a
-      // grip to arm) either. Still a valid drop target, though — dropping
-      // onto it is how a block gets moved to the very top of the body —
-      // moveBlockTo's own minIndex clamp is what keeps it from landing
-      // *above* front matter instead.
-      wrapper.addEventListener("dragover", (event) => {
-        if (armedIndex === null) return;
-        event.preventDefault();
-        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-      });
-      wrapper.addEventListener("drop", (event) => {
-        event.preventDefault();
-        const from = Number(event.dataTransfer?.getData("text/plain"));
-        if (Number.isNaN(from)) return;
-        moveBlockTo(from, index);
-        setArmed(null);
-      });
-    } else {
-      wrapper.appendChild(buildToolbar(index));
-      wrapper.draggable = index === armedIndex;
-      // dragover must call preventDefault for drop to fire at all — the
-      // browser's default is "this isn't a drop target." Gated on
-      // armedIndex, not on wrapper.draggable, since the *target* wrapper
-      // being dragged over is never itself the draggable one.
-      wrapper.addEventListener("dragover", (event) => {
-        if (armedIndex === null) return;
-        event.preventDefault();
-        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-      });
-      wrapper.addEventListener("dragstart", (event) => {
-        event.dataTransfer?.setData("text/plain", String(index));
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-      });
-      wrapper.addEventListener("drop", (event) => {
-        event.preventDefault();
-        const from = Number(event.dataTransfer?.getData("text/plain"));
-        if (Number.isNaN(from)) return;
-        moveBlockTo(from, index);
-        setArmed(null);
-      });
-    }
+    // Every block is a drop target, front matter included — dropping onto
+    // it is how a block reaches the very top of the body, and
+    // moveBlockTo's own clamp is what keeps anything from landing above
+    // it. Nothing is draggable here any more: the grip does the dragging
+    // (see the control cluster above), so a drag can only ever start from
+    // a deliberate handle rather than from anywhere in the block's text.
+    wrapper.addEventListener("dragover", (event) => {
+      if (draggingIndex === null) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      wrapper.classList.add("is-drop-target");
+    });
+    wrapper.addEventListener("dragleave", () => wrapper.classList.remove("is-drop-target"));
+    wrapper.addEventListener("drop", (event) => {
+      event.preventDefault();
+      wrapper.classList.remove("is-drop-target");
+      const from = Number(event.dataTransfer?.getData("text/plain"));
+      if (Number.isNaN(from)) return;
+      moveBlockTo(from, index);
+      setArmed(null);
+    });
+
+    // What moves the one cluster to this block. `mouseenter` is the
+    // pointer case; `focusin` is the keyboard one, so tabbing through a
+    // document brings the controls along instead of leaving them behind
+    // wherever the mouse last was. On a touch screen neither fires from
+    // scrolling alone — a tap into a block is what attaches them, which
+    // is why the resting state on a phone is a document with no chrome on
+    // it at all.
+    wrapper.addEventListener("mouseenter", () => attachControls(index));
+    wrapper.addEventListener("focusin", () => attachControls(index));
 
     if (block.kind === "fence") {
       const info = block.fence?.info ?? "";
@@ -1676,6 +1843,11 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     const rendered = document.createElement("div");
     rendered.className = "dn-block-render";
     rendered.innerHTML = renderBlockPreview(block, detectDialect(doc.frontMatter));
+    // An image the markdown names by bare file name resolves against the
+    // folder the document sits in, not against this editor's own page —
+    // so the bytes come back through the store (asset-preview.ts). The
+    // markdown keeps the bare name either way.
+    resolveSiblingImages(rendered);
     rendered.tabIndex = 0;
     rendered.addEventListener("click", () => enterEdit(index));
     rendered.addEventListener("keydown", (event) => {
@@ -1689,13 +1861,17 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   function render() {
     container.innerHTML = "";
     blockElements.length = 0;
-    container.appendChild(addGap(null));
+    // The cluster is appended once and survives every render — it is
+    // positioned against the container, not inside any block, so a
+    // re-render never tears it down mid-drag or mid-menu.
+    container.appendChild(controls);
     doc.blocks.forEach((block, index) => {
       const wrapper = renderBlockWrapper(block, index);
       blockElements[index] = wrapper;
       container.appendChild(wrapper);
-      container.appendChild(addGap(index));
     });
+    // Whatever it was attached to may have moved, changed kind, or gone.
+    attachControls(controlsIndex !== null && controlsIndex < doc.blocks.length ? controlsIndex : null);
   }
 
   render();
@@ -1722,6 +1898,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     destroy() {
       document.removeEventListener("click", closeOpenAddMenus);
       document.removeEventListener("click", disarmOnOutsideClick);
+      window.removeEventListener("pointerup", releaseGrip);
       teardownLiveViews();
       container.innerHTML = "";
     },

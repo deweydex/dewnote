@@ -1294,3 +1294,208 @@ courses.ts already records, with its own tests and no DOM; the panel is
 the only caller, and `active-store.ts` grew one read/write pair that both
 stores implement. Undoing any of it is deleting it.*
 
+**38 — The starter document carries dewlab's fields as they are now, not
+as they were when decision 31 chose it.**
+
+Decision 31 answered "should the starter model a real dialect, and which
+one" with dewlab, so a first-time reader meets the per-field form rather
+than plain markdown's raw-YAML caption. It then wrote out the fields
+dewlab had at the time: `title`, `slug`, `module`, `module_title`,
+`year`, `series`, `version: 1`.
+
+Decision 36 deleted four of those from the form. It did not delete them
+from here, and that gap was worse than leaving them visible: the form
+showed three clean rows while the document underneath still carried
+`slug`, `module`, `module_title` and `series`, invisible, unreachable
+without the raw-YAML fallback, and copied into every document anyone
+started from it. The round-trip guarantee is what made it stick —
+decision 1 means an untouched field survives every save, which is right
+for a file somebody else wrote and wrong for a template shipping four
+fields dewlab's build ignores.
+
+`version: 1` went the same way. It was never dewlab's form, which is a
+release date (`2026.09.14.1`, DIALECTS.md §1), and a reader who saved
+the starter got a version that no `v<version>.md` file name could match.
+
+**`todayVersion()` moved to `dialect.ts`.** It was private to
+folder-panel.ts, stamping a version for a newly created tutorial. The
+starter needs the same string for the same reason, and `dialect.ts`'s own
+header already claims to be the only place DIALECTS.md's inventory turns
+into code — what a dewlab `version:` looks like is part of that
+inventory. Stamped when the editor loads rather than frozen at whatever
+day this string was last edited.
+
+*Cost to change: none. The starter is one template string, and nothing
+reads it but the first mount.*
+
+**39 — An image is a real file beside the document, and the preview
+reads it back through the store.**
+
+Plan §6 step 8 has carried "a copy into the tutorial folder" as open
+since the step shipped, for the reason `insertImageAfter` said in its own
+comment: no store had a way to put a file anywhere. Both stores have one
+now (decision 37 gave them read and write), so this closes it.
+
+**Bare file name, because that is what both builds resolve.** dewlab's
+`resolve_assets()` looks for `diagram.png` in the folder the markdown
+sits in and *fails the build* on a name with no file behind it; dewstack
+copies every non-`.md`/`.yaml` sibling into the page's output. Under
+dewlab's current layout that folder is `tutorials/<id>/`, shared by the
+tutorial, its practice page and every frozen release, so all three
+resolve the same name against the same picture. dewlab has no image in
+any tutorial today, so none of this had a live example to check against —
+only the build's own rules, which are explicit.
+
+**The name is reshaped, and stepped past what is taken.**
+`![alt](My Photo (1).png)` ends its link at the first `)`; spaces break
+it the same way. So a picked file's name is lowercased and hyphenated
+(`asset-name.ts`). And because `tutorial_assets()` reads the folder
+rather than a declared list, a name already there belongs to a picture
+already on a page: writing over it would change that page silently, and
+pointing at it without writing would put the wrong picture under this alt
+text. A taken name gets a counter.
+
+Knowing what is taken meant a real directory listing, not the panels'
+own file lists: both walk for markdown and course files only, so a
+picture beside a tutorial appears in neither. The first version used
+those lists, and the test that caught it is the one worth keeping — a
+collision fell back to inlining rather than picking the next name.
+
+**A `data:` URI is still the answer when there is nowhere to write.** A
+document dropped on the editor has no folder, and neither does one being
+written before anything is opened. Inlining renders, round-trips, and
+passes dewlab's own `EXTERNAL_URL_RE`, which leaves a `data:` URI alone.
+What it costs is a real file, so the status says which of the two
+happened rather than leaving it to be found at build time.
+
+**The preview reads the bytes back rather than fetching the name.** This
+was not in the plan's line and is what makes the rest usable. dewnote is
+one HTML file served from somewhere else entirely, so `diagram.png`
+resolves against *it* and finds nothing — every image in a tutorial would
+render broken the moment the document was reopened, including one dewnote
+had just written. `asset-preview.ts` takes the `src` off before the
+browser can fetch it (a bare name set as `src` is one guaranteed 404 per
+image per render), reads the file through the store, and puts back an
+object URL. The markdown is never touched: what the document says stays
+the bare name.
+
+An image whose file isn't there keeps no `src` at all, which is what
+makes the browser show its `alt` text in the picture's place. More useful
+to an author than a broken icon, and honest — a name with no file behind
+it is exactly what fails dewlab's build.
+
+**`toBase64` was for text, and would have corrupted every image.** It
+UTF-8 encodes first, which rewrites every byte above 0x7F into two — over
+half of a PNG. `bytesToBase64` is its sibling for bytes that were never
+text, and `getFileBytes` is `getFileContent`'s, which decodes as UTF-8
+for the same reason. The repository test checks the committed base64
+against the bytes handed to the file chooser rather than only checking
+that a commit happened.
+
+*Cost to change: low. `asset-name.ts` and `asset-preview.ts` are both
+self-contained, and the store interface grew four optional methods that a
+store without them simply doesn't offer — which is what the `data:` URI
+fallback already handles.*
+
+**40 — One set of block controls that moves, not one per block.**
+
+Every block carried its own: a "+" gap above it holding a full copy of
+the six-item add menu, and a toolbar beside it holding a grip and a
+delete button. For a six-block document that is seven menus and six
+toolbars — over fifty buttons, almost none of them visible at any
+moment. On a phone, where `@media (hover: none)` revealed them all, it
+was six "+" circles running down the middle of the page and every
+block's grip stacked underneath the icon rail, flush to the bezel.
+
+At most one block is ever being acted on. So there is one cluster and it
+moves to whichever block is being pointed at. The reason is not fashion:
+chrome that repeats per block reads as part of the document, and chrome
+that appears at one place reads as a tool.
+
+**Two controls at rest.** Add, and a grip. Delete appears only once a
+block is armed — clicking the grip, which already armed it for keyboard
+reordering. Deleting is a deliberate two-step rather than a click on a
+button sitting a pixel from the drag handle, and the resting state loses
+a third of its chrome.
+
+**In the left gutter, outside the reading column.** That keeps it out of
+the line of text, and it is also what un-collided it from the icon rail,
+which is on the right.
+
+**Reordering stays two ways, not three**: drag the grip, or arm it and
+use the arrow keys. There are never up/down buttons — a pair per block is
+exactly the repetition this replaces.
+
+**What it cost.** `+` inserts *after* its block, so a plain markdown file
+with no front matter has no way to insert above its very first block.
+Front matter is block 0 in every dewlab and dewstack document and its own
+"+" is how the top of the body is reached, so the gap is narrow; adding
+then dragging covers it. A second "+" pinned permanently above every
+document to serve that one case is the trade this refuses.
+
+**Two bugs the tests caught, both about the cluster following the
+pointer.** It must freeze on *pointerdown*, not on dragstart: by the time
+`dragstart` fires the pointer has already travelled far enough to count
+as a drag, across blocks that each pulled the cluster along, and the drag
+reported whichever block it was passing rather than the one it started
+on. And `moveBlock` refocused a grip inside the block, which no longer
+exists there.
+
+**41 — The icon rail becomes a labelled bottom bar on a narrow screen.**
+
+Fixed to the right edge it sat on top of the text. Measured on a phone:
+the rail at x 352–384, every block's controls at x 376–400 — stacked on
+each other, both running to the bezel, and the prose flowing underneath.
+
+Along the bottom there is nothing to collide with, it is where a thumb
+already is, and the page reserves height for it rather than width. The
+eight toggles keep their own classes and their own behaviour; only the
+container's layout changes.
+
+**Each glyph gets a word under it.** A row of eight bare glyphs is a
+memory test — ▤, ⌂ and ≡ mean nothing until you have opened each one, and
+on a phone there is no tooltip to hover for the answer. Rendered from a
+`data-label` attribute via `::after` rather than as a second element, so
+the button stays one node with one accessible name and nothing has to
+know whether the rail is currently a column or a bar.
+
+They share the width rather than each taking what it wants: eight
+intrinsic widths came to 419px in a 390px bar, so the row scrolled and
+opened with its first and last items sliced in half, which reads as
+broken rather than as scrollable.
+
+**The file bar's three exports move behind one "⋯" menu.** Five buttons
+on one bar left the filename as "U…" at phone width — the one thing on it
+a reader actually needs to read. Open and Save are constant; exporting
+and importing are deliberate, occasional acts, and a menu is where those
+belong. Each button keeps its class and its handler and simply moves
+inside.
+
+**Touch sizing, everywhere else.** Measured before this: the "+" 22×22,
+the grip and delete 24×24, the rail 32×32, the file bar 23px tall, a
+cell's `+ hint` 19px tall — against 44 on iOS and 48 on Android. What
+makes finger-sized controls affordable at all is decision 40: three of
+them rather than three per block.
+
+**42 — Line height, paragraph spacing and a code font are settings.**
+
+Decision 7's "every one of those values is a user setting" already
+covered family, size, measure, tint and theme. Line height was not among
+them and the stylesheet hard-coded 1.62, which is the one reading control
+people reach for after size.
+
+Paragraph spacing is separate from it on purpose: a reader who wants
+generous leading inside a paragraph does not necessarily want the page to
+be twice as long. The code font is three real stacks rather than a
+free-text family name, each ending in a generic — a font nobody has
+installed falls back silently to whatever the system picks, which reads
+as a bug rather than as a choice.
+
+Settings saved before any of these existed get that field's default and
+keep everything else, which `parseSettings` already did field by field;
+there is now a test naming that case directly, because it is the shape
+actually sitting in a reader's localStorage today.
+
+*Cost to change: low for all three. The cluster is one element and one
+set of handlers; the bottom bar is one media query over a container whose
+children did not change; the settings are data in one table.*
