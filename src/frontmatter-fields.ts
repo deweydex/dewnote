@@ -8,14 +8,30 @@
 // flat slug, not a list, so it gets a row of its own like any other text
 // field.
 //
-// `module`/`series`/`practice_for` all carry `indexedAs`, naming which of
-// file-index.ts's `distinctValues` fields a text field's row should offer
-// as autocomplete suggestions — decision 11's own "module and series
-// fields are a picker over it, not free text," now that the index (§5.10)
-// exists, extended by decision 33 to `practice_for`'s own "which tutorial
-// slug." A plain HTML `<datalist>` is the picker: type anything (the
-// "new" escape hatch decision 11 names, for free, since a datalist never
-// restricts input to its own options) or pick a suggestion.
+// `indexedAs` names which of file-index.ts's `distinctValues` fields a
+// text field's row should offer as autocomplete suggestions. A plain HTML
+// `<datalist>` is the picker: type anything (a "new" value costs nothing,
+// since a datalist never restricts input to its own options) or pick a
+// suggestion. Decision 11 introduced this for `module` and `series`;
+// decision 33 extended it to `practice_for`'s own "which tutorial." Only
+// `practice_for` still carries one — dewlab moved placement out of front
+// matter entirely (see below), so the two fields that first motivated the
+// picker no longer exist to pick for.
+//
+// ## dewlab's list is three fields now
+//
+// A dewlab tutorial used to name its own place in the site: `slug`,
+// `module`, `module_title`, `series`. It doesn't any more. A tutorial is
+// `tutorials/<id>/<id>.md`, its id comes from the path and is site-wide,
+// and which course lists it — in what series, in what order — lives in
+// `courses/*.yaml` (courses.ts). So those four rows are gone rather than
+// relabelled: a form field for something the build ignores is worse than
+// no field, because it looks like it still places the tutorial.
+//
+// Placement didn't stop being editable; it stopped being front matter.
+// It's the series panel's job now, and the create-a-tutorial form's
+// ("list it on this course, in this series"), which is where decision
+// 11's picker survives.
 
 import type { DialectName } from "./dialect.ts";
 
@@ -27,19 +43,15 @@ export interface FrontMatterFieldSpec {
   options?: { value: string; label: string }[];
   /** Which file-index.ts field this text field's own datalist suggestions
    * should be drawn from (app.ts's buildFrontMatterRow). Undefined for a
-   * field with no meaningful cross-file index — title and slug are each
-   * unique per document, so suggesting one from elsewhere would suggest
-   * the wrong document's own value. */
-  indexedAs?: "module" | "series" | "slug";
+   * field with no meaningful cross-file index — a title is unique per
+   * document, so suggesting one from elsewhere would suggest the wrong
+   * document's own value. */
+  indexedAs?: "module" | "series" | "id";
 }
 
 const DEWLAB_FIELDS: FrontMatterFieldSpec[] = [
   { key: "title", label: "Title", required: true, kind: "text" },
-  { key: "slug", label: "Slug", required: true, kind: "text" },
-  { key: "module", label: "Module", required: true, kind: "text", indexedAs: "module" },
-  { key: "module_title", label: "Module title", required: true, kind: "text" },
   { key: "year", label: "Year", required: true, kind: "text" },
-  { key: "series", label: "Series", required: true, kind: "text", indexedAs: "series" },
   { key: "version", label: "Version", required: true, kind: "text" },
   {
     key: "status",
@@ -52,8 +64,11 @@ const DEWLAB_FIELDS: FrontMatterFieldSpec[] = [
     ],
   },
   // Optional, and absent from the vast majority of tutorials (a practice
-  // page's own field, not an ordinary tutorial's) — decision 33.
-  { key: "practice_for", label: "Practice for", required: false, kind: "text", indexedAs: "slug" },
+  // page's own field, not an ordinary tutorial's) — decision 33. Its
+  // value is a tutorial id, which is what it always was in substance:
+  // dewlab's `slug` and its id are the same string, and the id is now
+  // simply where that string lives.
+  { key: "practice_for", label: "Practice for", required: false, kind: "text", indexedAs: "id" },
 ];
 
 const DEWSTACK_FIELDS: FrontMatterFieldSpec[] = [

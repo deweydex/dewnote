@@ -86,12 +86,19 @@ async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: R
           { path: "content/tutorials/a-rule.md", type: "blob", sha: "tree-sha-1" },
           { path: "content/tutorials/sub/b-page.md", type: "blob", sha: "tree-sha-2" },
           { path: "assets/logo.png", type: "blob", sha: "tree-sha-3" },
-          { path: "content/tutorials/a-series.order.yaml", type: "blob", sha: "tree-sha-4" },
+          { path: "content/courses/a-course.yaml", type: "blob", sha: "tree-sha-4" },
         ],
       });
     }
 
     if (method === "GET" && /\/contents\//.test(path)) {
+      // The course file is read too (refreshCourses), and handing it the
+      // markdown fixture would have courses.ts parsing prose — the panel
+      // swallows that per file, so the test would pass while proving
+      // nothing about a course actually being read.
+      if (path.endsWith(".yaml")) {
+        return fulfillJson(route, 200, { content: toBase64(COURSE_YAML), sha: "course-sha" });
+      }
       const onBranch = url.searchParams.get("ref") === "dewnote-edits";
       if (onBranch && opts.branchContent !== undefined) {
         return fulfillJson(route, 200, { content: toBase64(opts.branchContent), sha: opts.branchContentSha ?? "branch-sha" });
@@ -150,10 +157,14 @@ async function setup(page: Page, opts: MockOptions): Promise<{ putBodies: Record
 
 const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n", fileSha: "file-sha-1" };
 
-test("loading a repository lists its markdown and order files, and search filters them", async ({ page }) => {
+/** What `content/courses/a-course.yaml` holds — one course, one series,
+ * listing the id of the one markdown file in the tree that has one. */
+const COURSE_YAML = ["title: A Course", "contents:", "- title: First steps", "  tutorials:", "  - a-rule", "  - b-page", ""].join("\n");
+
+test("loading a repository lists its markdown and course files, and search filters them", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 order file.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 course file.");
 
   const items = page.locator(".dn-repo-file");
   await expect(items).toHaveCount(3);
@@ -165,16 +176,16 @@ test("loading a repository lists its markdown and order files, and search filter
   await expect(page.locator(".dn-repo-file")).toHaveText("content/tutorials/sub/b-page.md");
 });
 
-// Step 4's own follow-up, raised alongside the series view: an
-// .order.yaml file is now just another file in the browsable list —
-// opening one hands it to the same editor and push path every markdown
-// file already gets, no new UI needed to hand-edit a reading order.
-test("an .order.yaml file opens and pushes through the ordinary repo panel, same as a markdown file", async ({ page }) => {
+// Step 4's own follow-up, raised alongside the series view: a course
+// file is just another file in the browsable list — opening one hands
+// it to the same editor and push path every markdown file already gets,
+// no new UI needed to hand-edit a reading order.
+test("a course file opens and pushes through the ordinary repo panel, same as a markdown file", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await page.locator(".dn-repo-file", { hasText: "a-series.order.yaml" }).click();
+  await page.locator(".dn-repo-file", { hasText: "a-course.yaml" }).click();
 
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened content/tutorials/a-series.order.yaml.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened content/courses/a-course.yaml.");
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
   await page.locator(".dn-repo-push").click();
 
@@ -189,7 +200,7 @@ test("an .order.yaml file opens and pushes through the ordinary repo panel, same
 test("loading a repository builds the file index the link picker searches", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 order file.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 course file.");
   await page.locator(".dn-repo-close").click();
 
   const gap = page.locator(".dn-add-gap").first();
@@ -316,52 +327,51 @@ test("pushing a new file to a path that already has one reports it plainly, not 
   await expect(page.locator(".dn-repo-conflict")).toBeHidden();
 });
 
-// decision 33: active-store.ts's own createFile, the mechanism
-// series-panel.ts's "New series" and folder-panel.ts's "New tutorial"
-// both already write through against a local folder — this is the
-// same interface implemented against a GitHub repository instead.
-test("the series panel's own 'New series' writes through this panel's createFile, onto the working branch", async ({ page }) => {
+// active-store.ts's read-modify-write pair against a repository, driven
+// the way a reader reaches it: the placement rail, reordering a course.
+// A folder writes a handle in place; a repository has to create the
+// working branch, find the blob sha that branch holds right now, and
+// commit — so what is checked here is the request that actually went
+// out, not just that the rail said something.
+//
+// The three tests that used to sit here drove the same interface's
+// `createFile` through series-panel.ts's "New series". That form wrote
+// `<series>.order.yaml` files and went with them (decision 36); a series
+// is an entry in a course file now, and making one needs a line range
+// courses.ts doesn't record, so `createFile` still has no caller here.
+test("reordering a course writes it back through the working branch, with the sha that branch holds", async ({ page }) => {
   const { putBodies } = await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 course file.");
+  await page.locator(".dn-repo-close").click();
 
   await page.locator(".dn-series-toggle").click();
-  await page.locator(".dn-series-create-field[placeholder='series-slug']").fill("new-series");
-  await page.locator(".dn-series-create-field[placeholder='Series title']").fill("New Series");
-  await page.locator(".dn-series-create-button").click();
+  const list = page.locator(".dn-series-list").first();
+  await expect(list.locator("li")).toHaveCount(2);
+  await list.locator("li").nth(1).locator(".dn-series-grip").dragTo(list.locator("li").nth(0), { targetPosition: { x: 5, y: 1 } });
 
-  await expect(page.locator(".dn-series-create-status")).toHaveText("Created new-series.order.yaml.");
+  await expect(page.locator(".dn-series-status")).toContainText("Moved b-page");
   expect(putBodies).toHaveLength(1);
-  expect(putBodies[0]).not.toHaveProperty("sha");
-  expect(putBodies[0]!["message"]).toBe("Add new-series.order.yaml from dewnote");
+  expect(putBodies[0]!["sha"]).toBe("course-sha");
+  expect(putBodies[0]!["branch"]).toBe("dewnote-edits");
   const content = Buffer.from(putBodies[0]!["content"] as string, "base64").toString("utf-8");
-  expect(content).toBe("series: New Series\norder: []\n");
+  expect(content).toBe(["title: A Course", "contents:", "- title: First steps", "  tutorials:", "  - b-page", "  - a-rule", ""].join("\n"));
 });
 
-test("createFile against a repository reports a real collision error, the same as it would for a local folder", async ({ page }) => {
-  await setup(page, { ...DEFAULT_OPTS, newFileAlreadyExists: true });
-  await page.locator(".dn-repo-load").click();
-
-  await page.locator(".dn-series-toggle").click();
-  await page.locator(".dn-series-create-field[placeholder='series-slug']").fill("a-series");
-  await page.locator(".dn-series-create-field[placeholder='Series title']").fill("Duplicate");
-  await page.locator(".dn-series-create-button").click();
-
-  await expect(page.locator(".dn-series-create-status")).not.toHaveText(/^Created/);
-});
-
-test("createFile never disturbs an already-open file's own push target", async ({ page }) => {
+test("a write against a repository never disturbs an already-open file's own push target", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
   await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
+  await page.locator(".dn-repo-close").click();
 
   await page.locator(".dn-series-toggle").click();
-  await page.locator(".dn-series-create-field[placeholder='series-slug']").fill("new-series");
-  await page.locator(".dn-series-create-field[placeholder='Series title']").fill("New Series");
-  await page.locator(".dn-series-create-button").click();
-  await expect(page.locator(".dn-series-create-status")).toHaveText("Created new-series.order.yaml.");
+  await page.locator(".dn-series-list").first().locator("li").nth(0).locator(".dn-series-remove").click();
+  await expect(page.locator(".dn-series-status")).toContainText("still there, on no course");
 
-  // Still pointed at a-rule.md, not silently repointed at the series file.
+  // Still pointed at a-rule.md, not silently repointed at the course file.
+  await page.locator(".dn-series-close").click();
+  await page.locator(".dn-repo-toggle").click();
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
   await expect(page.locator("h1")).toHaveText("A Rule");
 });

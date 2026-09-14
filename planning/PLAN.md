@@ -1634,3 +1634,63 @@ dewlab has it on the reading side.
    splitter rather than one cohesive section — also correct by decision
    1's own guarantee, just not yet given a block kind of its own.
    DIALECTS.md §1 names both as real, separate scope, not attempted here.
+
+6. **Placement moves into `courses/` — the read side built, the writer
+   next.** dewlab's 2026-09 refactor (its own `refactor/PLAN.md`) stopped
+   a tutorial declaring where it lives: `tutorials/<id>/<id>.md` flat,
+   the id from the path, front matter down to `title`/`year`/`version`,
+   and `courses/<id>.yaml` holding titled series of ordered ids.
+   `courses/index.yaml` orders the courses, `courses/redirects.yaml`
+   keeps old addresses alive, and a tutorial may be on several courses or
+   none. dewlab wrote this editor's half itself as `refactor/EDITOR.md`
+   §2; that folder is deleted now, so `planning/COURSES_REFACTOR.md`
+   reproduces it, marks the three places it turned out to be wrong and
+   the one surface it missed, and carries the order of work. Decision 36
+   has the reasoning.
+
+   Built: `courses.ts` (parse, *and* record the line range each
+   `tutorials:` list occupies); `file-index.ts` deriving the id and
+   joining course membership; the four placement rows gone from the
+   front-matter form; the panel grouped by course then series, naming an
+   id with no file and a tutorial on no course; both stores walking for
+   `courses/*.yaml`; the creation forms asking for an id rather than a
+   module and series; `module:`/`series:` links deleted; `series.ts`
+   deleted outright, replaced by `courses.ts`. *Done when*, satisfied:
+   `bun run typecheck`, `bun test src`, `bun run build` and the full
+   non-pyodide e2e suite all pass, with `courses.test.ts` checking the
+   six real course files in a sibling dewlab checkout and
+   `series-panel.spec.ts` rewritten around the new shape.
+
+7. **The writer, on top of those ranges.** Decision 37. A tutorial can
+   be dragged within its series, dragged into a sibling series on the
+   same course, added to a series, or taken off the course — all four one
+   splice into the line range `courses.ts` records, which is why it
+   records them and why this is one operation rather than four features.
+
+   Built: `course-writer.ts` (the splice, plus `moveTutorial`,
+   `addTutorial`, `removeTutorial`, and finding a tutorial by id and a
+   series by title across a re-read); `active-store.ts` grew
+   `readTextFile`/`writeTextFile`, implemented by both stores — a folder
+   writes a handle in place, a repository creates the working branch,
+   reads the blob sha that branch holds and commits; the panel grew
+   grips, a × per row and an "Add a tutorial" list per series, all of
+   them off when the open store can't write or the series has no range.
+
+   Everything outside the spliced lines stays byte-identical. The test
+   that proves it reverses every series in each of dewlab's six real
+   course files, reverses them again, and asserts the file is what it
+   started as byte for byte.
+
+   *Done when*, satisfied: `bun run typecheck`, `bun test src` (21 new),
+   `bun run build` and the full non-pyodide e2e suite all pass, with
+   `course-writing.spec.ts` dragging through the real built app against
+   the fake folder and `repo-panel.spec.ts` checking the commit a
+   reorder actually sends.
+
+   **Not built: "New series."** A series is an entry in a course file's
+   `contents:`, and appending one means splicing into a block whose
+   bounds `courses.ts` doesn't record. Guessing where it ends, or what
+   indent a `- title:` line carries, from the tutorials indent below it
+   is the guess this design exists to avoid. Recording that range
+   properly is its own piece of work; a course file opens in the editor
+   like any other text file in the meantime.

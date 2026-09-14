@@ -6,10 +6,10 @@
 // unchanged, since an opened folder file is exactly the single-file
 // case #18 already built — a name, content, and a real writable handle.
 
-import { chooseFolder, createFile, listMarkdownFiles, listOrderFiles, readFile, supportsDirectoryPicker, type FolderFile } from "./folder-store.ts";
+import { chooseFolder, createFile, listCourseFiles, listMarkdownFiles, readFile, supportsDirectoryPicker, writeFile, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
-import { parseSeriesFiles, type Series } from "./series.ts";
+import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
 import { createFile as createActiveFile, setActiveStore } from "./active-store.ts";
 import { iconRail } from "./icon-rail.ts";
 
@@ -48,13 +48,13 @@ function todayVersion(): string {
  * when given, is handed plan §5.10's own front-matter index every time
  * it's (re)built — main.ts wires it to app.ts's setFileIndex so the link
  * picker (link-picker.ts) has something to search once a folder is
- * open. `onSeriesChange`, when given, is handed series.ts's own read of
- * every `.order.yaml` file in the folder the same way, for
+ * open. `onCoursesChange`, when given, is handed courses.ts's own read
+ * of every `courses/*.yaml` file in the folder the same way, for
  * series-panel.ts. */
 export function mountFolderPanel(
   fileBar: FileBar,
   onIndexChange?: (index: FileIndexEntry[]) => void,
-  onSeriesChange?: (series: Series[]) => void,
+  onCoursesChange?: (courses: Course[]) => void,
 ): FolderPanel {
   let files: FolderFile[] = [];
   let folderName = "";
@@ -137,23 +137,26 @@ export function mountFolderPanel(
   openSection.appendChild(status);
   panel.appendChild(openSection);
 
-  // "New tutorial" — the other named item on step 4's own line, next to
-  // series-panel.ts's "New series". DIALECTS.md §1's real layout is
-  // `tutorials/<module>/<slug>/<slug>.md`, so the module field is the
-  // same "leave blank if the open folder already is one module's own
-  // directory" case series creation already has — but here module is a
-  // *required* front-matter field (build.py rejects a tutorial without
-  // one), and it must equal the file's own parent folder, so a blank
-  // field doesn't mean "no module": it means "use the folder that's
-  // already open," and `folderName` fills that in. `version` isn't a
-  // form field at all — DIALECTS.md's own `2026.09.04.1` form is a
-  // release date no reader would type by hand for a brand-new file, so
-  // `todayVersion()` stamps today's date with a fresh `.1` instead, the
-  // only sane default for something that has no prior release to be the
-  // second of. Written through `active-store.ts`'s own generic
-  // `createFile`, not `folder-store.ts` directly, for the same reason
-  // series-panel.ts does: this has no separate knowledge of which store
-  // is actually open, and folder-panel.ts's own registered handler
+  // "New tutorial". The layout is `tutorials/<id>/<id>.md` and the id is
+  // the folder's name, so the id is the only placement this form asks
+  // for — and it isn't front matter, it's where the file goes.
+  //
+  // The module, module title and series fields this used to carry are
+  // gone with them: dewlab reads placement from `courses/*.yaml` now, so
+  // a form that wrote `module:` into the front matter would be filling in
+  // a field its build ignores. Listing the new tutorial on a course is a
+  // write into a course file, which is the writer that follows this; a
+  // tutorial created here is simply on no course yet, which dewlab
+  // builds happily and the panel shows under "On no course".
+  //
+  // `version` isn't a form field either — DIALECTS.md's own
+  // `2026.09.04.1` form is a release date no reader would type by hand
+  // for a brand-new file, so `todayVersion()` stamps today's date with a
+  // fresh `.1` instead, the only sane default for something that has no
+  // prior release to be the second of. Written through
+  // `active-store.ts`'s own generic `createFile` rather than
+  // `folder-store.ts` directly: this has no separate knowledge of which
+  // store is actually open, and folder-panel.ts's own registered handler
   // (above) already re-runs `loadFromRoot` afterward.
   const tutorialSection = document.createElement("section");
   tutorialSection.className = "dn-folder-section dn-folder-create";
@@ -162,25 +165,16 @@ export function mountFolderPanel(
   tutorialHeading.textContent = "New tutorial";
   tutorialSection.appendChild(tutorialHeading);
 
-  const tutorialModuleInput = textInput("Module (leave blank if already inside one)");
-  tutorialModuleInput.className = "dn-folder-create-field";
-  const tutorialSlugInput = textInput("tutorial-slug");
-  tutorialSlugInput.className = "dn-folder-create-field";
+  const tutorialIdInput = textInput("tutorial-id (its folder, and its address)");
+  tutorialIdInput.className = "dn-folder-create-field";
   const tutorialTitleInput = textInput("Title");
   tutorialTitleInput.className = "dn-folder-create-field";
-  const tutorialModuleTitleInput = textInput("Module title (e.g. Getting Started)");
-  tutorialModuleTitleInput.className = "dn-folder-create-field";
-  const tutorialSeriesInput = textInput("Series slug (matches a .order.yaml)");
-  tutorialSeriesInput.className = "dn-folder-create-field";
   const tutorialYearInput = textInput("Year");
   tutorialYearInput.className = "dn-folder-create-field";
   tutorialYearInput.value = String(new Date().getFullYear());
   tutorialSection.append(
-    tutorialModuleInput,
-    tutorialSlugInput,
+    tutorialIdInput,
     tutorialTitleInput,
-    tutorialModuleTitleInput,
-    tutorialSeriesInput,
     tutorialYearInput,
   );
 
@@ -198,29 +192,30 @@ export function mountFolderPanel(
   panel.appendChild(tutorialSection);
 
   tutorialCreateButton.addEventListener("click", async () => {
-    const module = tutorialModuleInput.value.trim();
-    const slug = tutorialSlugInput.value.trim();
+    const id = tutorialIdInput.value.trim();
     const title = tutorialTitleInput.value.trim();
-    const moduleTitle = tutorialModuleTitleInput.value.trim();
-    const series = tutorialSeriesInput.value.trim();
     const year = tutorialYearInput.value.trim();
-    if (!SLUG_RE.test(slug)) {
-      tutorialStatus.textContent = "Tutorial slug must be lowercase letters, digits, and hyphens.";
+    if (!SLUG_RE.test(id)) {
+      tutorialStatus.textContent = "Tutorial id must be lowercase letters, digits, and hyphens.";
       return;
     }
-    if (!title || !moduleTitle || !series || !year) {
-      tutorialStatus.textContent = "Title, module title, series, and year are all required.";
+    if (!title || !year) {
+      tutorialStatus.textContent = "Title and year are both required.";
       return;
     }
-    const effectiveModule = module || folderName;
-    const path = module ? `${module}/${slug}/${slug}.md` : `${slug}/${slug}.md`;
+    // An id is taken if any file already sits in `tutorials/<id>/`, and
+    // it's the address of the page and the key a reader's saved work
+    // lives under — so this refuses rather than quietly writing a second
+    // tutorial into an existing folder.
+    const taken = files.some((file) => file.path.includes(`tutorials/${id}/`));
+    if (taken) {
+      tutorialStatus.textContent = `"${id}" is taken — a tutorial already lives in tutorials/${id}/.`;
+      return;
+    }
+    const path = `tutorials/${id}/${id}.md`;
     const content = `---
 title: ${title}
-slug: ${slug}
-module: ${effectiveModule}
-module_title: ${moduleTitle}
 year: "${year}"
-series: ${series}
 version: ${todayVersion()}
 ---
 
@@ -229,7 +224,7 @@ version: ${todayVersion()}
 Start writing.
 
 \`\`\`python exec
-id: ${slug}-first-cell
+id: ${id}-first-cell
 1 + 1
 \`\`\`
 `;
@@ -237,12 +232,9 @@ id: ${slug}-first-cell
     tutorialStatus.textContent = "Creating…";
     try {
       await createActiveFile(path, content);
-      tutorialStatus.textContent = `Created ${path}.`;
-      tutorialModuleInput.value = "";
-      tutorialSlugInput.value = "";
+      tutorialStatus.textContent = `Created ${path} — on no course yet.`;
+      tutorialIdInput.value = "";
       tutorialTitleInput.value = "";
-      tutorialModuleTitleInput.value = "";
-      tutorialSeriesInput.value = "";
     } catch (err) {
       tutorialStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {
@@ -302,11 +294,15 @@ id: ${slug}-first-cell
    * just leave that one file out of the index rather than failing the
    * whole folder open — the file list itself (already built) still
    * works regardless. Takes `markdownFiles` explicitly rather than
-   * reading the shared `files` — that list also carries `.order.yaml`
-   * files now (the click handler's own comment explains why), and an order
+   * reading the shared `files` — that list also carries the course files
+   * now (the click handler's own comment explains why), and a course
    * file has no front matter worth indexing at all, so reading its
-   * content again here would only ever produce a bare `{path}` entry. */
-  async function refreshIndex(markdownFiles: FolderFile[]) {
+   * content again here would only ever produce a bare `{path}` entry.
+   *
+   * `courses` is what lets each entry carry the courses that list its id
+   * (file-index.ts's own join), so the courses are read first and this
+   * runs after them. */
+  async function refreshIndex(markdownFiles: FolderFile[], courses: Course[]) {
     if (!onIndexChange) return;
     const entries = await Promise.all(
       markdownFiles.map(async (file) => {
@@ -317,17 +313,22 @@ id: ${slug}-first-cell
         }
       }),
     );
-    onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
+    onIndexChange(
+      buildFileIndex(
+        entries.filter((e): e is { path: string; content: string } => e !== null),
+        courses,
+      ),
+    );
   }
 
-  /** Mirrors refreshIndex's own shape, over the `.order.yaml` files
-   * `openButton`'s own click handler already listed — order files are
-   * typically few, so no attempt is made to fold this into the same pass
-   * as `refreshIndex`. */
-  async function refreshSeries(orderFiles: FolderFile[]) {
-    if (!onSeriesChange) return;
+  /** Mirrors refreshIndex's own shape, over the course files
+   * `openButton`'s own click handler already listed — there are a
+   * handful of them, so no attempt is made to fold this into the same
+   * pass as `refreshIndex`. Returns the parsed courses as well as
+   * handing them on, since the index needs them too. */
+  async function refreshCourses(courseFiles: FolderFile[]): Promise<Course[]> {
     const entries = await Promise.all(
-      orderFiles.map(async (file) => {
+      courseFiles.map(async (file) => {
         try {
           return { path: file.path, content: await readFile(file.handle) };
         } catch {
@@ -335,7 +336,11 @@ id: ${slug}-first-cell
         }
       }),
     );
-    onSeriesChange(parseSeriesFiles(entries.filter((e): e is { path: string; content: string } => e !== null)));
+    const read = entries.filter((e): e is { path: string; content: string } => e !== null);
+    const index = read.find((file) => file.path.endsWith("courses/index.yaml"));
+    const courses = parseCourseFiles(read, index ? parseCourseIndex(index.content) : []);
+    onCoursesChange?.(courses);
+    return courses;
   }
 
   /** The whole "read this folder and rebuild everything" pass, shared by
@@ -343,22 +348,27 @@ id: ${slug}-first-cell
    * (against `currentRoot`, already held) — the same work either way,
    * just with or without a new `chooseFolder()` in front of it. Listed
    * and read separately (folder-store.ts's own two functions, one walk
-   * each), but merged into one browsable/searchable list: an
-   * `.order.yaml` file is a plain text file like any other, and opening
-   * one hands it to the same editor and Save path every other file
-   * already gets — the whole-file source view (Cmd+/) shows its raw
-   * YAML untouched by any markdown rendering, which is exactly what
-   * hand-editing a reading order (inserting a slug, reordering two
-   * lines) actually wants, with no new UI needed. */
+   * each), but merged into one browsable/searchable list: a course file
+   * is a plain text file like any other, and opening one hands it to the
+   * same editor and Save path every other file already gets — the
+   * whole-file source view (Cmd+/) shows its raw YAML untouched by any
+   * markdown rendering, which is exactly what hand-editing a course
+   * (inserting an id, reordering two lines) actually wants, with no new
+   * UI needed. */
   async function loadFromRoot(root: FileSystemDirectoryHandle, name: string, verb: "Reading" | "Refreshing") {
     status.textContent = `${verb} folder…`;
     try {
-      const [markdownFiles, orderFiles] = await Promise.all([listMarkdownFiles(root), listOrderFiles(root)]);
-      files = [...markdownFiles, ...orderFiles];
-      status.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${orderFiles.length} order file${orderFiles.length === 1 ? "" : "s"}, in "${name}".`;
+      const [markdownFiles, courseFiles] = await Promise.all([
+        listMarkdownFiles(root),
+        listCourseFiles(root),
+      ]);
+      files = [...markdownFiles, ...courseFiles];
+      status.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${courseFiles.length} course file${courseFiles.length === 1 ? "" : "s"}, in "${name}".`;
       renderFiles();
-      await refreshIndex(markdownFiles);
-      await refreshSeries(orderFiles);
+      // Courses first: the index joins each entry to the courses that
+      // list its id, so it needs them already parsed.
+      const courses = await refreshCourses(courseFiles);
+      await refreshIndex(markdownFiles, courses);
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : String(err);
     }
@@ -393,6 +403,21 @@ id: ${slug}-first-cell
       },
       async createFile(path, content) {
         await createFile(root, path, content);
+        await loadFromRoot(root, folderName, "Refreshing");
+      },
+      // The read-modify-write half, for a caller editing a file it never
+      // opened into the editor — series-panel.ts writing a course file.
+      // `files` is the live binding, so a file added by a Refresh since
+      // this was registered is found without registering again.
+      async readTextFile(path) {
+        const file = files.find((f) => f.path === path);
+        if (!file) throw new Error(`There is no ${path} in this folder.`);
+        return readFile(file.handle);
+      },
+      async writeTextFile(path, content) {
+        const file = files.find((f) => f.path === path);
+        if (!file) throw new Error(`There is no ${path} in this folder.`);
+        await writeFile(file.handle, content);
         await loadFromRoot(root, folderName, "Refreshing");
       },
     });

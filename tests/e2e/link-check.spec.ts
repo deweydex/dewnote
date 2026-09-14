@@ -1,4 +1,4 @@
-// Step 5's "link checking against real slugs" (src/link-check.ts) —
+// Step 5's "link checking against real ids" (src/link-check.ts) —
 // drives the real built app: seed a file index the same way
 // link-picker.spec.ts does, mount a document with both a real and a
 // broken tutorial: link, and check the report names only the broken one.
@@ -27,7 +27,7 @@ const test = base.extend<{ failOnConsoleErrors: void }>({
 
 type TestHook = {
   mount(source: string): void;
-  setFileIndex(index: { path: string; title?: string; slug?: string; module?: string; series?: string }[]): void;
+  setFileIndex(index: { path: string; id?: string; title?: string }[]): void;
 };
 
 test.beforeEach(async ({ page }) => {
@@ -35,10 +35,10 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".dn-block").first()).toBeVisible();
 });
 
-test("reports a tutorial: link whose slug isn't in the index, and clears once fixed", async ({ page }) => {
+test("reports a tutorial: link whose id isn't in the index, and clears once fixed", async ({ page }) => {
   await page.evaluate(() => {
     const hook = window as unknown as { __dewnote: TestHook };
-    hook.__dewnote.setFileIndex([{ path: "tutorials/data/filtering/filtering.md", slug: "filtering", title: "Filtering" }]);
+    hook.__dewnote.setFileIndex([{ path: "tutorials/filtering/filtering.md", id: "filtering", title: "Filtering" }]);
     hook.__dewnote.mount("See [filtering](tutorial:filtering) and [sorting](tutorial:sorting).\n");
   });
 
@@ -54,7 +54,7 @@ test("reports a tutorial: link whose slug isn't in the index, and clears once fi
 test("with every link resolving, the report says so instead of listing nothing silently", async ({ page }) => {
   await page.evaluate(() => {
     const hook = window as unknown as { __dewnote: TestHook };
-    hook.__dewnote.setFileIndex([{ path: "tutorials/data/filtering/filtering.md", slug: "filtering", title: "Filtering" }]);
+    hook.__dewnote.setFileIndex([{ path: "tutorials/filtering/filtering.md", id: "filtering", title: "Filtering" }]);
     hook.__dewnote.mount("See [filtering](tutorial:filtering) for more.\n");
   });
 
@@ -64,24 +64,44 @@ test("with every link resolving, the report says so instead of listing nothing s
   await expect(page.locator(".dn-linkcheck-report li")).toHaveText("No broken links found.");
 });
 
-test("checks module: and series: links too, against distinct values in the index, not just tutorial: slugs", async ({ page }) => {
+// `module:` and `series:` were checked here once, against distinct index
+// values. Neither was ever a scheme either site's build resolved, so
+// both are gone and a link using one is now left alone like any other
+// unknown scheme — reporting it as broken was as wrong as clearing it,
+// since the link would have shipped as literal text either way.
+test("a module: or series: link is left alone, like any other link this doesn't own", async ({ page }) => {
   await page.evaluate(() => {
     const hook = window as unknown as { __dewnote: TestHook };
     hook.__dewnote.setFileIndex([
-      { path: "tutorials/a.md", slug: "filtering", module: "computational-methods", series: "core" },
+      { path: "tutorials/filtering/filtering.md", id: "filtering", title: "Filtering" },
     ]);
     hook.__dewnote.mount(
-      "See the [module](module:computational-methods), the [series](series:core), and [a typo'd module](module:computationl-methods).\n",
+      "See the [module](module:computational-methods), the [series](series:core), and [the real thing](tutorial:filtering).\n",
     );
   });
 
   await page.locator(".dn-linkcheck-toggle").click();
   await page.locator(".dn-linkcheck-run").click();
 
-  const report = page.locator(".dn-linkcheck-report li");
-  await expect(report).toHaveCount(1);
-  await expect(report).toContainText("a typo'd module");
-  await expect(report).toContainText("module:computationl-methods");
+  await expect(page.locator(".dn-linkcheck-report li")).toHaveText("No broken links found.");
+});
+
+// A frozen release and the live file beside it share one id, so a link
+// to it resolves once rather than being reported as ambiguous.
+test("a tutorial with several versions indexed still resolves by its one id", async ({ page }) => {
+  await page.evaluate(() => {
+    const hook = window as unknown as { __dewnote: TestHook };
+    hook.__dewnote.setFileIndex([
+      { path: "tutorials/first-steps/first-steps.md", id: "first-steps", title: "First Steps" },
+      { path: "tutorials/first-steps/v2026.08.23.1.md", id: "first-steps", title: "First Steps" },
+    ]);
+    hook.__dewnote.mount("See [first steps](tutorial:first-steps).\n");
+  });
+
+  await page.locator(".dn-linkcheck-toggle").click();
+  await page.locator(".dn-linkcheck-run").click();
+
+  await expect(page.locator(".dn-linkcheck-report li")).toHaveText("No broken links found.");
 });
 
 test("the command palette can open the link checker too", async ({ page }) => {

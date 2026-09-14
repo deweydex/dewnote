@@ -6,51 +6,40 @@
 // markdown to insert (or null on cancel) rather than inserting anything
 // itself — app.ts still owns where in the document that markdown lands.
 
-import { distinctValues, type FileIndexEntry } from "./file-index.ts";
+import type { FileIndexEntry } from "./file-index.ts";
 
-/** One pickable thing in the overlay's own list — a real file (`tutorial`,
- * or a bare path for one with no slug) or a name several files share
- * (`module`/`series`, decision 33's own `distinctValues`-backed pair,
- * link-check.ts's own set to validate either against). Unified into one
- * flat, searchable list rather than three separate ones: there are
- * usually a handful of modules and series next to potentially hundreds
- * of tutorials, and a reader typing "computational" to find either kind
- * shouldn't have to know which list it's in first. */
+/** One pickable thing in the overlay's own list — a real file, as a
+ * `tutorial:` link, or a bare path for one with no id to link by.
+ *
+ * `module:` and `series:` items used to sit alongside these. They are
+ * gone for the reason link-check.ts's own header gives: neither scheme
+ * was ever resolved by either site's build, so offering one here handed
+ * an author a link that would ship broken. */
 interface PickerItem {
   label: string;
   searchText: string;
   target: string;
-  kind: "tutorial" | "module" | "series";
 }
 
 /** dewlab and dewstack's own convention (plan §6 step 2's note: "tutorial:
  * links round-trip and render fine as ordinary markdown links already") —
- * used whenever the picked file has a slug, since a `tutorial:` link
- * survives a tutorial being moved to a different path in a way a plain
- * relative path never would. Falls back to the file's own path only for
- * an entry with no slug in its front matter. */
+ * used whenever the picked file has an id, since a `tutorial:` link
+ * survives a tutorial moving in a way a plain relative path never would,
+ * and an id is site-wide so it names one page from anywhere. Falls back
+ * to the file's own path only for an entry with no id at all. */
 function targetFor(entry: FileIndexEntry): string {
-  return entry.slug ? `tutorial:${entry.slug}` : entry.path;
+  return entry.id ? `tutorial:${entry.id}` : entry.path;
 }
 
 function itemsFor(index: FileIndexEntry[]): PickerItem[] {
-  const tutorials: PickerItem[] = index.map((entry) => {
+  return index.map((entry) => {
     const label = entry.title ?? entry.path;
-    return { label, searchText: `${label} ${entry.path}`.toLowerCase(), target: targetFor(entry), kind: "tutorial" as const };
+    return {
+      label,
+      searchText: `${label} ${entry.path}`.toLowerCase(),
+      target: targetFor(entry),
+    };
   });
-  const modules: PickerItem[] = distinctValues(index, "module").map((name) => ({
-    label: name,
-    searchText: name.toLowerCase(),
-    target: `module:${name}`,
-    kind: "module" as const,
-  }));
-  const series: PickerItem[] = distinctValues(index, "series").map((name) => ({
-    label: name,
-    searchText: name.toLowerCase(),
-    target: `series:${name}`,
-    kind: "series" as const,
-  }));
-  return [...tutorials, ...modules, ...series];
 }
 
 /**
@@ -92,7 +81,7 @@ export function pickLink(index: FileIndexEntry[]): Promise<string | null> {
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.className = "dn-link-search";
-    searchInput.placeholder = "Search tutorials, modules, or series…";
+    searchInput.placeholder = "Search tutorials by title or path…";
     box.appendChild(searchInput);
 
     const list = document.createElement("ul");
@@ -108,17 +97,8 @@ export function pickLink(index: FileIndexEntry[]): Promise<string | null> {
         li.className = "dn-link-item";
         const button = document.createElement("button");
         button.type = "button";
-        // A tutorial needs no badge — it's the common case, and its own
-        // title already reads as a document, not a category. A module or
-        // series shares its name with nothing else in this list visually,
-        // so the badge is what tells them apart from a tutorial titled
-        // the same as a module by coincidence.
-        if (item.kind !== "tutorial") {
-          const badge = document.createElement("span");
-          badge.className = "dn-link-item-kind";
-          badge.textContent = item.kind === "module" ? "Module" : "Series";
-          button.appendChild(badge);
-        }
+        // No badge: every item in this list is a tutorial now, so a
+        // label saying so on each one would tell a reader nothing.
         button.appendChild(document.createTextNode(item.label));
         button.addEventListener("click", () => finish(`[${item.label}](${item.target})`));
         li.appendChild(button);
@@ -147,7 +127,7 @@ export function pickLink(index: FileIndexEntry[]): Promise<string | null> {
     const urlField = document.createElement("input");
     urlField.type = "text";
     urlField.className = "dn-link-url";
-    urlField.placeholder = "URL or tutorial:slug";
+    urlField.placeholder = "URL or tutorial:id";
     const customRow = document.createElement("div");
     customRow.className = "dn-link-custom-row";
     customRow.append(textField, urlField);

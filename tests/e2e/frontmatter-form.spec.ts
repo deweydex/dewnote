@@ -76,13 +76,22 @@ test("clicking a dewlab document's front matter opens a form, not raw YAML", asy
   await expect(form).toBeVisible();
   await expect(page.locator(".dn-block-frontmatter .cm-editor")).toHaveCount(0);
 
-  for (const label of ["Title", "Slug", "Module", "Module title", "Year", "Series", "Version"]) {
+  for (const label of ["Title", "Year", "Version"]) {
     await expect(
       form.locator(".dn-frontmatter-row").filter({ has: page.locator(".dn-frontmatter-label", { hasText: new RegExp(`^${label}$`) }) }).locator('input[type="text"]'),
     ).toBeVisible();
   }
   // packages is a list — no row for it, only the raw fallback covers it.
   await expect(form.locator(".dn-frontmatter-row", { hasText: "packages" })).toHaveCount(0);
+
+  // Placement is not front matter any more: the id comes from the path
+  // and the course listing from courses/*.yaml, so a row for any of
+  // these would offer to set something dewlab's build ignores.
+  for (const gone of ["Slug", "Module", "Module title", "Series"]) {
+    await expect(
+      form.locator(".dn-frontmatter-row").filter({ has: page.locator(".dn-frontmatter-label", { hasText: new RegExp(`^${gone}$`) }) }),
+    ).toHaveCount(0);
+  }
 });
 
 test("editing a required field commits on change, touching only that line", async ({ page }) => {
@@ -188,7 +197,11 @@ test("plain markdown's front matter has no dialect field list, so it opens strai
 // drives a plain <datalist> on each field's own text input. Stubs
 // window.showDirectoryPicker the same way folder-panel.spec.ts does,
 // since Playwright has no scriptable equivalent of the OS picker.
-test("module and series offer autocomplete suggestions once a folder's own index exists", async ({ page }) => {
+// dewstack, not dewlab: dewlab's form has no module or series row any
+// more (placement moved to courses/), but dewstack still places a
+// tutorial from its own front matter, and decision 11's picker over the
+// shared index is exactly what those two rows are for.
+test("dewstack's module and series offer autocomplete suggestions once a folder's own index exists", async ({ page }) => {
   await page.addInitScript(() => {
     function fakeFileHandle(name: string, content: string) {
       return {
@@ -231,7 +244,7 @@ test("module and series offer autocomplete suggestions once a folder's own index
   // A document mounted independently of the folder still sees the same
   // shared index — file-index.ts is a module-level singleton in app.ts,
   // not something threaded through a particular open file.
-  await mount(page, DEWLAB_DOC);
+  await mount(page, DEWSTACK_DOC);
   await page.locator(".dn-block-frontmatter .dn-block-render").click();
 
   const moduleInput = page
@@ -319,7 +332,7 @@ test("typing a practice_for value commits it, and clearing it afterward removes 
   await expect(form.locator(".dn-frontmatter-row", { hasText: "Practice for" })).toHaveCount(0);
 });
 
-test("practice_for offers autocomplete over every real slug in the open folder's index", async ({ page }) => {
+test("practice_for offers autocomplete over every real id in the open folder's index", async ({ page }) => {
   await page.addInitScript(() => {
     function fakeFileHandle(name: string, content: string) {
       return {
@@ -339,15 +352,21 @@ test("practice_for offers autocomplete over every real slug in the open folder's
         },
       };
     }
+    // dewlab's own layout: the id is the folder, and the folder is the
+    // file's stem. Nothing in the front matter names it.
     const root = fakeDirHandle("tutorials", {
-      "first.md": fakeFileHandle(
-        "first.md",
-        "---\ntitle: First\nslug: filter-morning\nmodule: pandas-basics\nmodule_title: Pandas basics\nyear: \"2026\"\nseries: core\nversion: 2026.09.04.1\n---\n\nBody.\n",
-      ),
-      "second.md": fakeFileHandle(
-        "second.md",
-        "---\ntitle: Second\nslug: filter-evening\nmodule: pandas-basics\nmodule_title: Pandas basics\nyear: \"2026\"\nseries: core\nversion: 2026.09.04.1\n---\n\nBody.\n",
-      ),
+      "filter-morning": fakeDirHandle("filter-morning", {
+        "filter-morning.md": fakeFileHandle(
+          "filter-morning.md",
+          "---\ntitle: First\nyear: \"2026\"\nversion: 2026.09.04.1\n---\n\nBody.\n",
+        ),
+      }),
+      "filter-evening": fakeDirHandle("filter-evening", {
+        "filter-evening.md": fakeFileHandle(
+          "filter-evening.md",
+          "---\ntitle: Second\nyear: \"2026\"\nversion: 2026.09.04.1\n---\n\nBody.\n",
+        ),
+      }),
     });
     (window as unknown as { showDirectoryPicker: () => Promise<unknown> }).showDirectoryPicker = async () => root;
   });

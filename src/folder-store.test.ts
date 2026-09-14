@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createFile, listMarkdownFiles, listOrderFiles, readFile, type DirectoryLike } from "./folder-store.ts";
+import { createFile, listCourseFiles, listMarkdownFiles, readFile, type DirectoryLike } from "./folder-store.ts";
 
 /** A hand-built fake — no real FileSystemDirectoryHandle needed to
  * verify the walk itself, the same split github.ts's own truncation
@@ -43,19 +43,38 @@ describe("listMarkdownFiles", () => {
   });
 });
 
-describe("listOrderFiles", () => {
-  test("finds .order.yaml files, ignoring markdown and everything else, walking nested directories the same way", async () => {
+describe("listCourseFiles", () => {
+  test("finds courses/*.yaml, ignoring markdown and yaml elsewhere", async () => {
     const root = fakeDir({
       "README.md": { kind: "file" },
+      courses: fakeDir({
+        "computational-methods.yaml": { kind: "file" },
+        "index.yaml": { kind: "file" },
+      }),
       tutorials: fakeDir({
-        "computational-methods": fakeDir({
-          "python-fundamentals.order.yaml": { kind: "file" },
+        "first-steps": fakeDir({
           "first-steps.md": { kind: "file" },
+          // A tutorial's own glossary is yaml too, and is not a course.
+          "first-steps.glossary.yaml": { kind: "file" },
         }),
       }),
     });
-    const files = await listOrderFiles(root);
-    expect(files.map((f) => f.path)).toEqual(["tutorials/computational-methods/python-fundamentals.order.yaml"]);
+    const files = await listCourseFiles(root);
+    expect(files.map((f: { path: string }) => f.path).sort()).toEqual([
+      "courses/computational-methods.yaml",
+      "courses/index.yaml",
+    ]);
+  });
+
+  test("only directly inside courses/, not one level deeper", async () => {
+    const root = fakeDir({
+      courses: fakeDir({
+        "web-authoring.yaml": { kind: "file" },
+        archive: fakeDir({ "old-course.yaml": { kind: "file" } }),
+      }),
+    });
+    const files = await listCourseFiles(root);
+    expect(files.map((f: { path: string }) => f.path)).toEqual(["courses/web-authoring.yaml"]);
   });
 });
 

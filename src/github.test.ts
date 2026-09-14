@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { fromBase64, listMarkdownFiles, listOrderFiles, putFileContent, toBase64 } from "./github.ts";
+import { fromBase64, listCourseFiles, listMarkdownFiles, putFileContent, toBase64 } from "./github.ts";
 
 describe("toBase64/fromBase64", () => {
   test("round-trips plain ASCII", () => {
@@ -98,7 +98,7 @@ describe("listMarkdownFiles", () => {
   });
 });
 
-describe("listOrderFiles", () => {
+describe("listCourseFiles", () => {
   const originalFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -108,18 +108,22 @@ describe("listOrderFiles", () => {
     return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   }
 
-  test("filters to .order.yaml blobs instead of .md, same tree shape", async () => {
+  test("filters to courses/*.yaml blobs instead of .md, same tree shape", async () => {
     globalThis.fetch = (async (_input: RequestInfo | URL) =>
       respond({
         truncated: false,
         tree: [
-          { path: "tutorials/data/filtering.order.yaml", type: "blob", sha: "s1" },
-          { path: "tutorials/data/filtering/filtering.md", type: "blob", sha: "s2" },
+          { path: "courses/computational-methods.yaml", type: "blob", sha: "s1" },
+          { path: "tutorials/filtering/filtering.md", type: "blob", sha: "s2" },
+          // Yaml outside courses/, and yaml a level deeper inside it,
+          // are both something else.
+          { path: "tutorials/filtering/filtering.glossary.yaml", type: "blob", sha: "s3" },
+          { path: "courses/archive/old.yaml", type: "blob", sha: "s4" },
         ],
       })) as typeof fetch;
 
-    const files = await listOrderFiles({ owner: "dewlab", repo: "dewlab" }, "main", "tok");
-    expect(files).toEqual([{ path: "tutorials/data/filtering.order.yaml", sha: "s1" }]);
+    const files = await listCourseFiles({ owner: "dewlab", repo: "dewlab" }, "main", "tok");
+    expect(files).toEqual([{ path: "courses/computational-methods.yaml", sha: "s1" }]);
   });
 });
 

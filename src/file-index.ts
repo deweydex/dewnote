@@ -10,7 +10,24 @@
 // value as one here would just be a different way of silently
 // mis-indexing a file, the kind of thing §5.10 built this to prevent in
 // the first place.
+//
+// ## The id comes from the path, and the courses from courses/
+//
+// dewlab moved placement out of front matter: a page's id is `id_of()`
+// in its own build.py — "from where its file is and nothing else" —
+// and which course lists that id lives in `courses/*.yaml` (courses.ts).
+// So `id` here is derived, never read from a field, and `courses` is a
+// join rather than a property of the file.
+//
+// `module`/`series` stay. dewlab's files no longer carry them, so they
+// simply stop appearing on dewlab entries — but dewstack is a separate
+// dialect on its own schedule and still places a tutorial from its front
+// matter, and its own form still offers both as pickers over this index.
+// (dewlab's own spec for this change said to drop them; that holds for
+// dewlab and would break dewstack, so they're kept and left to empty out
+// on their own.)
 
+import type { Course } from "./courses.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 
 export interface FileIndexEntry {
@@ -18,18 +35,55 @@ export interface FileIndexEntry {
    * (folder-store.ts) or a repo path (github.ts); the caller's own
    * space, not reinterpreted here. */
   path: string;
+  /** The page's id, derived from the path the way dewlab's own `id_of()`
+   * derives it. Site-wide and unique per *page*, which is not the same as
+   * unique per *file* — see `defaultEntryFor`. */
+  id?: string;
   title?: string;
+  /** dewstack's own front-matter placement. A dewlab file written since
+   * the move to `courses/` has none of these. */
   slug?: string;
   module?: string;
   series?: string;
+  /** Ids of the courses whose own `contents` list this entry's id, filled
+   * in by `buildFileIndex` when it's given the course files. Empty (not
+   * absent) for an indexed dewlab tutorial no course lists — which is a
+   * real and buildable state, "published but on no course", and worth
+   * telling apart from a file that was never cross-referenced at all. */
+  courses?: string[];
   /** dewlab's own `status` (`draft`/`beta`/`live`/`archived`, `build.py`'s
    * own `STATUSES`) and `version` (a `YYYY.MM.DD.N` release date,
    * `build.py`'s own `VERSION_RE`) — read here only so `defaultEntryFor`
-   * can pick the one file among several sharing a slug that dewlab's own
+   * can pick the one file among several sharing an id that dewlab's own
    * build would actually serve. Absent entirely on a plain-markdown or
    * dewstack document, which have no versioning concept at all. */
   status?: string;
   version?: string;
+}
+
+/** `v2026.08.23.1.md` — a frozen past release, sitting in the folder of
+ * the tutorial it is a release of (`build.py`'s own `VERSION_FILE_RE`). */
+const VERSION_FILE_RE = /^v\d{4}\.\d{2}\.\d{2}\.\d+$/;
+
+/**
+ * A page's id from its path alone, following `build.py`'s own `id_of()`:
+ * a tutorial is `tutorials/<id>/<id>.md` so the id is the file's stem;
+ * a practice page is `<id>-practice.md` in the same folder and gets its
+ * own id; a frozen release is `v<version>.md` and takes the *folder's*
+ * name, since it is a version of that folder's tutorial rather than a
+ * page of its own.
+ *
+ * Derived rather than read, for the reason dewlab gives: the id is the
+ * address of the page and the key a reader's saved work lives under, so
+ * a field that could disagree with the folder would be a way to break
+ * both.
+ */
+export function idFromPath(path: string): string {
+  const segments = path.split("/");
+  const fileName = segments[segments.length - 1] ?? "";
+  const stem = fileName.replace(/\.[^./]*$/, "");
+  if (VERSION_FILE_RE.test(stem)) return segments[segments.length - 2] ?? stem;
+  return stem;
 }
 
 function stringField(fields: Record<string, unknown>, key: string): string | undefined {
@@ -42,7 +96,7 @@ function stringField(fields: Record<string, unknown>, key: string): string | und
  * rather than the whole file. */
 export function indexEntryFor(path: string, content: string): FileIndexEntry {
   const { fields } = extractFrontMatter(content);
-  const entry: FileIndexEntry = { path };
+  const entry: FileIndexEntry = { path, id: idFromPath(path) };
   const title = stringField(fields, "title");
   const slug = stringField(fields, "slug");
   const module = stringField(fields, "module");
@@ -58,8 +112,40 @@ export function indexEntryFor(path: string, content: string): FileIndexEntry {
   return entry;
 }
 
-export function buildFileIndex(files: { path: string; content: string }[]): FileIndexEntry[] {
-  return files.map(({ path, content }) => indexEntryFor(path, content));
+/** Which courses list each tutorial id — one pass over the course files,
+ * so the join below is a lookup rather than a scan per entry. A course
+ * listing the same id in two of its own series names that course once. */
+export function courseMembership(courses: Course[]): Map<string, string[]> {
+  const listedBy = new Map<string, string[]>();
+  for (const course of courses) {
+    for (const series of course.contents) {
+      for (const id of series.tutorials) {
+        const already = listedBy.get(id);
+        if (!already) listedBy.set(id, [course.id]);
+        else if (!already.includes(course.id)) already.push(course.id);
+      }
+    }
+  }
+  return listedBy;
+}
+
+/**
+ * The index, optionally cross-referenced against the course files the
+ * same store just read. Without them every entry's `courses` is absent —
+ * "nothing was cross-referenced" — rather than empty, which means "cross-
+ * referenced, and no course lists this."
+ */
+export function buildFileIndex(
+  files: { path: string; content: string }[],
+  courses: Course[] = [],
+): FileIndexEntry[] {
+  const index = files.map(({ path, content }) => indexEntryFor(path, content));
+  if (courses.length === 0) return index;
+  const listedBy = courseMembership(courses);
+  for (const entry of index) {
+    entry.courses = entry.id ? (listedBy.get(entry.id) ?? []) : [];
+  }
+  return index;
 }
 
 const STATUS_RANK: Record<string, number> = { draft: 0, archived: 1, beta: 2, live: 3 };
@@ -93,33 +179,41 @@ function isNewer(a: FileIndexEntry, b: FileIndexEntry): boolean {
   return false;
 }
 
-/** Among every entry sharing `slug`, the one `build.py`'s own
+/** Among every entry sharing `id`, the one `build.py`'s own
  * `versions_of()` would mark `is_default` — the newest `live` version,
  * or (with no live version at all) the newest version regardless of
  * status. Every version still gets its own entry in the index itself
  * (an author working on a draft, or browsing an archived one, needs to
  * find it by path); this only decides which *one* answers "what does
- * this slug mean" for a lookup that has to pick exactly one — today,
- * series-panel.ts's own title lookup. Returns `undefined` for a slug
- * nothing in `index` claims. */
-export function defaultEntryFor(index: FileIndexEntry[], slug: string): FileIndexEntry | undefined {
+ * this id mean" for a lookup that has to pick exactly one — today,
+ * series-panel.ts's own title lookup. Returns `undefined` for an id
+ * nothing in `index` claims.
+ *
+ * Still needed after the move to site-wide ids, though dewlab's own spec
+ * for this change expected it to go ("ids are unique"). Ids are unique
+ * per *page*; a page can still be several *files*. A frozen release
+ * `tutorials/first-steps/v2026.08.23.1.md` carries the same id as the
+ * live `tutorials/first-steps/first-steps.md` beside it — there are real
+ * ones in dewlab's tree today — and picking whichever happened to be
+ * indexed first would show a frozen release's title where the live one
+ * belongs. */
+export function defaultEntryFor(index: FileIndexEntry[], id: string): FileIndexEntry | undefined {
   let best: FileIndexEntry | undefined;
   for (const entry of index) {
-    if (entry.slug !== slug) continue;
+    if (entry.id !== id) continue;
     if (!best || isNewer(entry, best)) best = entry;
   }
   return best;
 }
 
-/** §5.10's own module/series pickers read from these — every distinct
- * value actually in use, sorted, so a picker offers `computational-methods`
- * once rather than once per tutorial that names it. `"slug"` is the same
- * mechanism for a different purpose: not "which values repeat," since a
- * slug is unique per tutorial, but "every real slug this index knows
- * about" — `practice_for`'s own datalist, so naming which tutorial a
- * practice page is for offers real choices rather than free text with
- * nothing to check it against. */
-export function distinctValues(index: FileIndexEntry[], field: "module" | "series" | "slug"): string[] {
+/** §5.10's own pickers read from these — every distinct value in use,
+ * sorted, so dewstack's module picker offers `data` once rather than once
+ * per tutorial that names it. `"id"` is the same mechanism for a
+ * different purpose: not "which values repeat," since an id names one
+ * page, but "every real id this index knows about" — `practice_for`'s own
+ * datalist, so naming which tutorial a practice page is for offers real
+ * choices rather than free text with nothing to check it against. */
+export function distinctValues(index: FileIndexEntry[], field: "module" | "series" | "id"): string[] {
   const values = new Set<string>();
   for (const entry of index) {
     const value = entry[field];

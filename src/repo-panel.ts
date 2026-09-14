@@ -32,7 +32,7 @@ import {
   getFileContent,
   GithubApiError,
   listMarkdownFiles,
-  listOrderFiles,
+  listCourseFiles,
   loadToken,
   openPullRequest,
   putFileContent,
@@ -41,7 +41,7 @@ import {
   type RepoRef,
 } from "./github.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
-import { parseSeriesFiles, type Series } from "./series.ts";
+import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
 import { setActiveStore } from "./active-store.ts";
 import { iconRail } from "./icon-rail.ts";
 
@@ -52,9 +52,9 @@ export interface RepoPanelHost {
    * loadRepoFiles rebuilds it — optional, since a caller with no link
    * picker (a test host, say) has nothing to do with it. */
   onIndexChange?(index: FileIndexEntry[]): void;
-  /** series.ts's own read of every `.order.yaml` file in the repository,
-   * handed the same way, for series-panel.ts. */
-  onSeriesChange?(series: Series[]): void;
+  /** courses.ts's own read of every `courses/*.yaml` file in the
+   * repository, handed the same way, for series-panel.ts. */
+  onCoursesChange?(courses: Course[]): void;
 }
 
 export interface RepoPanel {
@@ -228,7 +228,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   // or not) — this only decides where a push, whenever it happens, lands.
   const newFileSection = document.createElement("section");
   newFileSection.className = "dn-repo-section";
-  const newFileInput = textInput("tutorials/module/new-tutorial.md", "");
+  const newFileInput = textInput("tutorials/new-tutorial/new-tutorial.md", "");
   newFileInput.className = "dn-repo-new-file-path";
   newFileSection.appendChild(field("New file path", newFileInput));
 
@@ -297,11 +297,15 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
    * folder-panel.ts's own version of this, and the same "one file's
    * failure doesn't fail the rest" handling. Takes `markdownFiles`
    * explicitly rather than reading the shared `files` — that list also
-   * carries `.order.yaml` files now (loadRepoFiles's own comment
-   * explains why), and an order file has no front matter worth indexing
-   * at all, so fetching its content again here would spend a real API
-   * call on a bare `{path}` entry. */
-  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[]) {
+   * carries the course files now (loadRepoFiles's own comment explains
+   * why), and a course file has no front matter worth indexing at all,
+   * so fetching its content again here would spend a real API call on a
+   * bare `{path}` entry.
+   *
+   * `courses` is what lets each entry carry the courses that list its id
+   * (file-index.ts's own join), so the courses are read first and this
+   * runs after them. */
+  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[], courses: Course[]) {
     if (!host.onIndexChange) return;
     const entries = await Promise.all(
       markdownFiles.map(async (file) => {
@@ -313,16 +317,21 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
         }
       }),
     );
-    host.onIndexChange(buildFileIndex(entries.filter((e): e is { path: string; content: string } => e !== null)));
+    host.onIndexChange(
+      buildFileIndex(
+        entries.filter((e): e is { path: string; content: string } => e !== null),
+        courses,
+      ),
+    );
   }
 
-  /** Mirrors refreshIndex's own shape, over the `.order.yaml` files
+  /** Mirrors refreshIndex's own shape, over the course files
    * loadRepoFiles's own tree walk already listed — no separate fetch of
-   * the tree a second time just for this. */
-  async function refreshSeries(repo: RepoRef, ref: string, token: string, orderFiles: RepoFile[]) {
-    if (!host.onSeriesChange) return;
+   * the tree a second time just for this. Returns the parsed courses as
+   * well as handing them on, since the index needs them too. */
+  async function refreshCourses(repo: RepoRef, ref: string, token: string, courseFiles: RepoFile[]): Promise<Course[]> {
     const entries = await Promise.all(
-      orderFiles.map(async (file) => {
+      courseFiles.map(async (file) => {
         try {
           const { content } = await getFileContent(repo, file.path, ref, token);
           return { path: file.path, content };
@@ -331,7 +340,11 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
         }
       }),
     );
-    host.onSeriesChange(parseSeriesFiles(entries.filter((e): e is { path: string; content: string } => e !== null)));
+    const read = entries.filter((e): e is { path: string; content: string } => e !== null);
+    const index = read.find((file) => file.path.endsWith("courses/index.yaml"));
+    const courses = parseCourseFiles(read, index ? parseCourseIndex(index.content) : []);
+    host.onCoursesChange?.(courses);
+    return courses;
   }
 
   async function loadRepoFiles() {
@@ -351,15 +364,15 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     repoStatus.textContent = "Loading…";
     try {
       // Listed separately (github.ts's own two functions, one tree fetch
-      // each), but merged into one browsable/searchable list: an
-      // `.order.yaml` file is a plain text file like any other, and
-      // opening one hands it to the same editor and push path every
-      // other file already gets — the whole-file source view (Cmd+/)
-      // shows its raw YAML untouched by any markdown rendering, exactly
-      // what hand-editing a reading order actually wants, no new UI.
-      const [markdownFiles, orderFiles] = await Promise.all([listMarkdownFiles(repo, ref, token), listOrderFiles(repo, ref, token)]);
-      files = [...markdownFiles, ...orderFiles];
-      repoStatus.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${orderFiles.length} order file${orderFiles.length === 1 ? "" : "s"}.`;
+      // each), but merged into one browsable/searchable list: a
+      // course file is a plain text file like any other, and opening one
+      // hands it to the same editor and push path every other file
+      // already gets — the whole-file source view (Cmd+/) shows its raw
+      // YAML untouched by any markdown rendering, exactly what
+      // hand-editing a course actually wants, no new UI.
+      const [markdownFiles, courseFiles] = await Promise.all([listMarkdownFiles(repo, ref, token), listCourseFiles(repo, ref, token)]);
+      files = [...markdownFiles, ...courseFiles];
+      repoStatus.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${courseFiles.length} course file${courseFiles.length === 1 ? "" : "s"}.`;
       renderFiles();
       // active-store.ts's own "open this path" hook — the repository's
       // own version of the same registration folder-panel.ts makes,
@@ -374,15 +387,22 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           await openRepoFile(file);
           return true;
         },
-        // decision 33: closes the gap series-panel.ts's own "New series"
-        // named directly ("today: a local folder, since repo-panel.ts
-        // doesn't implement createFile yet"). Deliberately does not
-        // touch `opened`/renderPush/repoStatus — a reader clicking "New
-        // series" while a real edit is already open in this same panel
-        // should never have that edit's own push target silently
-        // swapped out from under them; the caller (series-panel.ts's own
-        // status line) is what reports success or failure here, the same
-        // as it already does for a local folder. Writes straight to the
+        // decision 33: the repository's own implementation of
+        // active-store.ts's generic createFile. Nothing in the editor
+        // calls it right now — its one caller was series-panel.ts's
+        // "New series", which wrote a `<series>.order.yaml` file, and
+        // that form went with the files it wrote (decision 36). The
+        // writer restores a caller: a new series is an entry in a course
+        // file's `contents:` now, and a new course is still a file.
+        // Kept rather than deleted and written again a PR later, and
+        // flagged here rather than left looking load-bearing.
+        //
+        // Deliberately does not touch `opened`/renderPush/repoStatus — a
+        // reader creating a file while a real edit is already open in
+        // this same panel should never have that edit's own push target
+        // silently swapped out from under them; the caller's own status
+        // line is what reports success or failure here, the same as it
+        // already does for a local folder. Writes straight to the
         // working branch, not the base `ref` this panel browses — a
         // freshly created file exists only there until a PR merges it,
         // so it deliberately never appears in `files`/the browsable list
@@ -398,9 +418,49 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           await ensureBranch(repo, branch, base, token);
           await putFileContent(repo, path, content, undefined, branch, `Add ${path} from dewnote`, token);
         },
+        // The read-modify-write half, for a caller editing a file it
+        // never opened into the editor — series-panel.ts writing a
+        // course file. Reads the working branch first and the browsed
+        // `ref` only as a fallback: a second edit to the same course has
+        // to build on the first one's commit, not on the base branch
+        // that still predates it. Like `createFile` above, it leaves
+        // `opened`/renderPush alone, so an edit already open in this
+        // panel keeps its own push target.
+        async readTextFile(path) {
+          const token = currentToken();
+          if (!token) throw new Error("Enter a GitHub token first.");
+          const repo = currentRepo();
+          const branch = branchInput.value.trim() || "dewnote-edits";
+          const ref = baseInput.value.trim() || "main";
+          try {
+            return (await getFileContent(repo, path, branch, token)).content;
+          } catch {
+            return (await getFileContent(repo, path, ref, token)).content;
+          }
+        },
+        async writeTextFile(path, content, message) {
+          const token = currentToken();
+          if (!token) throw new Error("Enter a GitHub token first.");
+          const repo = currentRepo();
+          const branch = branchInput.value.trim() || "dewnote-edits";
+          const base = baseInput.value.trim() || "main";
+          await ensureBranch(repo, branch, base, token);
+          // The sha the branch holds right now, not the one the base
+          // does: GitHub wants the blob being replaced, and a file this
+          // branch hasn't touched yet simply has none there.
+          let sha: string | undefined;
+          try {
+            sha = (await getFileContent(repo, path, branch, token)).sha;
+          } catch {
+            sha = undefined;
+          }
+          await putFileContent(repo, path, content, sha, branch, message, token);
+        },
       });
-      await refreshIndex(repo, ref, token, markdownFiles);
-      await refreshSeries(repo, ref, token, orderFiles);
+      // Courses first: the index joins each entry to the courses that
+      // list its id, so it needs them already parsed.
+      const courses = await refreshCourses(repo, ref, token, courseFiles);
+      await refreshIndex(repo, ref, token, markdownFiles, courses);
     } catch (err) {
       repoStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {

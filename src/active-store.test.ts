@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { createFile, openPath, setActiveStore } from "./active-store.ts";
+import { canWriteFiles, createFile, openPath, readTextFile, setActiveStore, writeTextFile } from "./active-store.ts";
 
 describe("openPath", () => {
   afterEach(() => setActiveStore(null));
@@ -41,7 +41,7 @@ describe("createFile", () => {
     await expect(createFile("x.md", "content")).rejects.toThrow(/isn't supported/i);
   });
 
-  test("with a store registered but no createFile of its own (repo-panel.ts today), throws the same way", async () => {
+  test("with a store registered but no createFile of its own, throws the same way", async () => {
     setActiveStore({ async openPath() { return true; } });
     await expect(createFile("x.md", "content")).rejects.toThrow(/isn't supported/i);
   });
@@ -56,8 +56,8 @@ describe("createFile", () => {
         calls.push({ path, content });
       },
     });
-    await createFile("a/b.order.yaml", "series: X\norder: []\n");
-    expect(calls).toEqual([{ path: "a/b.order.yaml", content: "series: X\norder: []\n" }]);
+    await createFile("tutorials/new-one/new-one.md", "---\ntitle: New One\n---\n");
+    expect(calls).toEqual([{ path: "tutorials/new-one/new-one.md", content: "---\ntitle: New One\n---\n" }]);
   });
 
   test("a rejection from the store's own createFile propagates as-is", async () => {
@@ -66,9 +66,69 @@ describe("createFile", () => {
         return true;
       },
       async createFile() {
-        throw new Error("\"a/b.order.yaml\" already exists.");
+        throw new Error("\"tutorials/new-one/new-one.md\" already exists.");
       },
     });
-    await expect(createFile("a/b.order.yaml", "x")).rejects.toThrow('"a/b.order.yaml" already exists.');
+    await expect(createFile("tutorials/new-one/new-one.md", "x")).rejects.toThrow('"tutorials/new-one/new-one.md" already exists.');
+  });
+});
+
+// The read-modify-write pair series-panel.ts edits course files through.
+// Both are optional on the interface, so the interesting cases are the
+// ones where a store implements one and not the other: that is what
+// `canWriteFiles` exists to tell the panel before it draws a drag handle
+// it could not honour.
+describe("readTextFile / writeTextFile", () => {
+  afterEach(() => setActiveStore(null));
+
+  const opener = { async openPath() { return true; } };
+
+  test("canWriteFiles is false with no store, and false for a store with only half the pair", () => {
+    expect(canWriteFiles()).toBe(false);
+    setActiveStore(opener);
+    expect(canWriteFiles()).toBe(false);
+    setActiveStore({ ...opener, async readTextFile() { return ""; } });
+    expect(canWriteFiles()).toBe(false);
+    setActiveStore({ ...opener, async writeTextFile() {} });
+    expect(canWriteFiles()).toBe(false);
+  });
+
+  test("canWriteFiles is true only once a store implements both", () => {
+    setActiveStore({ ...opener, async readTextFile() { return ""; }, async writeTextFile() {} });
+    expect(canWriteFiles()).toBe(true);
+  });
+
+  test("each throws a real message rather than silently doing nothing when unsupported", async () => {
+    await expect(readTextFile("courses/a.yaml")).rejects.toThrow(/isn't supported/i);
+    await expect(writeTextFile("courses/a.yaml", "x", "msg")).rejects.toThrow(/isn't supported/i);
+  });
+
+  test("routes to the registered store, forwarding the path, content and commit message", async () => {
+    const written: { path: string; content: string; message: string }[] = [];
+    setActiveStore({
+      ...opener,
+      async readTextFile(path) {
+        return `read ${path}`;
+      },
+      async writeTextFile(path, content, message) {
+        written.push({ path, content, message });
+      },
+    });
+    expect(await readTextFile("courses/a.yaml")).toBe("read courses/a.yaml");
+    await writeTextFile("courses/a.yaml", "title: A\n", "Move x in A from dewnote");
+    expect(written).toEqual([{ path: "courses/a.yaml", content: "title: A\n", message: "Move x in A from dewnote" }]);
+  });
+
+  test("a rejection from the store propagates as-is — a write the reader asked for that didn't happen", async () => {
+    setActiveStore({
+      ...opener,
+      async readTextFile() {
+        return "";
+      },
+      async writeTextFile() {
+        throw new Error("Enter a GitHub token first.");
+      },
+    });
+    await expect(writeTextFile("courses/a.yaml", "x", "msg")).rejects.toThrow("Enter a GitHub token first.");
   });
 });

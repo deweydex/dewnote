@@ -150,6 +150,13 @@ function convertFence(block: Block, from: DialectName, to: DialectName, report: 
 
 const DEWLAB_ONLY_FIELDS = ["year", "covers", "practice_for", "practice_across"];
 
+/** dewstack still places a tutorial from its own front matter; dewlab
+ * doesn't any more (courses.ts). These four carried the placement, so
+ * they come out on the way into dewlab rather than riding along as
+ * fields its build ignores — a `module:` sitting in a dewlab file reads
+ * like it still puts the tutorial somewhere. */
+const DEWSTACK_PLACEMENT_FIELDS = ["slug", "module", "module_title", "series"];
+
 function convertFrontMatter(block: Block, from: DialectName, to: DialectName, report: string[]): string {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(block.text);
   if (!match) return block.text;
@@ -164,6 +171,16 @@ function convertFrontMatter(block: Block, from: DialectName, to: DialectName, re
       report.push('front matter: dewlab requires "year" — left blank, fill in before using this document');
     }
     if (!("covers" in next)) next.covers = {};
+    const dropped = DEWSTACK_PLACEMENT_FIELDS.filter((key) => key in next);
+    for (const key of dropped) delete next[key];
+    if (dropped.length > 0) {
+      // Not recoverable automatically: a dewstack module is not a dewlab
+      // course, and the id comes from where the file is put. So the
+      // author is told rather than guessed for.
+      report.push(
+        `front matter: ${dropped.join(", ")} dropped — dewlab places a tutorial from courses/*.yaml and its id from its path, so list this on a course to place it`,
+      );
+    }
   } else {
     // Plain markdown keeps arbitrary keys (DIALECTS.md §3), and neither
     // direction into it is named in §5's table as dropping anything from

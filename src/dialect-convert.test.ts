@@ -126,11 +126,33 @@ describe("dewstack -> dewlab", () => {
   });
 
   test("front matter adds an empty year and empty covers, and reports the gap", () => {
-    const source = "---\ntitle: A Page\nmodule_title: Data\n---\n\nBody.\n";
+    const source = "---\ntitle: A Page\n---\n\nBody.\n";
     const { markdown, report } = convertDialect(source, "dewstack", "dewlab");
     expect(markdown).toContain("year:");
     expect(markdown).toContain("covers:");
     expect(report).toEqual(['front matter: dewlab requires "year" — left blank, fill in before using this document']);
+  });
+
+  test("dewstack's placement fields are dropped, and the author is told to place it", () => {
+    // dewlab reads placement from courses/*.yaml and the id from the
+    // path, so carrying these over would leave fields its build ignores
+    // in a file that looks placed.
+    const source =
+      "---\ntitle: A Page\nyear: '2026-2027'\nslug: a-page\nmodule: data\nmodule_title: Data\nseries: intro\n---\n\nBody.\n";
+    const { markdown, report } = convertDialect(source, "dewstack", "dewlab");
+    for (const gone of ["slug:", "module:", "module_title:", "series:"]) {
+      expect(markdown).not.toContain(gone);
+    }
+    expect(markdown).toContain("title: A Page");
+    expect(report).toEqual([
+      "front matter: slug, module, module_title, series dropped — dewlab places a tutorial from courses/*.yaml and its id from its path, so list this on a course to place it",
+    ]);
+  });
+
+  test("a dewstack file with no placement fields reports no drop", () => {
+    const source = "---\ntitle: A Page\nyear: '2026-2027'\n---\n\nBody.\n";
+    const { report } = convertDialect(source, "dewstack", "dewlab");
+    expect(report).toEqual([]);
   });
 });
 
