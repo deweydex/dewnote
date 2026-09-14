@@ -13,6 +13,7 @@ import { mountSourceView } from "./source-view.ts";
 import { mountLinkCheckPanel } from "./link-check.ts";
 import { mountSeriesPanel } from "./series-panel.ts";
 import { mountCommandPalette } from "./command-palette.ts";
+import { todayVersion } from "./dialect.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
@@ -28,14 +29,22 @@ applySettings(loadSettings());
 // dialect-convert panel (⇄) already converts a dewlab document down to
 // plain, dropping these fields rather than asking anyone to type a
 // blank set by hand.
+// Decision 31: the starter models a real dialect rather than plain
+// markdown, and the dialect is dewlab — so a first-time reader meets the
+// per-field form rather than the raw-YAML caption plain markdown gets.
+//
+// Which fields, though, is dewlab's to say, and dewlab's answer changed:
+// `slug`, `module`, `module_title` and `series` went when placement moved
+// into `courses/*.yaml` (decision 36). They survived here after the form
+// stopped showing them, which made them worse than visible-and-wrong —
+// every document started from this one carried four fields nobody could
+// see and dewlab's build ignores. `version` is dewlab's own dated form
+// now too (`2026.09.14.1`), stamped when the editor loads rather than
+// frozen at whatever day this string was last edited.
 const STARTER_DOCUMENT = `---
 title: Untitled
-slug: untitled
-module: getting-started
-module_title: "Getting Started"
-year: "2026"
-series: first-notebook
-version: 1
+year: "${new Date().getFullYear()}"
+version: ${todayVersion()}
 ---
 
 # Untitled

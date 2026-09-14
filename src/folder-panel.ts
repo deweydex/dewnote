@@ -12,6 +12,7 @@ import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
 import { createFile as createActiveFile, setActiveStore } from "./active-store.ts";
 import { iconRail } from "./icon-rail.ts";
+import { todayVersion } from "./dialect.ts";
 
 export interface FolderPanel {
   destroy(): void;
@@ -26,19 +27,6 @@ function textInput(placeholder: string): HTMLInputElement {
   input.autocomplete = "off";
   input.spellcheck = false;
   return input;
-}
-
-/** dewlab's own `version` form (DIALECTS.md §1: `2026.09.04.1`) —
- * today's date plus a `.1` release counter, since a freshly created
- * tutorial has no prior release to be the second of. Computed at create
- * time rather than once at mount, so a panel left open overnight still
- * stamps the day it's actually used on. */
-function todayVersion(): string {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const dd = String(now.getDate()).padStart(2, "0");
-  return `${yyyy}.${mm}.${dd}.1`;
 }
 
 /** Mounted once, independently of any particular document. Takes the

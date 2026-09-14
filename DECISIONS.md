@@ -1294,3 +1294,36 @@ courses.ts already records, with its own tests and no DOM; the panel is
 the only caller, and `active-store.ts` grew one read/write pair that both
 stores implement. Undoing any of it is deleting it.*
 
+**38 — The starter document carries dewlab's fields as they are now, not
+as they were when decision 31 chose it.**
+
+Decision 31 answered "should the starter model a real dialect, and which
+one" with dewlab, so a first-time reader meets the per-field form rather
+than plain markdown's raw-YAML caption. It then wrote out the fields
+dewlab had at the time: `title`, `slug`, `module`, `module_title`,
+`year`, `series`, `version: 1`.
+
+Decision 36 deleted four of those from the form. It did not delete them
+from here, and that gap was worse than leaving them visible: the form
+showed three clean rows while the document underneath still carried
+`slug`, `module`, `module_title` and `series`, invisible, unreachable
+without the raw-YAML fallback, and copied into every document anyone
+started from it. The round-trip guarantee is what made it stick —
+decision 1 means an untouched field survives every save, which is right
+for a file somebody else wrote and wrong for a template shipping four
+fields dewlab's build ignores.
+
+`version: 1` went the same way. It was never dewlab's form, which is a
+release date (`2026.09.14.1`, DIALECTS.md §1), and a reader who saved
+the starter got a version that no `v<version>.md` file name could match.
+
+**`todayVersion()` moved to `dialect.ts`.** It was private to
+folder-panel.ts, stamping a version for a newly created tutorial. The
+starter needs the same string for the same reason, and `dialect.ts`'s own
+header already claims to be the only place DIALECTS.md's inventory turns
+into code — what a dewlab `version:` looks like is part of that
+inventory. Stamped when the editor loads rather than frozen at whatever
+day this string was last edited.
+
+*Cost to change: none. The starter is one template string, and nothing
+reads it but the first mount.*
