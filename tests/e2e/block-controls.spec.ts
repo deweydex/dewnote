@@ -123,3 +123,42 @@ test("on a narrow screen the rail is a labelled bottom bar that fits, and nothin
 
   await browser.close();
 });
+
+test("a phone gets a phone's measure, and nothing fixed sits on top of the document", async () => {
+  // Before this the desktop gutter of 3rem a side ate 104px of a 390px
+  // screen and left the text at 32 characters a line, where reading
+  // wants 45 and up; the fixed file bar, grown taller for touch, also
+  // sat on the first block.
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const page = await ctx.newPage();
+  await page.goto(BUILT_APP);
+  await page.locator(".dn-block").first().waitFor();
+
+  const geo = await page.evaluate(() => {
+    const prose = document.querySelector(".dn-block-prose .dn-block-render")!;
+    const box = prose.getBoundingClientRect();
+    const probe = document.createElement("span");
+    probe.style.font = getComputedStyle(prose).font;
+    probe.style.position = "absolute";
+    probe.style.whiteSpace = "pre";
+    probe.textContent = "x".repeat(100);
+    document.body.appendChild(probe);
+    const per100 = probe.getBoundingClientRect().width;
+    probe.remove();
+    const bar = document.querySelector(".dn-file-bar")!.getBoundingClientRect();
+    const first = document.querySelector(".dn-block")!.getBoundingClientRect();
+    return {
+      charsPerLine: Math.round((box.width / per100) * 100),
+      firstBlockClearOfFileBar: first.top >= bar.bottom,
+    };
+  });
+
+  // Not a precise number — a range that means "reads like a reading app
+  // rather than a column of six words".
+  expect(geo.charsPerLine).toBeGreaterThanOrEqual(38);
+  expect(geo.charsPerLine).toBeLessThanOrEqual(60);
+  expect(geo.firstBlockClearOfFileBar).toBe(true);
+
+  await browser.close();
+});

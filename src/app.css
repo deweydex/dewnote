@@ -899,9 +899,27 @@ body {
   .dn-icon-rail > button[aria-expanded="true"]::after {
     color: var(--dl-orange);
   }
-  /* Room for the bar, so the last block is never under it. */
   .dn-page {
+    /* Room for the bar, so the last block is never under it. */
     padding-bottom: 6rem;
+    /* And a phone's own measure. The desktop gutter is 3rem a side,
+       which on a 390px screen is 104px of padding — a quarter of the
+       width — and left the text at 32 characters a line where reading
+       wants 45 and up. The left gutter only has to hold one 44px
+       control, and the right holds nothing at all.
+
+       The size comes down with it: 16px rather than 18. Together that is
+       about 41 characters a line, which is where a phone reader actually
+       sits — iOS Books at its default is much the same. `min` rather
+       than a flat value so a reader who chose something smaller still
+       gets it. */
+    padding-left: 2.75rem;
+    padding-right: 1rem;
+    font-size: min(var(--dl-font-size, 18px), 16px);
+    /* Clear of the file bar, which is fixed at the top and grew taller
+       when its buttons became finger-sized — 3rem left the first block
+       half behind Open and Save. */
+    padding-top: 4.5rem;
   }
   /* A panel opens above the bar rather than over it. */
   .dn-series-panel,
