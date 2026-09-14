@@ -1327,3 +1327,72 @@ day this string was last edited.
 
 *Cost to change: none. The starter is one template string, and nothing
 reads it but the first mount.*
+
+**39 — An image is a real file beside the document, and the preview
+reads it back through the store.**
+
+Plan §6 step 8 has carried "a copy into the tutorial folder" as open
+since the step shipped, for the reason `insertImageAfter` said in its own
+comment: no store had a way to put a file anywhere. Both stores have one
+now (decision 37 gave them read and write), so this closes it.
+
+**Bare file name, because that is what both builds resolve.** dewlab's
+`resolve_assets()` looks for `diagram.png` in the folder the markdown
+sits in and *fails the build* on a name with no file behind it; dewstack
+copies every non-`.md`/`.yaml` sibling into the page's output. Under
+dewlab's current layout that folder is `tutorials/<id>/`, shared by the
+tutorial, its practice page and every frozen release, so all three
+resolve the same name against the same picture. dewlab has no image in
+any tutorial today, so none of this had a live example to check against —
+only the build's own rules, which are explicit.
+
+**The name is reshaped, and stepped past what is taken.**
+`![alt](My Photo (1).png)` ends its link at the first `)`; spaces break
+it the same way. So a picked file's name is lowercased and hyphenated
+(`asset-name.ts`). And because `tutorial_assets()` reads the folder
+rather than a declared list, a name already there belongs to a picture
+already on a page: writing over it would change that page silently, and
+pointing at it without writing would put the wrong picture under this alt
+text. A taken name gets a counter.
+
+Knowing what is taken meant a real directory listing, not the panels'
+own file lists: both walk for markdown and course files only, so a
+picture beside a tutorial appears in neither. The first version used
+those lists, and the test that caught it is the one worth keeping — a
+collision fell back to inlining rather than picking the next name.
+
+**A `data:` URI is still the answer when there is nowhere to write.** A
+document dropped on the editor has no folder, and neither does one being
+written before anything is opened. Inlining renders, round-trips, and
+passes dewlab's own `EXTERNAL_URL_RE`, which leaves a `data:` URI alone.
+What it costs is a real file, so the status says which of the two
+happened rather than leaving it to be found at build time.
+
+**The preview reads the bytes back rather than fetching the name.** This
+was not in the plan's line and is what makes the rest usable. dewnote is
+one HTML file served from somewhere else entirely, so `diagram.png`
+resolves against *it* and finds nothing — every image in a tutorial would
+render broken the moment the document was reopened, including one dewnote
+had just written. `asset-preview.ts` takes the `src` off before the
+browser can fetch it (a bare name set as `src` is one guaranteed 404 per
+image per render), reads the file through the store, and puts back an
+object URL. The markdown is never touched: what the document says stays
+the bare name.
+
+An image whose file isn't there keeps no `src` at all, which is what
+makes the browser show its `alt` text in the picture's place. More useful
+to an author than a broken icon, and honest — a name with no file behind
+it is exactly what fails dewlab's build.
+
+**`toBase64` was for text, and would have corrupted every image.** It
+UTF-8 encodes first, which rewrites every byte above 0x7F into two — over
+half of a PNG. `bytesToBase64` is its sibling for bytes that were never
+text, and `getFileBytes` is `getFileContent`'s, which decodes as UTF-8
+for the same reason. The repository test checks the committed base64
+against the bytes handed to the file chooser rather than only checking
+that a commit happened.
+
+*Cost to change: low. `asset-name.ts` and `asset-preview.ts` are both
+self-contained, and the store interface grew four optional methods that a
+store without them simply doesn't offer — which is what the `data:` URI
+fallback already handles.*

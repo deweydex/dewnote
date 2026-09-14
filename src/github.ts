@@ -64,9 +64,21 @@ export function forgetToken(): void {
  * an edge case here). Exported and unit-tested directly, since a broken
  * encoder here means silent corruption of every file this ever saves. */
 export function toBase64(text: string): string {
-  const bytes = new TextEncoder().encode(text);
+  return bytesToBase64(new TextEncoder().encode(text));
+}
+
+/** The same encoding for bytes that were never text — an image copied in
+ * beside a tutorial. Not `toBase64` with the bytes read as a string:
+ * that UTF-8 encodes first, which rewrites every byte above 0x7F into
+ * two and corrupts the file. Chunked because `String.fromCharCode` is
+ * called with one argument per byte, and a few hundred thousand of them
+ * at once overflows the call stack. */
+export function bytesToBase64(bytes: Uint8Array): string {
+  const CHUNK = 0x8000;
   let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
+  for (let at = 0; at < bytes.length; at += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(at, at + CHUNK));
+  }
   return btoa(binary);
 }
 
@@ -188,6 +200,34 @@ export async function getFileContent(
   return { content: fromBase64(data.content), sha: data.sha };
 }
 
+/** Every file name directly inside `path` at `ref` — GitHub's own
+ * directory listing, used to pick an asset name that isn't already
+ * taken. Distinct from `listMarkdownFiles`/`listCourseFiles`, which walk
+ * the whole tree and filter to what this editor opens; a picture beside
+ * a tutorial is in neither of those. */
+export async function listDirectory(repo: RepoRef, path: string, ref: string, token: string): Promise<string[]> {
+  const data = await apiJson<{ name: string; type: string }[]>(
+    token,
+    "GET",
+    `/repos/${repo.owner}/${repo.repo}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+  );
+  if (!Array.isArray(data)) return [];
+  return data.filter((entry) => entry.type === "file").map((entry) => entry.name);
+}
+
+/** The same call, kept as bytes — an image, not text. `getFileContent`
+ * decodes as UTF-8, which is right for every file it was written for and
+ * destroys a PNG. */
+export async function getFileBytes(repo: RepoRef, path: string, ref: string, token: string): Promise<Uint8Array<ArrayBuffer>> {
+  const data = await apiJson<{ content: string }>(
+    token,
+    "GET",
+    `/repos/${repo.owner}/${repo.repo}/contents/${path}?ref=${encodeURIComponent(ref)}`,
+  );
+  const binary = atob(data.content.replace(/\n/g, ""));
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
 async function branchSha(repo: RepoRef, branch: string, token: string): Promise<string | null> {
   const response = await api(token, "GET", `/repos/${repo.owner}/${repo.repo}/git/ref/heads/${encodeURIComponent(branch)}`);
   if (response.status === 404) return null;
@@ -234,7 +274,7 @@ export interface PutFileResult {
 export async function putFileContent(
   repo: RepoRef,
   path: string,
-  content: string,
+  content: string | Uint8Array,
   sha: string | undefined,
   branch: string,
   message: string,
@@ -242,7 +282,7 @@ export async function putFileContent(
 ): Promise<PutFileResult> {
   const body: { message: string; content: string; branch: string; sha?: string } = {
     message,
-    content: toBase64(content),
+    content: typeof content === "string" ? toBase64(content) : bytesToBase64(content),
     branch,
   };
   if (sha !== undefined) body.sha = sha;

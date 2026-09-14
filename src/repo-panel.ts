@@ -29,6 +29,8 @@
 import {
   ensureBranch,
   forgetToken,
+  getFileBytes,
+  listDirectory,
   getFileContent,
   GithubApiError,
   listMarkdownFiles,
@@ -455,6 +457,62 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
             sha = undefined;
           }
           await putFileContent(repo, path, content, sha, branch, message, token);
+        },
+        // An image copied in beside a tutorial, committed to the working
+        // branch like any other new file. `putFileContent` base64s the
+        // bytes directly rather than through `toBase64`, which would
+        // UTF-8 encode them first and corrupt every byte above 0x7F.
+        async createBinaryFile(path, bytes) {
+          const token = currentToken();
+          if (!token) throw new Error("Enter a GitHub token first.");
+          const repo = currentRepo();
+          const branch = branchInput.value.trim() || "dewnote-edits";
+          const base = baseInput.value.trim() || "main";
+          await ensureBranch(repo, branch, base, token);
+          await putFileContent(repo, path, bytes, undefined, branch, `Add ${path} from dewnote`, token);
+        },
+        async readBinaryFile(path) {
+          const token = currentToken();
+          if (!token) return null;
+          const repo = currentRepo();
+          const branch = branchInput.value.trim() || "dewnote-edits";
+          const ref = baseInput.value.trim() || "main";
+          // The working branch first, then the browsed ref — the same
+          // order `readTextFile` uses, and for the same reason: an image
+          // added in this session exists only on the branch.
+          try {
+            return await getFileBytes(repo, path, branch, token);
+          } catch {
+            try {
+              return await getFileBytes(repo, path, ref, token);
+            } catch {
+              return null;
+            }
+          }
+        },
+        currentPath: () => opened?.file.path ?? null,
+        // GitHub's own directory listing, not this panel's tree walk —
+        // that walk keeps markdown and course files only, so a picture
+        // already committed beside a tutorial appears in neither list.
+        // One extra request, on a path a reader takes by hand.
+        async listNamesIn(folder) {
+          const token = currentToken();
+          if (!token) return [];
+          const repo = currentRepo();
+          const branch = branchInput.value.trim() || "dewnote-edits";
+          const ref = baseInput.value.trim() || "main";
+          // The working branch first: an image added earlier in this
+          // session is committed there and nowhere else yet, and missing
+          // it would hand the next one the same name.
+          for (const at of [branch, ref]) {
+            try {
+              return await listDirectory(repo, folder, at, token);
+            } catch {
+              // Try the base ref, then give up — an unreadable listing
+              // just means the create call is the only guard left.
+            }
+          }
+          return [];
         },
       });
       // Courses first: the index joins each entry to the courses that

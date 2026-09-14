@@ -6,7 +6,7 @@
 // unchanged, since an opened folder file is exactly the single-file
 // case #18 already built — a name, content, and a real writable handle.
 
-import { chooseFolder, createFile, listCourseFiles, listMarkdownFiles, readFile, supportsDirectoryPicker, writeFile, type FolderFile } from "./folder-store.ts";
+import { chooseFolder, createFile, listCourseFiles, listMarkdownFiles, listNamesIn, readBytesAt, readFile, supportsDirectoryPicker, writeFile, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
@@ -264,11 +264,20 @@ id: ${id}-first-cell
   }
   searchInput.addEventListener("input", renderFiles);
 
+  /** The folder-relative path of the file this panel last opened, or
+   * null if it hasn't opened one. */
+  let openedPath: string | null = null;
+
   async function openFolderFile(file: FolderFile) {
     status.textContent = `Opening ${file.path}…`;
     try {
       const content = await readFile(file.handle);
       fileBar.open({ name: file.path, content, handle: file.handle });
+      // What "beside this document" means, for an image copied in
+      // (app.ts's insertImageAfter). Set only on a real open from this
+      // folder: a file dropped onto the editor has no folder to sit in,
+      // and must not inherit whichever one was opened before it.
+      openedPath = file.path;
       status.textContent = `Opened ${file.path}.`;
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : String(err);
@@ -408,6 +417,18 @@ id: ${id}-first-cell
         await writeFile(file.handle, content);
         await loadFromRoot(root, folderName, "Refreshing");
       },
+      async createBinaryFile(path, bytes) {
+        await createFile(root, path, bytes);
+        await loadFromRoot(root, folderName, "Refreshing");
+      },
+      // Walked fresh rather than looked up in `files`, which holds only
+      // the markdown and course files this panel lists — an image is
+      // neither, so it was never in there to find.
+      async readBinaryFile(path) {
+        return readBytesAt(root, path);
+      },
+      currentPath: () => openedPath,
+      listNamesIn: (folder) => listNamesIn(root, folder),
     });
     await loadFromRoot(root, folderName, "Reading");
   });

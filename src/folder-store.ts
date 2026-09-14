@@ -91,6 +91,50 @@ export async function readFile(handle: FileSystemFileHandle): Promise<string> {
   return file.text();
 }
 
+/** Every file name directly inside `folder` under `root` — the real
+ * directory, not the filtered list `walk` builds.
+ *
+ * That distinction is the whole point: `listMarkdownFiles` and
+ * `listCourseFiles` deliberately see only what this editor opens, so a
+ * picture already sitting beside a tutorial is invisible to both. Naming
+ * a new one from that list would call a taken name free. Empty for a
+ * folder that doesn't exist, which is the right answer for "what is
+ * already in it". */
+export async function listNamesIn(root: FileSystemDirectoryHandle, folder: string): Promise<string[]> {
+  const segments = folder.split("/").filter(Boolean);
+  try {
+    let dir = root;
+    for (const segment of segments) dir = await dir.getDirectoryHandle(segment);
+    const names: string[] = [];
+    for await (const [name] of (dir as unknown as DirectoryLike).entries()) names.push(name);
+    return names;
+  } catch {
+    return [];
+  }
+}
+
+/** The raw bytes of the file at `relativePath` under `root`, or null if
+ * there is none — an image the editor has to show, which `walk` never
+ * listed because it only ever looked for markdown and course files. A
+ * missing directory along the way is a missing file, not an error: an
+ * image name with nothing behind it is a real state the editor renders
+ * (as a broken image, the same as the built page would) rather than
+ * something to throw over. */
+export async function readBytesAt(root: FileSystemDirectoryHandle, relativePath: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  const segments = relativePath.split("/").filter(Boolean);
+  const fileName = segments.pop();
+  if (!fileName) return null;
+  try {
+    let dir = root;
+    for (const segment of segments) dir = await dir.getDirectoryHandle(segment);
+    const handle = await dir.getFileHandle(fileName);
+    const file = await handle.getFile();
+    return new Uint8Array(await file.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
 /** Writes `content` over a file this store already holds — the write
  * half of `readFile` above, for a caller editing a file it never opened
  * into the editor (series-panel.ts's own course-file writes). Separate
@@ -118,8 +162,14 @@ export async function writeFile(handle: FileSystemFileHandle, content: string): 
  * that exact path — a caller creating something new getting back
  * someone else's file instead, unannounced, is exactly the silent data
  * loss this project's rules elsewhere refuse to risk (folder-panel.ts's
- * own SQL-cell-restore banner, dewnote's push-conflict UI). */
-export async function createFile(root: FileSystemDirectoryHandle, relativePath: string, content: string): Promise<FolderFile> {
+ * own SQL-cell-restore banner, dewnote's push-conflict UI).
+ *
+ * `content` may be raw bytes as well as text: `write()` takes either,
+ * and an image copied in beside a tutorial is the one caller that needs
+ * the byte form. Nothing else about the call differs, which is why this
+ * widened rather than gaining a second function — unlike the GitHub
+ * side, where text and bytes reach the API differently. */
+export async function createFile(root: FileSystemDirectoryHandle, relativePath: string, content: string | Uint8Array<ArrayBuffer>): Promise<FolderFile> {
   const segments = relativePath.split("/").filter(Boolean);
   const fileName = segments.pop();
   if (!fileName) throw new Error(`"${relativePath}" has no file name.`);

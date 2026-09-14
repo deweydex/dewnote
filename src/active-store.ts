@@ -46,6 +46,41 @@ export interface ActiveStore {
    * say it. Throws with a real message on failure — a write the reader
    * asked for that didn't happen is something they need to see. */
   writeTextFile?(path: string, content: string, message: string): Promise<void>;
+  /** Creates a new file at `path` from raw bytes — an image copied in
+   * beside the document that shows it. Separate from `createFile` rather
+   * than widening it, because the two stores diverge exactly here: a
+   * folder hands the bytes straight to a writable stream, while a
+   * repository has to base64 them, and `github.ts`'s own `toBase64`
+   * takes a *string* (it UTF-8 encodes first, which would corrupt every
+   * byte above 0x7F). Refuses rather than overwrites, the same as
+   * `createFile`. */
+  createBinaryFile?(path: string, bytes: Uint8Array<ArrayBuffer>): Promise<void>;
+  /** The raw bytes of a file this store holds — an image the editor has
+   * to show. Separate from `readTextFile` for the same reason as the
+   * write side: that one decodes as UTF-8, which destroys a PNG.
+   * Resolves null when there is no such file, since an image name with
+   * nothing behind it is a real state the editor renders rather than an
+   * error (dewlab's build is where that becomes a failure). */
+  readBinaryFile?(path: string): Promise<Uint8Array<ArrayBuffer> | null>;
+  /** The store-relative path of the document open in the editor right
+   * now, or null when this store has none open.
+   *
+   * What "beside the document" means, in other words. Only the store
+   * knows it: the file bar tracks a display name, which is a full
+   * relative path for a folder file and a bare file name for a dropped
+   * one, and telling those apart after the fact is guesswork. */
+  currentPath?(): string | null;
+  /** Every file name already sitting directly inside `folder`, for
+   * picking an asset name that isn't somebody else's picture
+   * (asset-name.ts).
+   *
+   * The real directory, not whatever list the panel happens to display:
+   * both panels walk for markdown and course files only, so a picture
+   * already beside a tutorial appears in neither, and naming a new one
+   * from those lists would call a taken name free. Empty when the store
+   * can't list it — the create call refusing to overwrite is still the
+   * backstop, but it is a backstop, not the plan. */
+  listNamesIn?(folder: string): Promise<string[]>;
 }
 
 let active: ActiveStore | null = null;
@@ -82,4 +117,30 @@ export async function readTextFile(path: string): Promise<string> {
 export async function writeTextFile(path: string, content: string, message: string): Promise<void> {
   if (!active?.writeTextFile) throw new Error("Saving a file isn't supported by whatever's open right now — open a folder or a repository first.");
   await active.writeTextFile(path, content, message);
+}
+
+/** True when the store open right now can copy an asset in beside the
+ * open document — a store that can write bytes, and a document that has
+ * somewhere for them to sit. False means an image has to be inlined as a
+ * `data:` URI instead, which is a real fallback rather than a failure. */
+export function canWriteAssets(): boolean {
+  return Boolean(active?.createBinaryFile && active.currentPath?.());
+}
+
+export function currentPath(): string | null {
+  return active?.currentPath?.() ?? null;
+}
+
+export async function listNamesIn(folder: string): Promise<string[]> {
+  return (await active?.listNamesIn?.(folder)) ?? [];
+}
+
+export async function createBinaryFile(path: string, bytes: Uint8Array<ArrayBuffer>): Promise<void> {
+  if (!active?.createBinaryFile) throw new Error("Saving a file isn't supported by whatever's open right now — open a folder or a repository first.");
+  await active.createBinaryFile(path, bytes);
+}
+
+export async function readBinaryFile(path: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!active?.readBinaryFile) return null;
+  return active.readBinaryFile(path);
 }

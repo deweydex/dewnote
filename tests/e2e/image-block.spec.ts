@@ -2,10 +2,13 @@
 // step 8's own "images with an alt prompt." Drives the real built app:
 // pick a real file through the browser's own file chooser, answer the
 // alt-text prompt, and check both the inserted markdown and the
-// rendered <img>. Copying the file into a tutorial folder is still open
-// (no store has a "copy this asset" method yet, per app.ts's own header
-// comment on insertImageAfter) — this only checks the data: URI path
-// that exists today.
+// rendered <img>.
+//
+// This file is the *fallback* half: no store open, so there is no folder
+// to put a file in and the image is inlined as a `data:` URI. The other
+// half — a real copy written beside the document, which is what both
+// builds actually want — is in image-asset.spec.ts, against the fake
+// folder and the mocked GitHub API.
 
 import { test as base, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
@@ -50,7 +53,7 @@ async function getSource(page: import("@playwright/test").Page): Promise<string>
   return page.evaluate(() => (window as unknown as { __dewnote: { getSource(): string } }).__dewnote.getSource());
 }
 
-test("adding an image prompts for alt text and inlines the file as a data: URI", async ({ page }) => {
+test("with nowhere to write a file, an image is inlined as a data: URI", async ({ page }) => {
   await mount(page, "One.\n\nTwo.\n");
 
   page.once("dialog", (dialog) => dialog.accept("A test image"));
@@ -85,6 +88,14 @@ test("cancelling the alt-text prompt still inserts the image, with empty alt tex
   await gap.locator(".dn-add-menu button", { hasText: "Image" }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "pixel.png", mimeType: "image/png", buffer: ONE_PIXEL_PNG });
+
+  // Waited for rather than assumed: `setFiles` returning means the
+  // picker closed, not that the file has been read. Reading it is a
+  // FileReader round trip, and the dismissed prompt no longer sits in
+  // between to cover for it — the prompt comes first now, so the image
+  // can be written beside the document under its real name rather than
+  // after the bytes have already been inlined.
+  await expect(page.locator('.dn-block-render img[alt=""]')).toBeVisible();
 
   const source = await getSource(page);
   expect(source).toContain("![](data:image/png;base64,");

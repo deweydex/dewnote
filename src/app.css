@@ -2298,3 +2298,22 @@ body {
 .dn-site-console-warn {
   color: var(--dl-orange);
 }
+
+/* An image the markdown names by bare file name, resolved through the
+   open store (asset-preview.ts). It carries no `src` until the bytes
+   come back, so the box is sized here rather than by the picture — and
+   one whose file isn't there keeps none, which is what makes the browser
+   render its alt text in place of the picture. */
+.dn-block-render img[data-dn-asset] {
+  max-width: 100%;
+}
+.dn-block-render img.dn-image-missing {
+  display: inline-block;
+  min-width: 8rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px dashed var(--dl-cell-border);
+  border-radius: 4px;
+  color: var(--dl-muted);
+  font-size: 0.9em;
+  font-style: italic;
+}

@@ -41,6 +41,9 @@ import { renderBlockPreview, renderCardFencePreview, renderHintFencePreview } fr
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
 import { pickLink } from "./link-picker.ts";
+import { canWriteAssets, createBinaryFile, currentPath, listNamesIn } from "./active-store.ts";
+import { assetNameFor, folderOf, isAssetFile, siblingPath } from "./asset-name.ts";
+import { forgetAssetUrls, resolveSiblingImages } from "./asset-preview.ts";
 import {
   declaredPackages,
   execCellLanguage,
@@ -150,6 +153,10 @@ function readAsDataUrl(file: File): Promise<string> {
   });
 }
 
+async function readAsBytes(file: File): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await file.arrayBuffer());
+}
+
 // A persisted SQL cell's saved script lives in localStorage, wrapped in
 // try/catch the way dewstack's own save/restore is — private browsing or
 // blocked storage just means this run's script won't be there to offer
@@ -185,6 +192,10 @@ function sameShape(a: Document, b: Document): boolean {
 }
 
 export function mountDocument(container: HTMLElement, initialSource: string): MountedDocument {
+  // A different document means a different folder, and the same bare
+  // image name in it may well mean a different picture — so nothing
+  // cached for the last one carries over (asset-preview.ts).
+  forgetAssetUrls();
   let source = initialSource;
   let doc = parseDocument(source);
   const liveViews = new Map<number, EditorView>();
@@ -411,22 +422,48 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
   /** Not in NEW_BLOCK_SPEC's own synchronous table because picking a
    * file and reading it are both async, unlike every other add-menu
-   * kind. Inlined as a `data:` URI in the markdown itself rather than
-   * saved alongside the document, since no store this file knows about
-   * (browser, folder, or GitHub — src/store.ts, src/folder-store.ts,
-   * src/github.ts) has a "copy this asset next to the document" method
-   * yet; plan §8's own "a copy into the tutorial folder" is still open
-   * for the same reason the link picker is (§6 step 8's own note) —
-   * both need more of the store interface than exists today. Alt text
-   * is asked for the same way DIALECTS.md's own worked examples always
-   * write it: required in the markdown, never left empty by this UI
-   * even though a reader could still hand-edit it away afterwards. */
+   * kind.
+   *
+   * ## A real file beside the document, when there is one
+   *
+   * Both builds resolve an image the same way: the markdown names a bare
+   * file, and the build looks for it in the folder the markdown sits in
+   * — dewlab's `resolve_assets()`, which *fails the build* on a name
+   * with no file behind it, and dewstack's own copy of every
+   * non-`.md`/`.yaml` sibling into the page's output. Under dewlab's
+   * current layout that folder is `tutorials/<id>/`, shared by the
+   * tutorial, its practice page and every frozen release of it, so all
+   * three resolve the same bare name against the same picture.
+   *
+   * So when a store is open and the open document has a path, the bytes
+   * are written next to it and the markdown gets the bare name dewlab
+   * expects. `asset-name.ts` decides the name: reshaped so markdown
+   * can't misread it (`![alt](My Photo (1).png)` ends its link at the
+   * first `)`), and stepped past any name already in that folder, since
+   * a name in use belongs to a picture already on a page.
+   *
+   * ## A `data:` URI when there is nowhere to write
+   *
+   * A document dropped onto the editor has no folder, and neither does
+   * one being written before anything is opened. Inlining is the honest
+   * answer there rather than refusing the image: it renders, it
+   * round-trips, and dewlab's own `EXTERNAL_URL_RE` leaves a `data:` URI
+   * alone rather than failing on it. What it costs is a real file — an
+   * export or a push carries the whole picture inline — so the status
+   * line says which of the two just happened rather than leaving the
+   * reader to find out at build time.
+   *
+   * Alt text is asked for the same way DIALECTS.md's own worked examples
+   * always write it: required in the markdown, never left empty by this
+   * UI even though a reader could still hand-edit it away afterwards.
+   * dewlab's `check_alt_text()` fails the build on an image with no
+   * `alt` at all, and reads an explicit empty one as "decorative". */
   async function insertImageAfter(afterIndex: number | null) {
     const file = await pickImageFile();
     if (!file) return;
-    const dataUrl = await readAsDataUrl(file);
     const alt = window.prompt("Alt text for this image:", "") ?? "";
-    const text = `![${alt}](${dataUrl})\n\n`;
+    const target = await writeImageBeside(file);
+    const text = `![${alt}](${target})\n\n`;
     const parts = blockTexts();
     const newIndex = afterIndex === null ? 0 : afterIndex + 1;
     parts.splice(newIndex, 0, text);
@@ -434,6 +471,29 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     teardownLiveViews();
     doc = parseDocument(source);
     render();
+  }
+
+  /** The bare file name a real copy was written under, or a `data:` URI
+   * when there was nowhere to write one. A failed write falls back to
+   * inlining rather than losing the image the reader just picked — the
+   * picture still lands on the page, and the reason the copy didn't
+   * happen is the one thing worth saying out loud. */
+  async function writeImageBeside(file: File): Promise<string> {
+    if (!canWriteAssets()) return readAsDataUrl(file);
+    const documentPath = currentPath();
+    if (!documentPath) return readAsDataUrl(file);
+
+    const folder = folderOf(documentPath);
+    const taken = (await listNamesIn(folder)).filter(isAssetFile);
+    const name = assetNameFor(file.name, taken);
+    try {
+      await createBinaryFile(siblingPath(documentPath, name), await readAsBytes(file));
+      return name;
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err);
+      window.alert(`Couldn't save the image beside this document (${why}) — it's in the document itself instead, which every build will still render.`);
+      return readAsDataUrl(file);
+    }
   }
 
   /** Also async, like insertImageAfter, and for the same reason it isn't
@@ -1676,6 +1736,11 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     const rendered = document.createElement("div");
     rendered.className = "dn-block-render";
     rendered.innerHTML = renderBlockPreview(block, detectDialect(doc.frontMatter));
+    // An image the markdown names by bare file name resolves against the
+    // folder the document sits in, not against this editor's own page —
+    // so the bytes come back through the store (asset-preview.ts). The
+    // markdown keeps the bare name either way.
+    resolveSiblingImages(rendered);
     rendered.tabIndex = 0;
     rendered.addEventListener("click", () => enterEdit(index));
     rendered.addEventListener("keydown", (event) => {
