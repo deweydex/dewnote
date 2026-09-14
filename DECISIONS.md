@@ -1206,13 +1206,12 @@ still writing an order file would write a format dewlab no longer reads,
 so it lands with the writer instead.
 
 That form was the only caller of `createFile` against a GitHub
-repository, so `repo-panel.ts`'s implementation of it is now code with
-no caller for one PR, and the three e2e tests that reached it through
-the form are gone with the form. Kept rather than deleted and written
-again a PR later: it is correct, the writer restores a caller — a new
-course is still a file — and the comment above it says plainly that
-nothing calls it yet, which is the part that would otherwise mislead
-somebody reading it as load-bearing.
+repository, so `repo-panel.ts`'s implementation of it is code with no
+caller, and the three e2e tests that reached it through the form went
+with the form. Kept rather than deleted: it is correct, a new course is
+still a file so a caller is coming, and the comment above it says
+plainly that nothing calls it yet — which is the part that would
+otherwise mislead somebody reading it as load-bearing.
 
 *Cost to change: low for everything except the split itself. The read
 side is confined to how files are found and placed — cells, the block
@@ -1221,3 +1220,77 @@ untouched, as dewlab's own spec predicted. The one deliberate cost is
 that `courses.ts` records line ranges it doesn't yet use: that is the
 writer's foundation, and recording them now is what keeps reorder, add
 and remove one operation rather than three.*
+
+**37 — A course file is edited by splicing the lines one series'
+`tutorials:` list occupies, and nothing else.**
+
+Decision 36 built the read side and recorded, per series, the half-open
+line range its `- id` items take up. This is what those ranges were for.
+A tutorial can be dragged within its series, dragged into a sibling
+series on the same course, added to a series, or taken off the course.
+All four are the same write — replace those lines with a different list
+of ids — which is why they arrived together rather than as four
+features, and why `course-writer.ts` is a hundred lines rather than a
+YAML editor.
+
+**Every other byte of the file is untouched, and that is checked against
+the real files.** A course file's `card:` is a folded scalar whose
+continuation lines are indented prose, and its `description:` is
+single-quoted with blank lines inside it. Both are student-facing text on
+dewlab's own front page, and both would be refolded and requoted by any
+round trip through a YAML dumper. The test that matters most reverses
+every series in each of dewlab's six real course files, reverses them
+again, and asserts the result is the original file byte for byte.
+
+**It refuses three things rather than guessing.** A series whose range
+courses.ts could not record — a flow list, or a file the line scan and
+js-yaml read differently — is shown, opened and read like any other and
+says once why it can't be written. An id the course already lists
+elsewhere is refused, because dewlab's own `read_course()` fails the
+build on a course that lists a tutorial twice, so writing it would hand
+somebody a file that no longer builds with nothing here saying so. And a
+drag across two courses is refused, because that is two files and the
+second write could fail after the first had already landed; taking a
+tutorial off one course and adding it to the other is two deliberate
+acts that each either happen or don't.
+
+**Every edit re-reads the file first, and finds its place by name.** The
+ranges are only true of the exact text they were read from, so writing a
+stale range into a file somebody edited in the meantime would write over
+whatever had moved into those lines. So each edit re-reads, re-parses,
+and locates its tutorial by id and its series by title — both of which
+dewlab requires to be unique within a course, which is what makes them
+safe to hold across a re-read where an index is not. A drag whose
+tutorial is no longer where it was refuses and says so instead of moving
+whatever took its place.
+
+**"Remove" takes a tutorial off a course; it never deletes the file.** A
+tutorial on no course still builds, and the id is the address of the page
+and the key a reader's saved work lives under. Throwing the file away is
+a far heavier act than taking it out of a reading order, and not one to
+offer behind the same small ×. What a reader sees after removing one is
+it reappearing under "On no course", which is where an unplaced tutorial
+belongs.
+
+**The grip is what drags, not the row.** app.ts arms a document block
+first, because a block has text somebody is trying to select and an
+always-draggable block would fight that on every click. A one-line row in
+a rail has no text to select — clicking it opens the tutorial — so it
+needs a handle to take hold of rather than a mode to enter. The drop
+target is the whole list rather than each row, which is what makes
+dropping under the last row and dropping into a series with nothing in it
+yet work without a row to aim at.
+
+**Still not here: making a new series.** A series is an entry in a course
+file's `contents:`, and appending one means splicing into a block whose
+bounds courses.ts does not record. Inferring where that block ends, or
+what indent a `- title:` line carries, from the tutorials indent below it
+is exactly the guess this whole design exists to avoid. Recording that
+range properly is its own piece of work; a course file opens in the
+editor like any other text file in the meantime.
+
+*Cost to change: low. `course-writer.ts` is pure text over the ranges
+courses.ts already records, with its own tests and no DOM; the panel is
+the only caller, and `active-store.ts` grew one read/write pair that both
+stores implement. Undoing any of it is deleting it.*
+

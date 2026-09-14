@@ -159,7 +159,7 @@ const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n"
 
 /** What `content/courses/a-course.yaml` holds — one course, one series,
  * listing the id of the one markdown file in the tree that has one. */
-const COURSE_YAML = ["title: A Course", "contents:", "  - title: First steps", "    tutorials:", "      - a-rule", ""].join("\n");
+const COURSE_YAML = ["title: A Course", "contents:", "- title: First steps", "  tutorials:", "  - a-rule", "  - b-page", ""].join("\n");
 
 test("loading a repository lists its markdown and course files, and search filters them", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
@@ -327,15 +327,54 @@ test("pushing a new file to a path that already has one reports it plainly, not 
   await expect(page.locator(".dn-repo-conflict")).toBeHidden();
 });
 
-// The three tests that used to sit here drove active-store.ts's
-// createFile against a repository through series-panel.ts's "New
-// series" — the push body it sent, the collision error it reported, and
-// its never repointing an already-open file's push target. That form
-// wrote `<series>.order.yaml` files and went with them (decision 36),
-// and the repository's createFile has no caller in the editor until the
-// writer lands. The adapter is still there and still commented; these
-// come back with the caller rather than being rewritten now against a
-// hook no reader of the app has.
+// active-store.ts's read-modify-write pair against a repository, driven
+// the way a reader reaches it: the placement rail, reordering a course.
+// A folder writes a handle in place; a repository has to create the
+// working branch, find the blob sha that branch holds right now, and
+// commit — so what is checked here is the request that actually went
+// out, not just that the rail said something.
+//
+// The three tests that used to sit here drove the same interface's
+// `createFile` through series-panel.ts's "New series". That form wrote
+// `<series>.order.yaml` files and went with them (decision 36); a series
+// is an entry in a course file now, and making one needs a line range
+// courses.ts doesn't record, so `createFile` still has no caller here.
+test("reordering a course writes it back through the working branch, with the sha that branch holds", async ({ page }) => {
+  const { putBodies } = await setup(page, DEFAULT_OPTS);
+  await page.locator(".dn-repo-load").click();
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 course file.");
+  await page.locator(".dn-repo-close").click();
+
+  await page.locator(".dn-series-toggle").click();
+  const list = page.locator(".dn-series-list").first();
+  await expect(list.locator("li")).toHaveCount(2);
+  await list.locator("li").nth(1).locator(".dn-series-grip").dragTo(list.locator("li").nth(0), { targetPosition: { x: 5, y: 1 } });
+
+  await expect(page.locator(".dn-series-status")).toContainText("Moved b-page");
+  expect(putBodies).toHaveLength(1);
+  expect(putBodies[0]!["sha"]).toBe("course-sha");
+  expect(putBodies[0]!["branch"]).toBe("dewnote-edits");
+  const content = Buffer.from(putBodies[0]!["content"] as string, "base64").toString("utf-8");
+  expect(content).toBe(["title: A Course", "contents:", "- title: First steps", "  tutorials:", "  - b-page", "  - a-rule", ""].join("\n"));
+});
+
+test("a write against a repository never disturbs an already-open file's own push target", async ({ page }) => {
+  await setup(page, DEFAULT_OPTS);
+  await page.locator(".dn-repo-load").click();
+  await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
+  await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
+  await page.locator(".dn-repo-close").click();
+
+  await page.locator(".dn-series-toggle").click();
+  await page.locator(".dn-series-list").first().locator("li").nth(0).locator(".dn-series-remove").click();
+  await expect(page.locator(".dn-series-status")).toContainText("still there, on no course");
+
+  // Still pointed at a-rule.md, not silently repointed at the course file.
+  await page.locator(".dn-series-close").click();
+  await page.locator(".dn-repo-toggle").click();
+  await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
+  await expect(page.locator("h1")).toHaveText("A Rule");
+});
 
 test("starting a new file with no owner/repo, or no path, is refused with a clear status instead of a silent no-op", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);

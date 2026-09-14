@@ -1606,59 +1606,6 @@ body {
   color: var(--dl-orange);
 }
 
-.dn-series-create {
-  margin-bottom: 1rem;
-  padding-bottom: 0.9rem;
-  border-bottom: 1px solid var(--dl-rule);
-}
-.dn-series-create-heading {
-  margin: 0 0 0.4rem;
-  font-size: 0.78em;
-  font-family: var(--dl-mono);
-  color: var(--dl-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-.dn-series-create-field {
-  display: block;
-  width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 0.4rem;
-  font-family: var(--dl-font-family);
-  font-size: 0.9em;
-  border: 1px solid var(--dl-cell-border);
-  border-radius: 4px;
-  background: var(--dl-bg);
-  color: var(--dl-fg);
-  padding: 0.25rem 0.4rem;
-}
-.dn-series-create-button {
-  display: block;
-  width: 100%;
-  border: 1px solid var(--dl-cell-border);
-  border-radius: 4px;
-  background: var(--dl-panel-bg);
-  color: var(--dl-fg);
-  font-family: var(--dl-font-family);
-  font-size: 0.9em;
-  padding: 0.3rem 0.6rem;
-  cursor: pointer;
-}
-.dn-series-create-button:hover:not(:disabled) {
-  color: var(--dl-orange);
-  border-color: var(--dl-orange);
-}
-.dn-series-create-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.dn-series-create-status {
-  min-height: 1.2em;
-  margin: 0.4rem 0 0;
-  font-size: 0.85em;
-  color: var(--dl-muted);
-}
-
 .dn-series-empty {
   color: var(--dl-muted);
   font-size: 0.9em;
@@ -1709,6 +1656,143 @@ body {
   color: var(--dl-orange);
   text-decoration: underline;
   outline: none;
+}
+
+/* A listed tutorial is a row of three: the grip that drags it, the title
+   that opens it, and the × that takes it off the course. The grip and
+   the × are quiet until the row is hovered or something in it has
+   keyboard focus — a rail of lists is easier to read without a column of
+   controls down each side of it — but never display:none, which would
+   put them out of reach of the keyboard entirely. */
+.dn-series-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.dn-series-grip {
+  color: var(--dl-muted);
+  cursor: grab;
+  user-select: none;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.dn-series-item:hover .dn-series-grip,
+.dn-series-item:focus-within .dn-series-grip {
+  opacity: 0.7;
+}
+.dn-series-item.dn-series-dragging {
+  opacity: 0.45;
+}
+.dn-series-remove {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--dl-muted);
+  font-family: var(--dl-font-family);
+  font-size: 1.05em;
+  line-height: 1;
+  padding: 0 0.15rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.dn-series-item:hover .dn-series-remove,
+.dn-series-remove:focus-visible {
+  opacity: 1;
+}
+.dn-series-remove:hover,
+.dn-series-remove:focus-visible {
+  color: var(--dl-orange);
+  outline: none;
+}
+.dn-series-missing {
+  color: var(--dl-muted);
+  font-style: italic;
+}
+
+/* The whole list is the drop target, so the whole list is what lights
+   up — including an empty one, which is the only way to drop the first
+   tutorial into a series that has none yet. */
+.dn-series-list.dn-series-list-over {
+  outline: 1px dashed var(--dl-orange);
+  outline-offset: 2px;
+  border-radius: 3px;
+  min-height: 1.2em;
+}
+
+.dn-series-add {
+  margin: 0.2rem 0 0 1.3rem;
+}
+.dn-series-add-toggle {
+  border: none;
+  background: none;
+  color: var(--dl-muted);
+  font-family: var(--dl-font-family);
+  font-size: 0.85em;
+  padding: 0;
+  cursor: pointer;
+}
+.dn-series-add-toggle:hover,
+.dn-series-add-toggle:focus-visible {
+  color: var(--dl-orange);
+  outline: none;
+}
+.dn-series-add-search {
+  display: block;
+  width: 100%;
+  margin-top: 0.3rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.85em;
+  padding: 0.25rem 0.4rem;
+}
+.dn-series-add-list {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  max-height: 9rem;
+  overflow-y: auto;
+}
+.dn-series-add-item {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.85em;
+  text-align: left;
+  padding: 0.15rem 0;
+  cursor: pointer;
+}
+.dn-series-add-item:hover,
+.dn-series-add-item:focus-visible {
+  color: var(--dl-orange);
+  outline: none;
+}
+.dn-series-add-empty {
+  color: var(--dl-muted);
+  font-size: 0.85em;
+  padding: 0.15rem 0;
+}
+
+.dn-series-readonly,
+.dn-series-status {
+  color: var(--dl-muted);
+  font-size: 0.85em;
+}
+.dn-series-readonly {
+  margin: 0.2rem 0 0 1.3rem;
+}
+.dn-series-status {
+  min-height: 1.2em;
+  margin: 0.6rem 0 0;
+  border-top: 1px solid var(--dl-rule);
+  padding-top: 0.5rem;
 }
 
 .dn-outline-toggle {

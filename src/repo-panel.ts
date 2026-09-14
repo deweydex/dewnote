@@ -418,6 +418,44 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           await ensureBranch(repo, branch, base, token);
           await putFileContent(repo, path, content, undefined, branch, `Add ${path} from dewnote`, token);
         },
+        // The read-modify-write half, for a caller editing a file it
+        // never opened into the editor — series-panel.ts writing a
+        // course file. Reads the working branch first and the browsed
+        // `ref` only as a fallback: a second edit to the same course has
+        // to build on the first one's commit, not on the base branch
+        // that still predates it. Like `createFile` above, it leaves
+        // `opened`/renderPush alone, so an edit already open in this
+        // panel keeps its own push target.
+        async readTextFile(path) {
+          const token = currentToken();
+          if (!token) throw new Error("Enter a GitHub token first.");
+          const repo = currentRepo();
+          const branch = branchInput.value.trim() || "dewnote-edits";
+          const ref = baseInput.value.trim() || "main";
+          try {
+            return (await getFileContent(repo, path, branch, token)).content;
+          } catch {
+            return (await getFileContent(repo, path, ref, token)).content;
+          }
+        },
+        async writeTextFile(path, content, message) {
+          const token = currentToken();
+          if (!token) throw new Error("Enter a GitHub token first.");
+          const repo = currentRepo();
+          const branch = branchInput.value.trim() || "dewnote-edits";
+          const base = baseInput.value.trim() || "main";
+          await ensureBranch(repo, branch, base, token);
+          // The sha the branch holds right now, not the one the base
+          // does: GitHub wants the blob being replaced, and a file this
+          // branch hasn't touched yet simply has none there.
+          let sha: string | undefined;
+          try {
+            sha = (await getFileContent(repo, path, branch, token)).sha;
+          } catch {
+            sha = undefined;
+          }
+          await putFileContent(repo, path, content, sha, branch, message, token);
+        },
       });
       // Courses first: the index joins each entry to the courses that
       // list its id, so it needs them already parsed.

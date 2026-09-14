@@ -6,7 +6,7 @@
 // unchanged, since an opened folder file is exactly the single-file
 // case #18 already built — a name, content, and a real writable handle.
 
-import { chooseFolder, createFile, listCourseFiles, listMarkdownFiles, readFile, supportsDirectoryPicker, type FolderFile } from "./folder-store.ts";
+import { chooseFolder, createFile, listCourseFiles, listMarkdownFiles, readFile, supportsDirectoryPicker, writeFile, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
@@ -403,6 +403,21 @@ id: ${id}-first-cell
       },
       async createFile(path, content) {
         await createFile(root, path, content);
+        await loadFromRoot(root, folderName, "Refreshing");
+      },
+      // The read-modify-write half, for a caller editing a file it never
+      // opened into the editor — series-panel.ts writing a course file.
+      // `files` is the live binding, so a file added by a Refresh since
+      // this was registered is found without registering again.
+      async readTextFile(path) {
+        const file = files.find((f) => f.path === path);
+        if (!file) throw new Error(`There is no ${path} in this folder.`);
+        return readFile(file.handle);
+      },
+      async writeTextFile(path, content) {
+        const file = files.find((f) => f.path === path);
+        if (!file) throw new Error(`There is no ${path} in this folder.`);
+        await writeFile(file.handle, content);
         await loadFromRoot(root, folderName, "Refreshing");
       },
     });

@@ -22,18 +22,30 @@ export interface ActiveStore {
    * asking about a path that turns out not to exist is a normal
    * outcome, not an error. */
   openPath(path: string): Promise<boolean>;
-  /** Creates a new file at `path` with `content`, for a store that
-   * supports writing new ones — only folder-panel.ts does today.
-   * repo-panel.ts doesn't implement this yet: creating a file on a
-   * working branch is real, separate scope (which branch, whether it
-   * needs its own commit before a reader's already-open edit does),
-   * left for later rather than guessed at now. Throws with a real
+  /** Creates a new file at `path` with `content`. Both stores implement
+   * it; folder-panel.ts's "New tutorial" is its one caller today. (The
+   * other was series-panel.ts's "New series", which went when a series
+   * stopped being a file — decision 36.) Throws with a real
    * message on failure (the file already exists, the write itself
    * failed, or — from `createFile` below, when nothing implements
    * this — the store open right now doesn't support it at all), since
    * unlike `openPath`'s "nothing there" outcome, a failed create is
    * something the reader needs to see and act on. */
   createFile?(path: string, content: string): Promise<void>;
+  /** Reads the current text of a file this store already holds — the
+   * read half of a read-modify-write, for a caller editing a file it
+   * never opened into the editor. The placement rail's own writes are
+   * the only caller: it re-reads a course file at the moment it writes
+   * it rather than trusting the copy parsed when the folder was last
+   * scanned, since courses.ts's line ranges are only true of the exact
+   * text they were read from. Throws when there is no such file. */
+  readTextFile?(path: string): Promise<string>;
+  /** Writes `content` over the file at `path`. `message` is what a store
+   * that commits needs and a store that writes a file in place ignores;
+   * only the caller knows what actually changed, so only the caller can
+   * say it. Throws with a real message on failure — a write the reader
+   * asked for that didn't happen is something they need to see. */
+  writeTextFile?(path: string, content: string, message: string): Promise<void>;
 }
 
 let active: ActiveStore | null = null;
@@ -53,4 +65,21 @@ export function openPath(path: string): Promise<boolean> {
 export async function createFile(path: string, content: string): Promise<void> {
   if (!active?.createFile) throw new Error("Creating a file isn't supported by whatever's open right now — try a local folder.");
   await active.createFile(path, content);
+}
+
+/** True when the store open right now can do a read-modify-write at all
+ * — what the placement rail checks before offering a drag handle it
+ * could not honour. */
+export function canWriteFiles(): boolean {
+  return Boolean(active?.readTextFile && active?.writeTextFile);
+}
+
+export async function readTextFile(path: string): Promise<string> {
+  if (!active?.readTextFile) throw new Error("Reading a file isn't supported by whatever's open right now.");
+  return active.readTextFile(path);
+}
+
+export async function writeTextFile(path: string, content: string, message: string): Promise<void> {
+  if (!active?.writeTextFile) throw new Error("Saving a file isn't supported by whatever's open right now — open a folder or a repository first.");
+  await active.writeTextFile(path, content, message);
 }

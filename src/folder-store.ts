@@ -91,6 +91,18 @@ export async function readFile(handle: FileSystemFileHandle): Promise<string> {
   return file.text();
 }
 
+/** Writes `content` over a file this store already holds — the write
+ * half of `readFile` above, for a caller editing a file it never opened
+ * into the editor (series-panel.ts's own course-file writes). Separate
+ * from `createFile` below on purpose: this one requires the file to
+ * exist already and replaces it, where that one requires it not to and
+ * refuses to overwrite. */
+export async function writeFile(handle: FileSystemFileHandle, content: string): Promise<void> {
+  const writable = await handle.createWritable();
+  await writable.write(content);
+  await writable.close();
+}
+
 /** Creates a new file at `relativePath` under `root`, creating any
  * missing intermediate directories along the way (`getDirectoryHandle`'s
  * own `{ create: true }`) — the write half of what `walk` above does for

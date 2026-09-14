@@ -115,11 +115,23 @@ rather than a file of its own, so it belongs with the rest of the
 writing. All of it is one splice into the line range courses.ts already
 records, which is why the read side records them.
 
-The writer also picks up two things the read side had to leave behind.
-`repo-panel.ts`'s `createFile` lost its only caller when "New series"
-went, and with it the three e2e tests that drove it; a new course is
-still a file, so the writer gives it a caller and those tests come back
-with it. And `folder-panel.ts`'s "New tutorial" creates a tutorial on no
-course — the spec's own "on create, offer a course and series to list it
-on" is the same splice as adding an existing tutorial to a series, so it
-belongs there too.
+The writer landed as described, minus one thing it had promised.
+
+**"New series" is still not there**, and the reason is the same one that
+makes everything else here safe. Appending a series means splicing into
+`contents:`, and courses.ts records the bounds of a `tutorials:` list,
+not of the block above it. Inferring where the block ends — or what
+indent a `- title:` line carries — from the tutorials indent is exactly
+the guess that writes into somebody's prose. Recording that range
+properly is its own piece of work, and a course file opens in the editor
+like any other text file in the meantime.
+
+So `repo-panel.ts`'s `createFile` still has no caller, though its
+`readTextFile`/`writeTextFile` pair now does, and the repository's store
+adapter is covered again through the rail's own reorder.
+
+`folder-panel.ts`'s "New tutorial" still creates a tutorial on no course.
+The spec's "on create, offer a course and series to list it on" is now
+one click away rather than folded into that form: the new tutorial shows
+up under "On no course", and the series it belongs in has an "Add a
+tutorial" list that offers it.
