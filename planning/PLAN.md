@@ -1634,3 +1634,45 @@ dewlab has it on the reading side.
    splitter rather than one cohesive section — also correct by decision
    1's own guarantee, just not yet given a block kind of its own.
    DIALECTS.md §1 names both as real, separate scope, not attempted here.
+
+6. **Placement moves into `courses/` — the read side built, the writer
+   next.** dewlab's 2026-09 refactor (its own `refactor/PLAN.md`) stopped
+   a tutorial declaring where it lives: `tutorials/<id>/<id>.md` flat,
+   the id from the path, front matter down to `title`/`year`/`version`,
+   and `courses/<id>.yaml` holding titled series of ordered ids.
+   `courses/index.yaml` orders the courses, `courses/redirects.yaml`
+   keeps old addresses alive, and a tutorial may be on several courses or
+   none. dewlab wrote this editor's half itself as `refactor/EDITOR.md`
+   §2; that folder is deleted now, so `planning/COURSES_REFACTOR.md`
+   reproduces it, marks the three places it turned out to be wrong and
+   the one surface it missed, and carries the order of work. Decision 36
+   has the reasoning.
+
+   Built: `courses.ts` (parse, *and* record the line range each
+   `tutorials:` list occupies); `file-index.ts` deriving the id and
+   joining course membership; the four placement rows gone from the
+   front-matter form; the panel grouped by course then series, naming an
+   id with no file and a tutorial on no course; both stores walking for
+   `courses/*.yaml`; the creation forms asking for an id rather than a
+   module and series; `module:`/`series:` links deleted; `series.ts`
+   deleted outright, replaced by `courses.ts`. *Done when*, satisfied:
+   `bun run typecheck`, `bun test src`, `bun run build` and the full
+   non-pyodide e2e suite all pass, with `courses.test.ts` checking the
+   six real course files in a sibling dewlab checkout and
+   `series-panel.spec.ts` rewritten around the new shape.
+
+   **Next: the writer.** Drag-reorder within a series, add a tutorial to
+   one, remove one from one, and "New series" (an entry in a course
+   file's `contents` now, not a file of its own, so it belongs here
+   rather than in the read side). All four are one splice into the line
+   range `courses.ts` already records — which is why it records them, and
+   why reorder/add/remove is one operation rather than three features.
+   Everything outside the spliced lines stays byte-identical: a course
+   file carries a folded `card:` and a single-quoted `description:`, the
+   front page's own prose, and re-serialising the YAML to reorder one
+   list would refold and requote them on every drag. A series whose list
+   isn't in the block form `courses.ts` can rewrite reports a null range
+   and is shown read-only rather than guessed at. Removing a tutorial
+   from a series unlists it — the file stays and dewlab still builds it;
+   deleting the file itself stays out of this panel, since an id is the
+   key a reader's saved work lives under.

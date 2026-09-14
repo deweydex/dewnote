@@ -1,87 +1,114 @@
-// Step 4's own "the series view from order.yaml" (PLAN.md §6 step 4),
-// UI half — series.ts is the parsing. Mounted the same independent way
-// outline-panel.ts is: a toggle and a docked rail, read-only, closed
-// until asked. Reads a plain array handed in via `setSeries` (fed by
-// folder-panel.ts's and repo-panel.ts's own order-file reads, alongside
-// the front-matter index each already builds) rather than pulling from
-// a document the way outline-panel.ts's own `getSource` does — a series
-// is a property of the open folder or repository, not of whichever
-// tutorial happens to be on screen, so nothing here needs to know a
-// document is even open.
+// The placement view: which course lists a tutorial, in which series,
+// in what order — read from dewlab's own `courses/*.yaml` (courses.ts).
 //
-// Each series lists its own tutorials by slug, using the file index's
-// title where the slug is actually indexed and the bare slug otherwise
-// (an order file naming a tutorial not yet opened, or not part of this
-// folder at all, is a real and unremarkable case — dewlab's own build
-// would fail on it, but this is a viewer, not a build). An indexed entry
-// is a real, clickable button, opening it through active-store.ts's own
-// "open this path" hook — the same routing folder-panel.ts's and
-// repo-panel.ts's own file lists use, just reached from here instead. A
-// slug with nothing indexed for it renders as plain text: there is no
-// path to send anywhere.
+// This used to read one `<series>.order.yaml` per series and group them
+// by the module folder they sat in. dewlab moved placement into course
+// files, so the grouping is now the real one: a course, its series in
+// the order the course file lists them, and each series' tutorials in
+// the order it lists those. Nothing is sorted here any more — an order
+// file's own order was the point before and a course file's is now, and
+// sorting series alphabetically (as this did) was only ever standing in
+// for an order the old format didn't record.
 //
-// A slug can index to more than one file — dewlab's own versioned
-// releases (`status`/`version` in front matter, `build.py`'s
-// `versions_of()`) mean a live tutorial, an archived one, and a frozen
-// past release can all share a slug. file-index.ts's `defaultEntryFor`
-// is what picks the one build.py itself would call `is_default` (the
-// newest live version, or the newest version at all if none is live);
-// picking whichever entry happened to be indexed first, as this used to,
-// would show an archived or superseded title (and open its path) as
-// often as the real one.
+// Kept from before: mounted the same independent way outline-panel.ts
+// is, a toggle and a docked rail, closed until asked; fed a whole list
+// via `setCourses` rather than pulling from the open document, since
+// placement is a property of the open folder or repository and not of
+// whichever tutorial happens to be on screen; and each listed tutorial
+// is a real button that opens it through active-store.ts's own hook,
+// falling back to plain text for an id with no file behind it.
+//
+// `defaultEntryFor` still picks which file an id means, because an id
+// can still be several files: a frozen release `v<version>.md` carries
+// the id of the folder it sits in, the same as the live tutorial beside
+// it (build.py's own `id_of`). Picking whichever was indexed first would
+// show a frozen release's title as often as the real one.
+//
+// ## Two things this can now say that the old panel could not
+//
+// A course file naming an id, and a `tutorials/<id>/` folder, are two
+// halves that can disagree. So the panel reports both halves of that:
+// an id a course lists with nothing indexed for it, and an indexed
+// tutorial no course lists. dewlab builds the second happily — "published
+// but on no course" is a real state — so it reads as a list to place
+// rather than as an error.
+//
+// ## No "New series" here, for now
+//
+// It used to create a `<slug>.order.yaml` file. A series is not a file
+// any more; it is an entry in a course file's own `contents`, so making
+// one means writing into a course file — the same splice reordering,
+// adding and removing all need, and all of that lands together in the
+// writer that follows this. A form that still wrote an order file would
+// write a format dewlab no longer reads.
 
-import { createFile, openPath } from "./active-store.ts";
+import { openPath } from "./active-store.ts";
+import type { Course } from "./courses.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
-import type { Series } from "./series.ts";
 import { iconRail } from "./icon-rail.ts";
 
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-
-function textInput(placeholder: string): HTMLInputElement {
-  const input = document.createElement("input");
-  input.type = "text";
-  input.placeholder = placeholder;
-  input.autocomplete = "off";
-  input.spellcheck = false;
-  return input;
-}
-
 export interface SeriesPanel {
-  /** Replaces the whole series list — called every time folder-panel.ts
-   * or repo-panel.ts (re)builds its own order-file read, the same
+  /** Replaces the whole listing — called every time folder-panel.ts or
+   * repo-panel.ts (re)reads the open store's course files, the same
    * "handed the whole thing every time" shape app.ts's setFileIndex
    * already has. */
-  setSeries(series: Series[]): void;
+  setCourses(courses: Course[]): void;
   destroy(): void;
+}
+
+/** Every indexed tutorial that no course lists, one entry per id (the
+ * one `defaultEntryFor` would pick), in path order.
+ *
+ * Only meaningful once course files have actually been read: an entry
+ * whose `courses` is undefined was never cross-referenced, which is not
+ * the same as being on no course, and counting those would report every
+ * tutorial the moment a folder without a `courses/` directory is open.
+ *
+ * Exported for its own unit test — the rendering around it is covered
+ * against the built app in tests/e2e/series-panel.spec.ts, the same
+ * split outline-panel.ts uses, but the rule itself is worth checking
+ * directly rather than only through a browser. */
+export function tutorialsOnNoCourse(index: FileIndexEntry[]): FileIndexEntry[] {
+  const seen = new Set<string>();
+  const out: FileIndexEntry[] = [];
+  for (const entry of index) {
+    if (!entry.id || entry.courses === undefined || entry.courses.length > 0) continue;
+    if (!entry.path.includes("tutorials/")) continue;
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    const best = defaultEntryFor(index, entry.id);
+    if (best) out.push(best);
+  }
+  return out;
 }
 
 /** Mounted once, independently of any particular document or store.
  * `getFileIndex` is read fresh on every render, not cached at mount
- * time, so a series rendered before a folder's index finishes building
+ * time, so a course rendered before a folder's index finishes building
  * still gets titles once it catches up. */
 export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPanel {
-  let series: Series[] = [];
+  let courses: Course[] = [];
 
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "dn-series-toggle";
-  toggle.setAttribute("aria-label", "Series");
+  toggle.setAttribute("aria-label", "Courses");
   toggle.setAttribute("aria-expanded", "false");
-  toggle.title = "Series";
+  toggle.title = "Courses";
   toggle.textContent = "☰";
 
   const panel = document.createElement("div");
   panel.className = "dn-series-panel";
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "false");
-  panel.setAttribute("aria-label", "Series");
+  panel.setAttribute("aria-label", "Courses");
   panel.hidden = true;
   toggle.setAttribute("aria-controls", (panel.id = "dn-series-panel"));
 
   const header = document.createElement("div");
   header.className = "dn-series-header";
   const heading = document.createElement("h2");
-  heading.textContent = "Series";
+  heading.textContent = "Courses";
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "dn-series-close";
@@ -94,130 +121,84 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   header.append(heading, closeButton);
   panel.appendChild(header);
 
-  // "New series" — plan §6 step 4's own other still-open item, next to
-  // this one. Only ever writes through active-store.ts's own
-  // createFile, so it works or fails exactly the way any other write
-  // through that hook would — a local folder, or (decision 33) a
-  // GitHub repository's own working branch — this has no
-  // separate knowledge of which store is actually open. The module
-  // field is left for the reader to fill in or leave blank rather than
-  // detected automatically: whether the currently open folder already
-  // *is* one module's own directory, or is the whole multi-module
-  // tutorials/ tree, isn't something order.yaml data alone can tell
-  // apart reliably (a folder with no series in it yet looks the same
-  // either way) — the reader already knows which case they're in.
-  const createSection = document.createElement("section");
-  createSection.className = "dn-series-create";
-  const createHeading = document.createElement("h3");
-  createHeading.className = "dn-series-create-heading";
-  createHeading.textContent = "New series";
-  createSection.appendChild(createHeading);
-
-  const moduleInput = textInput("Module (leave blank if already inside one)");
-  moduleInput.className = "dn-series-create-field";
-  const slugInput = textInput("series-slug");
-  slugInput.className = "dn-series-create-field";
-  const titleInput = textInput("Series title");
-  titleInput.className = "dn-series-create-field";
-  createSection.append(moduleInput, slugInput, titleInput);
-
-  const createButton = document.createElement("button");
-  createButton.type = "button";
-  createButton.className = "dn-series-create-button";
-  createButton.textContent = "Create";
-  createSection.appendChild(createButton);
-
-  const createStatus = document.createElement("p");
-  createStatus.className = "dn-series-create-status";
-  createSection.appendChild(createStatus);
-  panel.appendChild(createSection);
-
-  createButton.addEventListener("click", async () => {
-    const module = moduleInput.value.trim();
-    const slug = slugInput.value.trim();
-    const title = titleInput.value.trim();
-    if (!SLUG_RE.test(slug)) {
-      createStatus.textContent = "Series slug must be lowercase letters, digits, and hyphens.";
-      return;
-    }
-    if (!title) {
-      createStatus.textContent = "Enter a series title.";
-      return;
-    }
-    const path = module ? `${module}/${slug}.order.yaml` : `${slug}.order.yaml`;
-    // js-yaml isn't reached for here — build.py's own order files never
-    // need more than one string field and one empty list, and dumping
-    // through a full YAML serialiser for that would risk quoting a
-    // title differently than a human would type it by hand.
-    const content = `series: ${title}\norder: []\n`;
-    createButton.disabled = true;
-    createStatus.textContent = "Creating…";
-    try {
-      await createFile(path, content);
-      createStatus.textContent = `Created ${path}.`;
-      moduleInput.value = "";
-      slugInput.value = "";
-      titleInput.value = "";
-    } catch (err) {
-      createStatus.textContent = err instanceof Error ? err.message : String(err);
-    } finally {
-      createButton.disabled = false;
-    }
-  });
-
   const body = document.createElement("div");
   panel.appendChild(body);
 
   const empty = document.createElement("p");
   empty.className = "dn-series-empty";
-  empty.textContent = "No order.yaml files found — open a folder or repository with any.";
+  empty.textContent = "No course files found — open a folder or repository with a courses/ directory.";
   panel.appendChild(empty);
+
+  function renderSeriesList(ids: string[]): HTMLOListElement {
+    const index = getFileIndex();
+    const list = document.createElement("ol");
+    list.className = "dn-series-list";
+    for (const id of ids) {
+      const entry = defaultEntryFor(index, id);
+      const item = document.createElement("li");
+      if (entry) {
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = "dn-series-link";
+        link.textContent = entry.title ?? id;
+        link.addEventListener("click", () => void openPath(entry.path));
+        item.appendChild(link);
+      } else {
+        // A course listing an id with no file behind it — dewlab's own
+        // build stops on this, so it's worth naming rather than showing
+        // as a bare id that looks like any other line.
+        item.className = "dn-series-missing";
+        item.textContent = `${id} — no file`;
+      }
+      list.appendChild(item);
+    }
+    return list;
+  }
 
   function render() {
     body.replaceChildren();
-    empty.hidden = series.length > 0;
+    empty.hidden = courses.length > 0;
 
-    const byModule = new Map<string, Series[]>();
-    for (const one of series) {
-      const list = byModule.get(one.module) ?? [];
-      list.push(one);
-      byModule.set(one.module, list);
-    }
-
-    for (const module of [...byModule.keys()].sort()) {
+    for (const course of courses) {
       const section = document.createElement("section");
       section.className = "dn-series-module";
-      const moduleHeading = document.createElement("h3");
-      moduleHeading.textContent = module || "(no module)";
-      section.appendChild(moduleHeading);
+      const courseHeading = document.createElement("h3");
+      courseHeading.textContent = course.title;
+      section.appendChild(courseHeading);
 
-      for (const one of [...byModule.get(module)!].sort((a, b) => a.title.localeCompare(b.title))) {
+      for (const series of course.contents) {
         const seriesBlock = document.createElement("div");
         seriesBlock.className = "dn-series-block";
         const seriesHeading = document.createElement("h4");
-        seriesHeading.textContent = one.title;
+        seriesHeading.textContent = series.title;
         seriesBlock.appendChild(seriesHeading);
-
-        const list = document.createElement("ol");
-        list.className = "dn-series-list";
-        for (const slug of one.order) {
-          const entry = defaultEntryFor(getFileIndex(), slug);
-          const item = document.createElement("li");
-          if (entry) {
-            const link = document.createElement("button");
-            link.type = "button";
-            link.className = "dn-series-link";
-            link.textContent = entry.title ?? slug;
-            link.addEventListener("click", () => void openPath(entry.path));
-            item.appendChild(link);
-          } else {
-            item.textContent = slug;
-          }
-          list.appendChild(item);
-        }
-        seriesBlock.appendChild(list);
+        seriesBlock.appendChild(renderSeriesList(series.tutorials));
         section.appendChild(seriesBlock);
       }
+      body.appendChild(section);
+    }
+
+    const loose = tutorialsOnNoCourse(getFileIndex());
+    if (loose.length > 0) {
+      const section = document.createElement("section");
+      section.className = "dn-series-module dn-series-unlisted";
+      const looseHeading = document.createElement("h3");
+      looseHeading.textContent = "On no course";
+      section.appendChild(looseHeading);
+
+      const list = document.createElement("ol");
+      list.className = "dn-series-list";
+      for (const entry of loose) {
+        const item = document.createElement("li");
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = "dn-series-link";
+        link.textContent = entry.title ?? entry.id ?? entry.path;
+        link.addEventListener("click", () => void openPath(entry.path));
+        item.appendChild(link);
+        list.appendChild(item);
+      }
+      section.appendChild(list);
       body.appendChild(section);
     }
   }
@@ -232,8 +213,8 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   document.body.appendChild(panel);
 
   return {
-    setSeries(next) {
-      series = next;
+    setCourses(next) {
+      courses = next;
       if (!panel.hidden) render();
     },
     destroy() {

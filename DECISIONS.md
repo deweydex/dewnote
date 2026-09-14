@@ -1140,3 +1140,84 @@ heading line in place updates the preview once it blurs and commits.
 `isCardFence` check alongside `isHintFence`/`isSitePaneFence`'s already-
 established pattern — nothing about how an exec, hint, or site fence
 parses changed.*
+
+**36 — Placement is read from `courses/`, not front matter; the form
+loses its four placement fields, and decision 33's speculative link kinds
+are removed rather than renamed.** dewlab's own 2026-09 refactor moved
+where a tutorial lives out of the tutorial: `tutorials/<id>/<id>.md` flat
+with the id derived from the path, front matter down to `title`/`year`/
+`version`, and which course lists it — in which series, in what order —
+in `courses/<id>.yaml`. dewlab wrote this editor's half itself, as
+`refactor/EDITOR.md` §2, a file-by-file table. That folder was temporary
+and is deleted now, so it is reproduced (and corrected) in
+`planning/COURSES_REFACTOR.md` rather than left to `git log`.
+
+Nothing about opening, editing, running or round-tripping a dewlab file
+changed: `dialect.ts` decides dewlab by `year` alone and `year` survived
+the migration. Only placement broke, and this is the fix.
+
+**The id is derived, never read.** `file-index.ts` follows `build.py`'s
+own `id_of()` — a tutorial's stem, a practice page's own stem, a frozen
+`v<version>.md`'s *folder* — for the reason dewlab gives: the id is the
+address of the page and the key a reader's saved work lives under, so a
+field that could disagree with the folder would be a way to break both.
+Course membership is a join over the course files rather than a property
+of any file, absent when no course files were read and empty when they
+were and none lists it — "published but on no course" is a real state
+dewlab builds happily, and worth telling apart from "never checked".
+
+**Three places dewlab's spec was wrong, each found by checking.**
+`defaultEntryFor` survives, rekeyed slug → id: the spec expected it to go
+because ids are unique, but they are unique per *page*, and a page is
+still several *files* — a frozen release shares its folder's id with the
+live tutorial beside it, and dewlab's tree has real ones. `module`/
+`series` stay in the index: dropping them holds for dewlab but would
+break dewstack, which still places from front matter and whose own form
+offers both as pickers. And `module:`/`series:` links are deleted rather
+than renamed to `course:`.
+
+**That last one reverses half of decision 33.** It added those two kinds
+to the picker and the checker ahead of a `build.py` resolver, saying so
+plainly at the time — a home page linking to a whole module needed
+somewhere to put the link first. The resolver never came. Two years of
+content later `tutorial:` is used 38 times as a real link target across
+dewlab and dewstack and the other two are used zero times; their only
+appearances anywhere were this repository's own fixtures and tests.
+Building ahead of a consumer is a fair bet and this one did not pay:
+what it produced was a picker handing an author a link that ships as
+literal text, and a checker calling such a link fine. Renaming `module:`
+to `course:` as dewlab's spec proposed would carry the same bet forward
+under a new name. A course page does have a real address, so the scheme
+can be built properly — starting in `resolve_links()`, not here.
+`practice_for`, decision 33's other half, is untouched and now indexes
+over ids.
+
+**What the panel can say that it could not before.** A course naming an
+id and a `tutorials/<id>/` folder are two halves that can disagree, so
+both are reported: an id a course lists with no file behind it (which
+stops dewlab's build), and an indexed tutorial no course lists (which
+does not). The second reads as a list to place, not an error.
+
+**"New series" is gone from the panel for now**, because a series stopped
+being a file. It was a `<slug>.order.yaml`; it is an entry in a course
+file's `contents` now, so creating one is a write into a course file —
+the same splice that reordering, adding and removing all need. A form
+still writing an order file would write a format dewlab no longer reads,
+so it lands with the writer instead.
+
+That form was the only caller of `createFile` against a GitHub
+repository, so `repo-panel.ts`'s implementation of it is now code with
+no caller for one PR, and the three e2e tests that reached it through
+the form are gone with the form. Kept rather than deleted and written
+again a PR later: it is correct, the writer restores a caller — a new
+course is still a file — and the comment above it says plainly that
+nothing calls it yet, which is the part that would otherwise mislead
+somebody reading it as load-bearing.
+
+*Cost to change: low for everything except the split itself. The read
+side is confined to how files are found and placed — cells, the block
+model, the round-trip guarantee, exports and authentication are all
+untouched, as dewlab's own spec predicted. The one deliberate cost is
+that `courses.ts` records line ranges it doesn't yet use: that is the
+writer's foundation, and recording them now is what keeps reorder, add
+and remove one operation rather than three.*

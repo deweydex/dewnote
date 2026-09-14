@@ -76,11 +76,14 @@ export async function listMarkdownFiles(root: DirectoryLike): Promise<FolderFile
   return walk(root, (path) => path.endsWith(".md"));
 }
 
-/** Every `<series>.order.yaml` file under `root` — series.ts's own
- * reading-order files (DIALECTS.md §1), the source series-panel.ts reads
- * alongside `listMarkdownFiles`'s front-matter index. */
-export async function listOrderFiles(root: DirectoryLike): Promise<FolderFile[]> {
-  return walk(root, (path) => path.endsWith(".order.yaml"));
+/** Every course file under `root` — dewlab's own `courses/*.yaml`
+ * (courses.ts), which say which tutorials a course lists and in what
+ * order, and which series-panel.ts reads alongside `listMarkdownFiles`'s
+ * front-matter index. `index.yaml` and `redirects.yaml` come back too:
+ * both live in the same directory, the first carries the order the
+ * courses are shown in, and `isCourseFile` is what tells them apart. */
+export async function listCourseFiles(root: DirectoryLike): Promise<FolderFile[]> {
+  return walk(root, (path) => /(^|\/)courses\/[^/]+\.yaml$/.test(path));
 }
 
 export async function readFile(handle: FileSystemFileHandle): Promise<string> {

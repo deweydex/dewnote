@@ -19,7 +19,6 @@ interface PickerItem {
   label: string;
   searchText: string;
   target: string;
-  kind: "tutorial";
 }
 
 /** dewlab and dewstack's own convention (plan §6 step 2's note: "tutorial:
@@ -39,7 +38,6 @@ function itemsFor(index: FileIndexEntry[]): PickerItem[] {
       label,
       searchText: `${label} ${entry.path}`.toLowerCase(),
       target: targetFor(entry),
-      kind: "tutorial" as const,
     };
   });
 }
@@ -83,7 +81,7 @@ export function pickLink(index: FileIndexEntry[]): Promise<string | null> {
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.className = "dn-link-search";
-    searchInput.placeholder = "Search tutorials, modules, or series…";
+    searchInput.placeholder = "Search tutorials by title or path…";
     box.appendChild(searchInput);
 
     const list = document.createElement("ul");
@@ -99,17 +97,8 @@ export function pickLink(index: FileIndexEntry[]): Promise<string | null> {
         li.className = "dn-link-item";
         const button = document.createElement("button");
         button.type = "button";
-        // A tutorial needs no badge — it's the common case, and its own
-        // title already reads as a document, not a category. A module or
-        // series shares its name with nothing else in this list visually,
-        // so the badge is what tells them apart from a tutorial titled
-        // the same as a module by coincidence.
-        if (item.kind !== "tutorial") {
-          const badge = document.createElement("span");
-          badge.className = "dn-link-item-kind";
-          badge.textContent = item.kind === "module" ? "Module" : "Series";
-          button.appendChild(badge);
-        }
+        // No badge: every item in this list is a tutorial now, so a
+        // label saying so on each one would tell a reader nothing.
         button.appendChild(document.createTextNode(item.label));
         button.addEventListener("click", () => finish(`[${item.label}](${item.target})`));
         li.appendChild(button);
@@ -138,7 +127,7 @@ export function pickLink(index: FileIndexEntry[]): Promise<string | null> {
     const urlField = document.createElement("input");
     urlField.type = "text";
     urlField.className = "dn-link-url";
-    urlField.placeholder = "URL or tutorial:slug";
+    urlField.placeholder = "URL or tutorial:id";
     const customRow = document.createElement("div");
     customRow.className = "dn-link-custom-row";
     customRow.append(textField, urlField);

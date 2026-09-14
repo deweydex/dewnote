@@ -17,40 +17,66 @@ Everything is CommonMark underneath. A dialect is the set of additions.
 
 ## 1. dewlab
 
-**File layout.** `tutorials/<module>/<slug>/<slug>.md`, with optional
-`<slug>-practice.md`, `<slug>.glossary.yaml`, frozen `v<version>.md`
-releases, and images beside it. Reading order is
-`tutorials/<module>/<series>.order.yaml`, never a front matter field —
-checked directly against dewlab's own `build.py` (`order_files()`,
-`series_titles()`) rather than assumed: it's a real two-key mapping,
-`series: <human title>` and `order:` as a YAML list of slugs, one per
-line, not the flat "one slug per line" file this section first
-described. A module may also carry a `series.yaml` (`order:` a list of
-series names) chaining several series' own glossaries together for
-cross-series reference accumulation, and `tutorials/modules.yaml`
-(`order:` a list of module names) orders the modules themselves —
-both optional, and neither built into dewnote's own series view (plan
-§6 step 4) yet, which groups by module alphabetically and lists each
-series independently rather than reading either chain.
+**File layout.** `tutorials/<id>/<id>.md`, flat — every tutorial sits
+directly under `tutorials/`, whatever course it's on — with optional
+`<id>-practice.md`, `<id>.glossary.yaml`, frozen `v<version>.md`
+releases, and images beside it.
 
-**Front matter.** Required: `title`, `slug`, `module`, `module_title`,
-`year`, `series`, `version` (`2026.09.04.1` form). Optional: `status`
-(`live` or `archived`), `packages` (a list, e.g. `[sympy]`),
-`practice_for` (a single tutorial slug — a practice page names the one
-tutorial it practises), `practice_across` (a list of slugs, for a mixed
-set spanning several tutorials instead), `covers` (sections mapped to
-learning outcomes). A practice page is a tutorial in every other
-mechanical sense — same required fields, same cells — and dewlab's own
-`build.py` forbids one from also setting `covers`, or from naming
-another practice page as what it practises. Slug must equal the file
-name; module must equal the parent folder.
+**A page's id is its path, and nothing else.** `build.py`'s own
+`id_of()`: a tutorial's id is its file's stem, which is also its folder;
+a practice page `<id>-practice.md` has an id of its own; a frozen release
+`v<version>.md` takes the *folder's* id, since it is a version of that
+folder's tutorial rather than a page of its own. Nothing is read from the
+front matter, for the reason dewlab gives — the id is the address of the
+page and the key every reader's saved work lives under, so a field that
+could disagree with the folder would be a way to break both. An id is
+site-wide and unique per page, which is not the same as unique per file:
+a live tutorial and the frozen releases beside it all share one id, which
+is why `file-index.ts`'s `defaultEntryFor` still exists.
+
+**Placement is `courses/`, never a front matter field.** As of dewlab's
+own 2026-09 refactor (its `refactor/PLAN.md`, and the spec it wrote for
+this editor in `refactor/EDITOR.md` §2 — that folder is deleted now, so
+it lives at `git show b7c5a6d:refactor/EDITOR.md` in dewlab), a tutorial
+no longer says where it lives; a course says what it holds.
+`courses/<course-id>.yaml` is `{title, code, status, card, description,
+contents: [{title, tutorials: [<id>, ...]}, ...]}` — series with human
+titles, each an ordered list of tutorial ids. `courses/index.yaml`
+(`order:` a list of course ids) orders the courses themselves, and
+`courses/redirects.yaml` maps every old address to its new one so links
+into the pre-refactor layout still land. A tutorial may be listed by more
+than one course, and one listed by none still builds — "published but on
+no course" is a real state. courses.ts reads all of this; series-panel.ts
+shows it.
+
+**Front matter.** Required: `title`, `year`, `version` (`2026.09.04.1`
+form). Optional: `status` (`live` or `archived`), `packages` (a list,
+e.g. `[sympy]`), `practice_for` (a single tutorial id — a practice page
+names the one tutorial it practises), `practice_across` (a list of ids,
+for a mixed set spanning several tutorials instead), `covers` (sections
+mapped to learning outcomes). A practice page is a tutorial in every
+other mechanical sense — same required fields, same cells — and dewlab's
+own `build.py` forbids one from also setting `covers`, or from naming
+another practice page as what it practises.
+
+`slug`, `module`, `module_title` and `series` were all required here
+before the refactor and are all gone. dewnote's own form has no row for
+any of them: a field for something the build ignores is worse than no
+field, since it looks like it still places the tutorial.
 
 The front-matter form (decision 11) has a row for `practice_for` —
 scalar, and decision 33 gave the "+ field" mechanism its first optional
-*text* field to handle — with autocomplete over every real slug the open
+*text* field to handle — with autocomplete over every real id the open
 folder or repository's own index knows. `practice_across`, `covers`, and
 `packages` stay raw-YAML-only: each is a list or mapping, not the single
 value a form row edits directly.
+
+**Links.** `tutorial:<id>` is the only link scheme `build.py` resolves
+(`resolve_links()`), and an id being site-wide is what makes it work from
+any page without a module to qualify it. dewnote once also checked
+`module:` and `series:` links; neither was ever real in either site's
+build, and no tutorial in dewlab or dewstack has ever used one — see
+`link-check.ts`'s own header.
 
 **Cells.** Two cell languages as of `d2a21ed` (2026-09-10), both exec
 fences sharing one header grammar: `python exec` and `sql exec`.
@@ -151,23 +177,28 @@ reads the fence's `hint` info word yet (§8 has the plan).
 **Notes.** `<aside class="dl-note" id="...">`, lifted out of the body into
 the reference panel by the build. Built, currently unused by any tutorial.
 
-**Links.** `[text](tutorial:slug#anchor)`, resolved at build time; a dead
-slug or anchor fails the build. The editor should offer a picker over real
-slugs and anchors and check links on save.
+**Links.** `[text](tutorial:<id>#anchor)`, resolved at build time; a dead
+id or anchor fails the build. The editor offers a picker over real ids
+and anchors and checks links on request.
 
-decision 33 adds `module:name` and `series:name` alongside it in the
-editor's own picker and link checker — checked against every real
-module/series name the open folder or repository's index already
-knows, the same way `tutorial:` is checked against real slugs. These are
-**not yet** a `build.py`-resolved scheme the way `tutorial:` is; nothing
-in dewlab's own build knows what to do with one today. They exist ahead
-of that on purpose, for the pages/cards work discussed alongside decision
-32's own new-file support (a home page linking to "the whole
-Computational Methods module" needs somewhere to put that link before
-dewlab's build can resolve it) — a real `module:`/`series:` link in a
-tutorial pushed to dewlab today round-trips and checks out fine inside
-dewnote, but stays inert on the actual built site until `build.py` grows
-a matching resolver.
+decision 33 also added `module:name` and `series:name` to the editor's
+own picker and link checker, ahead of a `build.py` resolver for them — a
+home page linking to "the whole Computational Methods module" needed
+somewhere to put that link first, and the passage here said plainly that
+nothing in dewlab's build knew what to do with one.
+
+**That resolver never arrived, and both kinds are now removed.** Two
+years of content later, `tutorial:` is used 38 times as a real link
+target across dewlab and dewstack and the other two are used zero times;
+their only appearances anywhere were dewnote's own fixtures and tests.
+Building ahead of a consumer is a reasonable bet and this one did not
+pay: what it actually produced was a picker offering an author a link
+that would ship as literal text, and a checker reporting such a link as
+fine. dewlab's own spec for the courses refactor proposed renaming
+`module:` to `course:`; that would have carried the same bet forward
+under a new name, so it wasn't taken. A course page does have a real
+address (`courses/<id>.html`), so the scheme could be built for real —
+starting in `resolve_links()`, not here.
 
 **Images.** `![alt](name.png)`, a bare file name resolved against the
 tutorial's folder; `alt` is required. Built, currently unused.

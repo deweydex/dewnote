@@ -163,15 +163,15 @@ export async function listMarkdownFiles(repo: RepoRef, ref: string, token: strin
   return listMatchingFiles(repo, ref, token, (path) => path.endsWith(".md"));
 }
 
-/** Every `<series>.order.yaml` file (series.ts's own reading-order files,
- * DIALECTS.md §1) in a repository at `ref` — series-panel.ts's own
- * source, alongside `listMarkdownFiles`'s front-matter index. A second,
- * separate tree fetch rather than one call serving both lists: simpler
- * than threading a second predicate through every caller of
- * `listMarkdownFiles`, at the cost of one extra (cheap, per the same
- * reasoning above) request when both are actually needed. */
-export async function listOrderFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
-  return listMatchingFiles(repo, ref, token, (path) => path.endsWith(".order.yaml"));
+/** Every course file (dewlab's own `courses/*.yaml`, courses.ts) in a
+ * repository at `ref` — series-panel.ts's own source, alongside
+ * `listMarkdownFiles`'s front-matter index. A second, separate tree
+ * fetch rather than one call serving both lists: simpler than threading
+ * a second predicate through every caller of `listMarkdownFiles`, at the
+ * cost of one extra (cheap, per the same reasoning above) request when
+ * both are actually needed. */
+export async function listCourseFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
+  return listMatchingFiles(repo, ref, token, (path) => /(^|\/)courses\/[^/]+\.yaml$/.test(path));
 }
 
 export async function getFileContent(
