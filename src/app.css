@@ -25,18 +25,34 @@ body {
 }
 
 .dn-page {
+  /* The positioning context for the one block-control cluster, which is
+     absolutely placed against this rather than appended into any block —
+     so moving it between blocks never touches the document's own DOM. */
+  position: relative;
   max-width: var(--dl-line-width);
   margin: 0 auto;
+  /* Left padding leaves the cluster a margin to sit in, outside the
+     column the text runs in. It used to sit on the *right*, where on a
+     narrow screen it landed underneath the icon rail — every block's grip
+     stacked on a rail button and flush to the screen edge. */
   padding: var(--dn-page-padding, 3rem 1.25rem 8rem);
+  padding-inline: var(--dn-gutter, 3rem);
   font-family: var(--dl-font-family);
   font-size: var(--dl-font-size);
-  line-height: 1.62;
+  line-height: var(--dl-line-height, 1.62);
 }
 
 /* ---------------------------------------------------------------- blocks */
 
 .dn-block {
   position: relative;
+}
+/* Space between one block and the next — the reader's own
+   `paragraphSpacing` (settings.ts). On the block rather than in the
+   prose, so it applies the same whether the block is a paragraph, a
+   cell, a fold or a maths display. */
+.dn-block + .dn-block {
+  margin-top: var(--dn-block-gap, 0.75rem);
 }
 
 .dn-block-render {
@@ -213,59 +229,81 @@ body {
 /* Hover-revealed, never display:none — stays in the tab order and comes
  * back for a keyboard user on :focus-within, dewlab's own rule for this
  * (plan §5.3). */
-.dn-block-toolbar {
+/* The one control cluster (app.ts), parked in the left gutter at
+   whichever block is being pointed at. Two controls at rest — add and
+   grip — with delete appearing only once a block is armed, so the
+   resting state of a document is as close to no chrome as it can be
+   while still being editable. */
+.dn-block-controls {
   position: absolute;
-  top: 0.2rem;
-  right: -1.9rem;
+  left: 0;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.1s;
+  padding-top: 0.2rem;
+  transition: top 0.08s ease-out;
 }
-.dn-block:hover .dn-block-toolbar,
-.dn-block:focus-within .dn-block-toolbar {
-  opacity: 1;
-  pointer-events: auto;
+.dn-block-controls[hidden] {
+  display: none;
 }
+
+.dn-add-btn,
 .dn-block-grip,
 .dn-block-delete {
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 4px;
-  border: 1px solid var(--dl-cell-border);
-  background: var(--dl-panel-bg);
+  border: 1px solid transparent;
+  background: none;
   color: var(--dl-muted);
   cursor: pointer;
   font-family: var(--dl-mono);
-  font-size: 0.7em;
+  font-size: 0.75em;
   line-height: 1;
+  opacity: 0.55;
+  transition: opacity 0.1s, color 0.1s, border-color 0.1s, background 0.1s;
 }
-.dn-block-grip:hover {
+.dn-add-btn:hover,
+.dn-block-grip:hover,
+.dn-add-btn:focus-visible,
+.dn-block-grip:focus-visible {
+  opacity: 1;
   color: var(--dl-orange);
-  border-color: var(--dl-orange);
+  border-color: var(--dl-cell-border);
+  background: var(--dl-panel-bg);
+  outline: none;
 }
-.dn-block-grip[aria-pressed="true"] {
-  color: var(--dl-orange);
-  border-color: var(--dl-orange);
-  background: var(--dl-rule);
+.dn-block-grip {
   cursor: grab;
 }
-.dn-block-delete:hover {
+.dn-block-grip[aria-pressed="true"] {
+  opacity: 1;
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+  background: var(--dl-panel-bg);
+}
+.dn-block-delete:hover,
+.dn-block-delete:focus-visible {
+  opacity: 1;
   color: var(--dl-error-fg);
   border-color: var(--dl-error-fg);
+  background: var(--dl-panel-bg);
+  outline: none;
 }
 
-/* A block only becomes draggable once its own grip arms it (app.ts's
- * armedIndex) — this outline is the only visual sign that dragging is
- * live right now, since draggable="true" itself has no rendered form of
- * its own until a drag actually starts. */
+/* Armed: the block is outlined, the arrow keys reorder it, and delete is
+   reachable. Nothing else in the editor deletes a block, so arming is the
+   deliberate step that guards it. */
 .dn-block.is-armed {
   outline: 2px solid var(--dl-orange);
   outline-offset: 2px;
   border-radius: 4px;
-  cursor: grab;
+}
+
+/* Where a dragged block would land. Only ever on one block at a time, and
+   only while a grip is actually being dragged. */
+.dn-block.is-drop-target {
+  box-shadow: 0 -2px 0 0 var(--dl-orange);
 }
 
 /* ------------------------------------------------------------ fence panels */
@@ -591,49 +629,14 @@ body {
 
 /* ------------------------------------------------------------- add gaps */
 
-.dn-add-gap {
-  position: relative;
-  height: 1.2rem;
-}
-.dn-add-btn {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 50%;
-  border: 1px solid var(--dl-cell-border);
-  background: var(--dl-bg);
-  color: var(--dl-muted);
-  opacity: 0;
-  pointer-events: none;
-  cursor: pointer;
-  font-family: var(--dl-mono);
-  line-height: 1;
-  transition: opacity 0.1s, color 0.1s, border-color 0.1s;
-}
-.dn-add-gap:hover .dn-add-btn,
-.dn-add-btn:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-.dn-add-btn:hover,
-.dn-add-btn:focus-visible {
-  color: var(--dl-orange);
-  border-color: var(--dl-orange);
-  outline: none;
-}
-
 /* The menu is a real popover, not a hover reveal — closed means genuinely
  * absent (display:none), the same as any native menu, since its items
  * have no reason to sit in the tab order until a reader opens it. */
 .dn-add-menu {
   display: none;
   position: absolute;
-  left: 50%;
-  top: 100%;
-  transform: translateX(-50%);
+  left: 100%;
+  top: 0;
   z-index: 5;
   flex-direction: column;
   min-width: 8rem;
@@ -665,11 +668,32 @@ body {
   outline: none;
 }
 
+/* Touch. Nothing here is hover-revealed any more — the cluster is either
+   attached to a block or hidden — so this is only about size: a finger
+   needs a target Apple puts at 44px and Android at 48, where a mouse is
+   happy with 24. The gutter widens to match so the controls still clear
+   the text.
+
+   What makes this affordable is that there are three of them rather than
+   three per block: at the old geometry, finger-sized controls on every
+   block would have been most of the screen. */
 @media (hover: none) {
-  .dn-block-toolbar,
-  .dn-add-btn {
-    opacity: 1;
-    pointer-events: auto;
+  :root {
+    --dn-gutter: 3.25rem;
+  }
+  .dn-add-btn,
+  .dn-block-grip,
+  .dn-block-delete {
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1em;
+    opacity: 0.8;
+  }
+  .dn-block-controls {
+    gap: 0.35rem;
+  }
+  .dn-add-menu button {
+    min-height: 2.75rem;
   }
 }
 
@@ -793,6 +817,102 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
+}
+
+/* Narrow screens: the rail becomes a bottom bar.
+   
+   Not a style preference. Fixed to the right edge, it sat on top of the
+   text — measured on a phone, the rail occupied x 352-384 while every
+   block's own controls sat at x 376-400, so the two were stacked on each
+   other and both ran to the bezel. Along the bottom there is nothing to
+   collide with, it is where a thumb already is, and the page simply
+   reserves height for it instead of width.
+
+   The toggles keep their own class names and their own behaviour; only
+   the container's layout changes. */
+@media (max-width: 40rem) {
+  .dn-icon-rail {
+    top: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    flex-direction: row;
+    justify-content: center;
+    gap: 0.15rem;
+    padding: 0.35rem 0.5rem;
+    padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--dl-rule);
+    background: var(--dl-panel-bg);
+    /* A safety net only: the buttons above share the width, so this
+       should never actually scroll. It exists for a font scale or a
+       language that makes the labels wider than eight slots can hold. */
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .dn-icon-rail::-webkit-scrollbar {
+    display: none;
+  }
+  /* Every toggle, whatever it named its own class. Sized for a finger and
+     flat rather than circled — eight outlined circles in a row reads as
+     eight objects; eight glyphs on one bar reads as one control.
+
+     Each carries its own word underneath (icon-rail.ts's labelToggle).
+     A row of unlabelled glyphs is a memory test: ▤, ⌂ and ≡ mean nothing
+     until you have opened each one, and on a phone there is no tooltip
+     to hover for the answer. Rendered from the attribute rather than as
+     a second element, so the button stays one node with one accessible
+     name. */
+  .dn-icon-rail > button {
+    /* Share the width evenly rather than each taking what it wants. Eight
+       intrinsic widths came to 419px in a 390px bar, so the row scrolled
+       and opened with its first and last items sliced in half — which
+       reads as broken rather than as scrollable. */
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    width: auto;
+    height: auto;
+    min-height: 3.1rem;
+    padding: 0.3rem 0.1rem;
+    border-radius: 8px;
+    border-color: transparent;
+    background: none;
+    opacity: 1;
+    font-size: 1.05em;
+  }
+  .dn-icon-rail > button[data-label]::after {
+    content: attr(data-label);
+    font-family: var(--dl-font-family);
+    font-size: 0.56rem;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    color: var(--dl-muted);
+  }
+  .dn-icon-rail > button[aria-expanded="true"] {
+    background: var(--dl-cell-bg);
+  }
+  .dn-icon-rail > button[aria-expanded="true"]::after {
+    color: var(--dl-orange);
+  }
+  /* Room for the bar, so the last block is never under it. */
+  .dn-page {
+    padding-bottom: 6rem;
+  }
+  /* A panel opens above the bar rather than over it. */
+  .dn-series-panel,
+  .dn-folder-panel,
+  .dn-repo-panel,
+  .dn-outline-panel,
+  .dn-settings-panel,
+  .dn-dialect-panel,
+  .dn-linkcheck-panel {
+    bottom: 4rem;
+  }
 }
 
 /* ------------------------------------------------------------ repository */
@@ -2316,4 +2436,94 @@ body {
   color: var(--dl-muted);
   font-size: 0.9em;
   font-style: italic;
+}
+
+/* The file bar's export/import menu (file-bar.ts). A real popover like
+   the add menu: closed means absent, not hidden, so its items stay out of
+   the tab order until a reader opens it. */
+.dn-file-more-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.dn-file-more {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--dl-muted);
+  font-family: var(--dl-font-family);
+  font-size: 1em;
+  line-height: 1;
+  padding: 0.15rem 0.45rem;
+  cursor: pointer;
+}
+.dn-file-more:hover,
+.dn-file-more:focus-visible {
+  color: var(--dl-orange);
+  border-color: var(--dl-cell-border);
+  outline: none;
+}
+.dn-file-menu {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 11;
+  flex-direction: column;
+  min-width: 10rem;
+  margin-top: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 6px;
+  background: var(--dl-panel-bg);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
+.dn-file-menu.is-open {
+  display: flex;
+}
+.dn-file-menu button {
+  border: none;
+  background: none;
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  font-size: 0.9em;
+  text-align: left;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.dn-file-menu button:hover,
+.dn-file-menu button:focus-visible {
+  background: var(--dl-cell-bg);
+  color: var(--dl-orange);
+  outline: none;
+}
+@media (hover: none) {
+  .dn-file-more {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+  .dn-file-menu button {
+    min-height: 2.75rem;
+  }
+}
+
+/* Everything else a finger has to hit. The rail, the block controls and
+   the menus are sized where they're defined; these are the controls that
+   live in the document itself — a cell's Run/Stop and its header's
+   optional-field adds — plus the two file-bar buttons a writer uses
+   constantly. Measured at 19-26px before this, against 44 on iOS and 48
+   on Android. `min-height` rather than `height` so a button that wraps
+   its label still grows rather than clipping it. */
+@media (hover: none) {
+  .dn-file-open,
+  .dn-file-save,
+  .dn-cell-run,
+  .dn-cell-stop {
+    min-height: 2.75rem;
+    padding-inline: 0.9rem;
+  }
+  .dn-cell-header-add {
+    min-height: 2.75rem;
+    padding-inline: 0.7rem;
+  }
 }

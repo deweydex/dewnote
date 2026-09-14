@@ -13,6 +13,7 @@
 // The data: URI fallback, for a document with no folder to write into,
 // is in image-block.spec.ts.
 
+import { addBlockAfter, deleteBlock, openAddMenu, pointAt } from "./block-controls.ts";
 import { test as base, expect, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -64,13 +65,11 @@ async function getSource(page: Page): Promise<string> {
  * and a commit — so `setFiles` returning means the picker closed, not
  * that anything has been written. Asserting straight after it passes or
  * fails on how fast the machine is. */
-async function addImage(page: Page, gapIndex: number, fileName: string, alt: string) {
+async function addImage(page: Page, blockIndex: number, fileName: string, alt: string) {
   page.once("dialog", (dialog) => dialog.accept(alt));
-  const gap = page.locator(".dn-add-gap").nth(gapIndex);
-  await gap.hover();
-  await gap.locator(".dn-add-btn").click();
+  await openAddMenu(page, blockIndex);
   const chooserPromise = page.waitForEvent("filechooser");
-  await gap.locator(".dn-add-menu button", { hasText: "Image" }).click();
+  await page.locator(".dn-add-menu button", { hasText: "Image" }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: fileName, mimeType: "image/png", buffer: ONE_PIXEL_PNG });
   await expect(page.locator(`.dn-block-render img[alt="${alt}"]`)).toBeVisible();

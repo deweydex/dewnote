@@ -5,6 +5,7 @@
 // document, open the picker from the add menu, and check both the
 // indexed-entry path and the custom-link fallback.
 
+import { addBlockAfter, deleteBlock, openAddMenu, pointAt } from "./block-controls.ts";
 import { test as base, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -43,11 +44,8 @@ async function getSource(page: import("@playwright/test").Page): Promise<string>
   return page.evaluate(() => (window as unknown as { __dewnote: TestHook }).__dewnote.getSource());
 }
 
-async function openLinkPicker(page: import("@playwright/test").Page, gapIndex: number) {
-  const gap = page.locator(".dn-add-gap").nth(gapIndex);
-  await gap.hover();
-  await gap.locator(".dn-add-btn").click();
-  await gap.locator(".dn-add-menu button", { hasText: "Link" }).click();
+async function openLinkPicker(page: import("@playwright/test").Page, blockIndex: number) {
+  await addBlockAfter(page, blockIndex, "Link");
 }
 
 test("picking an indexed entry inserts a tutorial: link built from its id", async ({ page }) => {
@@ -59,7 +57,7 @@ test("picking an indexed entry inserts a tutorial: link built from its id", asyn
     ]);
   });
 
-  await openLinkPicker(page, 1);
+  await openLinkPicker(page, 0);
   await expect(page.locator(".dn-link-item button")).toHaveCount(2);
 
   await page.locator(".dn-link-search").fill("filtering");
@@ -117,7 +115,7 @@ test("the list is the indexed files themselves — a course a tutorial is on is 
     ]);
   });
 
-  await openLinkPicker(page, 1);
+  await openLinkPicker(page, 0);
   await expect(page.locator(".dn-link-item button")).toHaveCount(2);
   await expect(page.locator(".dn-link-item-kind")).toHaveCount(0);
 

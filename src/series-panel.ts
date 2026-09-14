@@ -71,7 +71,7 @@ import { canWriteFiles, openPath, readTextFile, writeTextFile } from "./active-s
 import { parseCourseFile, type Course, type CourseSeries } from "./courses.ts";
 import { addTutorial, findSeries, locateTutorial, moveTutorial, removeTutorial, idsListedBy, type WriteResult } from "./course-writer.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
-import { iconRail } from "./icon-rail.ts";
+import { iconRail, labelToggle } from "./icon-rail.ts";
 
 /** What a drag carries: enough to find the tutorial again in a file
  * re-read since the drag started. Serialised through the one
@@ -521,6 +521,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     if (!panel.hidden) render();
   });
 
+  labelToggle(toggle, "Courses");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
 

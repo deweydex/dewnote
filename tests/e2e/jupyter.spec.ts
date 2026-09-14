@@ -47,10 +47,20 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".dn-block").first()).toBeVisible();
 });
 
+
+/** The three export/import buttons live behind the file bar's "⋯" menu
+ * now — five buttons on one bar left the filename as "U…" at phone
+ * width. Each keeps its own class and its own handler; only how many are
+ * on screen at rest changed. */
+async function openFileMenuThen(page: import("@playwright/test").Page, selector: string) {
+  await page.locator(".dn-file-more").click();
+  await page.locator(selector).click();
+}
+
 test("Export ipynb downloads a real notebook with the exec cell as a code cell", async ({ page }) => {
   await dropFile(page, "a-rule.md", SOURCE);
 
-  const [download] = await Promise.all([page.waitForEvent("download"), page.locator(".dn-file-export-ipynb").click()]);
+  const [download] = await Promise.all([page.waitForEvent("download"), openFileMenuThen(page, ".dn-file-export-ipynb")]);
   expect(download.suggestedFilename()).toBe("a-rule.ipynb");
 
   const savedPath = await download.path();
@@ -63,7 +73,7 @@ test("Export ipynb downloads a real notebook with the exec cell as a code cell",
 
 test("Import ipynb round-trips a notebook exported from dewnote back to the original markdown", async ({ page }) => {
   await dropFile(page, "a-rule.md", SOURCE);
-  const [download] = await Promise.all([page.waitForEvent("download"), page.locator(".dn-file-export-ipynb").click()]);
+  const [download] = await Promise.all([page.waitForEvent("download"), openFileMenuThen(page, ".dn-file-export-ipynb")]);
   const notebookPath = await download.path();
   // download.path() is a temp file under a generated name — setFiles must
   // be given the real "a-rule.ipynb" name explicitly, since the file bar
@@ -71,7 +81,7 @@ test("Import ipynb round-trips a notebook exported from dewnote back to the orig
   // filename.
   const notebookBytes = readFileSync(notebookPath as string);
 
-  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.locator(".dn-file-import-ipynb").click()]);
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), openFileMenuThen(page, ".dn-file-import-ipynb")]);
   await chooser.setFiles({ name: "a-rule.ipynb", mimeType: "application/x-ipynb+json", buffer: notebookBytes });
 
   await expect(page.locator("h1")).toHaveText("A Rule");

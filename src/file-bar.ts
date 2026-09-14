@@ -107,7 +107,49 @@ export function mountFileBar(host: FileBarHost): FileBar {
   const status = document.createElement("span");
   status.className = "dn-file-status";
 
-  bar.append(nameLabel, openButton, saveButton, exportButton, exportIpynbButton, importIpynbButton, status);
+  // The three exports go behind one button.
+  //
+  // At phone width the bar's five buttons took the whole top row and left
+  // the filename as "U…" — the one thing on it a reader actually needs to
+  // read. Open and Save are what a writer reaches for constantly;
+  // exporting and importing are deliberate, occasional acts, and a menu
+  // is where occasional acts belong.
+  //
+  // Each button keeps its own class name and its own handler and simply
+  // moves inside the menu, so nothing about what they do changes — only
+  // how many of them are on screen at rest.
+  const moreButton = document.createElement("button");
+  moreButton.type = "button";
+  moreButton.className = "dn-file-more";
+  moreButton.setAttribute("aria-label", "Export and import");
+  moreButton.setAttribute("aria-expanded", "false");
+  moreButton.title = "Export and import";
+  moreButton.textContent = "⋯";
+
+  const moreMenu = document.createElement("div");
+  moreMenu.className = "dn-file-menu";
+  moreMenu.append(exportButton, exportIpynbButton, importIpynbButton);
+
+  function closeMoreMenu() {
+    moreMenu.classList.remove("is-open");
+    moreButton.setAttribute("aria-expanded", "false");
+  }
+  moreButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const open = !moreMenu.classList.contains("is-open");
+    moreMenu.classList.toggle("is-open", open);
+    moreButton.setAttribute("aria-expanded", String(open));
+  });
+  // Choosing anything in the menu closes it, and so does a click
+  // elsewhere — the same rule the add menu follows.
+  moreMenu.addEventListener("click", () => closeMoreMenu());
+  document.addEventListener("click", closeMoreMenu);
+
+  const moreWrap = document.createElement("div");
+  moreWrap.className = "dn-file-more-wrap";
+  moreWrap.append(moreButton, moreMenu);
+
+  bar.append(nameLabel, openButton, saveButton, moreWrap, status);
   document.body.appendChild(bar);
 
   function render() {

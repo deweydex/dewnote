@@ -1396,3 +1396,106 @@ that a commit happened.
 self-contained, and the store interface grew four optional methods that a
 store without them simply doesn't offer — which is what the `data:` URI
 fallback already handles.*
+
+**40 — One set of block controls that moves, not one per block.**
+
+Every block carried its own: a "+" gap above it holding a full copy of
+the six-item add menu, and a toolbar beside it holding a grip and a
+delete button. For a six-block document that is seven menus and six
+toolbars — over fifty buttons, almost none of them visible at any
+moment. On a phone, where `@media (hover: none)` revealed them all, it
+was six "+" circles running down the middle of the page and every
+block's grip stacked underneath the icon rail, flush to the bezel.
+
+At most one block is ever being acted on. So there is one cluster and it
+moves to whichever block is being pointed at. The reason is not fashion:
+chrome that repeats per block reads as part of the document, and chrome
+that appears at one place reads as a tool.
+
+**Two controls at rest.** Add, and a grip. Delete appears only once a
+block is armed — clicking the grip, which already armed it for keyboard
+reordering. Deleting is a deliberate two-step rather than a click on a
+button sitting a pixel from the drag handle, and the resting state loses
+a third of its chrome.
+
+**In the left gutter, outside the reading column.** That keeps it out of
+the line of text, and it is also what un-collided it from the icon rail,
+which is on the right.
+
+**Reordering stays two ways, not three**: drag the grip, or arm it and
+use the arrow keys. There are never up/down buttons — a pair per block is
+exactly the repetition this replaces.
+
+**What it cost.** `+` inserts *after* its block, so a plain markdown file
+with no front matter has no way to insert above its very first block.
+Front matter is block 0 in every dewlab and dewstack document and its own
+"+" is how the top of the body is reached, so the gap is narrow; adding
+then dragging covers it. A second "+" pinned permanently above every
+document to serve that one case is the trade this refuses.
+
+**Two bugs the tests caught, both about the cluster following the
+pointer.** It must freeze on *pointerdown*, not on dragstart: by the time
+`dragstart` fires the pointer has already travelled far enough to count
+as a drag, across blocks that each pulled the cluster along, and the drag
+reported whichever block it was passing rather than the one it started
+on. And `moveBlock` refocused a grip inside the block, which no longer
+exists there.
+
+**41 — The icon rail becomes a labelled bottom bar on a narrow screen.**
+
+Fixed to the right edge it sat on top of the text. Measured on a phone:
+the rail at x 352–384, every block's controls at x 376–400 — stacked on
+each other, both running to the bezel, and the prose flowing underneath.
+
+Along the bottom there is nothing to collide with, it is where a thumb
+already is, and the page reserves height for it rather than width. The
+eight toggles keep their own classes and their own behaviour; only the
+container's layout changes.
+
+**Each glyph gets a word under it.** A row of eight bare glyphs is a
+memory test — ▤, ⌂ and ≡ mean nothing until you have opened each one, and
+on a phone there is no tooltip to hover for the answer. Rendered from a
+`data-label` attribute via `::after` rather than as a second element, so
+the button stays one node with one accessible name and nothing has to
+know whether the rail is currently a column or a bar.
+
+They share the width rather than each taking what it wants: eight
+intrinsic widths came to 419px in a 390px bar, so the row scrolled and
+opened with its first and last items sliced in half, which reads as
+broken rather than as scrollable.
+
+**The file bar's three exports move behind one "⋯" menu.** Five buttons
+on one bar left the filename as "U…" at phone width — the one thing on it
+a reader actually needs to read. Open and Save are constant; exporting
+and importing are deliberate, occasional acts, and a menu is where those
+belong. Each button keeps its class and its handler and simply moves
+inside.
+
+**Touch sizing, everywhere else.** Measured before this: the "+" 22×22,
+the grip and delete 24×24, the rail 32×32, the file bar 23px tall, a
+cell's `+ hint` 19px tall — against 44 on iOS and 48 on Android. What
+makes finger-sized controls affordable at all is decision 40: three of
+them rather than three per block.
+
+**42 — Line height, paragraph spacing and a code font are settings.**
+
+Decision 7's "every one of those values is a user setting" already
+covered family, size, measure, tint and theme. Line height was not among
+them and the stylesheet hard-coded 1.62, which is the one reading control
+people reach for after size.
+
+Paragraph spacing is separate from it on purpose: a reader who wants
+generous leading inside a paragraph does not necessarily want the page to
+be twice as long. The code font is three real stacks rather than a
+free-text family name, each ending in a generic — a font nobody has
+installed falls back silently to whatever the system picks, which reads
+as a bug rather than as a choice.
+
+Settings saved before any of these existed get that field's default and
+keep everything else, which `parseSettings` already did field by field;
+there is now a test naming that case directly, because it is the shape
+actually sitting in a reader's localStorage today.
+
+*Cost to change: low for all three. The cluster is one element and one
+set of handlers; the bottom bar is one media query over a container whose
+children did not change; the settings are data in one table.*

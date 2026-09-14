@@ -10,6 +10,7 @@
 // builds actually want — is in image-asset.spec.ts, against the fake
 // folder and the mocked GitHub API.
 
+import { addBlockAfter, deleteBlock, openAddMenu, pointAt } from "./block-controls.ts";
 import { test as base, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -58,12 +59,10 @@ test("with nowhere to write a file, an image is inlined as a data: URI", async (
 
   page.once("dialog", (dialog) => dialog.accept("A test image"));
 
-  const gap = page.locator(".dn-add-gap").nth(1);
-  await gap.hover();
-  await gap.locator(".dn-add-btn").click();
+  await openAddMenu(page, 0);
 
   const chooserPromise = page.waitForEvent("filechooser");
-  await gap.locator(".dn-add-menu button", { hasText: "Image" }).click();
+  await page.locator(".dn-add-menu button", { hasText: "Image" }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "pixel.png", mimeType: "image/png", buffer: ONE_PIXEL_PNG });
 
@@ -80,12 +79,10 @@ test("cancelling the alt-text prompt still inserts the image, with empty alt tex
 
   page.once("dialog", (dialog) => dialog.dismiss());
 
-  const gap = page.locator(".dn-add-gap").nth(0);
-  await gap.hover();
-  await gap.locator(".dn-add-btn").click();
+  await openAddMenu(page, 0);
 
   const chooserPromise = page.waitForEvent("filechooser");
-  await gap.locator(".dn-add-menu button", { hasText: "Image" }).click();
+  await page.locator(".dn-add-menu button", { hasText: "Image" }).click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "pixel.png", mimeType: "image/png", buffer: ONE_PIXEL_PNG });
 

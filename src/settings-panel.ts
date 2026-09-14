@@ -19,7 +19,7 @@ import {
   type Settings,
 } from "./settings.ts";
 import { restartInterpreter, setPyodideBase } from "./runtime/pyodide-engine.ts";
-import { iconRail } from "./icon-rail.ts";
+import { iconRail, labelToggle } from "./icon-rail.ts";
 
 function row(labelText: string, control: HTMLElement): HTMLLabelElement {
   const label = document.createElement("label");
@@ -149,6 +149,25 @@ export function mountSettingsPanel(): SettingsPanel {
   measureInput.addEventListener("input", () => commit({ ...settings, measure: Number(measureInput.value) }));
   appearance.appendChild(row("Line width", measureInput));
 
+  const lineHeightInput = range(1.2, 2.2, 0.05, settings.lineHeight);
+  lineHeightInput.addEventListener("input", () =>
+    commit({ ...settings, lineHeight: Number(lineHeightInput.value) }),
+  );
+  appearance.appendChild(row("Line height", lineHeightInput));
+
+  const paragraphSpacingSelect = select(
+    [
+      { value: "tight", label: "Tight" },
+      { value: "normal", label: "Normal" },
+      { value: "loose", label: "Loose" },
+    ] as const,
+    settings.paragraphSpacing,
+  );
+  paragraphSpacingSelect.addEventListener("change", () =>
+    commit({ ...settings, paragraphSpacing: paragraphSpacingSelect.value as Settings["paragraphSpacing"] }),
+  );
+  appearance.appendChild(row("Paragraph spacing", paragraphSpacingSelect));
+
   const marginsSelect = select(
     [
       { value: "comfortable", label: "Comfortable" },
@@ -181,6 +200,20 @@ export function mountSettingsPanel(): SettingsPanel {
     commit({ ...settings, codeFontSize: Number(codeFontSizeInput.value) }),
   );
   codeSection.appendChild(row("Code font size", codeFontSizeInput));
+
+  const codeFontSelect = select(
+    [
+      { value: "mono", label: "System monospace" },
+      { value: "humanist", label: "Humanist (JetBrains, Fira)" },
+      { value: "slab", label: "Slab (IBM Plex, Source Code)" },
+    ] as const,
+    settings.codeFont,
+  );
+  codeFontSelect.addEventListener("change", () =>
+    commit({ ...settings, codeFont: codeFontSelect.value as Settings["codeFont"] }),
+  );
+  codeFontSelect.title = "Each falls back to the system monospace where the named families aren't installed.";
+  codeSection.appendChild(row("Code font", codeFontSelect));
 
   panel.appendChild(codeSection);
 
@@ -230,6 +263,7 @@ export function mountSettingsPanel(): SettingsPanel {
   });
   panel.appendChild(resetButton);
 
+  labelToggle(toggle, "Settings");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
   applySettings(settings);

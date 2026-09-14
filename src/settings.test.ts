@@ -20,11 +20,47 @@ describe("parseSettings", () => {
       textSize: 20,
       measure: 30,
       margins: "compact",
+      lineHeight: 1.9,
+      paragraphSpacing: "loose",
       cellTint: false,
       codeFontSize: 13,
+      codeFont: "humanist",
       pyodideBase: "https://example.com/pyodide/",
     };
     expect(parseSettings(saved)).toEqual(saved as never);
+  });
+
+  test("settings saved before a field existed get that field's default, not a broken object", () => {
+    // What is actually in a reader's localStorage today: the shape from
+    // before line height, paragraph spacing and the code font were
+    // settings at all. Every field they did save survives.
+    const beforeTypography = {
+      theme: "dark",
+      bodyFont: "mono",
+      textSize: 20,
+      measure: 30,
+      margins: "compact",
+      cellTint: false,
+      codeFontSize: 13,
+      pyodideBase: "",
+    };
+    const result = parseSettings(beforeTypography);
+    expect(result.textSize).toBe(20);
+    expect(result.measure).toBe(30);
+    expect(result.lineHeight).toBe(DEFAULT_SETTINGS.lineHeight);
+    expect(result.paragraphSpacing).toBe(DEFAULT_SETTINGS.paragraphSpacing);
+    expect(result.codeFont).toBe(DEFAULT_SETTINGS.codeFont);
+  });
+
+  test("line height is clamped to something still readable", () => {
+    expect(parseSettings({ lineHeight: 0.4 }).lineHeight).toBe(1.2);
+    expect(parseSettings({ lineHeight: 9 }).lineHeight).toBe(2.2);
+    expect(parseSettings({ lineHeight: "roomy" }).lineHeight).toBe(DEFAULT_SETTINGS.lineHeight);
+  });
+
+  test("an unknown paragraph spacing or code font falls back rather than reaching the stylesheet", () => {
+    expect(parseSettings({ paragraphSpacing: "enormous" }).paragraphSpacing).toBe("normal");
+    expect(parseSettings({ codeFont: "comic" }).codeFont).toBe("mono");
   });
 
   test("falls back field by field, not all-or-nothing, when some fields are bad", () => {
