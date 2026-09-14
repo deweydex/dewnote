@@ -3,9 +3,11 @@ import { parseDocument } from "./blocks.ts";
 import {
   declaredPackages,
   execCellLanguage,
+  isCardFence,
   isHintFence,
   isRunnableFence,
   isSitePaneFence,
+  parseCardFence,
   parseCellSource,
   parseCellSourceFromFenceText,
   parseHintFence,
@@ -318,6 +320,77 @@ describe("parseHintFence", () => {
   test("a hint with no header lines at all is still read correctly, body only", () => {
     const block = fenceBlock("```hint\nJust the body, no headers.\n```\n");
     expect(parseHintFence(block).body).toBe("Just the body, no headers.");
+  });
+});
+
+describe("isCardFence", () => {
+  test("is true only when the fence's whole info string is card", () => {
+    expect(isCardFence("card")).toBe(true);
+  });
+
+  test("is false for anything else, including a fence that merely mentions card", () => {
+    expect(isCardFence("python exec")).toBe(false);
+    expect(isCardFence("")).toBe(false);
+    expect(isCardFence("card wide")).toBe(false);
+  });
+});
+
+describe("parseCardFence", () => {
+  test("reads url:, status:, meta:, the heading, and the body beneath them", () => {
+    const block = fenceBlock(
+      "```card\nurl: computational-methods.html\nstatus: beta\nmeta: 5N0554 · QQI Level 5\n### Computational Methods\nWe work through matrices and simulation.\n```\n",
+    );
+    expect(parseCardFence(block)).toEqual({
+      url: "computational-methods.html",
+      status: "beta",
+      meta: "5N0554 · QQI Level 5",
+      wide: false,
+      heading: "Computational Methods",
+      body: "We work through matrices and simulation.",
+    });
+  });
+
+  test("wide: true/yes both count; anything else does not", () => {
+    const wide = fenceBlock("```card\nurl: a.html\nwide: true\n### A\n```\n");
+    expect(parseCardFence(wide).wide).toBe(true);
+    const alsoWide = fenceBlock("```card\nurl: a.html\nwide: yes\n### A\n```\n");
+    expect(parseCardFence(alsoWide).wide).toBe(true);
+    const notWide = fenceBlock("```card\nurl: a.html\nwide: no\n### A\n```\n");
+    expect(parseCardFence(notWide).wide).toBe(false);
+  });
+
+  test("status:, meta:, and wide: are all optional, and absent ones stay null/false", () => {
+    const block = fenceBlock("```card\nurl: features.html\n### What dewlab can do\n```\n");
+    expect(parseCardFence(block)).toEqual({
+      url: "features.html",
+      status: null,
+      meta: null,
+      wide: false,
+      heading: "What dewlab can do",
+      body: "",
+    });
+  });
+
+  test("a card with no url: still reads its heading and body, url just stays null", () => {
+    const block = fenceBlock("```card\n### A Card\nSome text.\n```\n");
+    const card = parseCardFence(block);
+    expect(card.url).toBeNull();
+    expect(card.heading).toBe("A Card");
+    expect(card.body).toBe("Some text.");
+  });
+
+  test("a body with no heading at all reads heading as null rather than throwing", () => {
+    const block = fenceBlock("```card\nurl: a.html\nJust prose, no heading.\n```\n");
+    const card = parseCardFence(block);
+    expect(card.heading).toBeNull();
+    expect(card.body).toBe("Just prose, no heading.");
+  });
+
+  test("skips leading blank lines before looking for the heading, like dewlab's own parser", () => {
+    const block = fenceBlock("```card\nurl: a.html\n\n\n### A Card\nBody.\n```\n");
+    const card = parseCardFence(block);
+    expect(card.heading).toBe("A Card");
+    expect(card.body).toBe("Body.");
   });
 });
 

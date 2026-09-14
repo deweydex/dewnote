@@ -37,13 +37,14 @@ import { parseDocument, serialize, type Block, type Document } from "./blocks.ts
 import { detectDialect } from "./dialect.ts";
 import { setFrontMatterField } from "./frontmatter.ts";
 import { frontMatterFieldsFor, isScalarField, type FrontMatterFieldSpec } from "./frontmatter-fields.ts";
-import { renderBlockPreview, renderHintFencePreview } from "./render-block.ts";
+import { renderBlockPreview, renderCardFencePreview, renderHintFencePreview } from "./render-block.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
 import { pickLink } from "./link-picker.ts";
 import {
   declaredPackages,
   execCellLanguage,
+  isCardFence,
   isHintFence,
   isRunnableFence,
   isSitePaneFence,
@@ -1447,6 +1448,20 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return container;
   }
 
+  /** A ```card fence's own read-only preview — dewlab's own
+   * `.dl-module-card` markup, shown alongside its live editor for the
+   * same reason a staged hint's is (decision 15). Each card previews on
+   * its own: dewlab's build groups adjacent cards into one shared
+   * `.dl-module-grid`, a purely cosmetic detail across several fences
+   * this editor doesn't reproduce, so a grid of one stands in here
+   * instead — the card itself renders exactly as it would on the built
+   * page either way. */
+  function buildCardPreview(block: Block): HTMLElement {
+    const container = buildFencePanel("dn-card-preview");
+    container.innerHTML = `<div class="dl-module-grid">${renderCardFencePreview(block)}</div>`;
+    return container;
+  }
+
   /** A small label above a site pane's own live editor, since three
    * fences in a row otherwise look identical until you read their info
    * strings — the same reason a cell's Run bar names nothing but a
@@ -1595,6 +1610,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const sqlInfo = parseSqlCellInfo(info);
       if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
       else if (isHintFence(info)) wrapper.appendChild(buildHintPreview(block));
+      else if (isCardFence(info)) wrapper.appendChild(buildCardPreview(block));
       else if (isSitePaneFence(info)) {
         wrapper.appendChild(buildSitePaneLabel(parseSitePaneInfo(block)));
         const group = siteGroupContaining(findSiteGroups(doc.blocks), index);

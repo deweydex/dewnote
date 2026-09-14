@@ -1071,3 +1071,72 @@ once nothing depended on it rather than deleted on a plan to.
 or the block model — a drag-reorder UI writes the same file the raw
 editor already can, and a structural preview reads the already-parsed
 document without changing how anything is stored.*
+
+**35 — dewlab's new ```card fence gets real support: a fourth,
+non-runnable fence kind, previewed but never called a cell.** dewlab
+moved its About, home, and features pages out of hardcoded `build.py`
+strings into `pages/*.md` (decisions 7.159–7.162 there) across the same
+session this one continued from, and the home/features moves needed a
+real syntax for a clickable tile — a `` ```card `` fence, the same
+header-line idiom (`url:`/`status:`/`meta:`/`wide:`) every exec-family
+fence here already uses. `cell.ts` gained `isCardFence`/`parseCardFence`
+(a fence whose whole info string is `card`, leading blank lines skipped
+before the heading the same way dewlab's own `parse_card()` does,
+`null` in place of dewlab's own hard failure on a missing `url:` or
+heading — an editor reads a fence mid-edit, not a finished build);
+`render-block.ts`'s `renderCardFencePreview` builds dewlab's own
+`.dl-module-card` markup byte-for-byte (badge, meta span, wide class);
+`app.ts` wires it in exactly where a staged hint's own preview already
+sits, `isCardFence(info)` alongside `isHintFence(info)`, the fence
+itself untouched as a live editor (decision 15).
+
+Deliberately not attempted: reproducing dewlab's own "adjacent cards
+share one `.dl-module-grid`" grouping across several fences. A staged
+hint or a runnable cell's own preview only ever depends on that one
+fence; matching dewlab's grouping would mean this editor's preview
+layer reaching across sibling blocks the way `findSiteGroups()` already
+does for a site pane — real, structural work for a purely cosmetic
+detail (the card itself renders identically to dewlab's build either
+way). Each card gets its own one-card `.dl-module-grid` instead, close
+enough for an authoring preview.
+
+The naming question — raised directly, not guessed at — settled the
+other way from how it first sounded: dewlab's own `Cell`/`CELL_TYPES`/
+`render_cell()` already reserve "cell" for something with a real
+saved-progress contract behind it (CLAUDE.md's own warning there:
+renaming a cell id throws away a student's saved work). A card has no
+output and nothing to save, so every function and type name here calls
+it a **card** — `CardFenceInfo`, `parseCardFence`, `renderCardFence-
+Preview`, `.dn-card-preview` — never a "card cell." dewnote's own
+vocabulary has no such collision (plan §3's "a cell is a box; a
+paragraph is not" already uses the word more broadly than "runs"), so
+nothing stops a course maintainer calling the *rendered result* a "card
+cell" in conversation; the code just doesn't call it that itself.
+
+Two real gaps named rather than closed, both documented in DIALECTS.md
+§1 alongside the new grammar: the `[[name]]` generated-block marker
+(`[[search-box]]` today) round-trips as ordinary prose — correct, but
+shown literally rather than previewed as the search box it stands for;
+and a `<div class="dl-hero">`/`<div class="dl-audience">`/`<ul
+class="dl-feature-list">` section or list wrapper has no block kind of
+its own in `blocks.ts`, so it splits into several plain, individually
+odd-looking prose blocks (one of them just a bare opening or closing tag
+on its own line) rather than one cohesive, editable section — still
+byte-exact on save, since neither gap touches what decision 1 actually
+guarantees, just a rougher editing experience than the finished markup
+suggests. Both are real, separate design work, not a one-line follow-up
+to this decision.
+
+Tested in `src/cell.test.ts` (parsing: all four header lines, `wide:
+true`/`yes` vs. anything else, each optional field absent, a missing
+`url:`, a missing heading, leading blank lines skipped) and
+`src/render-block.test.ts` (the rendered markup, a wide card's missing
+badge/meta, a missing heading/url's placeholder, attribute/text
+escaping) — 14 new unit tests. `tests/e2e/card-fence.spec.ts` drives the
+real built app: the fence stays editable with its headers visible, the
+preview shows the right badge/meta/wide class, and editing the fence's
+heading line in place updates the preview once it blurs and commits.
+*Cost to change: low. A new fence kind, recognised by its own
+`isCardFence` check alongside `isHintFence`/`isSitePaneFence`'s already-
+established pattern — nothing about how an exec, hint, or site fence
+parses changed.*
