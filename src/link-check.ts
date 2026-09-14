@@ -27,40 +27,52 @@
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
 import { iconRail } from "./icon-rail.ts";
 
-export type LinkKind = "tutorial" | "module" | "series";
+/**
+ * `tutorial:` is the only link scheme either site's build resolves.
+ *
+ * This used to check `module:` and `series:` too. Neither was ever real:
+ * dewlab's own `resolve_links()` has only ever rewritten `tutorial:id`,
+ * and across every tutorial in dewlab and dewstack `tutorial:` is used
+ * 38 times as a link target while `module:` and `series:` are used none —
+ * their only appearances anywhere were this editor's own fixtures and
+ * tests. Checking them offered an author a scheme that would have shipped
+ * as a literal broken href.
+ *
+ * dewlab's own spec for the move to `courses/` suggested renaming
+ * `module:` to `course:`. That would have carried the same problem
+ * forward under a new name, so both are dropped instead. A course page
+ * has a real address (`courses/<id>.html`), so a scheme for it could be
+ * built — on dewlab's side first, in `resolve_links()`.
+ */
+export type LinkKind = "tutorial";
 
 export interface BrokenLink {
   kind: LinkKind;
-  /** The name after the colon — a slug for `tutorial:`, a module or
-   * series name for the other two. */
+  /** The tutorial id after the colon. */
   target: string;
   /** The link's own visible text, so a report can name which link is
    * broken rather than only which target. */
   text: string;
 }
 
-const LINK_RE = /\[([^\]]*)\]\((tutorial|module|series):([^)#\s]+)(?:#[^)]*)?\)/g;
+const LINK_RE = /\[([^\]]*)\]\((tutorial):([^)#\s]+)(?:#[^)]*)?\)/g;
 
-/** Every `tutorial:slug`, `module:name`, or `series:name` link in `source`
- * whose target matches nothing in `index` — a link to a document, module,
- * or series that doesn't exist, or hasn't been indexed yet (an unopened
- * folder or repository leaves `index` empty, which reports every such
- * link as broken; the caller already knows this, the same way
- * link-picker.ts's own empty-index case is a real, expected state rather
- * than an error). `module:`/`series:` are checked against
- * `distinctValues`, the same set link-picker.ts's own picker offers —
- * there is no single file a module or series "is," only tutorials that
- * name it. */
+/** Every `tutorial:id` link in `source` whose target matches nothing in
+ * `index` — a link to a page that doesn't exist, or hasn't been indexed
+ * yet (an unopened folder or repository leaves `index` empty, which
+ * reports every such link as broken; the caller already knows this, the
+ * same way link-picker.ts's own empty-index case is a real, expected
+ * state rather than an error).
+ *
+ * Checked against every id the index knows, which is what dewlab's own
+ * build checks against: an id is site-wide, so a link names one page
+ * from anywhere and nothing has to be guessed. */
 export function findBrokenLinks(source: string, index: FileIndexEntry[]): BrokenLink[] {
-  const known: Record<LinkKind, Set<string>> = {
-    tutorial: new Set(index.flatMap((entry) => (entry.slug ? [entry.slug] : []))),
-    module: new Set(distinctValues(index, "module")),
-    series: new Set(distinctValues(index, "series")),
-  };
+  const known = new Set(distinctValues(index, "id"));
   const broken: BrokenLink[] = [];
   for (const match of source.matchAll(LINK_RE)) {
     const [, text, kind, target] = match as unknown as [string, string, LinkKind, string];
-    if (!known[kind].has(target)) broken.push({ kind, target, text });
+    if (!known.has(target)) broken.push({ kind, target, text });
   }
   return broken;
 }
@@ -113,7 +125,7 @@ export function mountLinkCheckPanel(host: LinkCheckHost): LinkCheckPanel {
 
   const hint = document.createElement("p");
   hint.className = "dn-linkcheck-hint";
-  hint.textContent = "Checks every tutorial:, module:, and series: link against the open folder or repository's own index.";
+  hint.textContent = "Checks every tutorial: link against the open folder or repository's own index.";
   panel.appendChild(hint);
 
   const checkButton = document.createElement("button");

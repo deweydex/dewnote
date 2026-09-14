@@ -13,14 +13,37 @@ describe("frontMatterFieldsFor", () => {
     expect(byKey["covers"]).toBeUndefined();
   });
 
-  test("module and series are marked for index-backed autocomplete; other fields are not", () => {
-    for (const dialect of ["dewlab", "dewstack"] as const) {
-      const byKey = Object.fromEntries(frontMatterFieldsFor(dialect).map((f) => [f.key, f]));
-      expect(byKey["module"]?.indexedAs).toBe("module");
-      expect(byKey["series"]?.indexedAs).toBe("series");
-      expect(byKey["title"]?.indexedAs).toBeUndefined();
-      expect(byKey["slug"]?.indexedAs).toBeUndefined();
+  test("dewlab requires exactly title, year and version — placement is not front matter", () => {
+    const fields = frontMatterFieldsFor("dewlab");
+    expect(fields.filter((f) => f.required).map((f) => f.key)).toEqual([
+      "title",
+      "year",
+      "version",
+    ]);
+    // A tutorial's id comes from its path and its course listing comes
+    // from courses/*.yaml, so a row for any of these would offer to set
+    // something the build ignores.
+    const byKey = Object.fromEntries(fields.map((f) => [f.key, f]));
+    for (const gone of ["slug", "module", "module_title", "series"]) {
+      expect(byKey[gone]).toBeUndefined();
     }
+  });
+
+  test("dewstack keeps its own placement fields and their pickers", () => {
+    // dewstack is a separate dialect on its own schedule; dewlab's move
+    // to courses/ says nothing about it.
+    const byKey = Object.fromEntries(frontMatterFieldsFor("dewstack").map((f) => [f.key, f]));
+    expect(byKey["module"]?.indexedAs).toBe("module");
+    expect(byKey["series"]?.indexedAs).toBe("series");
+    expect(byKey["title"]?.indexedAs).toBeUndefined();
+    expect(byKey["slug"]?.indexedAs).toBeUndefined();
+  });
+
+  test("dewlab's one remaining picker is practice_for, over tutorial ids", () => {
+    const byKey = Object.fromEntries(frontMatterFieldsFor("dewlab").map((f) => [f.key, f]));
+    expect(byKey["practice_for"]?.indexedAs).toBe("id");
+    expect(byKey["practice_for"]?.required).toBe(false);
+    expect(byKey["title"]?.indexedAs).toBeUndefined();
   });
 
   test("dewstack has no year field and offers a live/draft status", () => {
