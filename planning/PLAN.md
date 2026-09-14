@@ -1695,10 +1695,12 @@ dewlab has it on the reading side.
    the fake folder and `repo-panel.spec.ts` checking the commit a
    reorder actually sends.
 
-   **Not built: "New series."** A series is an entry in a course file's
-   `contents:`, and appending one means splicing into a block whose
-   bounds `courses.ts` doesn't record. Guessing where it ends, or what
-   indent a `- title:` line carries, from the tutorials indent below it
-   is the guess this design exists to avoid. Recording that range
-   properly is its own piece of work; a course file opens in the editor
-   like any other text file in the meantime.
+   **"New series" landed too** (decision 43), once the scan learned to
+   bound a `contents:` block for real — which is harder than a
+   `tutorials:` list, because two of dewlab's six course files carry a
+   `mixed:` key afterwards and the block ends mid-file. It refuses a
+   title that collides under dewlab's own `series_key()` normalisation,
+   since "Matrices" and "matrices!" are one section to its build. That
+   work also fixed a read-side bug: a course with an empty or absent
+   `contents:` was refused outright, though dewlab builds it happily —
+   and it is the exact state a course is in before its first series.

@@ -74,6 +74,28 @@ export interface Course {
    * doesn't set one. */
   status?: string;
   contents: CourseSeries[];
+  /** Half-open `[start, end)` line range of the entries under this
+   * course's own `contents:` key — where a new series is appended. Null
+   * when the scan couldn't be sure of it, the same refusal
+   * `tutorialsRange` makes.
+   *
+   * Recorded separately from the per-series ranges because it has a
+   * different edge: a course file can carry more top-level keys after
+   * `contents:` (`mixed:`, in two of dewlab's six), so the block ends in
+   * the middle of the file and the scan has to find where rather than
+   * run to the end. */
+  contentsRange: { start: number; end: number } | null;
+  /** The exact leading whitespace a `- title:` entry carries — `""` in
+   * every real course file, where the dash sits at column 0 while the
+   * `tutorials:` under it is indented two. Recorded rather than derived
+   * from the tutorials indent, because deriving it is a guess and a
+   * wrong one splices a series into somebody's prose. */
+  entryIndent: string;
+  /** What one level of indentation is worth inside an entry — the gap
+   * between a `- title:` line and its own `tutorials:` key. Two spaces
+   * everywhere today; read from the file rather than assumed so a course
+   * written with four still round-trips. */
+  innerIndent: string;
 }
 
 const YAML_SUFFIX = ".yaml";
@@ -123,14 +145,21 @@ export function parseCourseFile(path: string, content: string): Course | null {
   if (!data || typeof data !== "object") return null;
   const { title, status, contents } = data as Record<string, unknown>;
   if (typeof title !== "string" || !title.trim()) return null;
-  if (!Array.isArray(contents)) return null;
+  // `contents:` with nothing under it parses as null, and dewlab's own
+  // read_course maps that to an empty list rather than failing — a
+  // course with no series yet is a real, buildable state, and it is
+  // exactly the state a course is in just before somebody adds the
+  // first one. Refusing it here meant dewnote wouldn't read a file
+  // dewlab builds happily.
+  const entries = contents === null || contents === undefined ? [] : contents;
+  if (!Array.isArray(entries)) return null;
 
   const segments = path.split("/");
   const id = segments[segments.length - 1]!.slice(0, -YAML_SUFFIX.length);
   const ranges = scanTutorialBlocks(content);
 
   const series: CourseSeries[] = [];
-  for (const [index, entry] of contents.entries()) {
+  for (const [index, entry] of entries.entries()) {
     if (!entry || typeof entry !== "object") return null;
     const { title: seriesTitle, tutorials } = entry as Record<string, unknown>;
     if (typeof seriesTitle !== "string") return null;
@@ -155,12 +184,20 @@ export function parseCourseFile(path: string, content: string): Course | null {
     });
   }
 
+  const block = scanContentsBlock(content);
   return {
     id,
     path,
     title: title.trim(),
     ...(typeof status === "string" ? { status } : {}),
     contents: series,
+    // The scan has to agree with js-yaml about how many entries there
+    // are, the same cross-check each series' own range makes. A block
+    // whose entry count differs from the parsed one means the scan
+    // misread the file, so it offers no range rather than a wrong one.
+    contentsRange: block && countsAgree(block, content, series.length) ? { start: block.start, end: block.end } : null,
+    entryIndent: block?.entryIndent ?? "",
+    innerIndent: block?.innerIndent ?? "  ",
   };
 }
 
@@ -237,4 +274,116 @@ function scanTutorialBlocks(content: string): ScannedBlock[] {
   }
 
   return blocks;
+}
+
+interface ScannedContents {
+  start: number;
+  end: number;
+  entryIndent: string;
+  innerIndent: string;
+}
+
+const CONTENTS_KEY_RE = /^(\s*)contents\s*:\s*(.*)$/;
+
+/** A `contents:` entry line, keeping the gap between the dash and the
+ * entry's first key — `LIST_ITEM_RE` collapses that, and here it is the
+ * thing being measured. */
+const ENTRY_RE = /^(\s*)-( +)(\S.*?)\s*$/;
+
+/**
+ * Where the `contents:` block's own entries sit, so a series can be
+ * appended after the last one.
+ *
+ * The hard part is the *end*. A per-series `tutorials:` list ends at the
+ * first line that isn't one of its items, which is easy; `contents:` runs
+ * until the file stops describing it, and two of dewlab's six course
+ * files carry a `mixed:` key afterwards, so it genuinely ends in the
+ * middle. The rule here: an entry starts with `<indent>- `, and every
+ * line after it that is blank or indented further belongs to it. The
+ * first line that is neither ends the block.
+ *
+ * `innerIndent` is what one level in is worth — the gap between a
+ * `- title:` line and the `tutorials:` key beneath it. Read rather than
+ * assumed, so a course file written with four spaces round-trips as one
+ * written with two does.
+ *
+ * Returns null for anything it isn't sure of, the same refusal
+ * `scanTutorialBlocks` makes, and for the same reason: a range this
+ * module isn't certain about is how a splice lands in somebody's prose.
+ */
+function scanContentsBlock(content: string): ScannedContents | null {
+  const lines = content.split("\n");
+
+  let keyLine = -1;
+  let keyIndent = "";
+  for (let at = 0; at < lines.length; at += 1) {
+    const key = CONTENTS_KEY_RE.exec(lines[at]!);
+    // Anything after the colon is a flow list or a scalar — not a block
+    // this knows how to append to.
+    if (!key || key[2] !== "") continue;
+    keyLine = at;
+    keyIndent = key[1]!;
+    break;
+  }
+  if (keyLine === -1) return null;
+
+  const start = keyLine + 1;
+  let entryIndent: string | null = null;
+  let innerIndent: string | null = null;
+  /** The last line that held actual content, so the block ends there
+   * rather than at whatever blank lines trail it. A file's own trailing
+   * newline is not part of its last series, and appending after it would
+   * put a blank line in the middle of `contents:`. */
+  let lastContent = start - 1;
+
+  for (let at = start; at < lines.length; at += 1) {
+    const line = lines[at]!;
+    const item = ENTRY_RE.exec(line);
+    if (item && item[1]!.length >= keyIndent.length && (entryIndent === null || item[1] === entryIndent)) {
+      entryIndent = item[1]!;
+      // How far the entry's own keys are indented, which YAML fixes: a
+      // mapping under `- ` starts at the column after the dash and its
+      // following spaces, and every later key has to line up with it. So
+      // this is read off the dash rather than guessed, and it is "  " for
+      // a plain `- ` — which is every course file dewlab has written.
+      if (innerIndent === null) innerIndent = " ".repeat(1 + item[2]!.length);
+      lastContent = at;
+      continue;
+    }
+    // A blank line is passed over rather than ending the block — one can
+    // sit between entries — but it never extends it either.
+    if (entryIndent !== null && line.trim() === "") continue;
+    // A continuation of the entry above: indented past its dash.
+    if (entryIndent !== null) {
+      const indent = /^(\s*)/.exec(line)![1]!;
+      if (indent.length > entryIndent.length) {
+        lastContent = at;
+        continue;
+      }
+    }
+    break;
+  }
+  const end = lastContent + 1;
+
+  if (entryIndent === null) {
+    // `contents:` with nothing under it — a real, buildable state
+    // (read_course maps it to []), and an empty range is where a first
+    // series goes. Two spaces is the only sane guess for the inner
+    // indent when there is no entry to read one from, and it is what
+    // every course file dewlab has written uses.
+    return { start, end: start, entryIndent: keyIndent, innerIndent: "  " };
+  }
+  return { start, end, entryIndent, innerIndent: innerIndent ?? "  " };
+}
+
+/** How many `- ` entries the scanned block actually holds, against how
+ * many series js-yaml parsed. Cheap, and it is the only check that
+ * catches a block whose shape the scan read differently. */
+function countsAgree(block: ScannedContents, content: string, parsed: number): boolean {
+  const lines = content.split("\n").slice(block.start, block.end);
+  const entries = lines.filter((line) => {
+    const item = ENTRY_RE.exec(line);
+    return item !== null && item[1] === block.entryIndent;
+  }).length;
+  return entries === parsed;
 }

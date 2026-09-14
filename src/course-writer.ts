@@ -206,3 +206,67 @@ function clamp(index: number, length: number): number {
   if (!Number.isFinite(index) || index < 0) return 0;
   return Math.min(Math.trunc(index), length);
 }
+
+/** dewlab's own `series_key()`: lowercase, every run of non-alphanumeric
+ * characters to a hyphen, ends trimmed. Two series on one course whose
+ * titles come out the same here fail its build — "Python fundamentals"
+ * and "python-fundamentals" are the same series to it, and so are
+ * "Matrices" and "Matrices!". Reimplemented rather than approximated,
+ * because a near-duplicate that only dewlab notices is exactly the kind
+ * of file this editor should refuse to write. */
+export function seriesKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Appends a titled series, with nothing in it yet, to the end of a
+ * course's `contents:`.
+ *
+ * At the end rather than at a chosen position: a course's series are a
+ * reading order, a new one is the next thing to teach, and offering to
+ * insert it third would be offering a decision nobody has made yet. It
+ * can be dragged into place afterwards — or rather, its tutorials can,
+ * which is the same thing at this stage since it is empty.
+ *
+ * Three refusals. A course whose `contents:` block the scan couldn't
+ * bound (courses.ts's `contentsRange`), a title that is blank once
+ * trimmed, and a title that collides with one the course already has
+ * under dewlab's own normalisation.
+ */
+export function addSeries(course: Course, content: string, title: string): WriteResult {
+  const trimmed = title.trim();
+  if (!trimmed) return { ok: false, reason: "A series needs a title — it's the heading a student reads." };
+
+  const key = seriesKey(trimmed);
+  if (!key) {
+    return { ok: false, reason: `"${trimmed}" has no letters or digits in it, so dewlab has nothing to name its section.` };
+  }
+  const clash = course.contents.find((series) => seriesKey(series.title) === key);
+  if (clash) {
+    return {
+      ok: false,
+      reason:
+        clash.title === trimmed
+          ? `${course.title} already has a series called "${trimmed}".`
+          : `${course.title} already has "${clash.title}", which dewlab reads as the same section as "${trimmed}". Give one of them another title.`,
+    };
+  }
+
+  const range = course.contentsRange;
+  if (!range) {
+    return { ok: false, reason: `${course.path} is written in a form dewnote can't add a series to — edit the course file directly.` };
+  }
+
+  // `tutorials:` with nothing under it, which dewlab's own read_course
+  // maps to an empty list. The alternative, `tutorials: []`, is a flow
+  // list — and a flow list is exactly what courses.ts refuses to rewrite
+  // later, so writing one here would hand back a series that could never
+  // be dragged into.
+  const lines = content.split("\n");
+  const entry = [`${course.entryIndent}- title: ${trimmed}`, `${course.entryIndent}${course.innerIndent}tutorials:`];
+  lines.splice(range.end, 0, ...entry);
+  return { ok: true, content: lines.join("\n") };
+}

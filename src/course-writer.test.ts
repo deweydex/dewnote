@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseCourseFile, type Course } from "./courses.ts";
-import { addTutorial, idsListedBy, moveTutorial, removeTutorial, writeCourseFile } from "./course-writer.ts";
+import { addSeries, addTutorial, idsListedBy, moveTutorial, removeTutorial, seriesKey, writeCourseFile } from "./course-writer.ts";
 
 /** A course file shaped like dewlab's real ones: a folded `card:`, a
  * `description:` that runs over two lines, and series whose items carry
@@ -33,8 +33,8 @@ const COURSE = [
   "",
 ].join("\n");
 
-function course(content = COURSE): Course {
-  const parsed = parseCourseFile("courses/computational-methods.yaml", content);
+function course(content = COURSE, path = "courses/computational-methods.yaml"): Course {
+  const parsed = parseCourseFile(path, content);
   if (!parsed) throw new Error("fixture no longer parses");
   return parsed;
 }
@@ -224,6 +224,105 @@ describe("idsListedBy", () => {
   });
 });
 
+describe("seriesKey", () => {
+  test("dewlab's own normalisation, which is what makes two titles collide", () => {
+    expect(seriesKey("Python fundamentals")).toBe("python-fundamentals");
+    expect(seriesKey("Python  Fundamentals!")).toBe("python-fundamentals");
+    expect(seriesKey("  Matrices  ")).toBe("matrices");
+    expect(seriesKey("!!!")).toBe("");
+  });
+});
+
+describe("addSeries", () => {
+  test("appends to the end of contents:, with an empty tutorials key ready to drop into", () => {
+    const written = expectOk(addSeries(course(), COURSE, "Text Generation"));
+    const after = course(written);
+    expect(after.contents.map((s) => s.title)).toEqual(["Python fundamentals", "Matrices", "Text Generation"]);
+    expect(after.contents[2]!.tutorials).toEqual([]);
+    // An empty block key, not `tutorials: []` — a flow list is exactly
+    // what courses.ts refuses to rewrite, so writing one would hand back
+    // a series nothing could ever be dragged into.
+    expect(written).toContain("- title: Text Generation\n  tutorials:\n");
+    expect(after.contents[2]!.tutorialsRange).not.toBeNull();
+    // And the prose above is untouched, as always.
+    expect(prose(written).slice(0, 6)).toEqual(prose(COURSE).slice(0, 6));
+  });
+
+  test("the new series can be added to immediately", () => {
+    const written = expectOk(addSeries(course(), COURSE, "Text Generation"));
+    const filled = expectOk(addTutorial(course(written), written, 2, "a-chain-reads-a-book"));
+    expect(course(filled).contents[2]!.tutorials).toEqual(["a-chain-reads-a-book"]);
+  });
+
+  test("a title that normalises to one the course already has is refused, and the reason names it", () => {
+    // dewlab's read_course fails the build on two series whose keys
+    // match, so a near-duplicate is as broken as an exact one — and far
+    // harder to spot by eye.
+    const exact = addSeries(course(), COURSE, "Matrices");
+    expect(exact.ok).toBe(false);
+    if (!exact.ok) expect(exact.reason).toContain("already has a series called");
+
+    const near = addSeries(course(), COURSE, "matrices!");
+    expect(near.ok).toBe(false);
+    if (!near.ok) {
+      expect(near.reason).toContain("Matrices");
+      expect(near.reason).toContain("the same section");
+    }
+  });
+
+  test("a blank title, or one with no letters or digits, is refused", () => {
+    expect(addSeries(course(), COURSE, "   ").ok).toBe(false);
+    const punctuation = addSeries(course(), COURSE, "!!!");
+    expect(punctuation.ok).toBe(false);
+    if (!punctuation.ok) expect(punctuation.reason).toContain("no letters or digits");
+  });
+
+  test("a course written as a flow list offers nowhere to append, and says so", () => {
+    const flow = "title: A course\ncontents: []\n";
+    const parsed = parseCourseFile("courses/a.yaml", flow)!;
+    expect(parsed.contentsRange).toBeNull();
+    const result = addSeries(parsed, flow, "Anything");
+    expect(result.ok).toBe(false);
+  });
+
+  test("a course with more keys after contents: gets the series before them, not after", () => {
+    // Two of dewlab's six real course files carry `mixed:` after
+    // `contents:`. Appending past it would put a series into the mixed
+    // problem-set list, which dewlab reads as a list of ids.
+    const withMixed = [
+      "title: OOP",
+      "contents:",
+      "- title: Programming with objects",
+      "  tutorials:",
+      "  - objects-and-classes",
+      "mixed:",
+      "- mixed-programming-with-objects",
+      "",
+    ].join("\n");
+    const written = expectOk(addSeries(parseCourseFile("courses/oop.yaml", withMixed)!, withMixed, "Inheritance"));
+    expect(written).toBe(
+      [
+        "title: OOP",
+        "contents:",
+        "- title: Programming with objects",
+        "  tutorials:",
+        "  - objects-and-classes",
+        "- title: Inheritance",
+        "  tutorials:",
+        "mixed:",
+        "- mixed-programming-with-objects",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("a course with no series yet takes its first one", () => {
+    const empty = "title: A course\ncontents:\n";
+    const written = expectOk(addSeries(parseCourseFile("courses/a.yaml", empty)!, empty, "Getting started"));
+    expect(course(written, "courses/a.yaml").contents.map((s) => s.title)).toEqual(["Getting started"]);
+  });
+});
+
 // The same property against dewlab's real course files, which is where
 // the folded scalars and the wrapped single-quoted prose actually live.
 // Skipped when there's no sibling checkout, the same shape courses.test.ts
@@ -258,6 +357,48 @@ describe(`real course files: ${DEWLAB_COURSES}${havePath() ? "" : " (not checked
       for (const [at, series] of parsed!.contents.entries()) {
         expect(after!.contents[at]!.tutorials, `${file.path} — ${series.title}`).toEqual([...series.tutorials].reverse());
       }
+    }
+  });
+
+  test.skipIf(!havePath())("a series appended to every real course lands inside contents:, and nothing else moves", () => {
+    for (const file of courseFilesOnDisk()) {
+      const parsed = parseCourseFile(file.path, file.content)!;
+      expect(parsed.contentsRange, `${file.path} offers somewhere to append`).not.toBeNull();
+
+      const written = expectOk(addSeries(parsed, file.content, "A Brand New Series"));
+      const after = parseCourseFile(file.path, written)!;
+
+      // Last, and empty.
+      expect(after.contents.map((s) => s.title).slice(-1), file.path).toEqual(["A Brand New Series"]);
+      expect(after.contents[after.contents.length - 1]!.tutorials, file.path).toEqual([]);
+      // Every series that was there is unchanged, in order.
+      expect(after.contents.slice(0, -1).map((s) => s.title), file.path).toEqual(parsed.contents.map((s) => s.title));
+      for (const [at, series] of parsed.contents.entries()) {
+        expect(after.contents[at]!.tutorials, `${file.path} — ${series.title}`).toEqual(series.tutorials);
+      }
+      // The strongest form of "nothing else moved": take out the two
+      // lines it added and the file is what it was, byte for byte —
+      // including `mixed:`, which two of these files carry after
+      // `contents:`, and every folded and quoted scalar above.
+      const lines = written.split("\n");
+      const at = lines.indexOf("- title: A Brand New Series");
+      expect(at, `${file.path}: the entry was written at the course's own indent`).toBeGreaterThan(-1);
+      expect(lines[at + 1], file.path).toBe("  tutorials:");
+      lines.splice(at, 2);
+      expect(lines.join("\n"), file.path).toBe(file.content);
+    }
+  });
+
+  test.skipIf(!havePath())("a mixed: key after contents: still follows the new series, not precedes it", () => {
+    const withMixed = courseFilesOnDisk().filter((file) => /^mixed:/m.test(file.content));
+    expect(withMixed.length, "dewlab has course files with a mixed: key").toBeGreaterThan(0);
+    for (const file of withMixed) {
+      const written = expectOk(addSeries(parseCourseFile(file.path, file.content)!, file.content, "Appended"));
+      const lines = written.split("\n");
+      const newSeries = lines.findIndex((line) => line.includes("- title: Appended"));
+      const mixed = lines.findIndex((line) => /^mixed:/.test(line));
+      expect(newSeries, file.path).toBeGreaterThan(-1);
+      expect(newSeries, `${file.path}: the series sits before mixed:`).toBeLessThan(mixed);
     }
   });
 

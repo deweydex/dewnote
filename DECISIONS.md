@@ -1499,3 +1499,47 @@ actually sitting in a reader's localStorage today.
 *Cost to change: low for all three. The cluster is one element and one
 set of handlers; the bottom bar is one media query over a container whose
 children did not change; the settings are data in one table.*
+
+**43 — "New series" lands, on a range courses.ts now records properly.**
+
+Decision 37 left this out and said why: appending a series means splicing
+into `contents:`, and courses.ts recorded the bounds of a `tutorials:`
+list but nothing about the block above it. Inferring where that block
+ends, or what indent a `- title:` line carries, from the tutorials indent
+below it was the guess the whole design exists to avoid. So the scan
+learned to do it for real.
+
+**The hard part is the end.** A `tutorials:` list ends at the first line
+that isn't one of its items. `contents:` runs until the file stops
+describing it, and two of dewlab's six real course files carry a `mixed:`
+key afterwards — so it genuinely ends mid-file, and appending past it
+would write a series into the mixed problem-set list. An entry starts
+with `<indent>- `; every line after it that is indented further belongs
+to it; a blank line is passed over but never extends it, which is what
+stops a file's own trailing newline being read as part of its last
+series. That last one was a real bug, caught by a test.
+
+**The inner indent is read off the dash, not assumed.** A mapping under
+`- ` starts at the column after the dash and its spaces, and YAML
+requires every later key to line up with it — so `-   title:` means the
+`tutorials:` beneath it sits four in, not two. Measured rather than
+guessed.
+
+**It refuses a title that collides under dewlab's own normalisation.**
+`series_key()` lowercases and hyphenates, so "Matrices" and "matrices!"
+are the same section to dewlab and its build fails on the pair. That is
+reimplemented here rather than approximated: a near-duplicate only the
+build notices is precisely the file this editor should not write.
+
+**A new series gets a bare `tutorials:` key, not `tutorials: []`.** The
+flow form is exactly what courses.ts refuses to rewrite, so writing one
+would have handed back a series nothing could ever be dragged into.
+
+**One bug in the read side, surfaced by this.** `parseCourseFile`
+returned null for a course whose `contents:` was empty or absent —
+refusing a file dewlab's own `read_course` maps to an empty list and
+builds happily, and refusing it in exactly the state a course is in
+before anybody adds its first series. Fixed, with the test that names it.
+
+*Cost to change: low. The scan is one function beside the one it mirrors,
+and `addSeries` is a two-line splice with three refusals in front of it.*

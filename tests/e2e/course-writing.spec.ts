@@ -152,7 +152,7 @@ async function openRail(page: Page) {
   await expect(page.locator(".dn-series-block").first().locator(".dn-series-link").first()).toHaveText("First Steps");
 }
 
-function written(page: Page): Promise<string | null> {
+function written_(page: Page): Promise<string | null> {
   return page.evaluate(() => (window as unknown as { __testWritten(name: string): string | null }).__testWritten("computational-methods.yaml"));
 }
 
@@ -191,7 +191,7 @@ test("dragging a tutorial up its own series rewrites only the id lines", async (
   await list.locator("li").nth(1).locator(".dn-series-grip").dragTo(list.locator("li").nth(0), { targetPosition: { x: 5, y: 1 } });
 
   await expect(page.locator(".dn-series-status")).toContainText("Moved Working With Tables");
-  const after = await written(page);
+  const after = await written_(page);
   expect(after).not.toBeNull();
   expect(after).toContain("  tutorials:\n  - working-with-tables\n  - first-steps\n");
   expect(prose(after!)).toEqual(PROSE);
@@ -203,7 +203,7 @@ test("dragging a tutorial into a sibling series takes it out of one and puts it 
   await page.locator(".dn-series-list").first().locator("li").nth(0).locator(".dn-series-grip").dragTo(matrices, { targetPosition: { x: 5, y: 1 } });
 
   await expect(page.locator(".dn-series-status")).toContainText('into "Matrices"');
-  const after = await written(page);
+  const after = await written_(page);
   expect(after).toContain("- title: Python fundamentals\n  tutorials:\n  - working-with-tables\n");
   expect(after).toContain("- title: Matrices\n  tutorials:\n  - first-steps\n  - grid-of-numbers\n");
   expect(prose(after!)).toEqual(PROSE);
@@ -226,7 +226,7 @@ test("adding offers only tutorials this course doesn't already list, and lists t
   await offered.click();
 
   await expect(page.locator(".dn-series-status")).toContainText('Added A Loose One to "Python fundamentals"');
-  const after = await written(page);
+  const after = await written_(page);
   expect(after).toContain("  tutorials:\n  - first-steps\n  - working-with-tables\n  - a-loose-one\n");
   expect(prose(after!)).toEqual(PROSE);
 });
@@ -238,7 +238,7 @@ test("taking a tutorial off a course unlists it and leaves the file, which turns
   await page.locator(".dn-series-list").first().locator("li").nth(0).locator(".dn-series-remove").click();
 
   await expect(page.locator(".dn-series-status")).toContainText("still there, on no course");
-  const after = await written(page);
+  const after = await written_(page);
   expect(after).toContain("- title: Python fundamentals\n  tutorials:\n  - working-with-tables\n");
   expect(after).not.toContain("first-steps");
   expect(prose(after!)).toEqual(PROSE);
@@ -247,6 +247,46 @@ test("taking a tutorial off a course unlists it and leaves the file, which turns
   // tutorial reappears where an unplaced tutorial belongs rather than
   // vanishing from the rail entirely.
   await expect(page.locator(".dn-series-unlisted .dn-series-list li")).toHaveText(["First Steps", "A Loose One"]);
+});
+
+test.describe("new series", () => {
+  test.beforeEach(async ({ page }) => {
+    await stubDirectoryPicker(page);
+    await page.goto(BUILT_APP);
+    await expect(page.locator(".dn-block").first()).toBeVisible();
+    await openRail(page);
+  });
+
+  test("appends a series with nothing in it, which can then be added to", async ({ page }) => {
+    const course = page.locator(".dn-series-module", { hasText: "Computational Methods" });
+    await course.locator(".dn-series-add-toggle", { hasText: "New series" }).click();
+    await course.locator(".dn-series-new-title").fill("Text Generation");
+    await course.locator(".dn-series-new-create").click();
+
+    await expect(page.locator(".dn-series-status")).toContainText("no tutorials yet");
+    const written = await written_(page);
+    expect(written).toContain("- title: Text Generation\n  tutorials:\n");
+    expect(prose(written!)).toEqual([...PROSE, "- title: Text Generation", "  tutorials:"]);
+
+    // It is a real series straight away: shown, and with its own "Add a
+    // tutorial" row rather than being read-only until the file is
+    // reopened.
+    const block = course.locator(".dn-series-block", { hasText: "Text Generation" });
+    await expect(block.locator("h4")).toHaveText("Text Generation");
+    await expect(block.locator(".dn-series-add-toggle", { hasText: "Add a tutorial" })).toBeVisible();
+  });
+
+  test("a title the course already has, however it is punctuated, is refused rather than written", async ({ page }) => {
+    // dewlab's read_course fails the build on two series whose titles
+    // normalise the same, so this is the file staying buildable.
+    const course = page.locator(".dn-series-module", { hasText: "Computational Methods" });
+    await course.locator(".dn-series-add-toggle", { hasText: "New series" }).click();
+    await course.locator(".dn-series-new-title").fill("matrices!");
+    await course.locator(".dn-series-new-create").click();
+
+    await expect(page.locator(".dn-series-status")).toContainText("the same section");
+    expect(await written_(page), "nothing was written").toBeNull();
+  });
 });
 
 test("a series written as a flow list is shown, and says why it can't be edited here", async ({ page }) => {
