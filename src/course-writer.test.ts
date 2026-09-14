@@ -226,20 +226,23 @@ describe("idsListedBy", () => {
 
 // The same property against dewlab's real course files, which is where
 // the folded scalars and the wrapped single-quoted prose actually live.
-// Skipped when there's no sibling checkout, the same as courses.test.ts.
-const DEWLAB_COURSES = join(import.meta.dir, "..", "..", "dewlab", "courses");
-const haveDewlab = existsSync(DEWLAB_COURSES);
+// Skipped when there's no sibling checkout, the same shape courses.test.ts
+// and full-corpus.test.ts both use — the directory is read inside each
+// test body rather than in the describe callback, which bun evaluates
+// even for a describe every test in it is skipped in.
+const DEWLAB_COURSES = "../dewlab/courses";
+const havePath = () => existsSync(DEWLAB_COURSES);
 
-describe.if(haveDewlab)("against dewlab's own course files", () => {
-  const files = readdirSync(DEWLAB_COURSES)
+function courseFilesOnDisk(): { path: string; content: string }[] {
+  return readdirSync(DEWLAB_COURSES)
     .filter((name) => name.endsWith(".yaml") && name !== "index.yaml" && name !== "redirects.yaml")
     .map((name) => ({ path: `courses/${name}`, content: readFileSync(join(DEWLAB_COURSES, name), "utf-8") }));
+}
 
-  test("there are course files to check", () => {
+describe(`real course files: ${DEWLAB_COURSES}${havePath() ? "" : " (not checked out — skipped)"}`, () => {
+  test.skipIf(!havePath())("reversing every series in a real course rewrites only the id lines", () => {
+    const files = courseFilesOnDisk();
     expect(files.length).toBeGreaterThan(0);
-  });
-
-  test("reversing every series in a real course rewrites only the id lines", () => {
     for (const file of files) {
       const parsed = parseCourseFile(file.path, file.content);
       expect(parsed, file.path).not.toBeNull();
@@ -258,11 +261,13 @@ describe.if(haveDewlab)("against dewlab's own course files", () => {
     }
   });
 
-  test("reversing twice is the file it started as, byte for byte", () => {
+  test.skipIf(!havePath())("reversing twice is the file it started as, byte for byte", () => {
+    const files = courseFilesOnDisk();
+    expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
-      const once = expectOk(writeCourseFile(file.content, parseCourseFile(file.path, file.content)!.contents.map((series) => ({ series, tutorials: [...series.tutorials].reverse() }))));
-      const twice = expectOk(writeCourseFile(once, parseCourseFile(file.path, once)!.contents.map((series) => ({ series, tutorials: [...series.tutorials].reverse() }))));
-      expect(twice, file.path).toBe(file.content);
+      const reversed = (content: string) =>
+        expectOk(writeCourseFile(content, parseCourseFile(file.path, content)!.contents.map((series) => ({ series, tutorials: [...series.tutorials].reverse() }))));
+      expect(reversed(reversed(file.content)), file.path).toBe(file.content);
     }
   });
 });
