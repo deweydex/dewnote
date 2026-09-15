@@ -12,7 +12,7 @@ import texmath from "markdown-it-texmath";
 import katex from "katex";
 import type { Block } from "./blocks.ts";
 import type { DialectName } from "./dialect.ts";
-import { parseCardFence, parseHintFence } from "./cell.ts";
+import { parseCardFence, parseHintFence, parseQuestionFence } from "./cell.ts";
 
 const md = new MarkdownIt({ html: true, linkify: true }).use(texmath, {
   engine: katex,
@@ -157,4 +157,81 @@ export function renderCardFencePreview(block: Block): string {
   const bodyHtml = card.body ? md.render(card.body) : "";
   const href = card.url ? escapeAttr(card.url) : "#";
   return `<a class="${classes}" href="${href}"><h3>${heading}${badge}</h3>${meta}${bodyHtml}</a>`;
+}
+
+/** A single paragraph's own `<p>...</p>`, unwrapped — an option sits on
+ * a button, not inside a block of its own, the same reasoning build.py's
+ * own `render_question()` unwraps an option's markdown for. markdown-it
+ * itself decides whether that trailing newline is there; both are
+ * handled rather than assumed. */
+function stripSingleParagraph(html: string): string {
+  const match = /^<p>([\s\S]*)<\/p>\n?$/.exec(html);
+  return match ? match[1]! : html;
+}
+
+const QUESTION_GAP_RE = /\{([^{}]*)\}/g;
+
+/** A fill-in-the-blank question's own `{...}` gaps, replaced with a
+ * plain span showing the expected word — the first item for a `{a|b|c}`
+ * dropdown, the whole thing for a `{word}` typing box. Not the live
+ * `<select>`/`<input>` the built page actually mounts: this editor has
+ * no reader to check an answer for, so showing the correct word inline
+ * is the honest preview, not a simulation of a control this editor
+ * never runs (the same reasoning `renderHintFencePreview`'s own comment
+ * gives for skipping a staged hint's reveal trigger).
+ *
+ * Protected from Markdown's own inline pass the same way build.py's
+ * `render_question()` protects a gap from it — a bare alphanumeric
+ * token stands in while the sentence around it is converted, then the
+ * real span is spliced back in, since a gap can sit mid-sentence where
+ * an HTML-comment placeholder would not survive Markdown's inline pass
+ * the way it survives a block fence. */
+function renderQuestionGaps(text: string): string {
+  const gaps: string[] = [];
+  const tokenised = text.replace(QUESTION_GAP_RE, (_match, raw: string) => {
+    const shown = raw.includes("|") ? raw.split("|")[0]!.trim() : raw.trim();
+    gaps.push(`<span class="dn-question-gap">${md.utils.escapeHtml(shown)}</span>`);
+    return `dlgap${gaps.length - 1}z`;
+  });
+  let html = md.render(tokenised);
+  gaps.forEach((gap, index) => {
+    html = html.replace(`dlgap${index}z`, gap);
+  });
+  return html;
+}
+
+/** A ```question fence's own preview (planning/QUESTION_BLOCKS.md,
+ * cell.ts's own `parseQuestionFence`) — dewlab's real
+ * `.dl-question`/`.dl-question-prompt`/`.dl-question-options`/
+ * `.dl-question-option` markup for multiple-choice, minus the Check
+ * button and feedback slot, which need a reader and a click this editor
+ * never provides. The correct option carries the same `data-correct`
+ * dewlab's own build writes, so an author sees at a glance which one
+ * `correct:` currently names rather than counting positions by hand.
+ *
+ * A fill-in-the-blank question has no options markup at all — the whole
+ * body is one prompt, its gaps turned into plain spans by
+ * `renderQuestionGaps()`. Either way, missing content (`type:` not
+ * typed yet, `correct:` naming nothing, no options written) shows a
+ * placeholder or simply nothing extra, the same "an editor reads a
+ * fence mid-edit, not a finished build" choice `renderCardFencePreview`
+ * already makes for a missing heading. */
+export function renderQuestionFencePreview(block: Block): string {
+  const question = parseQuestionFence(block);
+  if (question.type === "fill-in-the-blank") {
+    const bodyHtml = question.body ? renderQuestionGaps(question.body) : "<p>(no text yet)</p>";
+    return `<div class="dl-question" data-question-type="fill-in-the-blank"><div class="dl-question-prompt">${bodyHtml}</div></div>`;
+  }
+  const promptHtml = question.prompt ? md.render(question.prompt) : "<p>(no question yet)</p>";
+  const optionsHtml = question.options.length
+    ? `<div class="dl-question-options">${question.options
+        .map((option, index) => {
+          const optionHtml = stripSingleParagraph(md.render(option));
+          const isCorrect = question.correct !== null && index + 1 === question.correct;
+          const correctAttr = isCorrect ? ' data-correct="true"' : "";
+          return `<button type="button" class="dl-question-option"${correctAttr}>${optionHtml}</button>`;
+        })
+        .join("")}</div>`
+    : "";
+  return `<div class="dl-question" data-question-type="multiple-choice"><div class="dl-question-prompt">${promptHtml}</div>${optionsHtml}</div>`;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseFold, renderBlockPreview, renderCardFencePreview, renderHintFencePreview } from "./render-block.ts";
+import { parseFold, renderBlockPreview, renderCardFencePreview, renderHintFencePreview, renderQuestionFencePreview } from "./render-block.ts";
 import { parseDocument } from "./blocks.ts";
 
 function firstBlockOfKind(source: string, kind: string) {
@@ -191,5 +191,64 @@ describe("renderCardFencePreview", () => {
     expect(html).toContain("&quot;y&quot;");
     expect(html).toContain("&amp;z=1");
     expect(html).toContain("&lt;b&gt;");
+  });
+});
+
+describe("renderQuestionFencePreview", () => {
+  test("renders a multiple-choice question with the correct option marked", () => {
+    const block = firstBlockOfKind(
+      "```question\nid: right-angle\ntype: multiple-choice\ncorrect: 2\n\n"
+        + "Which of these is a right angle?\n\n- 45 degrees\n- 90 degrees\n- 180 degrees\n```\n",
+      "fence",
+    );
+    const html = renderQuestionFencePreview(block);
+    expect(html).toContain('class="dl-question" data-question-type="multiple-choice"');
+    expect(html).toContain("<p>Which of these is a right angle?</p>");
+    expect(html).toContain('<button type="button" class="dl-question-option">45 degrees</button>');
+    expect(html).toContain('<button type="button" class="dl-question-option" data-correct="true">90 degrees</button>');
+    expect(html).toContain('<button type="button" class="dl-question-option">180 degrees</button>');
+    // Never a Check button or feedback slot — no reader, no click, so no
+    // simulated mechanism (the same choice renderHintFencePreview makes
+    // about a staged hint's own reveal trigger).
+    expect(html).not.toContain("dl-question-check");
+  });
+
+  test("markdown in the prompt and an option is converted, not left as literal text", () => {
+    const block = firstBlockOfKind(
+      "```question\nid: q\ntype: multiple-choice\ncorrect: 1\n\nWhich prints `1`?\n\n- `print(1)`\n- `print(2)`\n```\n",
+      "fence",
+    );
+    const html = renderQuestionFencePreview(block);
+    expect(html).toContain("Which prints <code>1</code>?");
+    expect(html).toContain('<button type="button" class="dl-question-option" data-correct="true"><code>print(1)</code></button>');
+  });
+
+  test("a fill-in-the-blank gap shows its correct word, dropdown or typing box alike", () => {
+    const block = firstBlockOfKind(
+      "```question\nid: angle-names\ntype: fill-in-the-blank\n\n"
+        + "An angle of 90 degrees is a {right angle|straight angle|acute angle}.\n"
+        + "The {mitochondrion} is the site of aerobic respiration.\n```\n",
+      "fence",
+    );
+    const html = renderQuestionFencePreview(block);
+    expect(html).toContain('data-question-type="fill-in-the-blank"');
+    expect(html).toContain('<span class="dn-question-gap">right angle</span>');
+    expect(html).toContain('<span class="dn-question-gap">mitochondrion</span>');
+    // Only the first, correct choice shows — this is a preview of the
+    // answer, not the reader's own dropdown.
+    expect(html).not.toContain("straight angle");
+    expect(html).not.toContain("dl-question-options");
+  });
+
+  test("missing content shows a placeholder rather than breaking", () => {
+    const block = firstBlockOfKind("```question\nJust prose, no headers yet.\n```\n", "fence");
+    const html = renderQuestionFencePreview(block);
+    expect(html).toContain("Just prose, no headers yet.");
+  });
+
+  test("a correct: naming no option marks nothing, rather than guessing", () => {
+    const block = firstBlockOfKind("```question\nid: q\ntype: multiple-choice\ncorrect: 9\n\nQ?\n\n- a\n- b\n```\n", "fence");
+    const html = renderQuestionFencePreview(block);
+    expect(html).not.toContain("data-correct");
   });
 });

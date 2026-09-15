@@ -5,12 +5,14 @@ import {
   execCellLanguage,
   isCardFence,
   isHintFence,
+  isQuestionFence,
   isRunnableFence,
   isSitePaneFence,
   parseCardFence,
   parseCellSource,
   parseCellSourceFromFenceText,
   parseHintFence,
+  parseQuestionFence,
   parseSitePaneInfo,
   parseSqlCellInfo,
   replaceCellCode,
@@ -420,5 +422,67 @@ describe("parseSitePaneInfo", () => {
   test("id and site are null when absent, body is whatever remains", () => {
     const block = fenceBlock("```js site\nconsole.log(1);\n```\n");
     expect(parseSitePaneInfo(block)).toEqual({ language: "js", id: null, site: null, body: "console.log(1);" });
+  });
+});
+
+describe("isQuestionFence", () => {
+  test("is true only when the fence's whole info string is question", () => {
+    expect(isQuestionFence("question")).toBe(true);
+  });
+
+  test("is false for anything else", () => {
+    expect(isQuestionFence("python exec")).toBe(false);
+    expect(isQuestionFence("")).toBe(false);
+    expect(isQuestionFence("questionnaire")).toBe(false);
+  });
+});
+
+describe("parseQuestionFence", () => {
+  test("reads id:/type:/correct: and splits a multiple-choice body into a prompt and its options", () => {
+    const block = fenceBlock(
+      "```question\nid: right-angle\ntype: multiple-choice\ncorrect: 2\n\n"
+        + "Which of these is a right angle?\n\n- 45 degrees\n- 90 degrees\n- 180 degrees\n```\n",
+    );
+    expect(parseQuestionFence(block)).toEqual({
+      id: "right-angle",
+      type: "multiple-choice",
+      correct: 2,
+      prompt: "Which of these is a right angle?",
+      options: ["45 degrees", "90 degrees", "180 degrees"],
+      body: "Which of these is a right angle?\n\n- 45 degrees\n- 90 degrees\n- 180 degrees",
+    });
+  });
+
+  test("a fill-in-the-blank question keeps its whole body as-is, with no options split", () => {
+    const block = fenceBlock(
+      "```question\nid: angle-names\ntype: fill-in-the-blank\n\n"
+        + "An angle of 90 degrees is a {right angle|straight angle}.\n- not an option, just a list in the sentence\n```\n",
+    );
+    const question = parseQuestionFence(block);
+    expect(question.type).toBe("fill-in-the-blank");
+    expect(question.options).toEqual([]);
+    expect(question.prompt).toBe("");
+    expect(question.body).toBe("An angle of 90 degrees is a {right angle|straight angle}.\n- not an option, just a list in the sentence");
+  });
+
+  test("splits a body that reads as multiple-choice even before type: is typed", () => {
+    const block = fenceBlock("```question\nid: q\n\nA question?\n\n- one\n- two\n```\n");
+    const question = parseQuestionFence(block);
+    expect(question.type).toBeNull();
+    expect(question.prompt).toBe("A question?");
+    expect(question.options).toEqual(["one", "two"]);
+  });
+
+  test("a missing or unparseable correct: is null, not a guess", () => {
+    const block = fenceBlock("```question\nid: q\ntype: multiple-choice\ncorrect: not-a-number\n\nQ?\n\n- a\n- b\n```\n");
+    expect(parseQuestionFence(block).correct).toBeNull();
+  });
+
+  test("id and type are null when absent", () => {
+    const block = fenceBlock("```question\nJust a question, no headers yet.\n```\n");
+    const question = parseQuestionFence(block);
+    expect(question.id).toBeNull();
+    expect(question.type).toBeNull();
+    expect(question.prompt).toBe("Just a question, no headers yet.");
   });
 });

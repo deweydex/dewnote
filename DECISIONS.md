@@ -1658,3 +1658,60 @@ under the line being typed and has to stay next to it.
 *Cost to change: low. The item table, the ranking and the list renderer
 are one small module with no app state in it; both menus are thirty lines
 of wiring around it.*
+
+---
+
+**46 — Two more kinds in the menu: Multiple choice and Fill in the
+blank, writing dewlab's own `question` fence.** dewlab's own decision
+7.179 built the build side — `parse_question()`/`render_question()`, a
+fifth fence kind — and its own PR named the second half as future work:
+"dewnote's own menu entry second." This is that entry.
+
+**One template each, in the "Teach" group beside Hint, Answer and
+Practice problem** — the same one-click, no-dialog shape every other
+kind already has. A multiple-choice template writes `id:`/`type:
+multiple-choice`/`correct: 1`, a prompt placeholder, and three options
+in the order `The right answer.` then two wrong ones — every line dewlab's
+own build checks for (an id, a real type, two or more options, `correct:`
+naming one of them) is present from the first click, the same "smallest
+fence that passes every check" standard the practice-problem template set
+(decision 44). A fill-in-the-blank template writes one sentence with a
+real `{this}` gap in it, since an empty fence is not a fence dewlab's
+build accepts either.
+
+**One id generator for cells and questions both.** `generateCellId`
+becomes `generateBlockId(prefix)` — `new-cell-1`, `new-question-1`, same
+collision check either way, because `collectExistingCellIds` already
+scans every fence's own `id:` line regardless of what kind of fence it
+is, and dewlab's build shares one saved-answer namespace between a page's
+cells and its questions (`extract_blocks()`'s own three-way duplicate
+check, dewlab decision 7.179). A question's id was never going to collide
+silently; this just means dewnote never offers one that would.
+
+**A preview, because every other fence kind already gets one.** `card`
+and staged `hint` fences each show a read-only rendering beside their
+live editor (decision 15), and a `question` fence would have looked like
+the one exception. `cell.ts`'s own `parseQuestionFence` reads the same
+header shape `parse_question()` does — id/type/correct, then the prompt
+and options for multiple-choice, or the whole body for fill-in-the-blank
+— and `render-block.ts`'s `renderQuestionFencePreview` builds dewlab's
+real `.dl-question`/`.dl-question-prompt`/`.dl-question-options`/
+`.dl-question-option` markup from it, `data-correct="true"` on the
+option `correct:` currently names. No Check button and no feedback slot:
+there is no reader here to click one, the same reasoning that already
+keeps a staged hint's own reveal trigger out of its preview. A
+fill-in-the-blank gap shows its expected word inline
+(`renderQuestionGaps`, a bare-token round trip through markdown-it, the
+same shape dewlab's own `render_question()` uses to protect a gap from
+Markdown's inline pass) rather than the live `<select>`/`<input>` the
+built page mounts — an honest preview of the answer, not a simulation of
+a control this editor never runs.
+
+**What this still leaves open.** dewlab decision 7.179's own list holds:
+no LaTeX inside a prompt or option, no per-option feedback, no scoring.
+Nothing here changes that — a template writes markdown, and the built
+page's own runtime is still exactly what dewlab ships.
+
+*Cost to change: low. Two table entries and two small template
+functions; the preview is one new branch in the same `renderBlockPreview`
+family every other fence kind already goes through.*

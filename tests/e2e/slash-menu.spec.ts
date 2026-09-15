@@ -62,11 +62,12 @@ test("typing '/' then a letter opens the menu, filtered to matching kinds", asyn
   await freshParagraph(page);
   await page.keyboard.type("/c");
   await expect(page.locator(".dn-slash-menu")).toHaveClass(/is-open/);
-  // Code cell by its label, Hint by its "clue", Practice problem by the
-  // letter sitting in the middle of it — the three tiers at once, and
-  // Code cell selected because a label that starts with the query beats
-  // both of the others.
-  await expect(slashLabels(page)).toHaveText(["Code cell", "Hint", "Practice problem"]);
+  // Code cell by its label, Multiple choice by a word in its own label
+  // ("choice"), Hint and Fill in the blank by a keyword ("clue",
+  // "check"), Practice problem by the letter sitting in the middle of
+  // it — several tiers at once, and Code cell selected because a label
+  // that starts with the query beats every other one.
+  await expect(slashLabels(page)).toHaveText(["Code cell", "Multiple choice", "Hint", "Fill in the blank", "Practice problem"]);
   await expect(page.locator(".dn-slash-menu .dn-block-menu-item.is-selected .dn-block-menu-label")).toHaveText("Code cell");
 });
 
@@ -78,7 +79,17 @@ test("'/' alone offers everything the \"+\" button does, bar the paragraph it is
   // a block you can type "/" into is already a paragraph.
   await freshParagraph(page);
   await page.keyboard.type("/");
-  await expect(slashLabels(page)).toHaveText(["Link", "Image", "Code cell", "Math", "Hint", "Answer", "Practice problem"]);
+  await expect(slashLabels(page)).toHaveText([
+    "Link",
+    "Image",
+    "Code cell",
+    "Math",
+    "Hint",
+    "Answer",
+    "Practice problem",
+    "Multiple choice",
+    "Fill in the blank",
+  ]);
   await expect(page.locator(".dn-slash-menu .dn-block-menu-group")).toHaveText(["Write", "Run", "Teach"]);
 });
 
@@ -96,14 +107,15 @@ test("search reaches a kind by a word that is not in its label", async ({ page }
 });
 
 test("the best match is selected even when its group draws it last", async ({ page }) => {
-  // "a" starts Answer's label and sits in the middle of Image, Math and
-  // Practice problem. Ranked, Answer is first; drawn, it is third,
-  // because the results go back into their groups and Write comes
-  // before Teach. Both are on purpose: the eye finds a kind where it
-  // always sits, and Enter still takes what the ranking chose.
+  // "a" starts Answer's label and sits in the middle of Image, Math,
+  // Practice problem and Fill in the blank (its own "blank"). Ranked,
+  // Answer is first; drawn, it is third, because the results go back
+  // into their groups and Write comes before Teach. Both are on
+  // purpose: the eye finds a kind where it always sits, and Enter still
+  // takes what the ranking chose.
   await freshParagraph(page);
   await page.keyboard.type("/a");
-  await expect(slashLabels(page)).toHaveText(["Image", "Math", "Answer", "Practice problem"]);
+  await expect(slashLabels(page)).toHaveText(["Image", "Math", "Answer", "Practice problem", "Fill in the blank"]);
   await expect(page.locator(".dn-slash-menu .dn-block-menu-item.is-selected .dn-block-menu-label")).toHaveText("Answer");
 
   await page.keyboard.press("Enter");
@@ -127,11 +139,15 @@ test("confirming with a mouse click replaces the block in place, not after it", 
 
 test("confirming with Enter uses the item the arrow keys landed on, not always the first", async ({ page }) => {
   await freshParagraph(page);
-  // "figure" on Image, "formula" on Math, "fold" on both Hint and
-  // Answer — four kinds, none of whose labels start with the letter.
+  // Fill in the blank's own label starts with the letter, so it is
+  // selected first; "figure" on Image, "formula" on Math, "fold" on
+  // both Hint and Answer are a lower tier behind it. Drawn, Fill in the
+  // blank sits third — Write and Run come before Teach — so two
+  // ArrowDowns from there reach Answer, not the third: one step lands
+  // on Hint, the next wraps to Answer only because Answer is Hint's own
+  // neighbour in the drawn Teach group.
   await page.keyboard.type("/f");
-  await expect(slashLabels(page)).toHaveText(["Image", "Math", "Hint", "Answer"]);
-  await page.keyboard.press("ArrowDown");
+  await expect(slashLabels(page)).toHaveText(["Image", "Math", "Fill in the blank", "Hint", "Answer"]);
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
   await expect(page.locator(".dn-slash-menu .dn-block-menu-item.is-selected .dn-block-menu-label")).toHaveText("Answer");
