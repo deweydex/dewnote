@@ -85,7 +85,7 @@ test("clicking a dewlab document's front matter opens a form, not raw YAML", asy
   await expect(form.locator(".dn-frontmatter-row", { hasText: "packages" })).toHaveCount(0);
 
   // Placement is not front matter any more: the id comes from the path
-  // and the course listing from courses/*.yaml, so a row for any of
+  // and the module listing from modules/*.yaml, so a row for any of
   // these would offer to set something dewlab's build ignores.
   for (const gone of ["Slug", "Module", "Module title", "Series"]) {
     await expect(
@@ -198,7 +198,7 @@ test("plain markdown's front matter has no dialect field list, so it opens strai
 // window.showDirectoryPicker the same way folder-panel.spec.ts does,
 // since Playwright has no scriptable equivalent of the OS picker.
 // dewstack, not dewlab: dewlab's form has no module or series row any
-// more (placement moved to courses/), but dewstack still places a
+// more (placement moved to modules/), but dewstack still places a
 // tutorial from its own front matter, and decision 11's picker over the
 // shared index is exactly what those two rows are for.
 test("dewstack's module and series offer autocomplete suggestions once a folder's own index exists", async ({ page }) => {

@@ -370,7 +370,7 @@ export function parseSitePaneInfo(block: Block): SitePaneInfo {
  * saved-progress contract behind it) — so this stays a **card**
  * throughout dewnote's own code and docs, "cell" left for dewnote's own
  * broader, non-runnable sense of the word only where nothing already
- * claims it more narrowly (a course maintainer may still call the
+ * claims it more narrowly (a module maintainer may still call the
  * rendered result a "card cell" in conversation; the type and function
  * names here don't). */
 export interface CardFenceInfo {

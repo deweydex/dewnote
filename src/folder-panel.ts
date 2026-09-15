@@ -6,10 +6,10 @@
 // unchanged, since an opened folder file is exactly the single-file
 // case #18 already built — a name, content, and a real writable handle.
 
-import { chooseFolder, createFile, listCourseFiles, listMarkdownFiles, listNamesIn, readBytesAt, readFile, supportsDirectoryPicker, writeFile, type FolderFile } from "./folder-store.ts";
+import { chooseFolder, createFile, listModuleFiles, listMarkdownFiles, listNamesIn, readBytesAt, readFile, supportsDirectoryPicker, writeFile, type FolderFile } from "./folder-store.ts";
 import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
-import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
+import { parseModuleFiles, parseModuleIndex, type Module } from "./modules.ts";
 import { createFile as createActiveFile, setActiveStore } from "./active-store.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
 import { todayVersion } from "./dialect.ts";
@@ -36,13 +36,13 @@ function textInput(placeholder: string): HTMLInputElement {
  * when given, is handed plan §5.10's own front-matter index every time
  * it's (re)built — main.ts wires it to app.ts's setFileIndex so the link
  * picker (link-picker.ts) has something to search once a folder is
- * open. `onCoursesChange`, when given, is handed courses.ts's own read
- * of every `courses/*.yaml` file in the folder the same way, for
+ * open. `onModulesChange`, when given, is handed modules.ts's own read
+ * of every `modules/*.yaml` file in the folder the same way, for
  * series-panel.ts. */
 export function mountFolderPanel(
   fileBar: FileBar,
   onIndexChange?: (index: FileIndexEntry[]) => void,
-  onCoursesChange?: (courses: Course[]) => void,
+  onModulesChange?: (modules: Module[]) => void,
 ): FolderPanel {
   let files: FolderFile[] = [];
   let folderName = "";
@@ -130,12 +130,12 @@ export function mountFolderPanel(
   // for — and it isn't front matter, it's where the file goes.
   //
   // The module, module title and series fields this used to carry are
-  // gone with them: dewlab reads placement from `courses/*.yaml` now, so
+  // gone with them: dewlab reads placement from `modules/*.yaml` now, so
   // a form that wrote `module:` into the front matter would be filling in
-  // a field its build ignores. Listing the new tutorial on a course is a
-  // write into a course file, which is the writer that follows this; a
-  // tutorial created here is simply on no course yet, which dewlab
-  // builds happily and the panel shows under "On no course".
+  // a field its build ignores. Listing the new tutorial on a module is a
+  // write into a module file, which is the writer that follows this; a
+  // tutorial created here is simply on no module yet, which dewlab
+  // builds happily and the panel shows under "On no module".
   //
   // `version` isn't a form field either — DIALECTS.md's own
   // `2026.09.04.1` form is a release date no reader would type by hand
@@ -220,7 +220,7 @@ id: ${id}-first-cell
     tutorialStatus.textContent = "Creating…";
     try {
       await createActiveFile(path, content);
-      tutorialStatus.textContent = `Created ${path} — on no course yet.`;
+      tutorialStatus.textContent = `Created ${path} — on no module yet.`;
       tutorialIdInput.value = "";
       tutorialTitleInput.value = "";
     } catch (err) {
@@ -291,15 +291,15 @@ id: ${id}-first-cell
    * just leave that one file out of the index rather than failing the
    * whole folder open — the file list itself (already built) still
    * works regardless. Takes `markdownFiles` explicitly rather than
-   * reading the shared `files` — that list also carries the course files
-   * now (the click handler's own comment explains why), and a course
+   * reading the shared `files` — that list also carries the module files
+   * now (the click handler's own comment explains why), and a module
    * file has no front matter worth indexing at all, so reading its
    * content again here would only ever produce a bare `{path}` entry.
    *
-   * `courses` is what lets each entry carry the courses that list its id
-   * (file-index.ts's own join), so the courses are read first and this
+   * `modules` is what lets each entry carry the modules that list its id
+   * (file-index.ts's own join), so the modules are read first and this
    * runs after them. */
-  async function refreshIndex(markdownFiles: FolderFile[], courses: Course[]) {
+  async function refreshIndex(markdownFiles: FolderFile[], modules: Module[]) {
     if (!onIndexChange) return;
     const entries = await Promise.all(
       markdownFiles.map(async (file) => {
@@ -313,19 +313,19 @@ id: ${id}-first-cell
     onIndexChange(
       buildFileIndex(
         entries.filter((e): e is { path: string; content: string } => e !== null),
-        courses,
+        modules,
       ),
     );
   }
 
-  /** Mirrors refreshIndex's own shape, over the course files
+  /** Mirrors refreshIndex's own shape, over the module files
    * `openButton`'s own click handler already listed — there are a
    * handful of them, so no attempt is made to fold this into the same
-   * pass as `refreshIndex`. Returns the parsed courses as well as
+   * pass as `refreshIndex`. Returns the parsed modules as well as
    * handing them on, since the index needs them too. */
-  async function refreshCourses(courseFiles: FolderFile[]): Promise<Course[]> {
+  async function refreshModules(moduleFiles: FolderFile[]): Promise<Module[]> {
     const entries = await Promise.all(
-      courseFiles.map(async (file) => {
+      moduleFiles.map(async (file) => {
         try {
           return { path: file.path, content: await readFile(file.handle) };
         } catch {
@@ -334,10 +334,10 @@ id: ${id}-first-cell
       }),
     );
     const read = entries.filter((e): e is { path: string; content: string } => e !== null);
-    const index = read.find((file) => file.path.endsWith("courses/index.yaml"));
-    const courses = parseCourseFiles(read, index ? parseCourseIndex(index.content) : []);
-    onCoursesChange?.(courses);
-    return courses;
+    const index = read.find((file) => file.path.endsWith("modules/index.yaml"));
+    const modules = parseModuleFiles(read, index ? parseModuleIndex(index.content) : []);
+    onModulesChange?.(modules);
+    return modules;
   }
 
   /** The whole "read this folder and rebuild everything" pass, shared by
@@ -345,27 +345,27 @@ id: ${id}-first-cell
    * (against `currentRoot`, already held) — the same work either way,
    * just with or without a new `chooseFolder()` in front of it. Listed
    * and read separately (folder-store.ts's own two functions, one walk
-   * each), but merged into one browsable/searchable list: a course file
+   * each), but merged into one browsable/searchable list: a module file
    * is a plain text file like any other, and opening one hands it to the
    * same editor and Save path every other file already gets — the
    * whole-file source view (Cmd+/) shows its raw YAML untouched by any
-   * markdown rendering, which is exactly what hand-editing a course
+   * markdown rendering, which is exactly what hand-editing a module
    * (inserting an id, reordering two lines) actually wants, with no new
    * UI needed. */
   async function loadFromRoot(root: FileSystemDirectoryHandle, name: string, verb: "Reading" | "Refreshing") {
     status.textContent = `${verb} folder…`;
     try {
-      const [markdownFiles, courseFiles] = await Promise.all([
+      const [markdownFiles, moduleFiles] = await Promise.all([
         listMarkdownFiles(root),
-        listCourseFiles(root),
+        listModuleFiles(root),
       ]);
-      files = [...markdownFiles, ...courseFiles];
-      status.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${courseFiles.length} course file${courseFiles.length === 1 ? "" : "s"}, in "${name}".`;
+      files = [...markdownFiles, ...moduleFiles];
+      status.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${moduleFiles.length} module file${moduleFiles.length === 1 ? "" : "s"}, in "${name}".`;
       renderFiles();
-      // Courses first: the index joins each entry to the courses that
+      // Modules first: the index joins each entry to the modules that
       // list its id, so it needs them already parsed.
-      const courses = await refreshCourses(courseFiles);
-      await refreshIndex(markdownFiles, courses);
+      const modules = await refreshModules(moduleFiles);
+      await refreshIndex(markdownFiles, modules);
     } catch (err) {
       status.textContent = err instanceof Error ? err.message : String(err);
     }
@@ -403,7 +403,7 @@ id: ${id}-first-cell
         await loadFromRoot(root, folderName, "Refreshing");
       },
       // The read-modify-write half, for a caller editing a file it never
-      // opened into the editor — series-panel.ts writing a course file.
+      // opened into the editor — series-panel.ts writing a module file.
       // `files` is the live binding, so a file added by a Refresh since
       // this was registered is found without registering again.
       async readTextFile(path) {
@@ -422,7 +422,7 @@ id: ${id}-first-cell
         await loadFromRoot(root, folderName, "Refreshing");
       },
       // Walked fresh rather than looked up in `files`, which holds only
-      // the markdown and course files this panel lists — an image is
+      // the markdown and module files this panel lists — an image is
       // neither, so it was never in there to find.
       async readBinaryFile(path) {
         return readBytesAt(root, path);

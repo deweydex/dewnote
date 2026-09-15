@@ -35,7 +35,7 @@ applySettings(loadSettings());
 //
 // Which fields, though, is dewlab's to say, and dewlab's answer changed:
 // `slug`, `module`, `module_title` and `series` went when placement moved
-// into `courses/*.yaml` (decision 36). They survived here after the form
+// into `modules/*.yaml` (decision 36). They survived here after the form
 // stopped showing them, which made them worse than visible-and-wrong —
 // every document started from this one carried four fields nobody could
 // see and dewlab's build ignores. `version` is dewlab's own dated form
@@ -77,7 +77,7 @@ const fileBar = mountFileBar({
   },
 });
 const seriesPanel = mountSeriesPanel(getFileIndex);
-mountFolderPanel(fileBar, setFileIndex, seriesPanel.setCourses);
+mountFolderPanel(fileBar, setFileIndex, seriesPanel.setModules);
 mountRepoPanel({
   getSource: () => current.getSource(),
   loadDocument(source, _name) {
@@ -85,7 +85,7 @@ mountRepoPanel({
     current = mountDocument(page, source);
   },
   onIndexChange: setFileIndex,
-  onCoursesChange: seriesPanel.setCourses,
+  onModulesChange: seriesPanel.setModules,
 });
 mountDialectPanel({
   getSource: () => current.getSource(),
@@ -112,7 +112,7 @@ interface DewnoteTestHook {
   mount(source: string): void;
   getSource(): string;
   setFileIndex(index: Parameters<typeof setFileIndex>[0]): void;
-  setCourses(courses: Parameters<typeof seriesPanel.setCourses>[0]): void;
+  setModules(modules: Parameters<typeof seriesPanel.setModules>[0]): void;
 }
 (window as unknown as { __dewnote: DewnoteTestHook }).__dewnote = {
   mount(source: string): void {
@@ -123,5 +123,5 @@ interface DewnoteTestHook {
     return current.getSource();
   },
   setFileIndex,
-  setCourses: seriesPanel.setCourses,
+  setModules: seriesPanel.setModules,
 };

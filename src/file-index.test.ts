@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { parseCourseFile } from "./courses.ts";
+import { parseModuleFile } from "./modules.ts";
 import {
   buildFileIndex,
-  courseMembership,
+  moduleMembership,
   defaultEntryFor,
   distinctValues,
   idFromPath,
@@ -80,7 +80,7 @@ describe("indexEntryFor", () => {
   });
 });
 
-const COURSE = `title: Computational Methods
+const MODULE = `title: Computational Methods
 contents:
 - title: Python fundamentals
   tutorials:
@@ -91,21 +91,21 @@ contents:
   - grid-of-numbers
 `;
 
-const OTHER_COURSE = `title: Programming and Design Principles
+const OTHER_MODULE = `title: Programming and Design Principles
 contents:
 - title: Programming Foundations
   tutorials:
   - first-steps
 `;
 
-describe("courseMembership", () => {
-  test("maps each id to the courses that list it", () => {
-    const courses = [
-      parseCourseFile("courses/computational-methods.yaml", COURSE)!,
-      parseCourseFile("courses/programming-design-principles.yaml", OTHER_COURSE)!,
+describe("moduleMembership", () => {
+  test("maps each id to the modules that list it", () => {
+    const modules = [
+      parseModuleFile("modules/computational-methods.yaml", MODULE)!,
+      parseModuleFile("modules/programming-design-principles.yaml", OTHER_MODULE)!,
     ];
-    const listedBy = courseMembership(courses);
-    // A tutorial can be listed by more than one course — dewlab's own
+    const listedBy = moduleMembership(modules);
+    // A tutorial can be listed by more than one module — dewlab's own
     // Programming and Design Principles is built from the integrated
     // module's own tutorials.
     expect(listedBy.get("first-steps")).toEqual([
@@ -116,8 +116,8 @@ describe("courseMembership", () => {
     expect(listedBy.get("never-listed")).toBeUndefined();
   });
 
-  test("a course listing the same id in two of its series names itself once", () => {
-    const twice = `title: A course
+  test("a module listing the same id in two of its series names itself once", () => {
+    const twice = `title: A module
 contents:
 - title: One
   tutorials:
@@ -126,7 +126,7 @@ contents:
   tutorials:
   - shared
 `;
-    const listedBy = courseMembership([parseCourseFile("courses/a.yaml", twice)!]);
+    const listedBy = moduleMembership([parseModuleFile("modules/a.yaml", twice)!]);
     expect(listedBy.get("shared")).toEqual(["a"]);
   });
 });
@@ -140,34 +140,34 @@ describe("buildFileIndex", () => {
     expect(index.map((e) => e.title)).toEqual(["One", "Two"]);
   });
 
-  test("with no course files, courses is absent rather than empty", () => {
+  test("with no module files, modules is absent rather than empty", () => {
     // "Nothing was cross-referenced" is a different fact from "cross-
-    // referenced, and no course lists this."
+    // referenced, and no module lists this."
     const index = buildFileIndex([{ path: "tutorials/x/x.md", content: "---\ntitle: X\n---\n" }]);
-    expect(index[0]!.courses).toBeUndefined();
+    expect(index[0]!.modules).toBeUndefined();
   });
 
-  test("given course files, each entry carries the courses that list it", () => {
-    const courses = [parseCourseFile("courses/computational-methods.yaml", COURSE)!];
+  test("given module files, each entry carries the modules that list it", () => {
+    const modules = [parseModuleFile("modules/computational-methods.yaml", MODULE)!];
     const index = buildFileIndex(
       [
         { path: "tutorials/first-steps/first-steps.md", content: "---\ntitle: First Steps\n---\n" },
-        { path: "tutorials/on-no-course/on-no-course.md", content: "---\ntitle: Loose\n---\n" },
+        { path: "tutorials/on-no-module/on-no-module.md", content: "---\ntitle: Loose\n---\n" },
       ],
-      courses,
+      modules,
     );
-    expect(index[0]!.courses).toEqual(["computational-methods"]);
-    // Published but on no course — a real, buildable state.
-    expect(index[1]!.courses).toEqual([]);
+    expect(index[0]!.modules).toEqual(["computational-methods"]);
+    // Published but on no module — a real, buildable state.
+    expect(index[1]!.modules).toEqual([]);
   });
 
-  test("a frozen release is listed by the same courses as its live file", () => {
-    const courses = [parseCourseFile("courses/computational-methods.yaml", COURSE)!];
+  test("a frozen release is listed by the same modules as its live file", () => {
+    const modules = [parseModuleFile("modules/computational-methods.yaml", MODULE)!];
     const index = buildFileIndex(
       [{ path: "tutorials/first-steps/v2026.08.23.1.md", content: "---\ntitle: Frozen\n---\n" }],
-      courses,
+      modules,
     );
-    expect(index[0]!.courses).toEqual(["computational-methods"]);
+    expect(index[0]!.modules).toEqual(["computational-methods"]);
   });
 });
 

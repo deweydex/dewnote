@@ -1,18 +1,18 @@
-// The placement view: which course lists a tutorial, in which series,
-// in what order — read from dewlab's own `courses/*.yaml` (courses.ts).
+// The placement view: which module lists a tutorial, in which series,
+// in what order — read from dewlab's own `modules/*.yaml` (modules.ts).
 //
 // This used to read one `<series>.order.yaml` per series and group them
-// by the module folder they sat in. dewlab moved placement into course
-// files, so the grouping is now the real one: a course, its series in
-// the order the course file lists them, and each series' tutorials in
+// by the module folder they sat in. dewlab moved placement into module
+// files, so the grouping is now the real one: a module, its series in
+// the order the module file lists them, and each series' tutorials in
 // the order it lists those. Nothing is sorted here any more — an order
-// file's own order was the point before and a course file's is now, and
+// file's own order was the point before and a module file's is now, and
 // sorting series alphabetically (as this did) was only ever standing in
 // for an order the old format didn't record.
 //
 // Kept from before: mounted the same independent way outline-panel.ts
 // is, a toggle and a docked rail, closed until asked; fed a whole list
-// via `setCourses` rather than pulling from the open document, since
+// via `setModules` rather than pulling from the open document, since
 // placement is a property of the open folder or repository and not of
 // whichever tutorial happens to be on screen; and each listed tutorial
 // is a real button that opens it through active-store.ts's own hook,
@@ -26,22 +26,22 @@
 //
 // ## Two things this can now say that the old panel could not
 //
-// A course file naming an id, and a `tutorials/<id>/` folder, are two
+// A module file naming an id, and a `tutorials/<id>/` folder, are two
 // halves that can disagree. So the panel reports both halves of that:
-// an id a course lists with nothing indexed for it, and an indexed
-// tutorial no course lists. dewlab builds the second happily — "published
-// but on no course" is a real state — so it reads as a list to place
+// an id a module lists with nothing indexed for it, and an indexed
+// tutorial no module lists. dewlab builds the second happily — "published
+// but on no module" is a real state — so it reads as a list to place
 // rather than as an error.
 //
 // ## Editing, and why it reads the file again first
 //
 // A tutorial can be dragged within its series, dragged into a sibling
-// series on the same course, added to a series, or taken off the course
+// series on the same module, added to a series, or taken off the module
 // — all four are one splice of the lines that series' `tutorials:` list
-// occupies (course-writer.ts). Every one of them re-reads the course
+// occupies (module-writer.ts). Every one of them re-reads the module
 // file and re-parses it immediately before writing, rather than writing
 // against the copy parsed when the folder was last scanned. Two reasons,
-// and the first is the serious one: courses.ts's line ranges are only
+// and the first is the serious one: modules.ts's line ranges are only
 // true of the exact text they were read from, so splicing a stale range
 // into a file somebody edited in the meantime would write over whatever
 // had moved into those lines. The second is that it makes a second drag
@@ -49,27 +49,26 @@
 //
 // Positions survive that re-read by name, not by number: a tutorial is
 // found again by its id and a series by its title, both of which dewlab
-// requires to be unique within a course. A drag whose tutorial is no
+// requires to be unique within a module. A drag whose tutorial is no
 // longer where it was refuses and says so instead of moving whatever
 // took its place.
 //
 // ## What it will not do
 //
-// **Delete a tutorial.** "Remove" here takes a tutorial off a course.
-// The file stays, and a tutorial on no course still builds. The id is
+// **Delete a tutorial.** "Remove" here takes a tutorial off a module.
+// The file stays, and a tutorial on no module still builds. The id is
 // the address of the page and the key a reader's saved work lives under,
 // so throwing the file away is a much heavier act than taking it out of
 // a reading order, and it is not one to offer behind the same small ×.
 //
-// **Make a new series.** A series stopped being a file; it is an entry
-// in a course file's `contents:`, and adding one means splicing lines
-// courses.ts doesn't record the bounds of yet. Adding to and reordering
-// the series a course already has is what the recorded ranges cover, and
-// that is what this does.
+// Creating, renaming and reordering series all preserve the module file's
+// untouched text. The module heading opens the descriptor itself for the
+// remaining metadata (code, status, card and description), while the
+// module arrows rewrite only `modules/index.yaml`.
 
-import { canWriteFiles, openPath, readTextFile, writeTextFile } from "./active-store.ts";
-import { parseCourseFile, type Course, type CourseSeries } from "./courses.ts";
-import { addSeries, addTutorial, findSeries, locateTutorial, moveTutorial, removeTutorial, idsListedBy, type WriteResult } from "./course-writer.ts";
+import { canWriteFiles, createFile, openPath, readTextFile, writeTextFile } from "./active-store.ts";
+import { parseModuleFile, type Module, type ModuleSeries } from "./modules.ts";
+import { addSeries, addTutorial, findSeries, locateTutorial, moveSeries, moveTutorial, renameSeries, removeTutorial, idsListedBy, type WriteResult } from "./module-writer.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
 
@@ -78,37 +77,37 @@ import { iconRail, labelToggle } from "./icon-rail.ts";
  * `text/plain` slot HTML drag and drop reliably gives, the same as
  * app.ts's own block drag. */
 interface DragPayload {
-  coursePath: string;
+  modulePath: string;
   seriesTitle: string;
   id: string;
 }
 
 export interface SeriesPanel {
   /** Replaces the whole listing — called every time folder-panel.ts or
-   * repo-panel.ts (re)reads the open store's course files, the same
+   * repo-panel.ts (re)reads the open store's module files, the same
    * "handed the whole thing every time" shape app.ts's setFileIndex
    * already has. */
-  setCourses(courses: Course[]): void;
+  setModules(modules: Module[]): void;
   destroy(): void;
 }
 
-/** Every indexed tutorial that no course lists, one entry per id (the
+/** Every indexed tutorial that no module lists, one entry per id (the
  * one `defaultEntryFor` would pick), in path order.
  *
- * Only meaningful once course files have actually been read: an entry
- * whose `courses` is undefined was never cross-referenced, which is not
- * the same as being on no course, and counting those would report every
- * tutorial the moment a folder without a `courses/` directory is open.
+ * Only meaningful once module files have actually been read: an entry
+ * whose `modules` is undefined was never cross-referenced, which is not
+ * the same as being on no module, and counting those would report every
+ * tutorial the moment a folder without a `modules/` directory is open.
  *
  * Exported for its own unit test — the rendering around it is covered
  * against the built app in tests/e2e/series-panel.spec.ts, the same
  * split outline-panel.ts uses, but the rule itself is worth checking
  * directly rather than only through a browser. */
-export function tutorialsOnNoCourse(index: FileIndexEntry[]): FileIndexEntry[] {
+export function tutorialsOnNoModule(index: FileIndexEntry[]): FileIndexEntry[] {
   const seen = new Set<string>();
   const out: FileIndexEntry[] = [];
   for (const entry of index) {
-    if (!entry.id || entry.courses === undefined || entry.courses.length > 0) continue;
+    if (!entry.id || entry.modules === undefined || entry.modules.length > 0) continue;
     if (!entry.path.includes("tutorials/")) continue;
     if (seen.has(entry.id)) continue;
     seen.add(entry.id);
@@ -120,31 +119,31 @@ export function tutorialsOnNoCourse(index: FileIndexEntry[]): FileIndexEntry[] {
 
 /** Mounted once, independently of any particular document or store.
  * `getFileIndex` is read fresh on every render, not cached at mount
- * time, so a course rendered before a folder's index finishes building
+ * time, so a module rendered before a folder's index finishes building
  * still gets titles once it catches up. */
 export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPanel {
-  let courses: Course[] = [];
+  let modules: Module[] = [];
 
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "dn-series-toggle";
-  toggle.setAttribute("aria-label", "Courses");
+  toggle.setAttribute("aria-label", "Modules");
   toggle.setAttribute("aria-expanded", "false");
-  toggle.title = "Courses";
+  toggle.title = "Modules";
   toggle.textContent = "☰";
 
   const panel = document.createElement("div");
   panel.className = "dn-series-panel";
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "false");
-  panel.setAttribute("aria-label", "Courses");
+  panel.setAttribute("aria-label", "Modules");
   panel.hidden = true;
   toggle.setAttribute("aria-controls", (panel.id = "dn-series-panel"));
 
   const header = document.createElement("div");
   header.className = "dn-series-header";
   const heading = document.createElement("h2");
-  heading.textContent = "Courses";
+  heading.textContent = "Modules";
   const closeButton = document.createElement("button");
   closeButton.type = "button";
   closeButton.className = "dn-series-close";
@@ -162,7 +161,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
 
   const empty = document.createElement("p");
   empty.className = "dn-series-empty";
-  empty.textContent = "No course files found — open a folder or repository with a courses/ directory.";
+  empty.textContent = "No module files found — open a folder or repository with a modules/ directory.";
   panel.appendChild(empty);
 
   /** What the last edit did, or why it didn't happen. One line for the
@@ -175,10 +174,10 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   panel.appendChild(status);
 
   /** Which series, if any, has its "add a tutorial" list open —
-   * identified by course path and series title rather than by position,
+   * identified by module path and series title rather than by position,
    * so a re-render after a write reopens the same one. */
-  let adding: { coursePath: string; seriesTitle: string } | null = null;
-  /** Which course, if any, has its "New series" form open. */
+  let adding: { modulePath: string; seriesTitle: string } | null = null;
+  /** Which module, if any, has its "New series" form open. */
   let addingSeriesTo: string | null = null;
   let writing = false;
 
@@ -187,22 +186,22 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   }
 
   /**
-   * Re-reads the course file, applies `edit` to what it actually says
+   * Re-reads the module file, applies `edit` to what it actually says
    * right now, and writes the result back.
    *
-   * `edit` is handed the freshly parsed course, never the one the panel
+   * `edit` is handed the freshly parsed module, never the one the panel
    * rendered from, which is what makes every caller here look up its
    * tutorial by id and its series by title rather than by the index it
    * drew. `describe` runs only on a write that happened.
    */
-  async function applyEdit(course: Course, message: string, edit: (fresh: Course, content: string) => WriteResult, describe: (fresh: Course) => string): Promise<void> {
+  async function applyEdit(module: Module, message: string, edit: (fresh: Module, content: string) => WriteResult, describe: (fresh: Module) => string): Promise<void> {
     if (writing) return;
     writing = true;
     try {
-      const content = await readTextFile(course.path);
-      const fresh = parseCourseFile(course.path, content);
+      const content = await readTextFile(module.path);
+      const fresh = parseModuleFile(module.path, content);
       if (!fresh) {
-        say(`${course.path} isn't readable as a course file any more — nothing was changed.`);
+        say(`${module.path} isn't readable as a module file any more — nothing was changed.`);
         return;
       }
       const result = edit(fresh, content);
@@ -210,13 +209,13 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
         say(result.reason);
         return;
       }
-      await writeTextFile(course.path, result.content, message);
+      await writeTextFile(module.path, result.content, message);
       // Re-parse what was written and swap it in, rather than waiting
       // for the store to hand the whole list back: a folder refreshes
       // itself after a write and a repository does not, and either way
       // the next drag needs line ranges that match the file on disk now.
-      const after = parseCourseFile(course.path, result.content);
-      if (after) courses = courses.map((one) => (one.path === course.path ? after : one));
+      const after = parseModuleFile(module.path, result.content);
+      if (after) modules = modules.map((one) => (one.path === module.path ? after : one));
       render();
       say(describe(after ?? fresh));
     } catch (err) {
@@ -244,7 +243,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     return rows.length;
   }
 
-  function onDrop(course: Course, series: CourseSeries, list: HTMLOListElement, event: DragEvent): void {
+  function onDrop(module: Module, series: ModuleSeries, list: HTMLOListElement, event: DragEvent): void {
     event.preventDefault();
     const raw = event.dataTransfer?.getData("text/plain");
     if (!raw) return;
@@ -254,19 +253,19 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     } catch {
       return;
     }
-    // Across two courses a move would be two files, and the second one
+    // Across two modules a move would be two files, and the second one
     // could fail after the first had already been written. Refused
-    // rather than half-done; a tutorial can be taken off one course and
+    // rather than half-done; a tutorial can be taken off one module and
     // added to the other, which is two deliberate acts.
-    if (payload.coursePath !== course.path) {
-      say("A tutorial can only be dragged within one course — take it off one and add it to the other.");
+    if (payload.modulePath !== module.path) {
+      say("A tutorial can only be dragged within one module — take it off one and add it to the other.");
       return;
     }
     const visualIndex = dropIndexFor(list, event.clientY);
     const targetTitle = series.title;
     void applyEdit(
-      course,
-      `Move ${payload.id} in ${course.title} from dewnote`,
+      module,
+      `Move ${payload.id} in ${module.title} from dewnote`,
       (fresh, content) => {
         const from = locateTutorial(fresh, payload.id);
         if (!from) return { ok: false, reason: `${payload.id} isn't on ${fresh.title} any more — nothing was moved.` };
@@ -282,7 +281,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     );
   }
 
-  function renderSeriesList(course: Course, series: CourseSeries, writable: boolean): HTMLOListElement {
+  function renderSeriesList(module: Module, series: ModuleSeries, writable: boolean): HTMLOListElement {
     const index = getFileIndex();
     const list = document.createElement("ol");
     list.className = "dn-series-list";
@@ -307,7 +306,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
         grip.title = `Drag to move ${entry?.title ?? id}`;
         grip.textContent = "⠿";
         grip.addEventListener("dragstart", (event) => {
-          const payload: DragPayload = { coursePath: course.path, seriesTitle: series.title, id };
+          const payload: DragPayload = { modulePath: module.path, seriesTitle: series.title, id };
           event.dataTransfer?.setData("text/plain", JSON.stringify(payload));
           if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
           item.classList.add("dn-series-dragging");
@@ -324,7 +323,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
         link.addEventListener("click", () => void openPath(entry.path));
         item.appendChild(link);
       } else {
-        // A course listing an id with no file behind it — dewlab's own
+        // A module listing an id with no file behind it — dewlab's own
         // build stops on this, so it's worth naming rather than showing
         // as a bare id that looks like any other line.
         const missing = document.createElement("span");
@@ -340,19 +339,19 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
         // "Take off", not "Delete": this unlists a tutorial and the file
         // stays. The label is the whole difference between the two, so
         // it says which one this is rather than leaving a bare ×.
-        remove.setAttribute("aria-label", `Take ${entry?.title ?? id} off ${course.title}`);
-        remove.title = `Take off ${course.title} — the tutorial itself is kept`;
+        remove.setAttribute("aria-label", `Take ${entry?.title ?? id} off ${module.title}`);
+        remove.title = `Take off ${module.title} — the tutorial itself is kept`;
         remove.textContent = "×";
         remove.addEventListener("click", () => {
           void applyEdit(
-            course,
-            `Take ${id} off ${course.title} from dewnote`,
+            module,
+            `Take ${id} off ${module.title} from dewnote`,
             (fresh, content) => {
               const at = findSeries(fresh, series.title);
               if (at === -1) return { ok: false, reason: `"${series.title}" isn't on ${fresh.title} any more — nothing was changed.` };
               return removeTutorial(fresh, content, at, id);
             },
-            (fresh) => `Took ${titleOf(id)} off ${fresh.title}. The tutorial itself is still there, on no course.`,
+            (fresh) => `Took ${titleOf(id)} off ${fresh.title}. The tutorial itself is still there, on no module.`,
           );
         });
         item.appendChild(remove);
@@ -373,7 +372,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
       list.addEventListener("dragleave", () => list.classList.remove("dn-series-list-over"));
       list.addEventListener("drop", (event) => {
         list.classList.remove("dn-series-list-over");
-        onDrop(course, series, list, event);
+        onDrop(module, series, list, event);
       });
     }
 
@@ -381,28 +380,28 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   }
 
   /** The "add a tutorial" row under one series: everything indexed that
-   * this course doesn't already list, filtered as you type. Only what
-   * the course doesn't list, because dewlab fails the build on a course
+   * this module doesn't already list, filtered as you type. Only what
+   * the module doesn't list, because dewlab fails the build on a module
    * that lists a tutorial twice — offering one would be offering a file
    * that stops building. */
-  function renderAddRow(course: Course, series: CourseSeries): HTMLElement {
+  function renderAddRow(module: Module, series: ModuleSeries): HTMLElement {
     const wrap = document.createElement("div");
     wrap.className = "dn-series-add";
 
-    const open = adding?.coursePath === course.path && adding.seriesTitle === series.title;
+    const open = adding?.modulePath === module.path && adding.seriesTitle === series.title;
     const toggleAdd = document.createElement("button");
     toggleAdd.type = "button";
     toggleAdd.className = "dn-series-add-toggle";
     toggleAdd.textContent = open ? "Cancel" : "Add a tutorial";
     toggleAdd.addEventListener("click", () => {
-      adding = open ? null : { coursePath: course.path, seriesTitle: series.title };
+      adding = open ? null : { modulePath: module.path, seriesTitle: series.title };
       addingSeriesTo = null;
       render();
     });
     wrap.appendChild(toggleAdd);
     if (!open) return wrap;
 
-    const listed = idsListedBy(course);
+    const listed = idsListedBy(module);
     const candidates = getFileIndex().filter((entry) => entry.id && entry.path.includes("tutorials/") && !listed.has(entry.id));
     const seen = new Set<string>();
     const unique = candidates.filter((entry) => (seen.has(entry.id!) ? false : (seen.add(entry.id!), true)));
@@ -410,7 +409,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     const search = document.createElement("input");
     search.type = "text";
     search.className = "dn-series-add-search";
-    search.placeholder = "Search tutorials not on this course…";
+    search.placeholder = "Search tutorials not on this module…";
     wrap.appendChild(search);
 
     const results = document.createElement("ul");
@@ -424,7 +423,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
       if (matches.length === 0) {
         const none = document.createElement("li");
         none.className = "dn-series-add-empty";
-        none.textContent = unique.length === 0 ? "Every indexed tutorial is already on this course." : "No matches.";
+        none.textContent = unique.length === 0 ? "Every indexed tutorial is already on this module." : "No matches.";
         results.appendChild(none);
         return;
       }
@@ -437,8 +436,8 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
         button.addEventListener("click", () => {
           adding = null;
           void applyEdit(
-            course,
-            `List ${entry.id} on ${course.title} from dewnote`,
+            module,
+            `List ${entry.id} on ${module.title} from dewnote`,
             (fresh, content) => {
               const at = findSeries(fresh, series.title);
               if (at === -1) return { ok: false, reason: `"${series.title}" isn't on ${fresh.title} any more — nothing was added.` };
@@ -457,26 +456,26 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     return wrap;
   }
 
-  /** "New series" at the foot of a course. Appends to the end of its
-   * `contents:`, which is where a new one belongs: a course's series are
+  /** "New series" at the foot of a module. Appends to the end of its
+   * `contents:`, which is where a new one belongs: a module's series are
    * a reading order, and the next thing to teach goes after the last
    * thing taught. Same shape as the per-series "Add a tutorial" row
    * above it, so the rail has one way of adding things rather than two.
    *
-   * Only for a course whose `contents:` block courses.ts could bound. A
-   * course it could not is still read, opened and shown; it just isn't
+   * Only for a module whose `contents:` block modules.ts could bound. A
+   * module it could not is still read, opened and shown; it just isn't
    * written. */
-  function renderNewSeriesRow(course: Course): HTMLElement {
+  function renderNewSeriesRow(module: Module): HTMLElement {
     const wrap = document.createElement("div");
     wrap.className = "dn-series-add dn-series-new";
 
-    const open = addingSeriesTo === course.path;
+    const open = addingSeriesTo === module.path;
     const toggle = document.createElement("button");
     toggle.type = "button";
     toggle.className = "dn-series-add-toggle";
     toggle.textContent = open ? "Cancel" : "New series";
     toggle.addEventListener("click", () => {
-      addingSeriesTo = open ? null : course.path;
+      addingSeriesTo = open ? null : module.path;
       adding = null;
       render();
     });
@@ -497,8 +496,8 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
       const title = input.value;
       addingSeriesTo = null;
       void applyEdit(
-        course,
-        `Add the series "${title.trim()}" to ${course.title} from dewnote`,
+        module,
+        `Add the series "${title.trim()}" to ${module.title} from dewnote`,
         (fresh, content) => addSeries(fresh, content, title),
         (fresh) => `Added "${title.trim()}" to ${fresh.title}. It has no tutorials yet — drop one in, or use its own "Add a tutorial".`,
       );
@@ -515,48 +514,137 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     return wrap;
   }
 
+  async function moveModule(from: number, to: number): Promise<void> {
+    if (writing || to < 0 || to >= modules.length) return;
+    writing = true;
+    try {
+      const next = [...modules];
+      const [moved] = next.splice(from, 1);
+      if (!moved) return;
+      next.splice(to, 0, moved);
+      const slash = moved.path.lastIndexOf("/");
+      const indexPath = `${slash === -1 ? "modules" : moved.path.slice(0, slash)}/index.yaml`;
+      const content = `order:\n${next.map((entry) => `  - ${entry.id}`).join("\n")}\n`;
+      try {
+        await readTextFile(indexPath);
+        await writeTextFile(indexPath, content, "Reorder modules from dewnote");
+      } catch {
+        await createFile(indexPath, content);
+      }
+      modules = next;
+      render();
+      say(`Moved ${moved.title} ${to < from ? "up" : "down"}.`);
+    } catch (err) {
+      say(err instanceof Error ? err.message : String(err));
+    } finally {
+      writing = false;
+    }
+  }
+
   function render() {
     const writable = canWriteFiles();
     body.replaceChildren();
-    empty.hidden = courses.length > 0;
+    empty.hidden = modules.length > 0;
 
-    for (const course of courses) {
+    for (const [moduleIndex, module] of modules.entries()) {
       const section = document.createElement("section");
       section.className = "dn-series-module";
-      const courseHeading = document.createElement("h3");
-      courseHeading.textContent = course.title;
-      section.appendChild(courseHeading);
+      const moduleHeader = document.createElement("div");
+      moduleHeader.className = "dn-series-module-header";
+      const moduleHeading = document.createElement("button");
+      moduleHeading.type = "button";
+      moduleHeading.className = "dn-series-module-title";
+      moduleHeading.textContent = module.title;
+      moduleHeading.title = `Open ${module.path} to edit its details`;
+      moduleHeading.addEventListener("click", () => void openPath(module.path));
+      moduleHeader.appendChild(moduleHeading);
+      if (writable) {
+        for (const [label, offset] of [["Move module up", -1], ["Move module down", 1]] as const) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "dn-series-order";
+          button.textContent = offset < 0 ? "↑" : "↓";
+          button.setAttribute("aria-label", `${label}: ${module.title}`);
+          button.disabled = moduleIndex + offset < 0 || moduleIndex + offset >= modules.length;
+          button.addEventListener("click", () => void moveModule(moduleIndex, moduleIndex + offset));
+          moduleHeader.appendChild(button);
+        }
+      }
+      section.appendChild(moduleHeader);
 
-      for (const series of course.contents) {
+      for (const [seriesIndex, series] of module.contents.entries()) {
         const seriesBlock = document.createElement("div");
         seriesBlock.className = "dn-series-block";
-        const seriesHeading = document.createElement("h4");
+        const seriesHeader = document.createElement("div");
+        seriesHeader.className = "dn-series-series-header";
+        const seriesHeading = document.createElement("button");
+        seriesHeading.type = "button";
+        seriesHeading.className = "dn-series-series-title";
         seriesHeading.textContent = series.title;
-        seriesBlock.appendChild(seriesHeading);
-        // A series courses.ts couldn't record a range for reads and
+        seriesHeading.title = "Rename series";
+        seriesHeading.addEventListener("click", () => {
+          const next = prompt("Series title", series.title);
+          if (next === null || next.trim() === series.title) return;
+          void applyEdit(
+            module,
+            `Rename ${series.title} in ${module.title} from dewnote`,
+            (fresh, content) => {
+              const at = findSeries(fresh, series.title);
+              return at === -1
+                ? { ok: false, reason: "That series is no longer in the module — reopen it." }
+                : renameSeries(fresh, content, at, next);
+            },
+            () => `Renamed “${series.title}” to “${next.trim()}”.`,
+          );
+        });
+        seriesHeader.appendChild(seriesHeading);
+        if (writable && series.entryRange) {
+          for (const [label, offset] of [["Move series up", -1], ["Move series down", 1]] as const) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "dn-series-order";
+            button.textContent = offset < 0 ? "↑" : "↓";
+            button.setAttribute("aria-label", `${label}: ${series.title}`);
+            button.disabled = seriesIndex + offset < 0 || seriesIndex + offset >= module.contents.length;
+            button.addEventListener("click", () => void applyEdit(
+              module,
+              `Move ${series.title} in ${module.title} from dewnote`,
+              (fresh, content) => {
+                const at = findSeries(fresh, series.title);
+                return at === -1
+                  ? { ok: false, reason: "That series is no longer in the module — reopen it." }
+                  : moveSeries(fresh, content, at, at + offset);
+              },
+              () => `Moved “${series.title}” ${offset < 0 ? "up" : "down"}.`,
+            ));
+            seriesHeader.appendChild(button);
+          }
+        }
+        seriesBlock.appendChild(seriesHeader);
+        // A series modules.ts couldn't record a range for reads and
         // opens like any other; it just can't be written. Said once,
         // here, rather than by silently leaving the controls off.
         const editable = writable && series.tutorialsRange !== null;
-        seriesBlock.appendChild(renderSeriesList(course, series, editable));
+        seriesBlock.appendChild(renderSeriesList(module, series, editable));
         if (writable && !editable) {
           const note = document.createElement("p");
           note.className = "dn-series-readonly";
-          note.textContent = "Written in a form dewnote can't rewrite safely — edit the course file directly.";
+          note.textContent = "Written in a form dewnote can't rewrite safely — edit the module file directly.";
           seriesBlock.appendChild(note);
         }
-        if (editable) seriesBlock.appendChild(renderAddRow(course, series));
+        if (editable) seriesBlock.appendChild(renderAddRow(module, series));
         section.appendChild(seriesBlock);
       }
-      if (writable && course.contentsRange) section.appendChild(renderNewSeriesRow(course));
+      if (writable && module.contentsRange) section.appendChild(renderNewSeriesRow(module));
       body.appendChild(section);
     }
 
-    const loose = tutorialsOnNoCourse(getFileIndex());
+    const loose = tutorialsOnNoModule(getFileIndex());
     if (loose.length > 0) {
       const section = document.createElement("section");
       section.className = "dn-series-module dn-series-unlisted";
       const looseHeading = document.createElement("h3");
-      looseHeading.textContent = "On no course";
+      looseHeading.textContent = "On no module";
       section.appendChild(looseHeading);
 
       const list = document.createElement("ol");
@@ -583,13 +671,13 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     if (!panel.hidden) render();
   });
 
-  labelToggle(toggle, "Courses");
+  labelToggle(toggle, "Modules");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
 
   return {
-    setCourses(next) {
-      courses = next;
+    setModules(next) {
+      modules = next;
       if (!panel.hidden) render();
     },
     destroy() {

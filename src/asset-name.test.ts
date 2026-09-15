@@ -50,7 +50,7 @@ describe("assetNameFor", () => {
 describe("isAssetFile", () => {
   test("the three suffixes neither build copies", () => {
     expect(isAssetFile("notes.md")).toBe(false);
-    expect(isAssetFile("a-course.yaml")).toBe(false);
+    expect(isAssetFile("a-module.yaml")).toBe(false);
     expect(isAssetFile("thing.yml")).toBe(false);
   });
 

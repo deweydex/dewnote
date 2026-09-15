@@ -1,7 +1,7 @@
-// The placement view (src/courses.ts, src/series-panel.ts) — drives the
-// real built app: seed course data and a file index the same way
+// The placement view (src/modules.ts, src/series-panel.ts) — drives the
+// real built app: seed module data and a file index the same way
 // link-picker.spec.ts and link-check.spec.ts do, open the rail, and check
-// it groups by course then series, keeps each course file's own order,
+// it groups by module then series, keeps each module file's own order,
 // prefers an indexed title over a bare id, and names both halves of a
 // placement that doesn't line up.
 
@@ -33,9 +33,9 @@ type IndexEntry = {
   title?: string;
   status?: string;
   version?: string;
-  courses?: string[];
+  modules?: string[];
 };
-type CourseSeed = {
+type ModuleSeed = {
   id: string;
   path: string;
   title: string;
@@ -43,7 +43,7 @@ type CourseSeed = {
 };
 type TestHook = {
   setFileIndex(index: IndexEntry[]): void;
-  setCourses(courses: CourseSeed[]): void;
+  setModules(modules: ModuleSeed[]): void;
 };
 
 test.beforeEach(async ({ page }) => {
@@ -51,7 +51,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".dn-block").first()).toBeVisible();
 });
 
-test("groups by course then series, in the course file's own order, preferring an indexed title over the bare id", async ({ page }) => {
+test("groups by module then series, in the module file's own order, preferring an indexed title over the bare id", async ({ page }) => {
   await page.evaluate(() => {
     const hook = window as unknown as { __dewnote: TestHook };
     hook.__dewnote.setFileIndex([
@@ -59,13 +59,13 @@ test("groups by course then series, in the course file's own order, preferring a
         path: "tutorials/first-steps/first-steps.md",
         id: "first-steps",
         title: "First Steps",
-        courses: ["computational-methods"],
+        modules: ["computational-methods"],
       },
     ]);
-    hook.__dewnote.setCourses([
+    hook.__dewnote.setModules([
       {
         id: "computational-methods",
-        path: "courses/computational-methods.yaml",
+        path: "modules/computational-methods.yaml",
         title: "Computational Methods",
         contents: [
           {
@@ -80,13 +80,13 @@ test("groups by course then series, in the course file's own order, preferring a
   });
 
   await page.locator(".dn-series-toggle").click();
-  await expect(page.locator(".dn-series-module h3")).toHaveText("Computational Methods");
-  await expect(page.locator(".dn-series-block h4")).toHaveText("Python fundamentals");
+  await expect(page.locator(".dn-series-module-title")).toHaveText("Computational Methods");
+  await expect(page.locator(".dn-series-series-title")).toHaveText("Python fundamentals");
 
   const items = page.locator(".dn-series-list li");
   await expect(items).toHaveCount(2);
   await expect(items.nth(0)).toHaveText("First Steps");
-  // A course listing an id with no file behind it — dewlab's own build
+  // A module listing an id with no file behind it — dewlab's own build
   // stops on this, so the panel names it rather than showing a bare id.
   await expect(items.nth(1)).toHaveText("working-with-tables — no file");
 });
@@ -103,7 +103,7 @@ test("with several versions of one tutorial indexed, the list shows the live one
         title: "Filtering (old draft title)",
         status: "archived",
         version: "2026.01.01.1",
-        courses: ["data"],
+        modules: ["data"],
       },
       {
         path: "tutorials/filtering/filtering.md",
@@ -111,13 +111,13 @@ test("with several versions of one tutorial indexed, the list shows the live one
         title: "Filtering",
         status: "live",
         version: "2026.06.01.1",
-        courses: ["data"],
+        modules: ["data"],
       },
     ]);
-    hook.__dewnote.setCourses([
+    hook.__dewnote.setModules([
       {
         id: "data",
-        path: "courses/data.yaml",
+        path: "modules/data.yaml",
         title: "Data",
         contents: [
           { title: "A series", tutorials: ["filtering"], tutorialsRange: null, indent: "  " },
@@ -130,13 +130,13 @@ test("with several versions of one tutorial indexed, the list shows the live one
   await expect(page.locator(".dn-series-list li")).toHaveText("Filtering");
 });
 
-test("several courses each get their own section, in index.yaml's order rather than alphabetically", async ({ page }) => {
+test("several modules each get their own section, in index.yaml's order rather than alphabetically", async ({ page }) => {
   await page.evaluate(() => {
     const hook = window as unknown as { __dewnote: TestHook };
-    hook.__dewnote.setCourses([
+    hook.__dewnote.setModules([
       {
         id: "web-authoring",
-        path: "courses/web-authoring.yaml",
+        path: "modules/web-authoring.yaml",
         title: "Web Authoring",
         contents: [
           { title: "First site", tutorials: ["a-form"], tutorialsRange: null, indent: "  " },
@@ -144,7 +144,7 @@ test("several courses each get their own section, in index.yaml's order rather t
       },
       {
         id: "computational-methods",
-        path: "courses/computational-methods.yaml",
+        path: "modules/computational-methods.yaml",
         title: "Computational Methods",
         contents: [
           { title: "Python fundamentals", tutorials: ["first-steps"], tutorialsRange: null, indent: "  " },
@@ -154,15 +154,15 @@ test("several courses each get their own section, in index.yaml's order rather t
   });
 
   await page.locator(".dn-series-toggle").click();
-  const courses = page.locator(".dn-series-module h3");
-  await expect(courses).toHaveCount(2);
-  // The order courses.ts handed over, which is index.yaml's — a course's
+  const modules = page.locator(".dn-series-module-title");
+  await expect(modules).toHaveCount(2);
+  // The order modules.ts handed over, which is index.yaml's — a module's
   // place in the list is a real decision, not something to re-sort.
-  await expect(courses.nth(0)).toHaveText("Web Authoring");
-  await expect(courses.nth(1)).toHaveText("Computational Methods");
+  await expect(modules.nth(0)).toHaveText("Web Authoring");
+  await expect(modules.nth(1)).toHaveText("Computational Methods");
 });
 
-test("a tutorial no course lists is shown under its own heading, not treated as an error", async ({ page }) => {
+test("a tutorial no module lists is shown under its own heading, not treated as an error", async ({ page }) => {
   await page.evaluate(() => {
     const hook = window as unknown as { __dewnote: TestHook };
     hook.__dewnote.setFileIndex([
@@ -170,16 +170,16 @@ test("a tutorial no course lists is shown under its own heading, not treated as 
         path: "tutorials/listed/listed.md",
         id: "listed",
         title: "Listed",
-        courses: ["a-course"],
+        modules: ["a-module"],
       },
-      // Published but on no course — a real, buildable state in dewlab.
-      { path: "tutorials/loose/loose.md", id: "loose", title: "Loose", courses: [] },
+      // Published but on no module — a real, buildable state in dewlab.
+      { path: "tutorials/loose/loose.md", id: "loose", title: "Loose", modules: [] },
     ]);
-    hook.__dewnote.setCourses([
+    hook.__dewnote.setModules([
       {
-        id: "a-course",
-        path: "courses/a-course.yaml",
-        title: "A Course",
+        id: "a-module",
+        path: "modules/a-module.yaml",
+        title: "A Module",
         contents: [
           { title: "A series", tutorials: ["listed"], tutorialsRange: null, indent: "  " },
         ],
@@ -189,20 +189,20 @@ test("a tutorial no course lists is shown under its own heading, not treated as 
 
   await page.locator(".dn-series-toggle").click();
   const unlisted = page.locator(".dn-series-unlisted");
-  await expect(unlisted.locator("h3")).toHaveText("On no course");
+  await expect(unlisted.locator("h3")).toHaveText("On no module");
   await expect(unlisted.locator(".dn-series-list li")).toHaveText("Loose");
 });
 
-test("without course files read at all, nothing is reported as unlisted", async ({ page }) => {
+test("without module files read at all, nothing is reported as unlisted", async ({ page }) => {
   await page.evaluate(() => {
     const hook = window as unknown as { __dewnote: TestHook };
-    // No `courses` key: never cross-referenced, which is not the same as
-    // being on no course. A folder with no courses/ directory shouldn't
+    // No `modules` key: never cross-referenced, which is not the same as
+    // being on no module. A folder with no modules/ directory shouldn't
     // report every tutorial in it.
     hook.__dewnote.setFileIndex([
       { path: "tutorials/loose/loose.md", id: "loose", title: "Loose" },
     ]);
-    hook.__dewnote.setCourses([]);
+    hook.__dewnote.setModules([]);
   });
 
   await page.locator(".dn-series-toggle").click();
@@ -210,14 +210,14 @@ test("without course files read at all, nothing is reported as unlisted", async 
   await expect(page.locator(".dn-series-empty")).toBeVisible();
 });
 
-test("with no course data at all, the panel says so instead of showing nothing", async ({ page }) => {
+test("with no module data at all, the panel says so instead of showing nothing", async ({ page }) => {
   await page.locator(".dn-series-toggle").click();
   await expect(page.locator(".dn-series-empty")).toBeVisible();
 });
 
-test("the command palette can open the courses rail too", async ({ page }) => {
+test("the command palette can open the modules rail too", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-palette-input").fill("Courses");
+  await page.locator(".dn-palette-input").fill("Modules");
   await page.locator(".dn-palette-item button").first().click();
   await expect(page.locator(".dn-series-panel")).toBeVisible();
 });

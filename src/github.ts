@@ -175,15 +175,15 @@ export async function listMarkdownFiles(repo: RepoRef, ref: string, token: strin
   return listMatchingFiles(repo, ref, token, (path) => path.endsWith(".md"));
 }
 
-/** Every course file (dewlab's own `courses/*.yaml`, courses.ts) in a
+/** Every module file (dewlab's own `modules/*.yaml`, modules.ts) in a
  * repository at `ref` — series-panel.ts's own source, alongside
  * `listMarkdownFiles`'s front-matter index. A second, separate tree
  * fetch rather than one call serving both lists: simpler than threading
  * a second predicate through every caller of `listMarkdownFiles`, at the
  * cost of one extra (cheap, per the same reasoning above) request when
  * both are actually needed. */
-export async function listCourseFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
-  return listMatchingFiles(repo, ref, token, (path) => /(^|\/)courses\/[^/]+\.yaml$/.test(path));
+export async function listModuleFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
+  return listMatchingFiles(repo, ref, token, (path) => /(^|\/)modules\/[^/]+\.yaml$/.test(path));
 }
 
 export async function getFileContent(
@@ -202,7 +202,7 @@ export async function getFileContent(
 
 /** Every file name directly inside `path` at `ref` — GitHub's own
  * directory listing, used to pick an asset name that isn't already
- * taken. Distinct from `listMarkdownFiles`/`listCourseFiles`, which walk
+ * taken. Distinct from `listMarkdownFiles`/`listModuleFiles`, which walk
  * the whole tree and filter to what this editor opens; a picture beside
  * a tutorial is in neither of those. */
 export async function listDirectory(repo: RepoRef, path: string, ref: string, token: string): Promise<string[]> {

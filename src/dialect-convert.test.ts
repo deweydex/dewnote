@@ -134,7 +134,7 @@ describe("dewstack -> dewlab", () => {
   });
 
   test("dewstack's placement fields are dropped, and the author is told to place it", () => {
-    // dewlab reads placement from courses/*.yaml and the id from the
+    // dewlab reads placement from modules/*.yaml and the id from the
     // path, so carrying these over would leave fields its build ignores
     // in a file that looks placed.
     const source =
@@ -145,7 +145,7 @@ describe("dewstack -> dewlab", () => {
     }
     expect(markdown).toContain("title: A Page");
     expect(report).toEqual([
-      "front matter: slug, module, module_title, series dropped — dewlab places a tutorial from courses/*.yaml and its id from its path, so list this on a course to place it",
+      "front matter: slug, module, module_title, series dropped — dewlab places a tutorial from modules/*.yaml and its id from its path, so list this on a module to place it",
     ]);
   });
 

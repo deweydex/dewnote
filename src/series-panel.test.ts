@@ -1,5 +1,5 @@
 // The pure part of the placement rail — which indexed tutorials count as
-// "on no course". The DOM half (grouping by course, opening a listed
+// "on no module". The DOM half (grouping by module, opening a listed
 // tutorial, naming an id with no file) is covered against the built app
 // in tests/e2e/series-panel.spec.ts, the same split outline-panel.ts
 // uses. Unlike that one, this imports the real function rather than
@@ -8,38 +8,38 @@
 
 import { describe, expect, test } from "bun:test";
 import type { FileIndexEntry } from "./file-index.ts";
-import { tutorialsOnNoCourse } from "./series-panel.ts";
+import { tutorialsOnNoModule } from "./series-panel.ts";
 
-describe("tutorialsOnNoCourse", () => {
-  test("an indexed tutorial no course lists", () => {
+describe("tutorialsOnNoModule", () => {
+  test("an indexed tutorial no module lists", () => {
     const index: FileIndexEntry[] = [
-      { path: "tutorials/listed/listed.md", id: "listed", title: "Listed", courses: ["a"] },
-      { path: "tutorials/loose/loose.md", id: "loose", title: "Loose", courses: [] },
+      { path: "tutorials/listed/listed.md", id: "listed", title: "Listed", modules: ["a"] },
+      { path: "tutorials/loose/loose.md", id: "loose", title: "Loose", modules: [] },
     ];
-    expect(tutorialsOnNoCourse(index).map((e) => e.id)).toEqual(["loose"]);
+    expect(tutorialsOnNoModule(index).map((e) => e.id)).toEqual(["loose"]);
   });
 
   test("an entry never cross-referenced is not reported", () => {
-    // `courses` undefined means no course files were read at all — a
-    // folder with no courses/ directory shouldn't report every tutorial
+    // `modules` undefined means no module files were read at all — a
+    // folder with no modules/ directory shouldn't report every tutorial
     // in it as unplaced.
     const index: FileIndexEntry[] = [
       { path: "tutorials/loose/loose.md", id: "loose", title: "Loose" },
     ];
-    expect(tutorialsOnNoCourse(index)).toEqual([]);
+    expect(tutorialsOnNoModule(index)).toEqual([]);
   });
 
   test("a file outside tutorials/ is not a tutorial to place", () => {
     const index: FileIndexEntry[] = [
-      { path: "notes.md", id: "notes", title: "Notes", courses: [] },
-      { path: "pages/about.md", id: "about", title: "About", courses: [] },
+      { path: "notes.md", id: "notes", title: "Notes", modules: [] },
+      { path: "pages/about.md", id: "about", title: "About", modules: [] },
     ];
-    expect(tutorialsOnNoCourse(index)).toEqual([]);
+    expect(tutorialsOnNoModule(index)).toEqual([]);
   });
 
   test("a tutorial with several files reports once, as the file the build would serve", () => {
     // A frozen release carries its folder's id, so both files are "on no
-    // course" — but they are one page, and the live one is the one to
+    // module" — but they are one page, and the live one is the one to
     // show and open.
     const index: FileIndexEntry[] = [
       {
@@ -48,7 +48,7 @@ describe("tutorialsOnNoCourse", () => {
         title: "Old title",
         status: "archived",
         version: "2026.01.01.1",
-        courses: [],
+        modules: [],
       },
       {
         path: "tutorials/first-steps/first-steps.md",
@@ -56,10 +56,10 @@ describe("tutorialsOnNoCourse", () => {
         title: "First Steps",
         status: "live",
         version: "2026.06.01.1",
-        courses: [],
+        modules: [],
       },
     ];
-    const found = tutorialsOnNoCourse(index);
+    const found = tutorialsOnNoModule(index);
     expect(found).toHaveLength(1);
     expect(found[0]!.title).toBe("First Steps");
     expect(found[0]!.path).toBe("tutorials/first-steps/first-steps.md");
@@ -67,22 +67,22 @@ describe("tutorialsOnNoCourse", () => {
 
   test("a practice page is its own tutorial to place", () => {
     // `<id>-practice.md` has an id of its own (build.py's id_of), so a
-    // practice page no course lists is its own line, not folded into the
+    // practice page no module lists is its own line, not folded into the
     // tutorial it belongs to.
     const index: FileIndexEntry[] = [
       {
         path: "tutorials/first-steps/first-steps.md",
         id: "first-steps",
         title: "First Steps",
-        courses: ["a"],
+        modules: ["a"],
       },
       {
         path: "tutorials/first-steps/first-steps-practice.md",
         id: "first-steps-practice",
         title: "First Steps — Practice",
-        courses: [],
+        modules: [],
       },
     ];
-    expect(tutorialsOnNoCourse(index).map((e) => e.id)).toEqual(["first-steps-practice"]);
+    expect(tutorialsOnNoModule(index).map((e) => e.id)).toEqual(["first-steps-practice"]);
   });
 });

@@ -87,18 +87,18 @@ async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: R
           { path: "content/tutorials/a-rule.md", type: "blob", sha: "tree-sha-1" },
           { path: "content/tutorials/sub/b-page.md", type: "blob", sha: "tree-sha-2" },
           { path: "assets/logo.png", type: "blob", sha: "tree-sha-3" },
-          { path: "content/courses/a-course.yaml", type: "blob", sha: "tree-sha-4" },
+          { path: "content/modules/a-module.yaml", type: "blob", sha: "tree-sha-4" },
         ],
       });
     }
 
     if (method === "GET" && /\/contents\//.test(path)) {
-      // The course file is read too (refreshCourses), and handing it the
-      // markdown fixture would have courses.ts parsing prose — the panel
+      // The module file is read too (refreshModules), and handing it the
+      // markdown fixture would have modules.ts parsing prose — the panel
       // swallows that per file, so the test would pass while proving
-      // nothing about a course actually being read.
+      // nothing about a module actually being read.
       if (path.endsWith(".yaml")) {
-        return fulfillJson(route, 200, { content: toBase64(COURSE_YAML), sha: "course-sha" });
+        return fulfillJson(route, 200, { content: toBase64(MODULE_YAML), sha: "module-sha" });
       }
       const onBranch = url.searchParams.get("ref") === "dewnote-edits";
       if (onBranch && opts.branchContent !== undefined) {
@@ -158,14 +158,14 @@ async function setup(page: Page, opts: MockOptions): Promise<{ putBodies: Record
 
 const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n", fileSha: "file-sha-1" };
 
-/** What `content/courses/a-course.yaml` holds — one course, one series,
+/** What `content/modules/a-module.yaml` holds — one module, one series,
  * listing the id of the one markdown file in the tree that has one. */
-const COURSE_YAML = ["title: A Course", "contents:", "- title: First steps", "  tutorials:", "  - a-rule", "  - b-page", ""].join("\n");
+const MODULE_YAML = ["title: A Module", "contents:", "- title: First steps", "  tutorials:", "  - a-rule", "  - b-page", ""].join("\n");
 
-test("loading a repository lists its markdown and course files, and search filters them", async ({ page }) => {
+test("loading a repository lists its markdown and module files, and search filters them", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 course file.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 module file.");
 
   const items = page.locator(".dn-repo-file");
   await expect(items).toHaveCount(3);
@@ -177,16 +177,16 @@ test("loading a repository lists its markdown and course files, and search filte
   await expect(page.locator(".dn-repo-file")).toHaveText("content/tutorials/sub/b-page.md");
 });
 
-// Step 4's own follow-up, raised alongside the series view: a course
+// Step 4's own follow-up, raised alongside the series view: a module
 // file is just another file in the browsable list — opening one hands
 // it to the same editor and push path every markdown file already gets,
 // no new UI needed to hand-edit a reading order.
-test("a course file opens and pushes through the ordinary repo panel, same as a markdown file", async ({ page }) => {
+test("a module file opens and pushes through the ordinary repo panel, same as a markdown file", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await page.locator(".dn-repo-file", { hasText: "a-course.yaml" }).click();
+  await page.locator(".dn-repo-file", { hasText: "a-module.yaml" }).click();
 
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened content/courses/a-course.yaml.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened content/modules/a-module.yaml.");
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
   await page.locator(".dn-repo-push").click();
 
@@ -201,7 +201,7 @@ test("a course file opens and pushes through the ordinary repo panel, same as a 
 test("loading a repository builds the file index the link picker searches", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 course file.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 module file.");
   await page.locator(".dn-repo-close").click();
 
   await addBlockAfter(page, 0, "Link");
@@ -326,7 +326,7 @@ test("pushing a new file to a path that already has one reports it plainly, not 
 });
 
 // active-store.ts's read-modify-write pair against a repository, driven
-// the way a reader reaches it: the placement rail, reordering a course.
+// the way a reader reaches it: the placement rail, reordering a module.
 // A folder writes a handle in place; a repository has to create the
 // working branch, find the blob sha that branch holds right now, and
 // commit — so what is checked here is the request that actually went
@@ -335,12 +335,12 @@ test("pushing a new file to a path that already has one reports it plainly, not 
 // The three tests that used to sit here drove the same interface's
 // `createFile` through series-panel.ts's "New series". That form wrote
 // `<series>.order.yaml` files and went with them (decision 36); a series
-// is an entry in a course file now, and making one needs a line range
-// courses.ts doesn't record, so `createFile` still has no caller here.
-test("reordering a course writes it back through the working branch, with the sha that branch holds", async ({ page }) => {
+// is an entry in a module file now, and making one needs a line range
+// modules.ts doesn't record, so `createFile` still has no caller here.
+test("reordering a module writes it back through the working branch, with the sha that branch holds", async ({ page }) => {
   const { putBodies } = await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 course file.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 module file.");
   await page.locator(".dn-repo-close").click();
 
   await page.locator(".dn-series-toggle").click();
@@ -350,10 +350,10 @@ test("reordering a course writes it back through the working branch, with the sh
 
   await expect(page.locator(".dn-series-status")).toContainText("Moved b-page");
   expect(putBodies).toHaveLength(1);
-  expect(putBodies[0]!["sha"]).toBe("course-sha");
+  expect(putBodies[0]!["sha"]).toBe("module-sha");
   expect(putBodies[0]!["branch"]).toBe("dewnote-edits");
   const content = Buffer.from(putBodies[0]!["content"] as string, "base64").toString("utf-8");
-  expect(content).toBe(["title: A Course", "contents:", "- title: First steps", "  tutorials:", "  - b-page", "  - a-rule", ""].join("\n"));
+  expect(content).toBe(["title: A Module", "contents:", "- title: First steps", "  tutorials:", "  - b-page", "  - a-rule", ""].join("\n"));
 });
 
 test("a write against a repository never disturbs an already-open file's own push target", async ({ page }) => {
@@ -365,9 +365,9 @@ test("a write against a repository never disturbs an already-open file's own pus
 
   await page.locator(".dn-series-toggle").click();
   await page.locator(".dn-series-list").first().locator("li").nth(0).locator(".dn-series-remove").click();
-  await expect(page.locator(".dn-series-status")).toContainText("still there, on no course");
+  await expect(page.locator(".dn-series-status")).toContainText("still there, on no module");
 
-  // Still pointed at a-rule.md, not silently repointed at the course file.
+  // Still pointed at a-rule.md, not silently repointed at the module file.
   await page.locator(".dn-series-close").click();
   await page.locator(".dn-repo-toggle").click();
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");

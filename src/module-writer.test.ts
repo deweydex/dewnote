@@ -1,19 +1,19 @@
 // The splice itself, and the three things a reader does with it. The
 // property that matters most in every one of these is what *didn't*
-// change: a course file's prose is student-facing text on dewlab's front
-// page, and the whole reason courses.ts records line ranges is that a
+// change: a module file's prose is student-facing text on dewlab's front
+// page, and the whole reason modules.ts records line ranges is that a
 // round trip through a YAML dumper would refold and requote it.
 
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseCourseFile, type Course } from "./courses.ts";
-import { addSeries, addTutorial, idsListedBy, moveTutorial, removeTutorial, seriesKey, writeCourseFile } from "./course-writer.ts";
+import { parseModuleFile, type Module } from "./modules.ts";
+import { addSeries, addTutorial, idsListedBy, moveSeries, moveTutorial, renameSeries, removeTutorial, seriesKey, writeModuleFile } from "./module-writer.ts";
 
-/** A course file shaped like dewlab's real ones: a folded `card:`, a
+/** A module file shaped like dewlab's real ones: a folded `card:`, a
  * `description:` that runs over two lines, and series whose items carry
  * the same indent as their own key. */
-const COURSE = [
+const MODULE = [
   "title: Computational Methods",
   "code: 5N0554 · QQI Level 5",
   "status: beta",
@@ -33,8 +33,8 @@ const COURSE = [
   "",
 ].join("\n");
 
-function course(content = COURSE, path = "courses/computational-methods.yaml"): Course {
-  const parsed = parseCourseFile(path, content);
+function module(content = MODULE, path = "modules/computational-methods.yaml"): Module {
+  const parsed = parseModuleFile(path, content);
   if (!parsed) throw new Error("fixture no longer parses");
   return parsed;
 }
@@ -65,68 +65,68 @@ function prose(content: string): string[] {
   return kept;
 }
 
-describe("writeCourseFile", () => {
+describe("writeModuleFile", () => {
   test("a reordered series rewrites its own lines and nothing else", () => {
-    const one = course();
-    const written = expectOk(writeCourseFile(COURSE, [{ series: one.contents[1]!, tutorials: ["undoing-it", "grid-of-numbers", "multiplying-grids"] }]));
+    const one = module();
+    const written = expectOk(writeModuleFile(MODULE, [{ series: one.contents[1]!, tutorials: ["undoing-it", "grid-of-numbers", "multiplying-grids"] }]));
 
-    expect(course(written).contents[1]!.tutorials).toEqual(["undoing-it", "grid-of-numbers", "multiplying-grids"]);
+    expect(module(written).contents[1]!.tutorials).toEqual(["undoing-it", "grid-of-numbers", "multiplying-grids"]);
     // The folded card, the two-line description and the other series all
     // come back byte for byte.
-    expect(prose(written)).toEqual(prose(COURSE));
-    expect(course(written).contents[0]!.tutorials).toEqual(["first-steps-cm", "working-with-tables"]);
+    expect(prose(written)).toEqual(prose(MODULE));
+    expect(module(written).contents[0]!.tutorials).toEqual(["first-steps-cm", "working-with-tables"]);
   });
 
   test("two series in one file are both written, and neither shifts the other", () => {
-    const one = course();
+    const one = module();
     // The first series grows by one line and the second shrinks by two,
     // so a top-down splice would write the second one into the wrong
     // place entirely.
     const written = expectOk(
-      writeCourseFile(COURSE, [
+      writeModuleFile(MODULE, [
         { series: one.contents[0]!, tutorials: ["first-steps-cm", "working-with-tables", "a-third"] },
         { series: one.contents[1]!, tutorials: ["undoing-it"] },
       ]),
     );
 
-    const after = course(written);
+    const after = module(written);
     expect(after.contents[0]!.tutorials).toEqual(["first-steps-cm", "working-with-tables", "a-third"]);
     expect(after.contents[1]!.tutorials).toEqual(["undoing-it"]);
-    expect(prose(written)).toEqual(prose(COURSE));
+    expect(prose(written)).toEqual(prose(MODULE));
   });
 
   test("emptying a series leaves a bare tutorials: key, which reads back as an empty series", () => {
-    // dewlab's own read_course() maps a `tutorials:` with nothing under
+    // dewlab's own read_module() maps a `tutorials:` with nothing under
     // it to [], so removing the last tutorial from a series is a real
     // state rather than a file that stops building.
-    const one = course();
-    const written = expectOk(writeCourseFile(COURSE, [{ series: one.contents[1]!, tutorials: [] }]));
+    const one = module();
+    const written = expectOk(writeModuleFile(MODULE, [{ series: one.contents[1]!, tutorials: [] }]));
 
     expect(written).toContain("- title: Matrices\n  tutorials:\n");
-    const after = course(written);
+    const after = module(written);
     expect(after.contents[1]!.tutorials).toEqual([]);
     // And the now-empty range can be written into again.
-    const refilled = expectOk(writeCourseFile(written, [{ series: after.contents[1]!, tutorials: ["back-again"] }]));
-    expect(course(refilled).contents[1]!.tutorials).toEqual(["back-again"]);
+    const refilled = expectOk(writeModuleFile(written, [{ series: after.contents[1]!, tutorials: ["back-again"] }]));
+    expect(module(refilled).contents[1]!.tutorials).toEqual(["back-again"]);
   });
 
   test("writing no edits at all returns the file untouched", () => {
-    expect(expectOk(writeCourseFile(COURSE, []))).toBe(COURSE);
+    expect(expectOk(writeModuleFile(MODULE, []))).toBe(MODULE);
   });
 
   test("a series with no writable range is refused, and nothing is written", () => {
-    const flow = COURSE.replace("  tutorials:\n  - grid-of-numbers\n  - multiplying-grids\n  - undoing-it\n", "  tutorials: [grid-of-numbers, undoing-it]\n");
-    const one = course(flow);
+    const flow = MODULE.replace("  tutorials:\n  - grid-of-numbers\n  - multiplying-grids\n  - undoing-it\n", "  tutorials: [grid-of-numbers, undoing-it]\n");
+    const one = module(flow);
     expect(one.contents[1]!.tutorialsRange).toBeNull();
 
-    const result = writeCourseFile(flow, [{ series: one.contents[1]!, tutorials: ["undoing-it"] }]);
+    const result = writeModuleFile(flow, [{ series: one.contents[1]!, tutorials: ["undoing-it"] }]);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toContain("Matrices");
   });
 
   test("two edits to the same series are refused rather than applied twice", () => {
-    const one = course();
-    const result = writeCourseFile(COURSE, [
+    const one = module();
+    const result = writeModuleFile(MODULE, [
       { series: one.contents[0]!, tutorials: ["a"] },
       { series: one.contents[0]!, tutorials: ["b"] },
     ]);
@@ -138,50 +138,50 @@ describe("moveTutorial", () => {
   test("within a series, an index is read against the list with the tutorial already taken out", () => {
     // "working-with-tables" is at 1 of 2; dragging it to the front is
     // index 0, and the list it lands in is the one-item list left behind.
-    const written = expectOk(moveTutorial(course(), COURSE, { series: 0, index: 1 }, { series: 0, index: 0 }));
-    expect(course(written).contents[0]!.tutorials).toEqual(["working-with-tables", "first-steps-cm"]);
+    const written = expectOk(moveTutorial(module(), MODULE, { series: 0, index: 1 }, { series: 0, index: 0 }));
+    expect(module(written).contents[0]!.tutorials).toEqual(["working-with-tables", "first-steps-cm"]);
   });
 
   test("dragging the middle of three to the end lands it last, not second", () => {
-    const written = expectOk(moveTutorial(course(), COURSE, { series: 1, index: 1 }, { series: 1, index: 2 }));
-    expect(course(written).contents[1]!.tutorials).toEqual(["grid-of-numbers", "undoing-it", "multiplying-grids"]);
+    const written = expectOk(moveTutorial(module(), MODULE, { series: 1, index: 1 }, { series: 1, index: 2 }));
+    expect(module(written).contents[1]!.tutorials).toEqual(["grid-of-numbers", "undoing-it", "multiplying-grids"]);
   });
 
   test("a drag into a sibling series takes it out of one and puts it in the other, in one write", () => {
-    const written = expectOk(moveTutorial(course(), COURSE, { series: 1, index: 0 }, { series: 0, index: 1 }));
-    const after = course(written);
+    const written = expectOk(moveTutorial(module(), MODULE, { series: 1, index: 0 }, { series: 0, index: 1 }));
+    const after = module(written);
     expect(after.contents[0]!.tutorials).toEqual(["first-steps-cm", "grid-of-numbers", "working-with-tables"]);
     expect(after.contents[1]!.tutorials).toEqual(["multiplying-grids", "undoing-it"]);
-    expect(prose(written)).toEqual(prose(COURSE));
+    expect(prose(written)).toEqual(prose(MODULE));
   });
 
   test("dropping past the end of a series lands at the end rather than refusing", () => {
-    const written = expectOk(moveTutorial(course(), COURSE, { series: 1, index: 0 }, { series: 0, index: 99 }));
-    expect(course(written).contents[0]!.tutorials).toEqual(["first-steps-cm", "working-with-tables", "grid-of-numbers"]);
+    const written = expectOk(moveTutorial(module(), MODULE, { series: 1, index: 0 }, { series: 0, index: 99 }));
+    expect(module(written).contents[0]!.tutorials).toEqual(["first-steps-cm", "working-with-tables", "grid-of-numbers"]);
   });
 
-  test("a stale index — the course changed underneath — is refused, not written at a guess", () => {
-    const result = moveTutorial(course(), COURSE, { series: 1, index: 7 }, { series: 1, index: 0 });
+  test("a stale index — the module changed underneath — is refused, not written at a guess", () => {
+    const result = moveTutorial(module(), MODULE, { series: 1, index: 7 }, { series: 1, index: 0 });
     expect(result.ok).toBe(false);
-    const gone = moveTutorial(course(), COURSE, { series: 9, index: 0 }, { series: 0, index: 0 });
+    const gone = moveTutorial(module(), MODULE, { series: 9, index: 0 }, { series: 0, index: 0 });
     expect(gone.ok).toBe(false);
   });
 });
 
 describe("addTutorial", () => {
   test("adds at a position, or at the end when none is given", () => {
-    const atEnd = expectOk(addTutorial(course(), COURSE, 0, "new-one"));
-    expect(course(atEnd).contents[0]!.tutorials).toEqual(["first-steps-cm", "working-with-tables", "new-one"]);
+    const atEnd = expectOk(addTutorial(module(), MODULE, 0, "new-one"));
+    expect(module(atEnd).contents[0]!.tutorials).toEqual(["first-steps-cm", "working-with-tables", "new-one"]);
 
-    const atFront = expectOk(addTutorial(course(), COURSE, 0, "new-one", 0));
-    expect(course(atFront).contents[0]!.tutorials).toEqual(["new-one", "first-steps-cm", "working-with-tables"]);
+    const atFront = expectOk(addTutorial(module(), MODULE, 0, "new-one", 0));
+    expect(module(atFront).contents[0]!.tutorials).toEqual(["new-one", "first-steps-cm", "working-with-tables"]);
   });
 
-  test("an id the course already lists elsewhere is refused, and the reason names where it sits", () => {
-    // dewlab's read_course() fails the build on this — "A tutorial sits
-    // in one place on a course" — so writing it would hand somebody a
+  test("an id the module already lists elsewhere is refused, and the reason names where it sits", () => {
+    // dewlab's read_module() fails the build on this — "A tutorial sits
+    // in one place on a module" — so writing it would hand somebody a
     // file that no longer builds.
-    const result = addTutorial(course(), COURSE, 0, "undoing-it");
+    const result = addTutorial(module(), MODULE, 0, "undoing-it");
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toContain("Matrices");
@@ -190,37 +190,37 @@ describe("addTutorial", () => {
   });
 
   test("adding to an empty series works, since its range is a real empty range", () => {
-    const emptied = expectOk(writeCourseFile(COURSE, [{ series: course().contents[1]!, tutorials: [] }]));
-    const written = expectOk(addTutorial(course(emptied), emptied, 1, "first-one"));
-    expect(course(written).contents[1]!.tutorials).toEqual(["first-one"]);
+    const emptied = expectOk(writeModuleFile(MODULE, [{ series: module().contents[1]!, tutorials: [] }]));
+    const written = expectOk(addTutorial(module(emptied), emptied, 1, "first-one"));
+    expect(module(written).contents[1]!.tutorials).toEqual(["first-one"]);
   });
 });
 
 describe("removeTutorial", () => {
   test("unlists one tutorial and leaves the rest in order", () => {
-    const written = expectOk(removeTutorial(course(), COURSE, 1, "multiplying-grids"));
-    expect(course(written).contents[1]!.tutorials).toEqual(["grid-of-numbers", "undoing-it"]);
-    expect(prose(written)).toEqual(prose(COURSE));
+    const written = expectOk(removeTutorial(module(), MODULE, 1, "multiplying-grids"));
+    expect(module(written).contents[1]!.tutorials).toEqual(["grid-of-numbers", "undoing-it"]);
+    expect(prose(written)).toEqual(prose(MODULE));
   });
 
   test("removing the only tutorial leaves the series, not a hole in the file", () => {
-    const one = expectOk(removeTutorial(course(), COURSE, 0, "first-steps-cm"));
-    const two = expectOk(removeTutorial(course(one), one, 0, "working-with-tables"));
-    const after = course(two);
+    const one = expectOk(removeTutorial(module(), MODULE, 0, "first-steps-cm"));
+    const two = expectOk(removeTutorial(module(one), one, 0, "working-with-tables"));
+    const after = module(two);
     expect(after.contents).toHaveLength(2);
     expect(after.contents[0]!.title).toBe("Python fundamentals");
     expect(after.contents[0]!.tutorials).toEqual([]);
   });
 
   test("an id the series doesn't list is refused", () => {
-    const result = removeTutorial(course(), COURSE, 0, "undoing-it");
+    const result = removeTutorial(module(), MODULE, 0, "undoing-it");
     expect(result.ok).toBe(false);
   });
 });
 
 describe("idsListedBy", () => {
-  test("every id on the course, across its series", () => {
-    expect([...idsListedBy(course())].sort()).toEqual(["first-steps-cm", "grid-of-numbers", "multiplying-grids", "undoing-it", "working-with-tables"]);
+  test("every id on the module, across its series", () => {
+    expect([...idsListedBy(module())].sort()).toEqual(["first-steps-cm", "grid-of-numbers", "multiplying-grids", "undoing-it", "working-with-tables"]);
   });
 });
 
@@ -235,34 +235,34 @@ describe("seriesKey", () => {
 
 describe("addSeries", () => {
   test("appends to the end of contents:, with an empty tutorials key ready to drop into", () => {
-    const written = expectOk(addSeries(course(), COURSE, "Text Generation"));
-    const after = course(written);
+    const written = expectOk(addSeries(module(), MODULE, "Text Generation"));
+    const after = module(written);
     expect(after.contents.map((s) => s.title)).toEqual(["Python fundamentals", "Matrices", "Text Generation"]);
     expect(after.contents[2]!.tutorials).toEqual([]);
     // An empty block key, not `tutorials: []` — a flow list is exactly
-    // what courses.ts refuses to rewrite, so writing one would hand back
+    // what modules.ts refuses to rewrite, so writing one would hand back
     // a series nothing could ever be dragged into.
     expect(written).toContain("- title: Text Generation\n  tutorials:\n");
     expect(after.contents[2]!.tutorialsRange).not.toBeNull();
     // And the prose above is untouched, as always.
-    expect(prose(written).slice(0, 6)).toEqual(prose(COURSE).slice(0, 6));
+    expect(prose(written).slice(0, 6)).toEqual(prose(MODULE).slice(0, 6));
   });
 
   test("the new series can be added to immediately", () => {
-    const written = expectOk(addSeries(course(), COURSE, "Text Generation"));
-    const filled = expectOk(addTutorial(course(written), written, 2, "a-chain-reads-a-book"));
-    expect(course(filled).contents[2]!.tutorials).toEqual(["a-chain-reads-a-book"]);
+    const written = expectOk(addSeries(module(), MODULE, "Text Generation"));
+    const filled = expectOk(addTutorial(module(written), written, 2, "a-chain-reads-a-book"));
+    expect(module(filled).contents[2]!.tutorials).toEqual(["a-chain-reads-a-book"]);
   });
 
-  test("a title that normalises to one the course already has is refused, and the reason names it", () => {
-    // dewlab's read_course fails the build on two series whose keys
+  test("a title that normalises to one the module already has is refused, and the reason names it", () => {
+    // dewlab's read_module fails the build on two series whose keys
     // match, so a near-duplicate is as broken as an exact one — and far
     // harder to spot by eye.
-    const exact = addSeries(course(), COURSE, "Matrices");
+    const exact = addSeries(module(), MODULE, "Matrices");
     expect(exact.ok).toBe(false);
     if (!exact.ok) expect(exact.reason).toContain("already has a series called");
 
-    const near = addSeries(course(), COURSE, "matrices!");
+    const near = addSeries(module(), MODULE, "matrices!");
     expect(near.ok).toBe(false);
     if (!near.ok) {
       expect(near.reason).toContain("Matrices");
@@ -271,22 +271,22 @@ describe("addSeries", () => {
   });
 
   test("a blank title, or one with no letters or digits, is refused", () => {
-    expect(addSeries(course(), COURSE, "   ").ok).toBe(false);
-    const punctuation = addSeries(course(), COURSE, "!!!");
+    expect(addSeries(module(), MODULE, "   ").ok).toBe(false);
+    const punctuation = addSeries(module(), MODULE, "!!!");
     expect(punctuation.ok).toBe(false);
     if (!punctuation.ok) expect(punctuation.reason).toContain("no letters or digits");
   });
 
-  test("a course written as a flow list offers nowhere to append, and says so", () => {
-    const flow = "title: A course\ncontents: []\n";
-    const parsed = parseCourseFile("courses/a.yaml", flow)!;
+  test("a module written as a flow list offers nowhere to append, and says so", () => {
+    const flow = "title: A module\ncontents: []\n";
+    const parsed = parseModuleFile("modules/a.yaml", flow)!;
     expect(parsed.contentsRange).toBeNull();
     const result = addSeries(parsed, flow, "Anything");
     expect(result.ok).toBe(false);
   });
 
-  test("a course with more keys after contents: gets the series before them, not after", () => {
-    // Two of dewlab's six real course files carry `mixed:` after
+  test("a module with more keys after contents: gets the series before them, not after", () => {
+    // Two of dewlab's six real module files carry `mixed:` after
     // `contents:`. Appending past it would put a series into the mixed
     // problem-set list, which dewlab reads as a list of ids.
     const withMixed = [
@@ -299,7 +299,7 @@ describe("addSeries", () => {
       "- mixed-programming-with-objects",
       "",
     ].join("\n");
-    const written = expectOk(addSeries(parseCourseFile("courses/oop.yaml", withMixed)!, withMixed, "Inheritance"));
+    const written = expectOk(addSeries(parseModuleFile("modules/oop.yaml", withMixed)!, withMixed, "Inheritance"));
     expect(written).toBe(
       [
         "title: OOP",
@@ -316,43 +316,64 @@ describe("addSeries", () => {
     );
   });
 
-  test("a course with no series yet takes its first one", () => {
-    const empty = "title: A course\ncontents:\n";
-    const written = expectOk(addSeries(parseCourseFile("courses/a.yaml", empty)!, empty, "Getting started"));
-    expect(course(written, "courses/a.yaml").contents.map((s) => s.title)).toEqual(["Getting started"]);
+  test("a module with no series yet takes its first one", () => {
+    const empty = "title: A module\ncontents:\n";
+    const written = expectOk(addSeries(parseModuleFile("modules/a.yaml", empty)!, empty, "Getting started"));
+    expect(module(written, "modules/a.yaml").contents.map((s) => s.title)).toEqual(["Getting started"]);
   });
 });
 
-// The same property against dewlab's real course files, which is where
+describe("editing series", () => {
+  test("moves a complete series, including its tutorials, without touching descriptor prose", () => {
+    const written = expectOk(moveSeries(module(), MODULE, 1, 0));
+    const after = module(written);
+    expect(after.contents.map((series) => series.title)).toEqual(["Matrices", "Python fundamentals"]);
+    expect(after.contents[0]!.tutorials).toEqual(["grid-of-numbers", "multiplying-grids", "undoing-it"]);
+    expect(written.split("\n").slice(0, 7)).toEqual(MODULE.split("\n").slice(0, 7));
+  });
+
+  test("renames one series with YAML-safe quoting and keeps its tutorial list", () => {
+    const written = expectOk(renameSeries(module(), MODULE, 0, "Python: first steps"));
+    const after = module(written);
+    expect(after.contents[0]!.title).toBe("Python: first steps");
+    expect(after.contents[0]!.tutorials).toEqual(["first-steps-cm", "working-with-tables"]);
+  });
+
+  test("refuses a renamed series that collides after dewlab normalises it", () => {
+    expect(renameSeries(module(), MODULE, 0, "matrices!").ok).toBe(false);
+  });
+});
+
+// The same property against dewlab's real module files, which is where
 // the folded scalars and the wrapped single-quoted prose actually live.
-// Skipped when there's no sibling checkout, the same shape courses.test.ts
+// Skipped when there's no sibling checkout, the same shape modules.test.ts
 // and full-corpus.test.ts both use — the directory is read inside each
 // test body rather than in the describe callback, which bun evaluates
 // even for a describe every test in it is skipped in.
-const DEWLAB_COURSES = "../dewlab/courses";
-const havePath = () => existsSync(DEWLAB_COURSES);
+const DEWLAB_MODULES = "../dewlab/modules";
+const havePath = () => existsSync(DEWLAB_MODULES);
 
-function courseFilesOnDisk(): { path: string; content: string }[] {
-  return readdirSync(DEWLAB_COURSES)
+function moduleFilesOnDisk(): { path: string; content: string }[] {
+  return readdirSync(DEWLAB_MODULES)
     .filter((name) => name.endsWith(".yaml") && name !== "index.yaml" && name !== "redirects.yaml")
-    .map((name) => ({ path: `courses/${name}`, content: readFileSync(join(DEWLAB_COURSES, name), "utf-8") }));
+    .map((name) => ({ path: `modules/${name}`, content: readFileSync(join(DEWLAB_MODULES, name), "utf-8") }));
 }
 
-describe(`real course files: ${DEWLAB_COURSES}${havePath() ? "" : " (not checked out — skipped)"}`, () => {
-  test.skipIf(!havePath())("reversing every series in a real course rewrites only the id lines", () => {
-    const files = courseFilesOnDisk();
+describe(`real module files: ${DEWLAB_MODULES}${havePath() ? "" : " (not checked out — skipped)"}`, () => {
+  test.skipIf(!havePath())("reversing every series in a real module rewrites only the id lines", () => {
+    const files = moduleFilesOnDisk();
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
-      const parsed = parseCourseFile(file.path, file.content);
+      const parsed = parseModuleFile(file.path, file.content);
       expect(parsed, file.path).not.toBeNull();
       const edits = parsed!.contents.map((series) => ({ series, tutorials: [...series.tutorials].reverse() }));
-      const written = expectOk(writeCourseFile(file.content, edits));
+      const written = expectOk(writeModuleFile(file.content, edits));
 
       // Same number of lines, same everything that isn't an id.
       expect(written.split("\n"), file.path).toHaveLength(file.content.split("\n").length);
       expect(prose(written), file.path).toEqual(prose(file.content));
 
-      const after = parseCourseFile(file.path, written);
+      const after = parseModuleFile(file.path, written);
       expect(after, file.path).not.toBeNull();
       for (const [at, series] of parsed!.contents.entries()) {
         expect(after!.contents[at]!.tutorials, `${file.path} — ${series.title}`).toEqual([...series.tutorials].reverse());
@@ -360,13 +381,13 @@ describe(`real course files: ${DEWLAB_COURSES}${havePath() ? "" : " (not checked
     }
   });
 
-  test.skipIf(!havePath())("a series appended to every real course lands inside contents:, and nothing else moves", () => {
-    for (const file of courseFilesOnDisk()) {
-      const parsed = parseCourseFile(file.path, file.content)!;
+  test.skipIf(!havePath())("a series appended to every real module lands inside contents:, and nothing else moves", () => {
+    for (const file of moduleFilesOnDisk()) {
+      const parsed = parseModuleFile(file.path, file.content)!;
       expect(parsed.contentsRange, `${file.path} offers somewhere to append`).not.toBeNull();
 
       const written = expectOk(addSeries(parsed, file.content, "A Brand New Series"));
-      const after = parseCourseFile(file.path, written)!;
+      const after = parseModuleFile(file.path, written)!;
 
       // Last, and empty.
       expect(after.contents.map((s) => s.title).slice(-1), file.path).toEqual(["A Brand New Series"]);
@@ -382,7 +403,7 @@ describe(`real course files: ${DEWLAB_COURSES}${havePath() ? "" : " (not checked
       // `contents:`, and every folded and quoted scalar above.
       const lines = written.split("\n");
       const at = lines.indexOf("- title: A Brand New Series");
-      expect(at, `${file.path}: the entry was written at the course's own indent`).toBeGreaterThan(-1);
+      expect(at, `${file.path}: the entry was written at the module's own indent`).toBeGreaterThan(-1);
       expect(lines[at + 1], file.path).toBe("  tutorials:");
       lines.splice(at, 2);
       expect(lines.join("\n"), file.path).toBe(file.content);
@@ -390,10 +411,10 @@ describe(`real course files: ${DEWLAB_COURSES}${havePath() ? "" : " (not checked
   });
 
   test.skipIf(!havePath())("a mixed: key after contents: still follows the new series, not precedes it", () => {
-    const withMixed = courseFilesOnDisk().filter((file) => /^mixed:/m.test(file.content));
-    expect(withMixed.length, "dewlab has course files with a mixed: key").toBeGreaterThan(0);
+    const withMixed = moduleFilesOnDisk().filter((file) => /^mixed:/m.test(file.content));
+    expect(withMixed.length, "dewlab has module files with a mixed: key").toBeGreaterThan(0);
     for (const file of withMixed) {
-      const written = expectOk(addSeries(parseCourseFile(file.path, file.content)!, file.content, "Appended"));
+      const written = expectOk(addSeries(parseModuleFile(file.path, file.content)!, file.content, "Appended"));
       const lines = written.split("\n");
       const newSeries = lines.findIndex((line) => line.includes("- title: Appended"));
       const mixed = lines.findIndex((line) => /^mixed:/.test(line));
@@ -403,11 +424,11 @@ describe(`real course files: ${DEWLAB_COURSES}${havePath() ? "" : " (not checked
   });
 
   test.skipIf(!havePath())("reversing twice is the file it started as, byte for byte", () => {
-    const files = courseFilesOnDisk();
+    const files = moduleFilesOnDisk();
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       const reversed = (content: string) =>
-        expectOk(writeCourseFile(content, parseCourseFile(file.path, content)!.contents.map((series) => ({ series, tutorials: [...series.tutorials].reverse() }))));
+        expectOk(writeModuleFile(content, parseModuleFile(file.path, content)!.contents.map((series) => ({ series, tutorials: [...series.tutorials].reverse() }))));
       expect(reversed(reversed(file.content)), file.path).toBe(file.content);
     }
   });

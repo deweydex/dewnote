@@ -11,12 +11,12 @@
 // mis-indexing a file, the kind of thing §5.10 built this to prevent in
 // the first place.
 //
-// ## The id comes from the path, and the courses from courses/
+// ## The id comes from the path, and the modules from modules/
 //
 // dewlab moved placement out of front matter: a page's id is `id_of()`
 // in its own build.py — "from where its file is and nothing else" —
-// and which course lists that id lives in `courses/*.yaml` (courses.ts).
-// So `id` here is derived, never read from a field, and `courses` is a
+// and which module lists that id lives in `modules/*.yaml` (modules.ts).
+// So `id` here is derived, never read from a field, and `modules` is a
 // join rather than a property of the file.
 //
 // `module`/`series` stay. dewlab's files no longer carry them, so they
@@ -27,7 +27,7 @@
 // dewlab and would break dewstack, so they're kept and left to empty out
 // on their own.)
 
-import type { Course } from "./courses.ts";
+import type { Module } from "./modules.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 
 export interface FileIndexEntry {
@@ -41,16 +41,16 @@ export interface FileIndexEntry {
   id?: string;
   title?: string;
   /** dewstack's own front-matter placement. A dewlab file written since
-   * the move to `courses/` has none of these. */
+   * the move to `modules/` has none of these. */
   slug?: string;
   module?: string;
   series?: string;
-  /** Ids of the courses whose own `contents` list this entry's id, filled
-   * in by `buildFileIndex` when it's given the course files. Empty (not
-   * absent) for an indexed dewlab tutorial no course lists — which is a
-   * real and buildable state, "published but on no course", and worth
+  /** Ids of the modules whose own `contents` list this entry's id, filled
+   * in by `buildFileIndex` when it's given the module files. Empty (not
+   * absent) for an indexed dewlab tutorial no module lists — which is a
+   * real and buildable state, "published but on no module", and worth
    * telling apart from a file that was never cross-referenced at all. */
-  courses?: string[];
+  modules?: string[];
   /** dewlab's own `status` (`draft`/`beta`/`live`/`archived`, `build.py`'s
    * own `STATUSES`) and `version` (a `YYYY.MM.DD.N` release date,
    * `build.py`'s own `VERSION_RE`) — read here only so `defaultEntryFor`
@@ -112,17 +112,17 @@ export function indexEntryFor(path: string, content: string): FileIndexEntry {
   return entry;
 }
 
-/** Which courses list each tutorial id — one pass over the course files,
- * so the join below is a lookup rather than a scan per entry. A course
- * listing the same id in two of its own series names that course once. */
-export function courseMembership(courses: Course[]): Map<string, string[]> {
+/** Which modules list each tutorial id — one pass over the module files,
+ * so the join below is a lookup rather than a scan per entry. A module
+ * listing the same id in two of its own series names that module once. */
+export function moduleMembership(modules: Module[]): Map<string, string[]> {
   const listedBy = new Map<string, string[]>();
-  for (const course of courses) {
-    for (const series of course.contents) {
+  for (const module of modules) {
+    for (const series of module.contents) {
       for (const id of series.tutorials) {
         const already = listedBy.get(id);
-        if (!already) listedBy.set(id, [course.id]);
-        else if (!already.includes(course.id)) already.push(course.id);
+        if (!already) listedBy.set(id, [module.id]);
+        else if (!already.includes(module.id)) already.push(module.id);
       }
     }
   }
@@ -130,20 +130,20 @@ export function courseMembership(courses: Course[]): Map<string, string[]> {
 }
 
 /**
- * The index, optionally cross-referenced against the course files the
- * same store just read. Without them every entry's `courses` is absent —
+ * The index, optionally cross-referenced against the module files the
+ * same store just read. Without them every entry's `modules` is absent —
  * "nothing was cross-referenced" — rather than empty, which means "cross-
- * referenced, and no course lists this."
+ * referenced, and no module lists this."
  */
 export function buildFileIndex(
   files: { path: string; content: string }[],
-  courses: Course[] = [],
+  modules: Module[] = [],
 ): FileIndexEntry[] {
   const index = files.map(({ path, content }) => indexEntryFor(path, content));
-  if (courses.length === 0) return index;
-  const listedBy = courseMembership(courses);
+  if (modules.length === 0) return index;
+  const listedBy = moduleMembership(modules);
   for (const entry of index) {
-    entry.courses = entry.id ? (listedBy.get(entry.id) ?? []) : [];
+    entry.modules = entry.id ? (listedBy.get(entry.id) ?? []) : [];
   }
   return index;
 }
