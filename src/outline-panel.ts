@@ -15,6 +15,7 @@
 
 import { parseDocument } from "./blocks.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
+import { attachResizeHandle } from "./panel-resize.ts";
 
 export interface OutlinePanelHost {
   getSource(): string;
@@ -131,6 +132,7 @@ export function mountOutlinePanel(host: OutlinePanelHost): OutlinePanel {
 
   labelToggle(toggle, "Outline");
   iconRail().appendChild(toggle);
+  attachResizeHandle(panel, "left");
   document.body.appendChild(panel);
 
   return {

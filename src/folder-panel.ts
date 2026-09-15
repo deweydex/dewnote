@@ -12,6 +12,7 @@ import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
 import { createFile as createActiveFile, setActiveStore } from "./active-store.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
+import { attachResizeHandle } from "./panel-resize.ts";
 import { todayVersion } from "./dialect.ts";
 
 export interface FolderPanel {
@@ -439,6 +440,7 @@ id: ${id}-first-cell
 
   labelToggle(toggle, "Folder");
   iconRail().appendChild(toggle);
+  attachResizeHandle(panel, "left");
   document.body.appendChild(panel);
   renderFiles();
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SETTINGS, parseSettings, settingsToRootProperties } from "./settings.ts";
+import { clampPanelWidth, DEFAULT_SETTINGS, parseSettings, settingsToRootProperties } from "./settings.ts";
 
 describe("parseSettings", () => {
   test("returns the defaults for null, undefined, or a non-object", () => {
@@ -26,6 +26,7 @@ describe("parseSettings", () => {
       codeFontSize: 13,
       codeFont: "humanist",
       pyodideBase: "https://example.com/pyodide/",
+      panelWidth: 24,
     };
     expect(parseSettings(saved)).toEqual(saved as never);
   });
@@ -50,6 +51,7 @@ describe("parseSettings", () => {
     expect(result.lineHeight).toBe(DEFAULT_SETTINGS.lineHeight);
     expect(result.paragraphSpacing).toBe(DEFAULT_SETTINGS.paragraphSpacing);
     expect(result.codeFont).toBe(DEFAULT_SETTINGS.codeFont);
+    expect(result.panelWidth).toBe(DEFAULT_SETTINGS.panelWidth);
   });
 
   test("line height is clamped to something still readable", () => {
@@ -76,6 +78,15 @@ describe("parseSettings", () => {
     expect(parseSettings({ textSize: 999 }).textSize).toBe(24);
     expect(parseSettings({ codeFontSize: 0 }).codeFontSize).toBe(11);
     expect(parseSettings({ codeFontSize: 999 }).codeFontSize).toBe(20);
+    expect(parseSettings({ panelWidth: 1 }).panelWidth).toBe(16);
+    expect(parseSettings({ panelWidth: 999 }).panelWidth).toBe(32);
+    expect(parseSettings({ panelWidth: "wide" }).panelWidth).toBe(DEFAULT_SETTINGS.panelWidth);
+  });
+
+  test("clampPanelWidth is the same range a saved value gets clamped to", () => {
+    expect(clampPanelWidth(1)).toBe(16);
+    expect(clampPanelWidth(999)).toBe(32);
+    expect(clampPanelWidth(24)).toBe(24);
   });
 
   test("rejects an unknown theme/bodyFont/margins value rather than storing it", () => {
@@ -105,5 +116,10 @@ describe("settingsToRootProperties", () => {
 
   test("cellTint false produces an explicit \"0\", not a removed property", () => {
     expect(settingsToRootProperties({ ...DEFAULT_SETTINGS, cellTint: false })["--dn-cell-tint"]).toBe("0");
+  });
+
+  test("a widened panel produces --dn-panel-width in rem", () => {
+    expect(settingsToRootProperties({ ...DEFAULT_SETTINGS, panelWidth: 26 })["--dn-panel-width"]).toBe("26rem");
+    expect(settingsToRootProperties(DEFAULT_SETTINGS)["--dn-panel-width"]).toBeNull();
   });
 });

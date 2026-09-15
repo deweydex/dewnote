@@ -72,6 +72,7 @@ import { parseCourseFile, type Course, type CourseSeries } from "./courses.ts";
 import { addSeries, addTutorial, findSeries, locateTutorial, moveTutorial, removeTutorial, idsListedBy, type WriteResult } from "./course-writer.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
+import { attachResizeHandle } from "./panel-resize.ts";
 
 /** What a drag carries: enough to find the tutorial again in a file
  * re-read since the drag started. Serialised through the one
@@ -585,6 +586,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
 
   labelToggle(toggle, "Courses");
   iconRail().appendChild(toggle);
+  attachResizeHandle(panel, "left");
   document.body.appendChild(panel);
 
   return {

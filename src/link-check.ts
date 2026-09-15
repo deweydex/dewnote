@@ -26,6 +26,7 @@
 
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
+import { attachResizeHandle } from "./panel-resize.ts";
 
 /**
  * `tutorial:` is the only link scheme either site's build resolves.
@@ -163,6 +164,7 @@ export function mountLinkCheckPanel(host: LinkCheckHost): LinkCheckPanel {
 
   labelToggle(toggle, "Links");
   iconRail().appendChild(toggle);
+  attachResizeHandle(panel, "left");
   document.body.appendChild(panel);
 
   return {

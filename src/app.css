@@ -1091,6 +1091,69 @@ body {
   }
 }
 
+/* ------------------------------------------------------------ side panels
+ *
+ * The repository, settings, series, folder, outline, dialect and
+ * link-check panels are seven fixed-width sidebars that otherwise repeat
+ * the same rule almost verbatim (position, size, background, border);
+ * this is the one place their width and base type size live, so a drag
+ * on any panel's own handle (panel-resize.ts) reaches every one of them
+ * through the single --dn-panel-width property it writes, and Settings'
+ * "Text size" reaches their type the same way the document's own already
+ * does, through --dl-font-size — one control governs the whole app's
+ * type, not the reading column alone. The factor (0.75) and the clamp
+ * keep a panel's own type legibly subordinate to the document's at every
+ * setting from the smallest to the largest.
+ */
+.dn-repo-panel,
+.dn-settings-panel,
+.dn-series-panel,
+.dn-folder-panel,
+.dn-outline-panel,
+.dn-dialect-panel,
+.dn-linkcheck-panel {
+  width: var(--dn-panel-width, 20rem);
+  font-size: clamp(11px, calc(var(--dl-font-size, 18px) * 0.75), 19px);
+}
+
+/* The handle itself: a thin strip along the panel's own inner edge. It
+ * sits flush inside the edge (right: 0 / left: 0) rather than straddling
+ * it — the panel's own `overflow-y: auto` computes its `overflow-x` to
+ * `auto` too, not `visible` (CSS2.1 §11.1.1: a non-visible value on one
+ * axis pulls the other off `visible` as well), so a handle that hung half
+ * outside the box the way a resizer often does would have half of its
+ * own hit area silently clipped away right at the boundary that matters
+ * most. `touch-action: none` stops the browser treating a touch drag here
+ * as a page scroll instead. */
+.dn-panel-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  touch-action: none;
+  background: transparent;
+}
+.dn-panel-resize-right {
+  right: 0;
+}
+.dn-panel-resize-left {
+  left: 0;
+}
+.dn-panel-resize:hover,
+.dn-panel-resize:focus-visible {
+  background: var(--dl-orange);
+  opacity: 0.5;
+  outline: none;
+}
+@media (hover: none) {
+  /* A fingertip needs more than 6px to find reliably; the visible border
+     stays the same, only the grabbable strip widens. */
+  .dn-panel-resize {
+    width: 16px;
+  }
+}
+
 /* ------------------------------------------------------------ repository */
 
 .dn-repo-toggle {
@@ -1119,7 +1182,6 @@ body {
   top: 0;
   left: 0;
   z-index: 11;
-  width: 20rem;
   max-width: 90vw;
   height: 100%;
   overflow-y: auto;
@@ -1128,7 +1190,6 @@ body {
   box-shadow: 4px 0 16px var(--dl-shadow);
   padding: 1rem 1.25rem 2rem;
   font-family: var(--dl-font-family);
-  font-size: 0.85em;
   color: var(--dl-fg);
 }
 
@@ -1338,7 +1399,6 @@ body {
   top: 0;
   right: 0;
   z-index: 11;
-  width: 20rem;
   max-width: 90vw;
   height: 100%;
   overflow-y: auto;
@@ -1347,7 +1407,6 @@ body {
   box-shadow: -4px 0 16px var(--dl-shadow);
   padding: 1rem 1.25rem 2rem;
   font-family: var(--dl-font-family);
-  font-size: 0.85em;
   color: var(--dl-fg);
 }
 
@@ -1554,7 +1613,6 @@ body {
   top: 0;
   right: 0;
   z-index: 11;
-  width: 20rem;
   max-width: 90vw;
   height: 100%;
   overflow-y: auto;
@@ -1563,7 +1621,6 @@ body {
   box-shadow: -4px 0 16px var(--dl-shadow);
   padding: 1rem 1.25rem 2rem;
   font-family: var(--dl-font-family);
-  font-size: 0.85em;
   color: var(--dl-fg);
 }
 
@@ -1678,7 +1735,6 @@ body {
   top: 0;
   right: 0;
   z-index: 11;
-  width: 20rem;
   max-width: 90vw;
   height: 100%;
   overflow-y: auto;
@@ -1687,7 +1743,6 @@ body {
   box-shadow: -4px 0 16px var(--dl-shadow);
   padding: 1rem 1.25rem 2rem;
   font-family: var(--dl-font-family);
-  font-size: 0.85em;
   color: var(--dl-fg);
 }
 
@@ -1865,7 +1920,6 @@ body {
   top: 0;
   right: 0;
   z-index: 11;
-  width: 20rem;
   max-width: 90vw;
   height: 100%;
   overflow-y: auto;
@@ -1874,7 +1928,6 @@ body {
   box-shadow: -4px 0 16px var(--dl-shadow);
   padding: 1rem 1.25rem 2rem;
   font-family: var(--dl-font-family);
-  font-size: 0.85em;
   color: var(--dl-fg);
 }
 
@@ -2117,7 +2170,6 @@ body {
   top: 0;
   right: 0;
   z-index: 11;
-  width: 20rem;
   max-width: 90vw;
   height: 100%;
   overflow-y: auto;
@@ -2126,7 +2178,6 @@ body {
   box-shadow: -4px 0 16px var(--dl-shadow);
   padding: 1rem 1.25rem 2rem;
   font-family: var(--dl-font-family);
-  font-size: 0.85em;
   color: var(--dl-fg);
 }
 
@@ -2227,7 +2278,6 @@ body {
   top: 0;
   right: 0;
   z-index: 11;
-  width: 18rem;
   max-width: 90vw;
   height: 100%;
   overflow-y: auto;
@@ -2236,7 +2286,6 @@ body {
   box-shadow: -4px 0 16px var(--dl-shadow);
   padding: 1rem 1.25rem 2rem;
   font-family: var(--dl-font-family);
-  font-size: 0.85em;
   color: var(--dl-fg);
 }
 

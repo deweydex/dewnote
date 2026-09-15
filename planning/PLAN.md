@@ -1402,10 +1402,12 @@ Still open:
   fill-in-the-blank, dewlab's own header shape rather than a port of
   dewmark's exam-file YAML. Decision 46 gives dewnote the two menu
   entries that write it, with a preview matching every other fence
-  kind's own (decision 15). Still open, on dewlab's own side and named
-  as such there: LaTeX inside a prompt or option, per-option feedback,
-  scoring — none of which this editor's own templates need to know
-  about, since it only ever writes the markdown.
+  kind's own (decision 15). LaTeX inside a prompt or option, named open
+  on dewlab's side at the time, is answered too now (dewlab decision
+  7.182, this editor's own decision 47 confirming the preview already
+  rendered it) — what remains open on dewlab's side alone is per-option
+  feedback and scoring, neither of which this editor's own templates
+  need to know about, since it only ever writes the markdown.
 - **What this retires.** dewlab's `editor.html` overlaps step 5 entirely;
   dewmini's file mounting overlaps step 4. Decided (decision 34, asked
   directly rather than assumed): dewnote replaces it rather than the two

@@ -1,8 +1,9 @@
 // The reading/editing texture settings, and the running-Python settings
 // beside them — decision 7's "every one of those values is a user
 // setting" (family, size, measure, cell tint, theme), plus a couple of
-// dewnote-specific additions (a separate code font size, and where
-// Pyodide loads from). Modelled directly on dewstack's own
+// dewnote-specific additions (a separate code font size, where Pyodide
+// loads from, and the shared side-panel width panel-resize.ts's drag
+// handle writes to). Modelled directly on dewstack's own
 // assets/settings.js: one small object in localStorage, applied to
 // <html> as CSS custom properties before first paint, a default value
 // removing its attribute/property rather than setting it so the
@@ -55,6 +56,12 @@ export interface Settings {
    * base URL is a module-level constant, not parameterised — see
    * DECISIONS.md. */
   pyodideBase: string;
+  /** rem, matching --dn-panel-width's own unit. Every side panel
+   * (repository, settings, series, folder, outline, dialect, link-check)
+   * reads the one value — panel-resize.ts's drag handle writes here, so
+   * widening one widens the next one a reader opens too, since they open
+   * one at a time from the same icon rail rather than side by side. */
+  panelWidth: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -69,17 +76,26 @@ export const DEFAULT_SETTINGS: Settings = {
   codeFontSize: 15,
   codeFont: "mono",
   pyodideBase: "",
+  panelWidth: 20,
 };
 
 const TEXT_SIZE_RANGE = { min: 14, max: 24 };
 const MEASURE_RANGE = { min: 24, max: 48 };
 const CODE_FONT_SIZE_RANGE = { min: 11, max: 20 };
 const LINE_HEIGHT_RANGE = { min: 1.2, max: 2.2 };
+const PANEL_WIDTH_RANGE = { min: 16, max: 32 };
 
 const STORAGE_KEY = "dewnote:settings";
 
 function clamp(value: number, range: { min: number; max: number }): number {
   return Math.min(range.max, Math.max(range.min, value));
+}
+
+/** The one piece of this module a caller outside it needs directly —
+ * panel-resize.ts, so a drag never pushes a panel narrower or wider than
+ * the range a saved value would itself be clamped to on the next load. */
+export function clampPanelWidth(value: number): number {
+  return clamp(value, PANEL_WIDTH_RANGE);
 }
 
 /** The actual validation/fallback logic, kept free of `localStorage`
@@ -120,6 +136,10 @@ export function parseSettings(raw: unknown): Settings {
     typeof value.lineHeight === "number" && Number.isFinite(value.lineHeight)
       ? clamp(value.lineHeight, LINE_HEIGHT_RANGE)
       : DEFAULT_SETTINGS.lineHeight;
+  const panelWidth =
+    typeof value.panelWidth === "number" && Number.isFinite(value.panelWidth)
+      ? clampPanelWidth(value.panelWidth)
+      : DEFAULT_SETTINGS.panelWidth;
 
   return {
     theme,
@@ -133,6 +153,7 @@ export function parseSettings(raw: unknown): Settings {
     codeFontSize,
     codeFont,
     pyodideBase,
+    panelWidth,
   };
 }
 
@@ -206,6 +227,7 @@ export function settingsToRootProperties(settings: Settings): Record<string, str
     "--dl-line-height": mapDefault(String(settings.lineHeight), String(DEFAULT_SETTINGS.lineHeight)),
     "--dn-block-gap": mapDefault(PARAGRAPH_SPACING[settings.paragraphSpacing], PARAGRAPH_SPACING.normal),
     "--dl-mono": mapDefault(CODE_FONT_STACKS[settings.codeFont], CODE_FONT_STACKS.mono),
+    "--dn-panel-width": mapDefault(`${settings.panelWidth}rem`, `${DEFAULT_SETTINGS.panelWidth}rem`),
   };
 }
 
