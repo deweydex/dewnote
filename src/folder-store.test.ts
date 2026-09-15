@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createFile, listCourseFiles, listMarkdownFiles, readFile, type DirectoryLike } from "./folder-store.ts";
+import { createFile, listModuleFiles, listMarkdownFiles, readFile, type DirectoryLike } from "./folder-store.ts";
 
 /** A hand-built fake — no real FileSystemDirectoryHandle needed to
  * verify the walk itself, the same split github.ts's own truncation
@@ -43,38 +43,38 @@ describe("listMarkdownFiles", () => {
   });
 });
 
-describe("listCourseFiles", () => {
-  test("finds courses/*.yaml, ignoring markdown and yaml elsewhere", async () => {
+describe("listModuleFiles", () => {
+  test("finds modules/*.yaml, ignoring markdown and yaml elsewhere", async () => {
     const root = fakeDir({
       "README.md": { kind: "file" },
-      courses: fakeDir({
+      modules: fakeDir({
         "computational-methods.yaml": { kind: "file" },
         "index.yaml": { kind: "file" },
       }),
       tutorials: fakeDir({
         "first-steps": fakeDir({
           "first-steps.md": { kind: "file" },
-          // A tutorial's own glossary is yaml too, and is not a course.
+          // A tutorial's own glossary is yaml too, and is not a module.
           "first-steps.glossary.yaml": { kind: "file" },
         }),
       }),
     });
-    const files = await listCourseFiles(root);
+    const files = await listModuleFiles(root);
     expect(files.map((f: { path: string }) => f.path).sort()).toEqual([
-      "courses/computational-methods.yaml",
-      "courses/index.yaml",
+      "modules/computational-methods.yaml",
+      "modules/index.yaml",
     ]);
   });
 
-  test("only directly inside courses/, not one level deeper", async () => {
+  test("only directly inside modules/, not one level deeper", async () => {
     const root = fakeDir({
-      courses: fakeDir({
+      modules: fakeDir({
         "web-authoring.yaml": { kind: "file" },
-        archive: fakeDir({ "old-course.yaml": { kind: "file" } }),
+        archive: fakeDir({ "old-module.yaml": { kind: "file" } }),
       }),
     });
-    const files = await listCourseFiles(root);
-    expect(files.map((f: { path: string }) => f.path)).toEqual(["courses/web-authoring.yaml"]);
+    const files = await listModuleFiles(root);
+    expect(files.map((f: { path: string }) => f.path)).toEqual(["modules/web-authoring.yaml"]);
   });
 });
 

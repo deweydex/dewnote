@@ -1,4 +1,4 @@
-// Writing a course file back (src/course-writer.ts through
+// Writing a module file back (src/module-writer.ts through
 // src/series-panel.ts) — drag a tutorial within its series, drag it into
 // a sibling series, add one, take one off.
 //
@@ -8,8 +8,8 @@
 // registered itself, which reads and writes a real handle. Every test
 // below reads the bytes that actually reached that handle.
 //
-// The course file carries a folded `card:` and a `description:` that
-// runs over two lines on purpose. They are the reason courses.ts records
+// The module file carries a folded `card:` and a `description:` that
+// runs over two lines on purpose. They are the reason modules.ts records
 // line ranges instead of re-dumping the YAML, so every write here is
 // checked for having left them exactly as they were.
 
@@ -35,7 +35,7 @@ const test = base.extend<{ failOnConsoleErrors: void }>({
   ],
 });
 
-const COURSE_YAML = [
+const MODULE_YAML = [
   "title: Computational Methods",
   "code: 5N0554 · QQI Level 5",
   "card: We work through matrices, simulation, algorithms and debugging, in Python.",
@@ -58,11 +58,11 @@ function tutorial(title: string): string {
   return `---\ntitle: ${title}\nyear: 2026\nversion: 2026.09.01.1\n---\n\n# ${title}\n`;
 }
 
-/** The same fake tree folder-panel.spec.ts uses, with a course file
+/** The same fake tree folder-panel.spec.ts uses, with a module file
  * worth writing into and four tutorials to move around in it. */
 async function stubDirectoryPicker(page: Page) {
   await page.addInitScript(
-    ({ course, flow, files }: { course: string; flow: string; files: Record<string, string> }) => {
+    ({ module, flow, files }: { module: string; flow: string; files: Record<string, string> }) => {
       const writes: Record<string, string> = {};
 
       function fakeFileHandle(name: string, content: string) {
@@ -117,8 +117,8 @@ async function stubDirectoryPicker(page: Page) {
       }
 
       const root = fakeDirHandle("dewlab", {
-        courses: fakeDirHandle("courses", {
-          "computational-methods.yaml": fakeFileHandle("computational-methods.yaml", course),
+        modules: fakeDirHandle("modules", {
+          "computational-methods.yaml": fakeFileHandle("computational-methods.yaml", module),
           "web-authoring.yaml": fakeFileHandle("web-authoring.yaml", flow),
         }),
         tutorials: fakeDirHandle("tutorials", tutorialDirs),
@@ -128,7 +128,7 @@ async function stubDirectoryPicker(page: Page) {
       (window as unknown as { __testWritten(name: string): string | null }).__testWritten = (name) => writes[name] ?? null;
     },
     {
-      course: COURSE_YAML,
+      module: MODULE_YAML,
       flow: FLOW_YAML,
       files: {
         "first-steps": tutorial("First Steps"),
@@ -140,13 +140,13 @@ async function stubDirectoryPicker(page: Page) {
   );
 }
 
-/** Opens the folder and then the courses rail, waiting for the index to
+/** Opens the folder and then the modules rail, waiting for the index to
  * have caught up — a tutorial's title only appears once the front-matter
  * index has read it, and the rail renders before that finishes. */
 async function openRail(page: Page) {
   await page.locator(".dn-folder-toggle").click();
   await page.locator(".dn-folder-open").click();
-  await expect(page.locator(".dn-folder-status")).toContainText("course files");
+  await expect(page.locator(".dn-folder-status")).toContainText("module files");
   await page.locator(".dn-folder-close").click();
   await page.locator(".dn-series-toggle").click();
   await expect(page.locator(".dn-series-block").first().locator(".dn-series-link").first()).toHaveText("First Steps");
@@ -213,12 +213,12 @@ test("dragging a tutorial into a sibling series takes it out of one and puts it 
   await expect(matrices.locator("li")).toHaveCount(2);
 });
 
-test("adding offers only tutorials this course doesn't already list, and lists the one picked", async ({ page }) => {
+test("adding offers only tutorials this module doesn't already list, and lists the one picked", async ({ page }) => {
   await openRail(page);
   await page.locator(".dn-series-add-toggle").first().click();
 
-  // Three of the four indexed tutorials are already on this course, so
-  // exactly one is on offer — dewlab's build fails on a course that
+  // Three of the four indexed tutorials are already on this module, so
+  // exactly one is on offer — dewlab's build fails on a module that
   // lists a tutorial twice, so offering one would offer a broken file.
   const offered = page.locator(".dn-series-add-item");
   await expect(offered).toHaveCount(1);
@@ -231,13 +231,13 @@ test("adding offers only tutorials this course doesn't already list, and lists t
   expect(prose(after!)).toEqual(PROSE);
 });
 
-test("taking a tutorial off a course unlists it and leaves the file, which turns up under 'On no course'", async ({ page }) => {
+test("taking a tutorial off a module unlists it and leaves the file, which turns up under 'On no module'", async ({ page }) => {
   await openRail(page);
   await expect(page.locator(".dn-series-unlisted .dn-series-list li")).toHaveText("A Loose One");
 
   await page.locator(".dn-series-list").first().locator("li").nth(0).locator(".dn-series-remove").click();
 
-  await expect(page.locator(".dn-series-status")).toContainText("still there, on no course");
+  await expect(page.locator(".dn-series-status")).toContainText("still there, on no module");
   const after = await written_(page);
   expect(after).toContain("- title: Python fundamentals\n  tutorials:\n  - working-with-tables\n");
   expect(after).not.toContain("first-steps");
@@ -258,10 +258,10 @@ test.describe("new series", () => {
   });
 
   test("appends a series with nothing in it, which can then be added to", async ({ page }) => {
-    const course = page.locator(".dn-series-module", { hasText: "Computational Methods" });
-    await course.locator(".dn-series-add-toggle", { hasText: "New series" }).click();
-    await course.locator(".dn-series-new-title").fill("Text Generation");
-    await course.locator(".dn-series-new-create").click();
+    const module = page.locator(".dn-series-module", { hasText: "Computational Methods" });
+    await module.locator(".dn-series-add-toggle", { hasText: "New series" }).click();
+    await module.locator(".dn-series-new-title").fill("Text Generation");
+    await module.locator(".dn-series-new-create").click();
 
     await expect(page.locator(".dn-series-status")).toContainText("no tutorials yet");
     const written = await written_(page);
@@ -271,18 +271,18 @@ test.describe("new series", () => {
     // It is a real series straight away: shown, and with its own "Add a
     // tutorial" row rather than being read-only until the file is
     // reopened.
-    const block = course.locator(".dn-series-block", { hasText: "Text Generation" });
-    await expect(block.locator("h4")).toHaveText("Text Generation");
+    const block = module.locator(".dn-series-block", { hasText: "Text Generation" });
+    await expect(block.locator(".dn-series-series-title")).toHaveText("Text Generation");
     await expect(block.locator(".dn-series-add-toggle", { hasText: "Add a tutorial" })).toBeVisible();
   });
 
-  test("a title the course already has, however it is punctuated, is refused rather than written", async ({ page }) => {
-    // dewlab's read_course fails the build on two series whose titles
+  test("a title the module already has, however it is punctuated, is refused rather than written", async ({ page }) => {
+    // dewlab's read_module fails the build on two series whose titles
     // normalise the same, so this is the file staying buildable.
-    const course = page.locator(".dn-series-module", { hasText: "Computational Methods" });
-    await course.locator(".dn-series-add-toggle", { hasText: "New series" }).click();
-    await course.locator(".dn-series-new-title").fill("matrices!");
-    await course.locator(".dn-series-new-create").click();
+    const module = page.locator(".dn-series-module", { hasText: "Computational Methods" });
+    await module.locator(".dn-series-add-toggle", { hasText: "New series" }).click();
+    await module.locator(".dn-series-new-title").fill("matrices!");
+    await module.locator(".dn-series-new-create").click();
 
     await expect(page.locator(".dn-series-status")).toContainText("the same section");
     expect(await written_(page), "nothing was written").toBeNull();
@@ -292,7 +292,7 @@ test.describe("new series", () => {
 test("a series written as a flow list is shown, and says why it can't be edited here", async ({ page }) => {
   await openRail(page);
   const flowBlock = page.locator(".dn-series-module", { hasText: "Web Authoring" }).locator(".dn-series-block");
-  await expect(flowBlock.locator("h4")).toHaveText("First site");
+  await expect(flowBlock.locator(".dn-series-series-title")).toHaveText("First site");
   await expect(flowBlock.locator(".dn-series-readonly")).toContainText("can't rewrite safely");
   // Shown, opened and read like any other — just not written.
   await expect(flowBlock.locator(".dn-series-list li")).toHaveCount(1);
@@ -304,13 +304,13 @@ test("with no folder or repository open, the rail is read-only rather than offer
   await page.evaluate(() => {
     (
       window as unknown as {
-        __dewnote: { setCourses(courses: unknown[]): void; setFileIndex(index: unknown[]): void };
+        __dewnote: { setModules(modules: unknown[]): void; setFileIndex(index: unknown[]): void };
       }
-    ).__dewnote.setCourses([
+    ).__dewnote.setModules([
       {
-        id: "a-course",
-        path: "courses/a-course.yaml",
-        title: "A Course",
+        id: "a-module",
+        path: "modules/a-module.yaml",
+        title: "A Module",
         contents: [{ title: "A series", tutorials: ["listed"], tutorialsRange: { start: 3, end: 4 }, indent: "  " }],
       },
     ]);

@@ -38,10 +38,10 @@ import { iconRail, labelToggle } from "./icon-rail.ts";
  * tests. Checking them offered an author a scheme that would have shipped
  * as a literal broken href.
  *
- * dewlab's own spec for the move to `courses/` suggested renaming
- * `module:` to `course:`. That would have carried the same problem
- * forward under a new name, so both are dropped instead. A course page
- * has a real address (`courses/<id>.html`), so a scheme for it could be
+ * dewlab's own spec for the move to `modules/` suggested renaming
+ * `module:` to `module:`. That would have carried the same problem
+ * forward under a new name, so both are dropped instead. A module page
+ * has a real address (`modules/<id>.html`), so a scheme for it could be
  * built — on dewlab's side first, in `resolve_links()`.
  */
 export type LinkKind = "tutorial";

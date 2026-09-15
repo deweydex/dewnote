@@ -22,6 +22,7 @@ export type BodyFont = "serif" | "sans" | "mono";
 export type Margins = "comfortable" | "compact";
 export type ParagraphSpacing = "tight" | "normal" | "loose";
 export type CodeFont = "mono" | "humanist" | "slab";
+export type RailDisplay = "icons" | "icons-and-labels" | "labels";
 
 export interface Settings {
   theme: Theme;
@@ -49,6 +50,9 @@ export interface Settings {
    * rather than a free-text field: a font nobody has installed silently
    * falls back to whatever the system picks, which looks like a bug. */
   codeFont: CodeFont;
+  /** How the shared sidebar launchers are presented. Labels are the
+   * default: a glyph should never be the only clue to what a button does. */
+  railDisplay: RailDisplay;
   /** Empty string means the built-in default (jsDelivr) — see
    * pyodide-engine.ts's own PYODIDE_BASE. A real gap this doesn't cover
    * yet: nothing currently reads this setting, since pyodide-engine.ts's
@@ -68,6 +72,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cellTint: true,
   codeFontSize: 15,
   codeFont: "mono",
+  railDisplay: "icons-and-labels",
   pyodideBase: "",
 };
 
@@ -101,6 +106,8 @@ export function parseSettings(raw: unknown): Settings {
     value.paragraphSpacing === "tight" || value.paragraphSpacing === "loose" ? value.paragraphSpacing : "normal";
   const codeFont: CodeFont =
     value.codeFont === "humanist" || value.codeFont === "slab" ? value.codeFont : "mono";
+  const railDisplay: RailDisplay =
+    value.railDisplay === "icons" || value.railDisplay === "labels" ? value.railDisplay : "icons-and-labels";
   const cellTint = typeof value.cellTint === "boolean" ? value.cellTint : DEFAULT_SETTINGS.cellTint;
   const pyodideBase = typeof value.pyodideBase === "string" ? value.pyodideBase : "";
 
@@ -132,6 +139,7 @@ export function parseSettings(raw: unknown): Settings {
     cellTint,
     codeFontSize,
     codeFont,
+    railDisplay,
     pyodideBase,
   };
 }
@@ -197,6 +205,7 @@ const MARGIN_PADDING: Record<Margins, string> = {
 export function settingsToRootProperties(settings: Settings): Record<string, string | null> {
   return {
     "data-theme": settings.theme === "system" ? null : settings.theme,
+    "data-rail-display": settings.railDisplay === DEFAULT_SETTINGS.railDisplay ? null : settings.railDisplay,
     "--dl-font-family": mapDefault(BODY_FONT_STACKS[settings.bodyFont], BODY_FONT_STACKS.serif),
     "--dl-font-size": mapDefault(`${settings.textSize}px`, `${DEFAULT_SETTINGS.textSize}px`),
     "--dl-line-width": mapDefault(`${settings.measure}rem`, `${DEFAULT_SETTINGS.measure}rem`),
@@ -219,9 +228,9 @@ function mapDefault(value: string, defaultValue: string): string | null {
 export function applySettings(settings: Settings): void {
   const root = document.documentElement;
   for (const [key, value] of Object.entries(settingsToRootProperties(settings))) {
-    if (key === "data-theme") {
-      if (value === null) root.removeAttribute("data-theme");
-      else root.setAttribute("data-theme", value);
+    if (key.startsWith("data-")) {
+      if (value === null) root.removeAttribute(key);
+      else root.setAttribute(key, value);
     } else if (value === null) {
       root.style.removeProperty(key);
     } else {

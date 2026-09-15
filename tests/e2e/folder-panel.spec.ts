@@ -104,10 +104,10 @@ async function stubDirectoryPicker(page: Page) {
 
     const root = fakeDirHandle("tutorials", {
       "README.md": fakeFileHandle("README.md", "# Read Me\n\nTop level.\n"),
-      courses: fakeDirHandle("courses", {
-        "a-course.yaml": fakeFileHandle(
-          "a-course.yaml",
-          "title: A Course\ncontents:\n- title: A Series\n  tutorials:\n  - a-rule\n",
+      modules: fakeDirHandle("modules", {
+        "a-module.yaml": fakeFileHandle(
+          "a-module.yaml",
+          "title: A Module\ncontents:\n- title: A Series\n  tutorials:\n  - a-rule\n",
         ),
       }),
       content: fakeDirHandle("content", contentEntries),
@@ -134,7 +134,7 @@ test("opening a folder lists its markdown files recursively, and search filters 
   await page.locator(".dn-folder-toggle").click();
   await page.locator(".dn-folder-open").click();
 
-  await expect(page.locator(".dn-folder-status").first()).toHaveText('2 markdown files, 1 course file, in "tutorials".');
+  await expect(page.locator(".dn-folder-status").first()).toHaveText('2 markdown files, 1 module file, in "tutorials".');
   const items = page.locator(".dn-folder-file");
   await expect(items).toHaveCount(3);
 
@@ -166,27 +166,27 @@ test("Refresh re-scans the open folder, picking up a file added outside dewnote,
   await expect(page.locator(".dn-folder-file")).toHaveCount(3);
 
   await page.locator(".dn-folder-refresh").click();
-  await expect(page.locator(".dn-folder-status").first()).toHaveText('3 markdown files, 1 course file, in "tutorials".');
+  await expect(page.locator(".dn-folder-status").first()).toHaveText('3 markdown files, 1 module file, in "tutorials".');
   await expect(page.locator(".dn-folder-file")).toHaveCount(4);
   await expect(page.locator(".dn-folder-file", { hasText: "new-page.md" })).toBeVisible();
 });
 
-// A course file is just another file in the browsable list — opening one
+// A module file is just another file in the browsable list — opening one
 // hands it to the same editor and Save path every markdown file already
-// gets, so hand-editing a course needs no UI this repo doesn't already
-// have. That stays true now the panel can show courses: the panel reads
+// gets, so hand-editing a module needs no UI this repo doesn't already
+// have. That stays true now the panel can show modules: the panel reads
 // them, and this is still the way to edit one by hand.
-test("a course file opens and saves through the ordinary file bar, same as any markdown file", async ({ page }) => {
+test("a module file opens and saves through the ordinary file bar, same as any markdown file", async ({ page }) => {
   await page.locator(".dn-folder-toggle").click();
   await page.locator(".dn-folder-open").click();
-  await page.locator(".dn-folder-file", { hasText: "courses/a-course.yaml" }).click();
+  await page.locator(".dn-folder-file", { hasText: "modules/a-module.yaml" }).click();
 
-  await expect(page.locator(".dn-file-name")).toHaveText("courses/a-course.yaml");
+  await expect(page.locator(".dn-file-name")).toHaveText("modules/a-module.yaml");
   await expect(page.locator(".dn-file-status")).toHaveText("saved");
 
   await page.keyboard.press("ControlOrMeta+/");
   const editor = page.locator(".dn-source-editor .cm-content");
-  await expect(editor).toContainText("title: A Course");
+  await expect(editor).toContainText("title: A Module");
   await editor.click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("  - a-new-tutorial\n");
@@ -236,18 +236,18 @@ test("opening a folder builds the file index the link picker searches", async ({
 });
 
 // active-store.ts's own "open this path" hook, exercised through the
-// placement panel — a course listing a real, indexed id is a real
+// placement panel — a module listing a real, indexed id is a real
 // clickable button there, opening the exact file this folder already
 // has, the same as clicking it directly in this rail's own file list.
-test("the courses panel can open a listed tutorial by clicking it", async ({ page }) => {
+test("the modules panel can open a listed tutorial by clicking it", async ({ page }) => {
   await page.locator(".dn-folder-toggle").click();
   await page.locator(".dn-folder-open").click();
   await expect(page.locator(".dn-folder-file")).toHaveCount(3);
   await page.locator(".dn-folder-close").click();
 
   await page.locator(".dn-series-toggle").click();
-  await expect(page.locator(".dn-series-module h3")).toHaveText("A Course");
-  await expect(page.locator(".dn-series-block h4")).toHaveText("A Series");
+  await expect(page.locator(".dn-series-module-title")).toHaveText("A Module");
+  await expect(page.locator(".dn-series-series-title")).toHaveText("A Series");
   const link = page.locator(".dn-series-link", { hasText: "A Rule" });
   await expect(link).toBeVisible();
   await link.click();
@@ -260,9 +260,9 @@ test("the courses panel can open a listed tutorial by clicking it", async ({ pag
 // tutorial" form. The layout is `tutorials/<id>/<id>.md` and the id is
 // the folder's own name, so the id is the only placement this form asks
 // for — the module, module title and series fields it used to carry went
-// with dewlab's move to courses/, since writing `module:` into front
+// with dewlab's move to modules/, since writing `module:` into front
 // matter would fill in a field its build ignores. A tutorial made here
-// is on no course until something lists it, which dewlab builds happily.
+// is on no module until something lists it, which dewlab builds happily.
 test("the folder rail can create a new tutorial from a template, which then appears in the file list and opens", async ({
   page,
 }) => {
@@ -277,7 +277,7 @@ test("the folder rail can create a new tutorial from a template, which then appe
   await page.locator(".dn-folder-create-button").click();
 
   await expect(page.locator(".dn-folder-create-status")).toHaveText(
-    "Created tutorials/a-tutorial/a-tutorial.md — on no course yet.",
+    "Created tutorials/a-tutorial/a-tutorial.md — on no module yet.",
   );
   // Fields clear on success, ready for the next one — the year field is
   // left alone (defaulted, not cleared) since it's still the right value.
@@ -302,7 +302,7 @@ test("creating a tutorial with an id already in use is refused, rather than sile
   await page.locator(".dn-folder-create-field[placeholder='Title']").fill("A Tutorial");
   await page.locator(".dn-folder-create-button").click();
   await expect(page.locator(".dn-folder-create-status")).toHaveText(
-    "Created tutorials/a-tutorial/a-tutorial.md — on no course yet.",
+    "Created tutorials/a-tutorial/a-tutorial.md — on no module yet.",
   );
 
   await page.locator(".dn-folder-create-field[placeholder^='tutorial-id']").fill("a-tutorial");

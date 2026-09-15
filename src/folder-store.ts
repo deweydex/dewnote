@@ -76,14 +76,14 @@ export async function listMarkdownFiles(root: DirectoryLike): Promise<FolderFile
   return walk(root, (path) => path.endsWith(".md"));
 }
 
-/** Every course file under `root` — dewlab's own `courses/*.yaml`
- * (courses.ts), which say which tutorials a course lists and in what
+/** Every module file under `root` — dewlab's own `modules/*.yaml`
+ * (modules.ts), which say which tutorials a module lists and in what
  * order, and which series-panel.ts reads alongside `listMarkdownFiles`'s
  * front-matter index. `index.yaml` and `redirects.yaml` come back too:
  * both live in the same directory, the first carries the order the
- * courses are shown in, and `isCourseFile` is what tells them apart. */
-export async function listCourseFiles(root: DirectoryLike): Promise<FolderFile[]> {
-  return walk(root, (path) => /(^|\/)courses\/[^/]+\.yaml$/.test(path));
+ * modules are shown in, and `isModuleFile` is what tells them apart. */
+export async function listModuleFiles(root: DirectoryLike): Promise<FolderFile[]> {
+  return walk(root, (path) => /(^|\/)modules\/[^/]+\.yaml$/.test(path));
 }
 
 export async function readFile(handle: FileSystemFileHandle): Promise<string> {
@@ -95,7 +95,7 @@ export async function readFile(handle: FileSystemFileHandle): Promise<string> {
  * directory, not the filtered list `walk` builds.
  *
  * That distinction is the whole point: `listMarkdownFiles` and
- * `listCourseFiles` deliberately see only what this editor opens, so a
+ * `listModuleFiles` deliberately see only what this editor opens, so a
  * picture already sitting beside a tutorial is invisible to both. Naming
  * a new one from that list would call a taken name free. Empty for a
  * folder that doesn't exist, which is the right answer for "what is
@@ -115,7 +115,7 @@ export async function listNamesIn(root: FileSystemDirectoryHandle, folder: strin
 
 /** The raw bytes of the file at `relativePath` under `root`, or null if
  * there is none — an image the editor has to show, which `walk` never
- * listed because it only ever looked for markdown and course files. A
+ * listed because it only ever looked for markdown and module files. A
  * missing directory along the way is a missing file, not an error: an
  * image name with nothing behind it is a real state the editor renders
  * (as a broken image, the same as the built page would) rather than
@@ -137,7 +137,7 @@ export async function readBytesAt(root: FileSystemDirectoryHandle, relativePath:
 
 /** Writes `content` over a file this store already holds — the write
  * half of `readFile` above, for a caller editing a file it never opened
- * into the editor (series-panel.ts's own course-file writes). Separate
+ * into the editor (series-panel.ts's own module-file writes). Separate
  * from `createFile` below on purpose: this one requires the file to
  * exist already and replaces it, where that one requires it not to and
  * refuses to overwrite. */

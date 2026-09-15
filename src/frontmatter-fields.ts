@@ -23,14 +23,14 @@
 // A dewlab tutorial used to name its own place in the site: `slug`,
 // `module`, `module_title`, `series`. It doesn't any more. A tutorial is
 // `tutorials/<id>/<id>.md`, its id comes from the path and is site-wide,
-// and which course lists it — in what series, in what order — lives in
-// `courses/*.yaml` (courses.ts). So those four rows are gone rather than
+// and which module lists it — in what series, in what order — lives in
+// `modules/*.yaml` (modules.ts). So those four rows are gone rather than
 // relabelled: a form field for something the build ignores is worse than
 // no field, because it looks like it still places the tutorial.
 //
 // Placement didn't stop being editable; it stopped being front matter.
 // It's the series panel's job now, and the create-a-tutorial form's
-// ("list it on this course, in this series"), which is where decision
+// ("list it on this module, in this series"), which is where decision
 // 11's picker survives.
 
 import type { DialectName } from "./dialect.ts";

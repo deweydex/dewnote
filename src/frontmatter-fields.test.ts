@@ -20,8 +20,8 @@ describe("frontMatterFieldsFor", () => {
       "year",
       "version",
     ]);
-    // A tutorial's id comes from its path and its course listing comes
-    // from courses/*.yaml, so a row for any of these would offer to set
+    // A tutorial's id comes from its path and its module listing comes
+    // from modules/*.yaml, so a row for any of these would offer to set
     // something the build ignores.
     const byKey = Object.fromEntries(fields.map((f) => [f.key, f]));
     for (const gone of ["slug", "module", "module_title", "series"]) {
@@ -31,7 +31,7 @@ describe("frontMatterFieldsFor", () => {
 
   test("dewstack keeps its own placement fields and their pickers", () => {
     // dewstack is a separate dialect on its own schedule; dewlab's move
-    // to courses/ says nothing about it.
+    // to modules/ says nothing about it.
     const byKey = Object.fromEntries(frontMatterFieldsFor("dewstack").map((f) => [f.key, f]));
     expect(byKey["module"]?.indexedAs).toBe("module");
     expect(byKey["series"]?.indexedAs).toBe("series");

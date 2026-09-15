@@ -151,7 +151,7 @@ function convertFence(block: Block, from: DialectName, to: DialectName, report: 
 const DEWLAB_ONLY_FIELDS = ["year", "covers", "practice_for", "practice_across"];
 
 /** dewstack still places a tutorial from its own front matter; dewlab
- * doesn't any more (courses.ts). These four carried the placement, so
+ * doesn't any more (modules.ts). These four carried the placement, so
  * they come out on the way into dewlab rather than riding along as
  * fields its build ignores — a `module:` sitting in a dewlab file reads
  * like it still puts the tutorial somewhere. */
@@ -175,10 +175,10 @@ function convertFrontMatter(block: Block, from: DialectName, to: DialectName, re
     for (const key of dropped) delete next[key];
     if (dropped.length > 0) {
       // Not recoverable automatically: a dewstack module is not a dewlab
-      // course, and the id comes from where the file is put. So the
+      // module, and the id comes from where the file is put. So the
       // author is told rather than guessed for.
       report.push(
-        `front matter: ${dropped.join(", ")} dropped — dewlab places a tutorial from courses/*.yaml and its id from its path, so list this on a course to place it`,
+        `front matter: ${dropped.join(", ")} dropped — dewlab places a tutorial from modules/*.yaml and its id from its path, so list this on a module to place it`,
       );
     }
   } else {

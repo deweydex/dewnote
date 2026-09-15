@@ -977,6 +977,46 @@ body {
   gap: 0.6rem;
 }
 
+/* Labels are the default on every screen, not only on the phone bar.
+   The setting can collapse the rail to familiar icons or remove the
+   decorative glyphs entirely without changing accessible names. */
+.dn-icon-rail > button {
+  width: auto;
+  min-width: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding-inline: 0.65rem;
+}
+
+.dn-icon-rail > button[data-label]::after {
+  content: attr(data-label);
+  font-family: var(--dl-font-family);
+  font-size: 0.72rem;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--dl-muted);
+}
+
+[data-rail-display="icons"] .dn-icon-rail > button {
+  width: 2rem;
+  min-width: 2rem;
+  padding-inline: 0;
+}
+
+[data-rail-display="icons"] .dn-icon-rail > button[data-label]::after {
+  display: none;
+}
+
+[data-rail-display="labels"] .dn-icon-rail > button {
+  font-size: 0;
+}
+
+[data-rail-display="labels"] .dn-icon-rail > button[data-label]::after {
+  font-size: 0.78rem;
+}
+
 /* Narrow screens: the rail becomes a bottom bar.
    
    Not a style preference. Fixed to the right edge, it sat on top of the
@@ -1910,22 +1950,59 @@ body {
 .dn-series-module {
   margin-bottom: 1rem;
 }
-.dn-series-module h3 {
+.dn-series-module-header,
+.dn-series-series-header {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.dn-series-module-title {
   margin: 0 0 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
   font-size: 0.78em;
   font-family: var(--dl-mono);
   color: var(--dl-muted);
   text-transform: uppercase;
   letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+  flex: 1;
 }
 
 .dn-series-block {
   margin-bottom: 0.75rem;
 }
-.dn-series-block h4 {
+.dn-series-series-title {
   margin: 0 0 0.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
   font-size: 0.95em;
+  font-family: var(--dl-font-family);
   color: var(--dl-heading);
+  text-align: left;
+  cursor: pointer;
+  flex: 1;
+}
+.dn-series-module-title:hover,
+.dn-series-series-title:hover {
+  color: var(--dl-orange);
+}
+.dn-series-order {
+  border: 0;
+  background: none;
+  color: var(--dl-muted);
+  cursor: pointer;
+  padding: 0.15rem 0.25rem;
+}
+.dn-series-order:hover:not(:disabled) {
+  color: var(--dl-orange);
+}
+.dn-series-order:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 
 .dn-series-list {
@@ -1955,7 +2032,7 @@ body {
 }
 
 /* A listed tutorial is a row of three: the grip that drags it, the title
-   that opens it, and the × that takes it off the course. The grip and
+   that opens it, and the × that takes it off the module. The grip and
    the × are quiet until the row is hovered or something in it has
    keyboard focus — a rail of lists is easier to read without a column of
    controls down each side of it — but never display:none, which would

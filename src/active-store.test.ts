@@ -73,7 +73,7 @@ describe("createFile", () => {
   });
 });
 
-// The read-modify-write pair series-panel.ts edits course files through.
+// The read-modify-write pair series-panel.ts edits module files through.
 // Both are optional on the interface, so the interesting cases are the
 // ones where a store implements one and not the other: that is what
 // `canWriteFiles` exists to tell the panel before it draws a drag handle
@@ -99,8 +99,8 @@ describe("readTextFile / writeTextFile", () => {
   });
 
   test("each throws a real message rather than silently doing nothing when unsupported", async () => {
-    await expect(readTextFile("courses/a.yaml")).rejects.toThrow(/isn't supported/i);
-    await expect(writeTextFile("courses/a.yaml", "x", "msg")).rejects.toThrow(/isn't supported/i);
+    await expect(readTextFile("modules/a.yaml")).rejects.toThrow(/isn't supported/i);
+    await expect(writeTextFile("modules/a.yaml", "x", "msg")).rejects.toThrow(/isn't supported/i);
   });
 
   test("routes to the registered store, forwarding the path, content and commit message", async () => {
@@ -114,9 +114,9 @@ describe("readTextFile / writeTextFile", () => {
         written.push({ path, content, message });
       },
     });
-    expect(await readTextFile("courses/a.yaml")).toBe("read courses/a.yaml");
-    await writeTextFile("courses/a.yaml", "title: A\n", "Move x in A from dewnote");
-    expect(written).toEqual([{ path: "courses/a.yaml", content: "title: A\n", message: "Move x in A from dewnote" }]);
+    expect(await readTextFile("modules/a.yaml")).toBe("read modules/a.yaml");
+    await writeTextFile("modules/a.yaml", "title: A\n", "Move x in A from dewnote");
+    expect(written).toEqual([{ path: "modules/a.yaml", content: "title: A\n", message: "Move x in A from dewnote" }]);
   });
 
   test("a rejection from the store propagates as-is — a write the reader asked for that didn't happen", async () => {
@@ -129,6 +129,6 @@ describe("readTextFile / writeTextFile", () => {
         throw new Error("Enter a GitHub token first.");
       },
     });
-    await expect(writeTextFile("courses/a.yaml", "x", "msg")).rejects.toThrow("Enter a GitHub token first.");
+    await expect(writeTextFile("modules/a.yaml", "x", "msg")).rejects.toThrow("Enter a GitHub token first.");
   });
 });

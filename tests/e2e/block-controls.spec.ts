@@ -118,7 +118,7 @@ test("on a narrow screen the rail is a labelled bottom bar that fits, and nothin
   expect(geo.textClearOfRail).toBe(true);
   // Every glyph carries a word — a row of bare glyphs is a memory test,
   // and there is no tooltip to hover on a phone.
-  expect(geo.labels).toEqual(["Settings", "Courses", "Folder", "GitHub", "Convert", "Outline", "Source", "Links"]);
+  expect(geo.labels).toEqual(["Settings", "Modules", "Folder", "GitHub", "Convert", "Outline", "Source", "Links"]);
   expect(geo.smallest, "touch targets stay finger-sized").toBeGreaterThanOrEqual(44);
 
   await browser.close();

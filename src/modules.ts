@@ -1,4 +1,4 @@
-// Where a tutorial sits in a course, read from dewlab's own `courses/`
+// Where a tutorial sits in a module, read from dewlab's own `modules/`
 // directory — the replacement for the `<series>.order.yaml` files
 // series.ts used to read, after dewlab moved placement out of a
 // tutorial's front matter entirely (its DECISIONS_LOG 7.17x, and the
@@ -6,12 +6,12 @@
 // at `git show b7c5a6d:refactor/EDITOR.md` since that folder was deleted
 // when the refactor finished).
 //
-// The shape, read against real course files rather than a summary of
-// them: `courses/index.yaml` is `{order: [course-id, ...]}`; each
-// `courses/<id>.yaml` is `{title, code, status, card, description,
+// The shape, read against real module files rather than a summary of
+// them: `modules/index.yaml` is `{order: [module-id, ...]}`; each
+// `modules/<id>.yaml` is `{title, code, status, card, description,
 // contents: [{title, tutorials: [tutorial-id, ...]}, ...]}`. A tutorial
 // id is site-wide now — `tutorials/<id>/<id>.md` — so an id names one
-// page from any course, and a course file is the only place that says
+// page from any module, and a module file is the only place that says
 // which pages it holds and in what order.
 //
 // ## Why this records line ranges
@@ -20,7 +20,7 @@
 // with js-yaml for structure, never re-dump it, and write by replacing
 // the exact text of the one thing that changed, so everything untouched
 // stays byte-identical (DECISIONS.md 1 — the file is the document). A
-// course file needs that discipline more than front matter does, not
+// module file needs that discipline more than front matter does, not
 // less: `card:` is a folded scalar whose continuation lines are indented
 // prose, and `description:` is a single-quoted scalar carrying blank
 // lines inside it. Both are student-facing text on dewlab's own front
@@ -49,9 +49,9 @@
 
 import { load as parseYaml } from "js-yaml";
 
-export interface CourseSeries {
+export interface ModuleSeries {
   title: string;
-  /** Tutorial ids, in the order the course file lists them. */
+  /** Tutorial ids, in the order the module file lists them. */
   tutorials: string[];
   /** Half-open `[start, end)` line range of the `- id` items under this
    * series' own `tutorials:` key, for a writer to splice. An empty list
@@ -62,10 +62,12 @@ export interface CourseSeries {
   /** The exact leading whitespace each `- id` item carries, so a spliced
    * line matches the ones around it. */
   indent: string;
+  /** Complete line range for this series entry inside `contents:`. */
+  entryRange?: { start: number; end: number } | null;
 }
 
-export interface Course {
-  /** The file's own name minus `.yaml` — the course id, which is also
+export interface Module {
+  /** The file's own name minus `.yaml` — the module id, which is also
    * its page's address on the built site. */
   id: string;
   path: string;
@@ -73,27 +75,27 @@ export interface Course {
   /** dewlab's own `status:` — "beta" and so on. Absent in a file that
    * doesn't set one. */
   status?: string;
-  contents: CourseSeries[];
+  contents: ModuleSeries[];
   /** Half-open `[start, end)` line range of the entries under this
-   * course's own `contents:` key — where a new series is appended. Null
+   * module's own `contents:` key — where a new series is appended. Null
    * when the scan couldn't be sure of it, the same refusal
    * `tutorialsRange` makes.
    *
    * Recorded separately from the per-series ranges because it has a
-   * different edge: a course file can carry more top-level keys after
+   * different edge: a module file can carry more top-level keys after
    * `contents:` (`mixed:`, in two of dewlab's six), so the block ends in
    * the middle of the file and the scan has to find where rather than
    * run to the end. */
   contentsRange: { start: number; end: number } | null;
   /** The exact leading whitespace a `- title:` entry carries — `""` in
-   * every real course file, where the dash sits at column 0 while the
+   * every real module file, where the dash sits at column 0 while the
    * `tutorials:` under it is indented two. Recorded rather than derived
    * from the tutorials indent, because deriving it is a guess and a
    * wrong one splices a series into somebody's prose. */
   entryIndent: string;
   /** What one level of indentation is worth inside an entry — the gap
    * between a `- title:` line and its own `tutorials:` key. Two spaces
-   * everywhere today; read from the file rather than assumed so a course
+   * everywhere today; read from the file rather than assumed so a module
    * written with four still round-trips. */
   innerIndent: string;
 }
@@ -101,21 +103,21 @@ export interface Course {
 const YAML_SUFFIX = ".yaml";
 
 /** Files this module reads, by path: anything directly inside a
- * `courses/` directory, except the two that aren't courses. `index.yaml`
- * carries the order courses are shown in and `redirects.yaml` maps old
+ * `modules/` directory, except the two that aren't modules. `index.yaml`
+ * carries the order modules are shown in and `redirects.yaml` maps old
  * addresses to new ones; neither lists tutorials. */
-export function isCourseFile(path: string): boolean {
+export function isModuleFile(path: string): boolean {
   if (!path.endsWith(YAML_SUFFIX)) return false;
   const segments = path.split("/");
   const fileName = segments[segments.length - 1]!;
-  if (segments[segments.length - 2] !== "courses") return false;
+  if (segments[segments.length - 2] !== "modules") return false;
   return fileName !== "index.yaml" && fileName !== "redirects.yaml";
 }
 
-/** `courses/index.yaml`'s own `order:` list — the order the courses are
+/** `modules/index.yaml`'s own `order:` list — the order the modules are
  * shown in. An empty list for anything this can't read, which leaves the
  * caller to fall back on its own ordering rather than show nothing. */
-export function parseCourseIndex(content: string): string[] {
+export function parseModuleIndex(content: string): string[] {
   let data: unknown;
   try {
     data = parseYaml(content);
@@ -128,13 +130,13 @@ export function parseCourseIndex(content: string): string[] {
   return order.filter((entry): entry is string => typeof entry === "string");
 }
 
-/** One course file, or null for anything that isn't one or this can't
- * make sense of. dewlab's own build treats a malformed course file as a
+/** One module file, or null for anything that isn't one or this can't
+ * make sense of. dewlab's own build treats a malformed module file as a
  * hard failure; this is an editor, which has to stay open on a file it
  * doesn't understand, so an unreadable one is left out silently the way
  * series.ts's own order files always were. */
-export function parseCourseFile(path: string, content: string): Course | null {
-  if (!isCourseFile(path)) return null;
+export function parseModuleFile(path: string, content: string): Module | null {
+  if (!isModuleFile(path)) return null;
 
   let data: unknown;
   try {
@@ -146,9 +148,9 @@ export function parseCourseFile(path: string, content: string): Course | null {
   const { title, status, contents } = data as Record<string, unknown>;
   if (typeof title !== "string" || !title.trim()) return null;
   // `contents:` with nothing under it parses as null, and dewlab's own
-  // read_course maps that to an empty list rather than failing — a
-  // course with no series yet is a real, buildable state, and it is
-  // exactly the state a course is in just before somebody adds the
+  // read_module maps that to an empty list rather than failing — a
+  // module with no series yet is a real, buildable state, and it is
+  // exactly the state a module is in just before somebody adds the
   // first one. Refusing it here meant dewnote wouldn't read a file
   // dewlab builds happily.
   const entries = contents === null || contents === undefined ? [] : contents;
@@ -158,7 +160,8 @@ export function parseCourseFile(path: string, content: string): Course | null {
   const id = segments[segments.length - 1]!.slice(0, -YAML_SUFFIX.length);
   const ranges = scanTutorialBlocks(content);
 
-  const series: CourseSeries[] = [];
+  const block = scanContentsBlock(content);
+  const series: ModuleSeries[] = [];
   for (const [index, entry] of entries.entries()) {
     if (!entry || typeof entry !== "object") return null;
     const { title: seriesTitle, tutorials } = entry as Record<string, unknown>;
@@ -181,10 +184,10 @@ export function parseCourseFile(path: string, content: string): Course | null {
       tutorials: ids,
       tutorialsRange: agrees ? { start: scanned.start, end: scanned.end } : null,
       indent: scanned?.indent ?? "  ",
+      entryRange: block?.entries[index] ?? null,
     });
   }
 
-  const block = scanContentsBlock(content);
   return {
     id,
     path,
@@ -201,20 +204,20 @@ export function parseCourseFile(path: string, content: string): Course | null {
   };
 }
 
-/** Every real course among `files`, in `index.yaml`'s own order where
- * one is given — courses it doesn't name keep their own relative order,
- * after the ones it does, so a course file added by hand shows up rather
+/** Every real module among `files`, in `index.yaml`'s own order where
+ * one is given — modules it doesn't name keep their own relative order,
+ * after the ones it does, so a module file added by hand shows up rather
  * than vanishing until someone remembers to list it. */
-export function parseCourseFiles(
+export function parseModuleFiles(
   files: { path: string; content: string }[],
   indexOrder: string[] = [],
-): Course[] {
-  const courses = files.flatMap((file) => {
-    const course = parseCourseFile(file.path, file.content);
-    return course ? [course] : [];
+): Module[] {
+  const modules = files.flatMap((file) => {
+    const module = parseModuleFile(file.path, file.content);
+    return module ? [module] : [];
   });
   const rank = new Map(indexOrder.map((id, at) => [id, at]));
-  return courses.sort((a, b) => {
+  return modules.sort((a, b) => {
     const left = rank.get(a.id) ?? Number.MAX_SAFE_INTEGER;
     const right = rank.get(b.id) ?? Number.MAX_SAFE_INTEGER;
     return left === right ? 0 : left - right;
@@ -240,7 +243,7 @@ const LIST_ITEM_RE = /^(\s*)-\s+(.*?)\s*$/;
  * recognise the shape it knows how to rewrite is safer than a parser
  * that returns a position for a shape it would mangle. A `tutorials:`
  * key with anything after the colon is a flow list or a scalar, and is
- * skipped — `parseCourseFile` then finds no block for that series and
+ * skipped — `parseModuleFile` then finds no block for that series and
  * hands back a null range.
  */
 function scanTutorialBlocks(content: string): ScannedBlock[] {
@@ -281,6 +284,7 @@ interface ScannedContents {
   end: number;
   entryIndent: string;
   innerIndent: string;
+  entries: { start: number; end: number }[];
 }
 
 const CONTENTS_KEY_RE = /^(\s*)contents\s*:\s*(.*)$/;
@@ -296,7 +300,7 @@ const ENTRY_RE = /^(\s*)-( +)(\S.*?)\s*$/;
  *
  * The hard part is the *end*. A per-series `tutorials:` list ends at the
  * first line that isn't one of its items, which is easy; `contents:` runs
- * until the file stops describing it, and two of dewlab's six course
+ * until the file stops describing it, and two of dewlab's six module
  * files carry a `mixed:` key afterwards, so it genuinely ends in the
  * middle. The rule here: an entry starts with `<indent>- `, and every
  * line after it that is blank or indented further belongs to it. The
@@ -304,7 +308,7 @@ const ENTRY_RE = /^(\s*)-( +)(\S.*?)\s*$/;
  *
  * `innerIndent` is what one level in is worth — the gap between a
  * `- title:` line and the `tutorials:` key beneath it. Read rather than
- * assumed, so a course file written with four spaces round-trips as one
+ * assumed, so a module file written with four spaces round-trips as one
  * written with two does.
  *
  * Returns null for anything it isn't sure of, the same refusal
@@ -345,7 +349,7 @@ function scanContentsBlock(content: string): ScannedContents | null {
       // mapping under `- ` starts at the column after the dash and its
       // following spaces, and every later key has to line up with it. So
       // this is read off the dash rather than guessed, and it is "  " for
-      // a plain `- ` — which is every course file dewlab has written.
+      // a plain `- ` — which is every module file dewlab has written.
       if (innerIndent === null) innerIndent = " ".repeat(1 + item[2]!.length);
       lastContent = at;
       continue;
@@ -367,13 +371,19 @@ function scanContentsBlock(content: string): ScannedContents | null {
 
   if (entryIndent === null) {
     // `contents:` with nothing under it — a real, buildable state
-    // (read_course maps it to []), and an empty range is where a first
+    // (read_module maps it to []), and an empty range is where a first
     // series goes. Two spaces is the only sane guess for the inner
     // indent when there is no entry to read one from, and it is what
-    // every course file dewlab has written uses.
-    return { start, end: start, entryIndent: keyIndent, innerIndent: "  " };
+    // every module file dewlab has written uses.
+    return { start, end: start, entryIndent: keyIndent, innerIndent: "  ", entries: [] };
   }
-  return { start, end, entryIndent, innerIndent: innerIndent ?? "  " };
+  const starts: number[] = [];
+  for (let at = start; at < end; at += 1) {
+    const item = ENTRY_RE.exec(lines[at]!);
+    if (item && item[1] === entryIndent) starts.push(at);
+  }
+  const entries = starts.map((entryStart, index) => ({ start: entryStart, end: starts[index + 1] ?? end }));
+  return { start, end, entryIndent, innerIndent: innerIndent ?? "  ", entries };
 }
 
 /** How many `- ` entries the scanned block actually holds, against how

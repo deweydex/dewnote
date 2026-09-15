@@ -98,20 +98,20 @@ test("with no index yet, a custom link can still be inserted directly", async ({
   expect(source).toContain("[dewlab](https://dewlab.example/)");
 });
 
-test("the list is the indexed files themselves — a course a tutorial is on is not an item", async ({ page }) => {
+test("the list is the indexed files themselves — a module a tutorial is on is not an item", async ({ page }) => {
   // `module:` and `series:` items used to sit alongside the tutorials
   // here, one per distinct value in the index. They are gone with the
   // schemes themselves (DECISIONS.md 36), so two tutorials that share a
-  // course are two items, not two plus the course.
+  // module are two items, not two plus the module.
   await mount(page, "One.\n\nTwo.\n");
   await page.evaluate(() => {
     (
       window as unknown as {
-        __dewnote: TestHook & { setFileIndex(index: { path: string; title?: string; id?: string; courses?: string[] }[]): void };
+        __dewnote: TestHook & { setFileIndex(index: { path: string; title?: string; id?: string; modules?: string[] }[]): void };
       }
     ).__dewnote.setFileIndex([
-      { path: "tutorials/filtering/filtering.md", title: "Filtering Rows", id: "filtering", courses: ["computational-methods"] },
-      { path: "tutorials/grouping/grouping.md", title: "Grouping Rows", id: "grouping", courses: ["computational-methods"] },
+      { path: "tutorials/filtering/filtering.md", title: "Filtering Rows", id: "filtering", modules: ["computational-methods"] },
+      { path: "tutorials/grouping/grouping.md", title: "Grouping Rows", id: "grouping", modules: ["computational-methods"] },
     ]);
   });
 
@@ -119,7 +119,7 @@ test("the list is the indexed files themselves — a course a tutorial is on is 
   await expect(page.locator(".dn-link-item button")).toHaveCount(2);
   await expect(page.locator(".dn-link-item-kind")).toHaveCount(0);
 
-  // The course name matches nothing: it names no item, and searching it
+  // The module name matches nothing: it names no item, and searching it
   // leaves the author with the custom-link row rather than a badged
   // entry that would insert a link no build resolves.
   await page.locator(".dn-link-search").fill("computational");

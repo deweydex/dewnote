@@ -35,9 +35,9 @@ export interface ActiveStore {
   /** Reads the current text of a file this store already holds — the
    * read half of a read-modify-write, for a caller editing a file it
    * never opened into the editor. The placement rail's own writes are
-   * the only caller: it re-reads a course file at the moment it writes
+   * the only caller: it re-reads a module file at the moment it writes
    * it rather than trusting the copy parsed when the folder was last
-   * scanned, since courses.ts's line ranges are only true of the exact
+   * scanned, since modules.ts's line ranges are only true of the exact
    * text they were read from. Throws when there is no such file. */
   readTextFile?(path: string): Promise<string>;
   /** Writes `content` over the file at `path`. `message` is what a store
@@ -75,7 +75,7 @@ export interface ActiveStore {
    * (asset-name.ts).
    *
    * The real directory, not whatever list the panel happens to display:
-   * both panels walk for markdown and course files only, so a picture
+   * both panels walk for markdown and module files only, so a picture
    * already beside a tutorial appears in neither, and naming a new one
    * from those lists would call a taken name free. Empty when the store
    * can't list it — the create call refusing to overwrite is still the

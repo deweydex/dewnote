@@ -62,6 +62,32 @@ test("changing text size and theme writes real CSS to <html>, at the default it 
   expect(await rootStyle(page, "--dl-font-size")).toBe("22px");
 });
 
+test("every sidebar button is labelled and the rail can show icons, labels, or both", async ({ page }) => {
+  const buttons = page.locator(".dn-icon-rail > button");
+  expect(await buttons.count()).toBeGreaterThan(1);
+  for (let at = 0; at < await buttons.count(); at += 1) {
+    await expect(buttons.nth(at)).toHaveAttribute("data-label", /\S/);
+  }
+
+  const first = buttons.first();
+  const pseudo = () => first.evaluate((el) => getComputedStyle(el, "::after").content);
+  expect(await pseudo()).not.toBe("none");
+
+  await page.locator(".dn-settings-toggle").click();
+  const display = page.locator('.dn-settings-row:has-text("Sidebar buttons") select');
+  await display.selectOption("icons");
+  await expect(page.locator("html")).toHaveAttribute("data-rail-display", "icons");
+  expect(await first.evaluate((el) => getComputedStyle(el, "::after").display)).toBe("none");
+
+  await display.selectOption("labels");
+  await expect(page.locator("html")).toHaveAttribute("data-rail-display", "labels");
+  expect(await first.evaluate((el) => getComputedStyle(el).fontSize)).toBe("0px");
+
+  await display.selectOption("icons-and-labels");
+  await expect(page.locator("html")).not.toHaveAttribute("data-rail-display");
+  expect(await pseudo()).not.toBe("none");
+});
+
 test("a setting survives a reload, and Reset puts everything back", async ({ page }) => {
   await page.locator(".dn-settings-toggle").click();
   const textSize = page.locator('.dn-settings-row:has-text("Text size") input[type="range"]');

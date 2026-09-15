@@ -34,7 +34,7 @@ import {
   getFileContent,
   GithubApiError,
   listMarkdownFiles,
-  listCourseFiles,
+  listModuleFiles,
   loadToken,
   openPullRequest,
   putFileContent,
@@ -43,7 +43,7 @@ import {
   type RepoRef,
 } from "./github.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
-import { parseCourseFiles, parseCourseIndex, type Course } from "./courses.ts";
+import { parseModuleFiles, parseModuleIndex, type Module } from "./modules.ts";
 import { setActiveStore } from "./active-store.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
 
@@ -54,9 +54,9 @@ export interface RepoPanelHost {
    * loadRepoFiles rebuilds it — optional, since a caller with no link
    * picker (a test host, say) has nothing to do with it. */
   onIndexChange?(index: FileIndexEntry[]): void;
-  /** courses.ts's own read of every `courses/*.yaml` file in the
+  /** modules.ts's own read of every `modules/*.yaml` file in the
    * repository, handed the same way, for series-panel.ts. */
-  onCoursesChange?(courses: Course[]): void;
+  onModulesChange?(modules: Module[]): void;
 }
 
 export interface RepoPanel {
@@ -299,15 +299,15 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
    * folder-panel.ts's own version of this, and the same "one file's
    * failure doesn't fail the rest" handling. Takes `markdownFiles`
    * explicitly rather than reading the shared `files` — that list also
-   * carries the course files now (loadRepoFiles's own comment explains
-   * why), and a course file has no front matter worth indexing at all,
+   * carries the module files now (loadRepoFiles's own comment explains
+   * why), and a module file has no front matter worth indexing at all,
    * so fetching its content again here would spend a real API call on a
    * bare `{path}` entry.
    *
-   * `courses` is what lets each entry carry the courses that list its id
-   * (file-index.ts's own join), so the courses are read first and this
+   * `modules` is what lets each entry carry the modules that list its id
+   * (file-index.ts's own join), so the modules are read first and this
    * runs after them. */
-  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[], courses: Course[]) {
+  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[], modules: Module[]) {
     if (!host.onIndexChange) return;
     const entries = await Promise.all(
       markdownFiles.map(async (file) => {
@@ -322,18 +322,18 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     host.onIndexChange(
       buildFileIndex(
         entries.filter((e): e is { path: string; content: string } => e !== null),
-        courses,
+        modules,
       ),
     );
   }
 
-  /** Mirrors refreshIndex's own shape, over the course files
+  /** Mirrors refreshIndex's own shape, over the module files
    * loadRepoFiles's own tree walk already listed — no separate fetch of
-   * the tree a second time just for this. Returns the parsed courses as
+   * the tree a second time just for this. Returns the parsed modules as
    * well as handing them on, since the index needs them too. */
-  async function refreshCourses(repo: RepoRef, ref: string, token: string, courseFiles: RepoFile[]): Promise<Course[]> {
+  async function refreshModules(repo: RepoRef, ref: string, token: string, moduleFiles: RepoFile[]): Promise<Module[]> {
     const entries = await Promise.all(
-      courseFiles.map(async (file) => {
+      moduleFiles.map(async (file) => {
         try {
           const { content } = await getFileContent(repo, file.path, ref, token);
           return { path: file.path, content };
@@ -343,10 +343,10 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       }),
     );
     const read = entries.filter((e): e is { path: string; content: string } => e !== null);
-    const index = read.find((file) => file.path.endsWith("courses/index.yaml"));
-    const courses = parseCourseFiles(read, index ? parseCourseIndex(index.content) : []);
-    host.onCoursesChange?.(courses);
-    return courses;
+    const index = read.find((file) => file.path.endsWith("modules/index.yaml"));
+    const modules = parseModuleFiles(read, index ? parseModuleIndex(index.content) : []);
+    host.onModulesChange?.(modules);
+    return modules;
   }
 
   async function loadRepoFiles() {
@@ -367,14 +367,14 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     try {
       // Listed separately (github.ts's own two functions, one tree fetch
       // each), but merged into one browsable/searchable list: a
-      // course file is a plain text file like any other, and opening one
+      // module file is a plain text file like any other, and opening one
       // hands it to the same editor and push path every other file
       // already gets — the whole-file source view (Cmd+/) shows its raw
       // YAML untouched by any markdown rendering, exactly what
-      // hand-editing a course actually wants, no new UI.
-      const [markdownFiles, courseFiles] = await Promise.all([listMarkdownFiles(repo, ref, token), listCourseFiles(repo, ref, token)]);
-      files = [...markdownFiles, ...courseFiles];
-      repoStatus.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${courseFiles.length} course file${courseFiles.length === 1 ? "" : "s"}.`;
+      // hand-editing a module actually wants, no new UI.
+      const [markdownFiles, moduleFiles] = await Promise.all([listMarkdownFiles(repo, ref, token), listModuleFiles(repo, ref, token)]);
+      files = [...markdownFiles, ...moduleFiles];
+      repoStatus.textContent = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${moduleFiles.length} module file${moduleFiles.length === 1 ? "" : "s"}.`;
       renderFiles();
       // active-store.ts's own "open this path" hook — the repository's
       // own version of the same registration folder-panel.ts makes,
@@ -394,8 +394,8 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
         // calls it right now — its one caller was series-panel.ts's
         // "New series", which wrote a `<series>.order.yaml` file, and
         // that form went with the files it wrote (decision 36). The
-        // writer restores a caller: a new series is an entry in a course
-        // file's `contents:` now, and a new course is still a file.
+        // writer restores a caller: a new series is an entry in a module
+        // file's `contents:` now, and a new module is still a file.
         // Kept rather than deleted and written again a PR later, and
         // flagged here rather than left looking load-bearing.
         //
@@ -422,8 +422,8 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
         },
         // The read-modify-write half, for a caller editing a file it
         // never opened into the editor — series-panel.ts writing a
-        // course file. Reads the working branch first and the browsed
-        // `ref` only as a fallback: a second edit to the same course has
+        // module file. Reads the working branch first and the browsed
+        // `ref` only as a fallback: a second edit to the same module has
         // to build on the first one's commit, not on the base branch
         // that still predates it. Like `createFile` above, it leaves
         // `opened`/renderPush alone, so an edit already open in this
@@ -492,7 +492,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
         },
         currentPath: () => opened?.file.path ?? null,
         // GitHub's own directory listing, not this panel's tree walk —
-        // that walk keeps markdown and course files only, so a picture
+        // that walk keeps markdown and module files only, so a picture
         // already committed beside a tutorial appears in neither list.
         // One extra request, on a path a reader takes by hand.
         async listNamesIn(folder) {
@@ -515,10 +515,10 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           return [];
         },
       });
-      // Courses first: the index joins each entry to the courses that
+      // Modules first: the index joins each entry to the modules that
       // list its id, so it needs them already parsed.
-      const courses = await refreshCourses(repo, ref, token, courseFiles);
-      await refreshIndex(repo, ref, token, markdownFiles, courses);
+      const modules = await refreshModules(repo, ref, token, moduleFiles);
+      await refreshIndex(repo, ref, token, markdownFiles, modules);
     } catch (err) {
       repoStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {

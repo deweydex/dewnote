@@ -128,6 +128,19 @@ export function mountSettingsPanel(): SettingsPanel {
   themeSelect.addEventListener("change", () => commit({ ...settings, theme: themeSelect.value as Settings["theme"] }));
   appearance.appendChild(row("Theme", themeSelect));
 
+  const railDisplaySelect = select(
+    [
+      { value: "icons-and-labels", label: "Icons and labels" },
+      { value: "icons", label: "Icons only" },
+      { value: "labels", label: "Labels only" },
+    ] as const,
+    settings.railDisplay,
+  );
+  railDisplaySelect.addEventListener("change", () =>
+    commit({ ...settings, railDisplay: railDisplaySelect.value as Settings["railDisplay"] }),
+  );
+  appearance.appendChild(row("Sidebar buttons", railDisplaySelect));
+
   const fontSelect = select(
     [
       { value: "serif", label: "Serif (dewlab's own)" },
@@ -252,6 +265,7 @@ export function mountSettingsPanel(): SettingsPanel {
   resetButton.addEventListener("click", () => {
     commit({ ...DEFAULT_SETTINGS });
     themeSelect.value = DEFAULT_SETTINGS.theme;
+    railDisplaySelect.value = DEFAULT_SETTINGS.railDisplay;
     fontSelect.value = DEFAULT_SETTINGS.bodyFont;
     textSizeInput.value = String(DEFAULT_SETTINGS.textSize);
     measureInput.value = String(DEFAULT_SETTINGS.measure);
