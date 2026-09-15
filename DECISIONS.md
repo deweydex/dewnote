@@ -1715,3 +1715,111 @@ page's own runtime is still exactly what dewlab ships.
 *Cost to change: low. Two table entries and two small template
 functions; the preview is one new branch in the same `renderBlockPreview`
 family every other fence kind already goes through.*
+
+---
+
+**47 — Maths in a question preview needed no code, only a test that says
+so.** dewlab decision 7.180 wired `$...$`/`$$...$$` through `to_html()`
+everywhere a `question` or `card` fence's own text is converted, closing
+the "no LaTeX inside a prompt or option" gap decision 46 named as still
+open. The question here was whether dewnote's own preview — a second,
+independent parse of the same text (this file's own header comment) —
+had the matching gap on its side.
+
+It did not. `render-block.ts`'s one `md` instance, shared by every
+non-fence prose block and every fence preview alike
+(`renderHintFencePreview`, `renderCardFencePreview`,
+`renderQuestionFencePreview`, `renderQuestionGaps`), was already
+configured with `markdown-it-texmath` and `katex` when the "math" block
+kind was built, long before a `question` or `card` fence existed to call
+it. Nothing route-specific ever turned that off for either. So the gap
+decision 46 inherited from dewlab was dewlab's alone; dewnote's preview
+had been rendering a question's or a card's maths correctly since the
+day each preview was written, unverified only because nobody had reason
+to check.
+
+Two tests in `render-block.test.ts` — a `$2^3$` in a multiple-choice
+prompt and option, a `$x^2 = 4$` in a card body — assert on the `katex`
+class the shared renderer emits, so the fact stays checked rather than
+assumed the next time either preview function changes.
+
+*Cost to change: none — nothing was built. If a future preview function
+introduces its own `MarkdownIt` instance rather than reusing this one,
+it inherits no maths support by default and would need this decision
+re-read.*
+
+---
+
+**48 — Every side panel gets a drag handle and one shared width, and the
+Settings panel's own "Text size" now reaches their type too.** Reported
+directly: the repository panel (the GitHub browser, the one screenshotted)
+had no way to make it wider, and its type stayed a fixed size regardless
+of the Text size slider. Neither was a regression — none of the seven
+side panels (repository, settings, series, folder, outline, dialect,
+link-check) had ever had either.
+
+**All seven were already the same rule, repeated seven times.** Each
+panel module built its own `position: fixed` sidebar independently
+(`icon-rail.ts`'s own header comment already notes this about their
+toggle buttons), and `app.css` carried the identical width/font-size
+pair seven times over — 20rem and `0.85em` six times, 18rem once for
+Settings alone. That duplication is what makes "one shared width" nearly
+free: one selector list now owns `width: var(--dn-panel-width, 20rem)`
+and a `font-size` derived from `--dl-font-size`, and each panel's own
+rule keeps only what actually differs between them (`left`/`right`,
+border and shadow direction).
+
+**`panelWidth` joins `Settings` the same way `textSize` already lives
+there** — a plain field, clamped to a sane range (16rem–32rem) by
+`parseSettings`, mapped to `--dn-panel-width` by
+`settingsToRootProperties`, the same "a default value removes the
+property" rule every other setting here follows. `clampPanelWidth` is
+exported for `panel-resize.ts` to use directly, so a live drag is
+clamped to the identical range a saved value would be clamped to on the
+next load — never a value that briefly renders wider than what a reload
+would then snap it back to.
+
+**One shared width, because they are seven doors onto one room, not
+seven rooms.** They open one at a time from the same icon rail
+(`icon-rail.ts`), left-docked for the repository panel and right-docked
+for the rest — a reader who drags one wider is telling dewnote something
+about how much of the screen they want chrome to take, not something
+specific to that one panel. `panel-resize.ts`'s `attachResizeHandle(panel,
+edge)` is the one thing every panel module now calls at the end of its
+own mount function, `edge` naming which side its own handle sits on and
+so which drag direction widens it.
+
+**The handle sits inside the panel's own edge, not straddling it.** A
+first version put it half in, half out (`right: -3px`, mirroring how a
+resizer is drawn in a lot of software) and found, only once actually
+dragged in a real browser rather than read as CSS, that the outer half
+was invisible to the pointer: `overflow-y: auto` on the panel computes
+its `overflow-x` to `auto` as well (CSS2.1 §11.1.1 — one axis leaving
+`visible` pulls the other off it too), silently clipping the half of the
+handle that hung past the panel's own box exactly where a drag has to
+start. Moving the handle fully inside the edge (`right: 0`/`left: 0`)
+costs nothing visually and removes the dependency on an overflow detail
+nobody reading the handle's own CSS would think to check.
+
+**Committed once, on release, not on every pointermove.** A drag updates
+the live `--dn-panel-width` continuously so the panel visibly tracks the
+pointer, but `saveSettings` is called only in the `pointerup` handler —
+the same shape a slider dragged mid-range would want, so a `bun:test`-
+style rapid-fire of writes never happens for a gesture that can fire
+dozens of `pointermove` events. Left/Right arrow keys on the handle
+(focusable, `role="separator"`) commit immediately per press instead,
+since there is no in-between state to defer for a discrete step.
+
+**`widthFromPointer` is a pure function; `attachResizeHandle` is not,
+and only the first has a `bun:test`.** The same split this codebase
+already draws everywhere a module touches the DOM (`settings.ts`'s own
+header comment says so directly) — the px-to-rem, which-edge-means-which-
+direction arithmetic is exactly the part worth pinning down in a fast
+test with no browser, and the pointer/keyboard wiring around it is
+exactly the part `tests/e2e/panel-resize.spec.ts` exists to drive for
+real instead.
+
+*Cost to change: low. `panel-resize.ts` is one small module with no
+state of its own beyond what `settings.ts` already persists; the CSS
+consolidation is additive — nothing stops a future panel from opting out
+of the shared rule if it ever needs its own fixed width.*

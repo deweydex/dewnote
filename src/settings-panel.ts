@@ -20,6 +20,7 @@ import {
 } from "./settings.ts";
 import { restartInterpreter, setPyodideBase } from "./runtime/pyodide-engine.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
+import { attachResizeHandle } from "./panel-resize.ts";
 
 function row(labelText: string, control: HTMLElement): HTMLLabelElement {
   const label = document.createElement("label");
@@ -265,6 +266,7 @@ export function mountSettingsPanel(): SettingsPanel {
 
   labelToggle(toggle, "Settings");
   iconRail().appendChild(toggle);
+  attachResizeHandle(panel, "left");
   document.body.appendChild(panel);
   applySettings(settings);
   setPyodideBase(settings.pyodideBase);

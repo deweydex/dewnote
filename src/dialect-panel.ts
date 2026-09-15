@@ -13,6 +13,7 @@
 import { convertDialect } from "./dialect-convert.ts";
 import type { DialectName } from "./dialect.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
+import { attachResizeHandle } from "./panel-resize.ts";
 
 export interface DialectPanelHost {
   getSource(): string;
@@ -127,6 +128,7 @@ export function mountDialectPanel(host: DialectPanelHost): DialectPanel {
 
   labelToggle(toggle, "Convert");
   iconRail().appendChild(toggle);
+  attachResizeHandle(panel, "left");
   document.body.appendChild(panel);
 
   return {
