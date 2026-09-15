@@ -72,6 +72,15 @@ test("every sidebar button is labelled and the rail can show icons, labels, or b
   const first = buttons.first();
   const pseudo = () => first.evaluate((el) => getComputedStyle(el, "::after").content);
   expect(await pseudo()).not.toBe("none");
+  const restingShape = await first.evaluate((el) => {
+    const style = getComputedStyle(el);
+    const box = el.getBoundingClientRect();
+    return { width: box.width, height: box.height, radius: style.borderRadius, direction: style.flexDirection };
+  });
+  expect(restingShape.width).toBe(restingShape.height);
+  expect(restingShape.width).toBeGreaterThanOrEqual(44);
+  expect(restingShape.radius).toBe("50%");
+  expect(restingShape.direction).toBe("column");
 
   await page.locator(".dn-settings-toggle").click();
   const display = page.locator('.dn-settings-row:has-text("Sidebar buttons") select');
