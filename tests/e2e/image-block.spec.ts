@@ -10,7 +10,7 @@
 // builds actually want — is in image-asset.spec.ts, against the fake
 // folder and the mocked GitHub API.
 
-import { addBlockAfter, deleteBlock, openAddMenu, pointAt } from "./block-controls.ts";
+import { addBlockAfter, blockMenuItem, deleteBlock, openAddMenu, pointAt } from "./block-controls.ts";
 import { test as base, expect } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -62,7 +62,7 @@ test("with nowhere to write a file, an image is inlined as a data: URI", async (
   await openAddMenu(page, 0);
 
   const chooserPromise = page.waitForEvent("filechooser");
-  await page.locator(".dn-add-menu button", { hasText: "Image" }).click();
+  await blockMenuItem(page, ".dn-add-menu", "Image").click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "pixel.png", mimeType: "image/png", buffer: ONE_PIXEL_PNG });
 
@@ -82,7 +82,7 @@ test("cancelling the alt-text prompt still inserts the image, with empty alt tex
   await openAddMenu(page, 0);
 
   const chooserPromise = page.waitForEvent("filechooser");
-  await page.locator(".dn-add-menu button", { hasText: "Image" }).click();
+  await blockMenuItem(page, ".dn-add-menu", "Image").click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: "pixel.png", mimeType: "image/png", buffer: ONE_PIXEL_PNG });
 

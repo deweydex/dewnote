@@ -26,10 +26,20 @@ export async function openAddMenu(page: Page, blockIndex: number) {
   await expect(page.locator(".dn-add-menu.is-open")).toBeVisible();
 }
 
+/** One row of either block menu, by its label exactly.
+ *
+ * Exact, and against the label alone, because a row now carries a line
+ * of explanation under its label and those lines mention each other:
+ * Practice problem's says "a stepped hint", so a substring match on
+ * "Hint" finds two rows and Playwright refuses the click. */
+export function blockMenuItem(page: Page, scope: string, label: string) {
+  return page.locator(`${scope} .dn-block-menu-item`).filter({ has: page.locator(`.dn-block-menu-label:text-is("${label}")`) });
+}
+
 /** Adds a block of `label` after `blockIndex`. */
 export async function addBlockAfter(page: Page, blockIndex: number, label: string) {
   await openAddMenu(page, blockIndex);
-  await page.locator(".dn-add-menu button", { hasText: label }).click();
+  await blockMenuItem(page, ".dn-add-menu", label).click();
 }
 
 /** Arms `blockIndex` — clicking the grip, which is also what reveals the

@@ -1589,3 +1589,72 @@ pages, because the form dewlab reads today is enough to write them.
 
 *Cost to change: low. Two entries in a table of templates and one
 predicate over front matter.*
+
+**45 — One menu, searched and grouped, offering everything on every
+document.**
+
+Decision 44 ended by keeping Answer and Practice problem off a tutorial's
+menu, on two grounds: that six items was already long, and that §6 says
+an answer belongs beside its problem on the practice page. Both were
+wrong, and in the same way.
+
+**Shortening a menu by removing things from it is a trade the reader
+pays.** The kind they wanted is not missing from the app; it is missing
+from the place they looked, and nothing on screen says where else to
+look. Three separate lists had grown out of that reasoning — the "+"
+button's six, the slash menu's three, and two more that appeared only on
+a page whose front matter said `practice_for` — so what a reader could
+reach depended on which surface they were standing on.
+
+**And the editor was enforcing a rule it cannot see.** §6 is about how to
+teach, which an author applies. Front matter is a poor guess at what a
+document is: a problem set has no `practice_for` until somebody types
+one, and a tutorial can close on a worked answer without becoming a
+practice page. Withholding the block does not make the page better; it
+makes the author go and find the markdown by hand.
+
+**So the menu handles length instead of avoiding it.** It searches, and
+it groups. Two letters reaches any kind, which is what makes the list's
+length stop mattering for a reader who knows what they want; three short
+groups — Write, Run, Teach — is what makes it stop mattering for a reader
+who does not, since they read one group rather than eight rows. A tenth
+kind now costs nobody anything, which is the property the old menu did
+not have and kept paying for.
+
+**Ranked to select, grouped to draw.** A query's best match is what the
+selection starts on and what Enter takes; the results are then put back
+into their groups to be drawn. The two orders genuinely disagree —
+searching "a" selects Answer while drawing Image first — and both are
+wanted: the eye finds a kind where it always sits, and the keyboard takes
+what the ranking chose.
+
+**Each row says what it leaves behind.** One line under the label, in the
+imperative. It is what lets the menu hold eight kinds without a reader
+having to already know what a fold is, and it is why a row is two lines
+tall.
+
+**Everything is a slash command too, pickers included.** Image and Link
+were missing from the slash menu because each hands the reader to a file
+chooser or a search overlay while the block's own editor is still focused
+and live, with a blur mid-flight to account for. That was a real problem
+and the wrong answer to it. The fix belongs in the one place that places
+a picker's result: `placePickedBlock` takes the block the reader typed
+"/image" into, and replaces it *if it still reads as that slash command*
+— which it does, because the blur committed exactly those characters and
+nothing else. If it does not, the markdown lands after it instead. Losing
+the reader's own words is the one outcome worth a branch to avoid.
+
+The slash menu offers everything except Paragraph, which is not a
+shortened list: a block you can type "/" into is already a paragraph, so
+that one command alone would do nothing.
+
+**A phone gets the "+" menu as a sheet.** An 18rem popover hanging off a
+button in a 3.25rem gutter has nowhere to go, so under 40rem it is
+anchored to the bottom edge, full width, over the icon rail rather than
+above it — while a reader is choosing a block, the rail is not what they
+are reaching for. The slash menu stays a popover at every width: it opens
+under the line being typed and has to stay next to it.
+
+*Cost to change: low. The item table, the ranking and the list renderer
+are one small module with no app state in it; both menus are thirty lines
+of wiring around it.*

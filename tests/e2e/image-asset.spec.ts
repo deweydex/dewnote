@@ -13,7 +13,7 @@
 // The data: URI fallback, for a document with no folder to write into,
 // is in image-block.spec.ts.
 
-import { addBlockAfter, deleteBlock, openAddMenu, pointAt } from "./block-controls.ts";
+import { addBlockAfter, blockMenuItem, deleteBlock, openAddMenu, pointAt } from "./block-controls.ts";
 import { test as base, expect, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -69,7 +69,7 @@ async function addImage(page: Page, blockIndex: number, fileName: string, alt: s
   page.once("dialog", (dialog) => dialog.accept(alt));
   await openAddMenu(page, blockIndex);
   const chooserPromise = page.waitForEvent("filechooser");
-  await page.locator(".dn-add-menu button", { hasText: "Image" }).click();
+  await blockMenuItem(page, ".dn-add-menu", "Image").click();
   const chooser = await chooserPromise;
   await chooser.setFiles({ name: fileName, mimeType: "image/png", buffer: ONE_PIXEL_PNG });
   await expect(page.locator(`.dn-block-render img[alt="${alt}"]`)).toBeVisible();

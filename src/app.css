@@ -627,11 +627,79 @@ body {
   color: var(--dl-muted);
 }
 
-/* ------------------------------------------------------------- add gaps */
+/* --------------------------------------------------------- block menu */
 
-/* The menu is a real popover, not a hover reveal — closed means genuinely
- * absent (display:none), the same as any native menu, since its items
- * have no reason to sit in the tab order until a reader opens it. */
+/* One menu, drawn twice: the "+" button's popover wraps it in a search
+   field, and a prose block's slash command feeds it the text already
+   being typed. Everything below — group headings, a label with a line
+   of explanation under it, the selected row — is shared, so the two
+   never drift apart the way two hand-written lists did.
+
+   Both are real popovers, not hover reveals: closed means genuinely
+   absent (display:none), the same as any native menu, since the items
+   have no reason to sit in the tab order until a reader opens one. */
+
+.dn-block-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dn-block-menu-group {
+  padding: 0.5rem 0.55rem 0.2rem;
+  color: var(--dl-muted);
+  font-size: 0.62em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+/* No rule above the first heading, and none doubled where a group
+   follows the search field. */
+.dn-block-menu-group + .dn-block-menu-item {
+  margin-top: 0;
+}
+
+.dn-block-menu-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  align-items: flex-start;
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--dl-fg);
+  text-align: left;
+  cursor: pointer;
+}
+.dn-block-menu-label {
+  font-size: 0.85em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+/* The one line under each label. It is what lets the menu hold eight
+   kinds without a reader having to already know what a "fold" is, and
+   it is the reason a row is two lines tall rather than one. */
+.dn-block-menu-detail {
+  color: var(--dl-muted);
+  font-size: 0.72em;
+  line-height: 1.3;
+}
+.dn-block-menu-item.is-selected,
+.dn-block-menu-item:hover,
+.dn-block-menu-item:focus-visible {
+  background: var(--dl-cell-bg);
+  outline: none;
+}
+.dn-block-menu-item.is-selected .dn-block-menu-label,
+.dn-block-menu-item:hover .dn-block-menu-label,
+.dn-block-menu-item:focus-visible .dn-block-menu-label {
+  color: var(--dl-orange);
+}
+
+/* ---- the "+" button's popover */
+
 .dn-add-menu {
   display: none;
   position: absolute;
@@ -639,33 +707,68 @@ body {
   top: 0;
   z-index: 5;
   flex-direction: column;
-  min-width: 8rem;
+  width: 18rem;
+  max-width: calc(100vw - 4rem);
+  max-height: 60vh;
+  overflow-y: auto;
   margin-top: 0.2rem;
-  padding: 0.25rem;
+  padding: 0.3rem;
   border: 1px solid var(--dl-cell-border);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--dl-panel-bg);
-  box-shadow: 0 4px 16px var(--dl-shadow);
+  box-shadow: 0 8px 28px var(--dl-shadow);
 }
 .dn-add-menu.is-open {
   display: flex;
 }
-.dn-add-menu button {
-  border: none;
-  background: none;
+
+.dn-add-search {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 6px;
+  background: var(--dl-bg);
   color: var(--dl-fg);
-  font-family: var(--dl-mono);
-  font-size: 0.78em;
-  text-align: left;
-  padding: 0.35rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
 }
-.dn-add-menu button:hover,
-.dn-add-menu button:focus-visible {
-  background: var(--dl-cell-bg);
-  color: var(--dl-orange);
+.dn-add-search:focus-visible {
+  border-color: var(--dl-orange);
   outline: none;
+}
+
+.dn-add-empty {
+  padding: 0.7rem 0.55rem;
+  color: var(--dl-muted);
+  font-size: 0.78em;
+}
+
+/* ---- a prose block's slash command */
+
+/* Left-anchored under the editor rather than centred under a "+"
+   button, since it opens from wherever the reader is typing rather than
+   from a fixed point in the margin. Narrower than the "+" popover: it
+   has no search field of its own, and it sits inside the text column
+   rather than beside it. */
+.dn-slash-menu {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 5;
+  width: 16rem;
+  max-width: 100%;
+  margin-top: 0.2rem;
+  padding: 0.3rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 10px;
+  background: var(--dl-panel-bg);
+  box-shadow: 0 8px 28px var(--dl-shadow);
+}
+.dn-slash-menu.is-open {
+  display: flex;
 }
 
 /* Touch. Nothing here is hover-revealed any more — the cluster is either
@@ -692,49 +795,46 @@ body {
   .dn-block-controls {
     gap: 0.35rem;
   }
-  .dn-add-menu button {
+  .dn-block-menu-item {
+    min-height: 2.75rem;
+    justify-content: center;
+  }
+  .dn-add-search {
     min-height: 2.75rem;
   }
 }
 
-/* A prose block's own slash-command menu (buildSlashMenu) — same shape
-   as .dn-add-menu (a real popover, absent rather than hidden while
-   closed) but left-anchored under the editor rather than centred under
-   a "+" button, since it opens from wherever the reader is typing, not
-   a fixed point between two blocks. */
-.dn-slash-menu {
-  display: none;
-  position: absolute;
-  left: 0;
-  top: 100%;
-  z-index: 5;
-  flex-direction: column;
-  min-width: 8rem;
-  margin-top: 0.2rem;
-  padding: 0.25rem;
-  border: 1px solid var(--dl-cell-border);
-  border-radius: 6px;
-  background: var(--dl-panel-bg);
-  box-shadow: 0 4px 16px var(--dl-shadow);
-}
-.dn-slash-menu.is-open {
-  display: flex;
-}
-.dn-slash-menu button {
-  border: none;
-  background: none;
-  color: var(--dl-fg);
-  font-family: var(--dl-mono);
-  font-size: 0.78em;
-  text-align: left;
-  padding: 0.35rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.dn-slash-menu button.is-selected,
-.dn-slash-menu button:hover {
-  background: var(--dl-cell-bg);
-  color: var(--dl-orange);
+/* A phone gets the "+" menu as a sheet across the bottom of the window
+   rather than a popover hanging off a button in a 3.25rem gutter, where
+   an 18rem panel has nowhere to go. It is the same list; what changes is
+   that it is anchored to the edge the thumb is nearest and is as wide as
+   the screen, so every row is a full-width target.
+
+   It sits over the icon rail rather than above it (z-index 40, against
+   the rail's 11). A sheet resting on a bar reads as two bars, and while
+   a reader is choosing what block to add, the rail is not the thing
+   they are reaching for.
+
+   The slash menu stays a popover at every width. It opens under the line
+   being typed and has to stay next to it — a reader mid-sentence
+   watching the menu jump to the bottom of the screen has lost the thread
+   the menu was meant to keep. */
+@media (max-width: 40rem) {
+  .dn-add-menu {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: auto;
+    max-width: none;
+    max-height: 70vh;
+    margin: 0;
+    padding: 0.5rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom, 0px));
+    border-width: 1px 0 0;
+    border-radius: 14px 14px 0 0;
+    z-index: 40;
+  }
 }
 
 /* --------------------------------------------------------- file bar */

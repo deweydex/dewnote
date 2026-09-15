@@ -1387,12 +1387,14 @@ so this isn't a decision made without a way back.
 
 Still open:
 
-- **Practice problems.** Answered, and the second half built (decision
-  44): dewnote writes the fold-and-answer form dewlab already accepts —
-  §6's own problem, stepped hint and `dl-answer`, offered only on a page
-  that declares `practice_for` or `practice_across`. The editor could
-  write `dl-hint` and not `dl-answer` before this, so an answer couldn't
-  be inserted at all.
+- **Practice problems.** Answered and built (decisions 44 and 45):
+  dewnote writes the fold-and-answer form dewlab already accepts — §6's
+  own problem, stepped hint and `dl-answer`. The editor could write
+  `dl-hint` and not `dl-answer` before this, so an answer couldn't be
+  inserted at all. Decision 44 offered the two kinds only on a page
+  declaring `practice_for`; decision 45 took that back, because front
+  matter is a poor guess at what a document is and the menu's own length
+  is no longer a reason to withhold anything.
 
   Still open, and still a real question: whether to bring dewmark's
   fenced `question` grammar into dewlab's build, which is what dropdowns
