@@ -429,3 +429,92 @@ export function parseCardFence(block: Block): CardFenceInfo {
     body: bodyLines.join("\n").trim(),
   };
 }
+
+/** dewlab's own ```question fence (planning/QUESTION_BLOCKS.md,
+ * build.py's `parse_question()`/`render_question()`) — a multiple-choice
+ * or fill-in-the-blank self-check. `id:`/`type:`/`correct:` header lines
+ * read the same way every other exec-family fence's header is, then
+ * ordinary markdown: the prompt and its options for multiple-choice, or
+ * the sentence itself, `{gaps}` and all, for fill-in-the-blank.
+ *
+ * Not a cell, for the same reason a card fence isn't one (`CardFenceInfo`'s
+ * own comment): nothing here runs. Its id still shares dewlab's one
+ * saved-answer namespace with every cell on the page, though — see
+ * `generateBlockId()` in app.ts, which checks a new id against both. */
+export interface QuestionFenceInfo {
+  id: string | null;
+  type: "multiple-choice" | "fill-in-the-blank" | null;
+  /** 1-based, multiple-choice only; `null` otherwise, or when the header
+   * is missing or unparseable — an editor reads a fence mid-edit, not a
+   * finished build, so a bad `correct:` shows as "no option marked"
+   * here rather than refusing to preview at all. */
+  correct: number | null;
+  /** multiple-choice only — the prompt above the options list, or the
+   * whole body when `type:` hasn't been typed yet (so a bullet list
+   * started before the header line still previews as one). Empty for
+   * fill-in-the-blank, where the whole sentence is in `body` instead. */
+  prompt: string;
+  /** multiple-choice only — each option's own raw markdown, in the
+   * order written. */
+  options: string[];
+  /** The fence's full body below the header lines, untouched — what a
+   * fill-in-the-blank question's own `{...}` gaps are read out of. */
+  body: string;
+}
+
+const QUESTION_HEADER_RE = /^\s*(id|type|correct)\s*:\s*(.*)$/;
+const QUESTION_OPTION_RE = /^[ \t]*[-*+]\s+(.*\S)\s*$/;
+
+/** Whether a fence's info string is exactly `question` — dewlab's own
+ * `info and info[0] == "question"` check (build.py's `extract_blocks()`),
+ * the same "one bare word" shape `isCardFence` already tests for. */
+export function isQuestionFence(info: string): boolean {
+  return info.trim() === "question";
+}
+
+/** Reads a question fence's own header lines, and splits what follows
+ * into a prompt and its options when the fence reads as multiple-choice
+ * — the same "first bullet line starts the options" rule build.py's own
+ * `_split_multiple_choice()` uses. Run whether or not `type:` has been
+ * typed yet, since a bullet list under a question already looks like a
+ * multiple-choice one to an author reading it; only a fence that already
+ * says `fill-in-the-blank` skips the split, since the body there is the
+ * sentence itself and any `- ` inside it is the author's own markdown,
+ * not an options list. */
+export function parseQuestionFence(block: Block): QuestionFenceInfo {
+  const lines = fenceBody(block.text).split("\n");
+  const header: Record<string, string> = {};
+  let i = 0;
+  while (i < lines.length) {
+    const match = QUESTION_HEADER_RE.exec(lines[i]!);
+    if (!match || match[1]! in header) break;
+    header[match[1]!] = match[2]!.trim();
+    i++;
+  }
+  const bodyLines = lines.slice(i);
+  const body = bodyLines.join("\n").trim();
+  const type = header["type"] === "multiple-choice" || header["type"] === "fill-in-the-blank" ? header["type"] : null;
+
+  let prompt = "";
+  let options: string[] = [];
+  if (type !== "fill-in-the-blank") {
+    let start = bodyLines.length;
+    for (let j = 0; j < bodyLines.length; j++) {
+      if (QUESTION_OPTION_RE.test(bodyLines[j]!)) {
+        start = j;
+        break;
+      }
+    }
+    prompt = bodyLines.slice(0, start).join("\n").trim();
+    options = bodyLines
+      .slice(start)
+      .map((line) => QUESTION_OPTION_RE.exec(line))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map((m) => m[1]!);
+  }
+
+  const correctRaw = header["correct"];
+  const correct = correctRaw && /^\d+$/.test(correctRaw) ? Number(correctRaw) : null;
+
+  return { id: header["id"] ?? null, type, correct, prompt, options, body };
+}

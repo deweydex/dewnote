@@ -37,7 +37,7 @@ import { parseDocument, serialize, type Block, type Document } from "./blocks.ts
 import { detectDialect } from "./dialect.ts";
 import { setFrontMatterField } from "./frontmatter.ts";
 import { frontMatterFieldsFor, isScalarField, type FrontMatterFieldSpec } from "./frontmatter-fields.ts";
-import { renderBlockPreview, renderCardFencePreview, renderHintFencePreview } from "./render-block.ts";
+import { renderBlockPreview, renderCardFencePreview, renderHintFencePreview, renderQuestionFencePreview } from "./render-block.ts";
 import { buildBlockMenuList, BLOCK_MENU_ITEMS, SLASH_MENU_ITEMS, type BlockKind } from "./block-menu.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
@@ -50,6 +50,7 @@ import {
   execCellLanguage,
   isCardFence,
   isHintFence,
+  isQuestionFence,
   isRunnableFence,
   isSitePaneFence,
   parseCellSourceFromFenceText,
@@ -129,6 +130,15 @@ const STEPPED_HINT = [
   "",
   "",
 ].join("\n");
+
+// dewlab's own ```question fence (planning/QUESTION_BLOCKS.md,
+// build.py's own parse_question()) — id:/type:/correct: headers, then
+// ordinary markdown. Templates below are the smallest fence that passes
+// every one of build.py's own checks: an id, a real type, a prompt with
+// at least two options and a correct: naming one of them for multiple
+// choice; a sentence with at least one {gap} for fill-in-the-blank.
+const QUESTION_PROMPT_PLACEHOLDER = "The question, written so it has one right answer.";
+const QUESTION_SENTENCE_PLACEHOLDER = "Write a sentence here, with the missing word in curly brackets like {this}.";
 
 /** Set by main.ts whenever folder-panel.ts or repo-panel.ts (re)builds
  * its own file-index.ts index — a module-level singleton rather than
@@ -414,7 +424,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   const NEW_BLOCK_SPEC: Record<TemplateKind, () => { text: string; anchor: number; head: number }> = {
     paragraph: () => ({ text: "New paragraph.\n\n", anchor: 0, head: "New paragraph.".length }),
     cell: () => {
-      const text = `\`\`\`python exec\nid: ${generateCellId()}\n\n\`\`\`\n\n`;
+      const text = `\`\`\`python exec\nid: ${generateBlockId("new-cell")}\n\n\`\`\`\n\n`;
       // A fresh cell's own code-only editor (fenceCodeViews) starts
       // empty, so position 0 is always right — unlike the other three
       // kinds here, this offset was never into the full spliced text.
@@ -441,16 +451,38 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       // that has to be written before the rest means anything.
       return { text, anchor: 0, head: PROBLEM_PLACEHOLDER.length };
     },
+    "multiple-choice": () => {
+      const text =
+        "```question\n" +
+        `id: ${generateBlockId("new-question")}\n` +
+        "type: multiple-choice\n" +
+        "correct: 1\n\n" +
+        `${QUESTION_PROMPT_PLACEHOLDER}\n\n` +
+        "- The right answer.\n" +
+        "- A wrong answer.\n" +
+        "- Another wrong answer.\n" +
+        "```\n\n";
+      const at = text.indexOf(QUESTION_PROMPT_PLACEHOLDER);
+      return { text, anchor: at, head: at + QUESTION_PROMPT_PLACEHOLDER.length };
+    },
+    "fill-in-the-blank": () => {
+      const text = "```question\n" + `id: ${generateBlockId("new-question")}\n` + "type: fill-in-the-blank\n\n" + `${QUESTION_SENTENCE_PLACEHOLDER}\n` + "```\n\n";
+      const at = text.indexOf(QUESTION_SENTENCE_PLACEHOLDER);
+      return { text, anchor: at, head: at + QUESTION_SENTENCE_PLACEHOLDER.length };
+    },
   };
 
-  /** `new-cell-1`, `new-cell-2`, ... — the first not already used as a
-   * dewlab `id:` line anywhere in the document, since that id is a
-   * contract (DIALECTS.md §1) and two cells must never collide. */
-  function generateCellId(): string {
+  /** `new-cell-1`/`new-question-1`/... — the first `${prefix}-N` not
+   * already used as a dewlab `id:` line anywhere in the document. One
+   * generator for both: a question's id is a contract on the same terms
+   * a cell's is (planning/QUESTION_BLOCKS.md), sharing dewlab's own one
+   * saved-answer namespace, and `collectExistingCellIds` already scans
+   * every fence's `id:` line regardless of what kind of fence it is. */
+  function generateBlockId(prefix: string): string {
     const existing = collectExistingCellIds(null);
     let n = 1;
-    while (existing.has(`new-cell-${n}`)) n++;
-    return `new-cell-${n}`;
+    while (existing.has(`${prefix}-${n}`)) n++;
+    return `${prefix}-${n}`;
   }
 
   /** Not in NEW_BLOCK_SPEC's own synchronous table because picking a
@@ -1725,6 +1757,18 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return container;
   }
 
+  /** A ```question fence's own read-only preview — dewlab's real
+   * `.dl-question` markup for multiple-choice, minus the Check button
+   * and feedback slot a reader's own click needs, which this editor
+   * never provides (render-block.ts's own `renderQuestionFencePreview`
+   * comment says why). Shown alongside the fence's live editor, same as
+   * every other non-runnable fence's preview (decision 15). */
+  function buildQuestionPreview(block: Block): HTMLElement {
+    const container = buildFencePanel("dn-question-preview");
+    container.innerHTML = renderQuestionFencePreview(block);
+    return container;
+  }
+
   /** A small label above a site pane's own live editor, since three
    * fences in a row otherwise look identical until you read their info
    * strings — the same reason a cell's Run bar names nothing but a
@@ -1862,6 +1906,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       if (sqlInfo) wrapper.appendChild(buildSqlCellRunner(index, view, sqlInfo));
       else if (isHintFence(info)) wrapper.appendChild(buildHintPreview(block));
       else if (isCardFence(info)) wrapper.appendChild(buildCardPreview(block));
+      else if (isQuestionFence(info)) wrapper.appendChild(buildQuestionPreview(block));
       else if (isSitePaneFence(info)) {
         wrapper.appendChild(buildSitePaneLabel(parseSitePaneInfo(block)));
         const group = siteGroupContaining(findSiteGroups(doc.blocks), index);

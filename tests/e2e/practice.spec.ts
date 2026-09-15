@@ -65,7 +65,18 @@ async function menuLabels(page: Page, blockIndex: number): Promise<string[]> {
   return page.locator(".dn-add-menu .dn-block-menu-label").allInnerTexts();
 }
 
-const EVERY_KIND = ["Paragraph", "Link", "Image", "Code cell", "Math", "Hint", "Answer", "Practice problem"];
+const EVERY_KIND = [
+  "Paragraph",
+  "Link",
+  "Image",
+  "Code cell",
+  "Math",
+  "Hint",
+  "Answer",
+  "Practice problem",
+  "Multiple choice",
+  "Fill in the blank",
+];
 
 test("the same menu on a tutorial and on a practice page", async ({ page }) => {
   // What a document is is the author's business, and front matter is

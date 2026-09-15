@@ -31,7 +31,17 @@
 /** Every kind of block the editor can create. `paragraph` is the plain
  * one; `image` and `link` finish through a picker rather than a
  * template, which is why they are marked `picks` below. */
-export type BlockKind = "paragraph" | "cell" | "math" | "hint" | "answer" | "practice" | "image" | "link";
+export type BlockKind =
+  | "paragraph"
+  | "cell"
+  | "math"
+  | "hint"
+  | "answer"
+  | "practice"
+  | "multiple-choice"
+  | "fill-in-the-blank"
+  | "image"
+  | "link";
 
 /** The groups, in the order a menu shows them. Write first because it
  * holds the kind most blocks are; Teach last because it is the longest
@@ -73,6 +83,20 @@ export const BLOCK_MENU_ITEMS: readonly BlockMenuItem[] = [
     group: "Teach",
     detail: "A problem, a stepped hint, then the answer.",
     keywords: ["exercise", "question", "problem", "task", "drill"],
+  },
+  {
+    kind: "multiple-choice",
+    label: "Multiple choice",
+    group: "Teach",
+    detail: "A question with one right answer, checked instantly.",
+    keywords: ["question", "quiz", "choice", "options", "recognition", "check"],
+  },
+  {
+    kind: "fill-in-the-blank",
+    label: "Fill in the blank",
+    group: "Teach",
+    detail: "A sentence with a missing word, checked instantly.",
+    keywords: ["question", "quiz", "cloze", "gap", "vocabulary", "check"],
   },
 ];
 

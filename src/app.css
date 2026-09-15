@@ -498,6 +498,64 @@ body {
   border-color: var(--dl-orange);
   color: var(--dl-orange);
 }
+
+/* A ```question fence's own preview — dewlab's real .dl-question/
+ * .dl-question-prompt/.dl-question-options/.dl-question-option classes
+ * (assets/tutorial-style.css there), the same "tokens shared, rules of
+ * its own" split every other dewlab-borrowed class in this file already
+ * follows. No Check button and no feedback slot: there is no reader
+ * here to click one, so the option marked `data-correct` (build.py's
+ * own attribute, not this editor's invention) is simply shown as such,
+ * which is what an author needs to see while `correct:` is a number
+ * they'd otherwise have to count options to check. */
+.dn-question-preview .dl-question {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 8px;
+  background: var(--dl-cell-bg);
+}
+.dn-question-preview .dl-question-prompt > :first-child {
+  margin-top: 0;
+}
+.dn-question-preview .dl-question-prompt > :last-child {
+  margin-bottom: 0;
+}
+.dn-question-preview .dl-question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.dn-question-preview .dl-question-option {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 6px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: default;
+}
+/* The one option `correct:` currently names — a solid border rather
+ * than dewlab's own runtime `is-selected` styling, which is for a
+ * reader's own click and has no meaning here. */
+.dn-question-preview .dl-question-option[data-correct="true"] {
+  border-color: var(--dl-pass-fg);
+  box-shadow: inset 0 0 0 1px var(--dl-pass-fg);
+}
+/* A fill-in-the-blank gap's own expected word, shown inline rather than
+ * as the live dropdown or typing box the built page mounts — this
+ * editor has no reader to check an answer for (renderQuestionGaps's own
+ * comment says why). Not a `dl-` class: unlike `.dl-question-option`
+ * above, nothing here reproduces a class dewlab's real build writes. */
+.dn-question-gap {
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  background: var(--dl-cell-bg);
+  color: var(--dl-pass-fg);
+  font-weight: 600;
+}
 .dn-sql-restore {
   align-items: center;
   gap: 0.5rem;

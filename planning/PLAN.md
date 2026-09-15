@@ -1396,12 +1396,16 @@ Still open:
   matter is a poor guess at what a document is and the menu's own length
   is no longer a reason to withhold anything.
 
-  Still open, and still a real question: whether to bring dewmark's
-  fenced `question` grammar into dewlab's build, which is what dropdowns
-  and multiple choice would need. That is a build change there first, and
-  a new fence every tutorial and every build has to understand. Not a
-  prerequisite for writing practice pages, which is what decision 44
-  settles.
+  Answered the rest of the way, not with dewmark's own grammar: dewlab
+  decision 7.179 built a `question` fence of its own —
+  `planning/QUESTION_BLOCKS.md`'s design, multiple-choice and
+  fill-in-the-blank, dewlab's own header shape rather than a port of
+  dewmark's exam-file YAML. Decision 46 gives dewnote the two menu
+  entries that write it, with a preview matching every other fence
+  kind's own (decision 15). Still open, on dewlab's own side and named
+  as such there: LaTeX inside a prompt or option, per-option feedback,
+  scoring — none of which this editor's own templates need to know
+  about, since it only ever writes the markdown.
 - **What this retires.** dewlab's `editor.html` overlaps step 5 entirely;
   dewmini's file mounting overlaps step 4. Decided (decision 34, asked
   directly rather than assumed): dewnote replaces it rather than the two
