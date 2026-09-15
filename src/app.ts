@@ -38,6 +38,7 @@ import { detectDialect } from "./dialect.ts";
 import { setFrontMatterField } from "./frontmatter.ts";
 import { frontMatterFieldsFor, isScalarField, type FrontMatterFieldSpec } from "./frontmatter-fields.ts";
 import { renderBlockPreview, renderCardFencePreview, renderHintFencePreview } from "./render-block.ts";
+import { buildBlockMenuList, BLOCK_MENU_ITEMS, SLASH_MENU_ITEMS, type BlockKind } from "./block-menu.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
 import { pickLink } from "./link-picker.ts";
@@ -87,26 +88,47 @@ export interface MountedDocument {
 
 const BASE_EXTENSIONS: Extension[] = [history(), keymap.of([...defaultKeymap, ...historyKeymap])];
 
-type AddKind = "paragraph" | "cell" | "math" | "hint" | "image" | "link";
-const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
-  { kind: "paragraph", label: "Paragraph" },
-  { kind: "cell", label: "Code cell" },
-  { kind: "math", label: "Math" },
-  { kind: "hint", label: "Hint" },
-  { kind: "image", label: "Image" },
-  { kind: "link", label: "Link" },
-];
+// PEDAGOGICAL_STYLE_GUIDE §6's own worked forms, transcribed rather than
+// paraphrased — this is a template an author types over, so every word
+// it leaves behind is a word that ships.
+//
+// The hint's shape is the part worth being exact about. §6: "Two folds,
+// opened in order, so a stuck student gets a route rather than the
+// answer. The reflection and the follow-on question at the end matter as
+// much as the steps — a hint that ends at the answer teaches the answer,
+// and one that ends in a related question teaches the method." So the
+// template carries **Think about:** and **Try this next:** as prompts an
+// author has to delete deliberately, not as something they have to
+// remember to add.
+//
+// Offered on every document, not only one whose front matter says
+// `practice_for`. An answer fold is where the working goes, and the
+// working belongs wherever the author decides to put it; §6 is a rule
+// about how to teach, which the author applies, and not a rule the
+// editor is in a position to enforce by withholding the block.
+/** The kinds NEW_BLOCK_SPEC can build outright. Image and Link are the
+ * other two: each finishes through a picker, so neither has a template
+ * to drop in — see placePickedBlock. */
+type TemplateKind = Exclude<BlockKind, "image" | "link">;
 
-/** The slash-command menu's own, smaller list — everything the "+" menu
- * offers except Paragraph (typing "/" only makes sense inside one
- * already) and Image/Link, whose file-picker and search overlay each
- * have to survive a blur mid-flight in a way Cell/Math/Hint's own
- * synchronous NEW_BLOCK_SPEC never has to (see buildSlashMenu). */
-const SLASH_MENU_ITEMS: { kind: Exclude<AddKind, "paragraph" | "image" | "link">; label: string }[] = [
-  { kind: "cell", label: "Code cell" },
-  { kind: "math", label: "Math" },
-  { kind: "hint", label: "Hint" },
-];
+const PROBLEM_PLACEHOLDER = "The problem, written as a question.";
+const ANSWER_PLACEHOLDER = "The answer, with the working.";
+const ANSWER_FOLD = `<details class="dl-answer"><summary>answer</summary>\n\n${ANSWER_PLACEHOLDER}\n\n</details>\n\n`;
+const STEPPED_HINT = [
+  '<details class="dl-hint"><summary>stuck? here are some steps</summary>',
+  "",
+  "1. The first thing to work out.",
+  "2. What that lets you do next.",
+  "3. The step people usually miss.",
+  "",
+  "**Think about:** the question that makes the method make sense.",
+  "",
+  "**Try this next:** a related problem the same steps solve.",
+  "",
+  "</details>",
+  "",
+  "",
+].join("\n");
 
 /** Set by main.ts whenever folder-panel.ts or repo-panel.ts (re)builds
  * its own file-index.ts index — a module-level singleton rather than
@@ -389,7 +411,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * cell forms, not dewlab's one), and this is the same universal set
    * regardless of the open document's dialect until that per-dialect
    * module exists. */
-  const NEW_BLOCK_SPEC: Record<Exclude<AddKind, "image" | "link">, () => { text: string; anchor: number; head: number }> = {
+  const NEW_BLOCK_SPEC: Record<TemplateKind, () => { text: string; anchor: number; head: number }> = {
     paragraph: () => ({ text: "New paragraph.\n\n", anchor: 0, head: "New paragraph.".length }),
     cell: () => {
       const text = `\`\`\`python exec\nid: ${generateCellId()}\n\n\`\`\`\n\n`;
@@ -407,6 +429,17 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const text = '<details class="dl-hint"><summary>hint</summary>\n\nHint text.\n\n</details>\n\n';
       const at = text.indexOf("Hint text.");
       return { text, anchor: at, head: at + "Hint text.".length };
+    },
+    answer: () => {
+      const text = ANSWER_FOLD;
+      const at = text.indexOf(ANSWER_PLACEHOLDER);
+      return { text, anchor: at, head: at + ANSWER_PLACEHOLDER.length };
+    },
+    practice: () => {
+      const text = `${PROBLEM_PLACEHOLDER}\n\n${STEPPED_HINT}${ANSWER_FOLD}`;
+      // The cursor lands on the problem itself, which is the one part
+      // that has to be written before the rest means anything.
+      return { text, anchor: 0, head: PROBLEM_PLACEHOLDER.length };
     },
   };
 
@@ -458,19 +491,12 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * UI even though a reader could still hand-edit it away afterwards.
    * dewlab's `check_alt_text()` fails the build on an image with no
    * `alt` at all, and reads an explicit empty one as "decorative". */
-  async function insertImageAfter(afterIndex: number | null) {
+  async function markdownForImage(): Promise<string | null> {
     const file = await pickImageFile();
-    if (!file) return;
+    if (!file) return null;
     const alt = window.prompt("Alt text for this image:", "") ?? "";
     const target = await writeImageBeside(file);
-    const text = `![${alt}](${target})\n\n`;
-    const parts = blockTexts();
-    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
-    parts.splice(newIndex, 0, text);
-    source = parts.join("");
-    teardownLiveViews();
-    doc = parseDocument(source);
-    render();
+    return `![${alt}](${target})`;
   }
 
   /** The bare file name a real copy was written under, or a `data:` URI
@@ -496,27 +522,63 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     }
   }
 
-  /** Also async, like insertImageAfter, and for the same reason it isn't
-   * in NEW_BLOCK_SPEC — pickLink is a whole search overlay, not a
-   * synchronous placeholder. Resolves to the finished `[text](target)`
-   * markdown already, so this only has to splice it in; sharedFileIndex
+  /** Also async, like markdownForImage, and for the same reason neither
+   * is in NEW_BLOCK_SPEC — pickLink is a whole search overlay, not a
+   * synchronous placeholder. It resolves to finished `[text](target)`
+   * markdown already, so there is nothing to build here; sharedFileIndex
    * is whatever main.ts last set from an opened folder or repository,
    * empty until then. */
-  async function insertLinkAfter(afterIndex: number | null) {
-    const markdown = await pickLink(sharedFileIndex);
-    if (!markdown) return;
+  async function markdownForLink(): Promise<string | null> {
+    return await pickLink(sharedFileIndex);
+  }
+
+  /** Where a picker's finished markdown goes, for either menu.
+   *
+   * ## Why this is not just insertAfter with an await in front of it
+   *
+   * The "+" menu's case is the easy one: the reader clicked a button in
+   * the margin, nothing in the document is focused, and the result is
+   * spliced in after block `afterIndex` exactly the way a template
+   * would be.
+   *
+   * The slash menu's case is the one this function exists for. The
+   * reader typed "/image" into a block whose editor is still live and
+   * focused, and the file chooser that opens next takes that focus
+   * away. The blur commits "/image" as real prose and re-renders — so
+   * by the time the picker resolves, the promise's own idea of "the
+   * block the reader was typing into" is a paragraph that now says
+   * "/image", and replacing it is exactly right. That is what
+   * `replacing` asks for.
+   *
+   * It is checked rather than assumed. The link picker is an overlay in
+   * the same page, not an OS file chooser, so a reader can in principle
+   * click back into the document while it is open and change what is
+   * there. If the block no longer reads as the slash command that
+   * started this, the markdown lands after it instead of over whatever
+   * the reader has since written — losing the reader's own words is the
+   * one outcome worth writing a branch to avoid. */
+  function placePickedBlock(markdown: string, index: number | null, replacing: boolean) {
     const text = `${markdown}\n\n`;
     const parts = blockTexts();
-    const newIndex = afterIndex === null ? 0 : afterIndex + 1;
-    parts.splice(newIndex, 0, text);
+    const at = index === null ? 0 : index;
+    const stillTheSlashCommand = replacing && index !== null && /^\/[a-zA-Z]*\s*$/.test(parts[at] ?? "");
+    const spliceIndex = stillTheSlashCommand ? at : index === null ? 0 : at + 1;
+    parts.splice(spliceIndex, stillTheSlashCommand ? 1 : 0, text);
     source = parts.join("");
     teardownLiveViews();
     doc = parseDocument(source);
     render();
   }
 
+  /** One route to a picker for both menus: run it, and if the reader
+   * chose something, place it. */
+  async function addPickedBlock(kind: "image" | "link", index: number | null, replacing: boolean) {
+    const markdown = kind === "image" ? await markdownForImage() : await markdownForLink();
+    if (markdown) placePickedBlock(markdown, index, replacing);
+  }
+
   /** Shared by insertAfter (deleteCount 0 — the "+" menu, between two
-   * existing blocks) and replaceBlockViaSlash (deleteCount 1 — the slash
+   * existing blocks) and insertViaSlash (deleteCount 1 — the slash
    * menu, replacing the very block the reader is typing into): splice a
    * freshly-specced block's text into `parts` at `spliceIndex`, reparse,
    * and focus it exactly the way a block just created from a placeholder
@@ -546,17 +608,19 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     });
   }
 
-  function insertAfter(afterIndex: number | null, kind: Exclude<AddKind, "image" | "link">) {
+  function insertAfter(afterIndex: number | null, kind: TemplateKind) {
     const spec = NEW_BLOCK_SPEC[kind]();
     const newIndex = afterIndex === null ? 0 : afterIndex + 1;
     spliceNewBlock(newIndex, 0, spec);
   }
 
-  /** The slash menu's own confirm (buildSlashMenu): replaces the block
-   * the reader is mid-typing into — not the block after it, the way the
-   * "+" menu's insertAfter does — since the whole point of typing "/cell"
-   * is that there is nothing in this block worth keeping. */
-  function replaceBlockViaSlash(index: number, kind: (typeof SLASH_MENU_ITEMS)[number]["kind"]) {
+  /** The slash menu's own confirm for a template kind (buildSlashMenu):
+   * replaces the block the reader is mid-typing into — not the block
+   * after it, the way the "+" menu's insertAfter does — since the whole
+   * point of typing "/cell" is that there is nothing in this block worth
+   * keeping. A picked kind (Image, Link) goes through addPickedBlock
+   * instead, which cannot replace the block until its picker resolves. */
+  function insertViaSlash(index: number, kind: TemplateKind) {
     const spec = NEW_BLOCK_SPEC[kind]();
     spliceNewBlock(index, 1, spec);
   }
@@ -731,26 +795,77 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
   addButton.title = "Add a block after this one";
   addButton.textContent = "+";
 
+  // ## The "+" menu is a small palette, not a list of buttons
+  //
+  // It holds a search field, then the same grouped list the slash menu
+  // draws (block-menu.ts). Search is what lets the list hold everything
+  // without getting harder to use: two letters reaches any kind, so the
+  // next kind added costs nothing, and a reader who does not know what
+  // they want reads three short groups rather than one long column.
+  //
+  // The field takes focus when the menu opens and the keys work the way
+  // they do everywhere else in the app — ↑ and ↓ move, Enter confirms,
+  // Escape closes. A reader who never touches it clicks a row instead,
+  // and on a touch screen the whole thing is a sheet at the bottom of
+  // the window with rows the size of a thumb.
   const addMenu = document.createElement("div");
   addMenu.className = "dn-add-menu";
-  for (const { kind, label } of ADD_MENU_ITEMS) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.textContent = label;
-    item.addEventListener("click", () => {
-      closeOpenAddMenus();
+  addMenu.setAttribute("role", "dialog");
+  addMenu.setAttribute("aria-label", "Add a block");
+
+  const addSearch = document.createElement("input");
+  addSearch.type = "text";
+  addSearch.className = "dn-add-search";
+  addSearch.setAttribute("placeholder", "Search blocks…");
+  addSearch.setAttribute("aria-label", "Search blocks");
+  addMenu.appendChild(addSearch);
+
+  const addList = buildBlockMenuList({
+    items: BLOCK_MENU_ITEMS,
+    onConfirm: (kind) => {
       const after = controlsIndex;
-      if (kind === "image") void insertImageAfter(after);
-      else if (kind === "link") void insertLinkAfter(after);
+      closeOpenAddMenus();
+      if (kind === "image" || kind === "link") void addPickedBlock(kind, after, false);
       else insertAfter(after, kind);
-    });
-    addMenu.appendChild(item);
+    },
+  });
+  addMenu.appendChild(addList.element);
+
+  const addEmpty = document.createElement("div");
+  addEmpty.className = "dn-add-empty";
+  addEmpty.hidden = true;
+  addEmpty.textContent = "Nothing by that name.";
+  addMenu.appendChild(addEmpty);
+
+  function syncAddMenu() {
+    addList.setQuery(addSearch.value);
+    addEmpty.hidden = addList.isOpen();
   }
+
+  addSearch.addEventListener("input", syncAddMenu);
+  addSearch.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown" && addList.move(1)) event.preventDefault();
+    else if (event.key === "ArrowUp" && addList.move(-1)) event.preventDefault();
+    else if (event.key === "Enter") {
+      event.preventDefault();
+      addList.confirmSelected();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeOpenAddMenus();
+      addButton.focus();
+    }
+  });
+
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
     const wasOpen = addMenu.classList.contains("is-open");
     closeOpenAddMenus();
-    if (!wasOpen) addMenu.classList.add("is-open");
+    if (!wasOpen) {
+      addSearch.value = "";
+      syncAddMenu();
+      addMenu.classList.add("is-open");
+      addSearch.focus();
+    }
   });
 
   const grip = document.createElement("button");
@@ -878,25 +993,29 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
   /** A prose block's own keyboard shortcut for the "+" menu: typing "/"
    * (optionally followed by a few letters) while the block holds nothing
-   * else offers to turn the whole block into a code cell, a math block,
-   * or a hint fold. Deliberately whole-block, not per-line the way
-   * Notion's own slash menu is — a block that already holds real prose
-   * typing a literal "/" is not offering to replace itself, only a block
-   * that is nothing else yet reads as one. Scoped to `SLASH_MENU_ITEMS`,
-   * not the full add-menu: Image and Link are both async (a file picker,
-   * a search overlay) and this block's own editor is still focused and
-   * live while the reader answers those, with a real blur mid-flight to
-   * account for — Cell/Math/Hint stay synchronous end to end through
-   * NEW_BLOCK_SPEC, so there is nothing to race. Renders into the block
-   * wrapper (renderBlockWrapper's own prose branch), `sync` called from
-   * an `EditorView.updateListener` on every doc change, `keymap` wired
-   * in alongside it so the arrow keys/Enter/Escape only ever mean
-   * "the menu" while it actually has items open. */
+   * else offers to turn the whole block into any other kind.
+   *
+   * Deliberately whole-block, not per-line the way Notion's own slash
+   * menu is — a block that already holds real prose typing a literal
+   * "/" is not offering to replace itself, only a block that is nothing
+   * else yet reads as one.
+   *
+   * It offers `SLASH_MENU_ITEMS`, which is everything the "+" menu
+   * offers except Paragraph: a block you can type "/" into already is a
+   * paragraph, so that one command alone would do nothing. Image and
+   * Link used to be missing here too, on the grounds that each hands
+   * the reader to a picker while this block's editor is still focused
+   * and live, with a blur mid-flight to account for. That was a real
+   * problem and the wrong answer to it — the fix belongs in the one
+   * place that places a picker's result (placePickedBlock), not in a
+   * menu that quietly offers less than the button beside it.
+   *
+   * Renders into the block wrapper (renderBlockWrapper's own prose
+   * branch), `sync` called from an `EditorView.updateListener` on every
+   * doc change, `keymap` wired in alongside it so the arrow
+   * keys/Enter/Escape only ever mean "the menu" while it actually has
+   * items open. */
   function buildSlashMenu(index: number): { element: HTMLElement; sync: (text: string) => void; keymap: readonly KeyBinding[] } {
-    const menu = document.createElement("div");
-    menu.className = "dn-slash-menu";
-    let items: typeof SLASH_MENU_ITEMS = [];
-    let selected = 0;
     // Escape dismisses this one slash attempt, not slash commands in
     // general — set here and cleared only once the text stops looking
     // like a slash command at all (sync's own "no match" branch), so
@@ -904,28 +1023,18 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     // reopen the menu the reader just closed.
     let dismissed = false;
 
-    function confirm(kind: (typeof SLASH_MENU_ITEMS)[number]["kind"]) {
-      items = [];
-      replaceBlockViaSlash(index, kind);
-    }
-
-    function renderItems() {
-      menu.replaceChildren();
-      items.forEach((item, i) => {
-        const option = document.createElement("button");
-        option.type = "button";
-        option.textContent = item.label;
-        option.className = i === selected ? "is-selected" : "";
-        // mousedown, not click: fires before the editor's own blur
-        // handler would commit "/cell" as the block's real prose text.
-        option.addEventListener("mousedown", (event) => {
-          event.preventDefault();
-          confirm(item.kind);
-        });
-        menu.appendChild(option);
-      });
-      menu.classList.toggle("is-open", items.length > 0);
-    }
+    const list = buildBlockMenuList({
+      items: SLASH_MENU_ITEMS,
+      // mousedown, not click: fires before the editor's own blur
+      // handler would commit "/answer" as the block's real prose text.
+      confirmOn: "mousedown",
+      onConfirm: (kind) => {
+        list.close();
+        if (kind === "image" || kind === "link") void addPickedBlock(kind, index, true);
+        else insertViaSlash(index, kind);
+      },
+    });
+    list.element.classList.add("dn-slash-menu");
 
     function sync(text: string) {
       // Trailing newlines stripped before matching: the "+" menu's own
@@ -934,53 +1043,28 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       // block's own "\n\n" after it untouched — still nothing but a
       // slash command as far as this block's own content goes.
       const match = /^\/([a-zA-Z]*)$/.exec(text.replace(/\n+$/, ""));
-      const filter = match?.[1]?.toLowerCase() ?? null;
+      const filter = match?.[1] ?? null;
       if (filter === null) dismissed = false;
-      items = filter === null || dismissed ? [] : SLASH_MENU_ITEMS.filter((item) => item.label.toLowerCase().startsWith(filter));
-      selected = 0;
-      renderItems();
+      if (filter === null || dismissed) list.close();
+      else list.setQuery(filter);
     }
 
     const bindings: KeyBinding[] = [
-      {
-        key: "ArrowDown",
-        run: () => {
-          if (items.length === 0) return false;
-          selected = (selected + 1) % items.length;
-          renderItems();
-          return true;
-        },
-      },
-      {
-        key: "ArrowUp",
-        run: () => {
-          if (items.length === 0) return false;
-          selected = (selected - 1 + items.length) % items.length;
-          renderItems();
-          return true;
-        },
-      },
-      {
-        key: "Enter",
-        run: () => {
-          if (items.length === 0) return false;
-          confirm(items[selected]!.kind);
-          return true;
-        },
-      },
+      { key: "ArrowDown", run: () => list.move(1) },
+      { key: "ArrowUp", run: () => list.move(-1) },
+      { key: "Enter", run: () => list.confirmSelected() },
       {
         key: "Escape",
         run: () => {
-          if (items.length === 0) return false;
+          if (!list.isOpen()) return false;
           dismissed = true;
-          items = [];
-          renderItems();
+          list.close();
           return true;
         },
       },
     ];
 
-    return { element: menu, sync, keymap: bindings };
+    return { element: list.element, sync, keymap: bindings };
   }
 
   /** Move and delete apply to every block kind, fences included — a code

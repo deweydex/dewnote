@@ -140,8 +140,21 @@ contents:
   test("null for a file that isn't a course, or one it can't read", () => {
     expect(parseCourseFile("courses/index.yaml", "order:\n- one\n")).toBeNull();
     expect(parseCourseFile("courses/x.yaml", "title: [\n")).toBeNull();
-    expect(parseCourseFile("courses/x.yaml", "title: A course\n")).toBeNull();
+    // No title is the one thing dewlab's read_course fails outright on.
     expect(parseCourseFile("courses/x.yaml", "contents: []\n")).toBeNull();
+  });
+
+  test("a course with a title but no contents key at all is read, not refused", () => {
+    // read_course maps a missing or empty `contents:` to [] rather than
+    // failing, so this file builds. Refusing it here meant dewnote
+    // wouldn't show a course dewlab is perfectly happy with — and it is
+    // the exact state a course is in before its first series.
+    const course = parseCourseFile("courses/x.yaml", "title: A course\n");
+    expect(course).not.toBeNull();
+    expect(course!.title).toBe("A course");
+    expect(course!.contents).toEqual([]);
+    // Nothing to append to, though: no `contents:` key means no block.
+    expect(course!.contentsRange).toBeNull();
   });
 });
 
@@ -220,4 +233,66 @@ describe(`real course files: ${DEWLAB_COURSES}${existsSync(DEWLAB_COURSES) ? "" 
       }
     },
   );
+});
+
+describe("scanContentsBlock, through parseCourseFile", () => {
+  const withMixed = [
+    "title: OOP",
+    "card: Classes and objects.",
+    "contents:",
+    "- title: Programming with objects",
+    "  tutorials:",
+    "  - objects-and-classes",
+    "  - one-class-many-methods",
+    "mixed:",
+    "- mixed-programming-with-objects",
+    "",
+  ].join("\n");
+
+  test("the block ends where the next top-level key begins, not at the end of the file", () => {
+    // Two of dewlab's six real course files carry `mixed:` after
+    // `contents:`, so the block genuinely ends mid-file. Appending past
+    // it would write a series into the mixed list.
+    const course = parseCourseFile("courses/oop.yaml", withMixed)!;
+    expect(course.contentsRange).toEqual({ start: 3, end: 7 });
+    expect(withMixed.split("\n")[7]).toBe("mixed:");
+  });
+
+  test("the entry and inner indents are read, not assumed", () => {
+    const course = parseCourseFile("courses/oop.yaml", withMixed)!;
+    // The dash sits at column 0 in every real course file, with the
+    // `tutorials:` under it indented two.
+    expect(course.entryIndent).toBe("");
+    expect(course.innerIndent).toBe("  ");
+  });
+
+  test("a course whose entries are indented keeps that indent", () => {
+    const indented = ["title: A", "contents:", "  - title: One", "    tutorials:", "    - a", ""].join("\n");
+    const course = parseCourseFile("courses/a.yaml", indented)!;
+    expect(course.entryIndent).toBe("  ");
+    expect(course.innerIndent).toBe("  ");
+  });
+
+  test("extra spaces after the dash widen the inner indent, because YAML says they do", () => {
+    // A mapping under `-` starts at the column after the dash and its
+    // spaces, and every later key has to line up with it — so this is
+    // measured off the dash rather than assumed to be two.
+    const wide = ["title: A", "contents:", "-   title: One", "    tutorials:", "    - a", ""].join("\n");
+    const course = parseCourseFile("courses/a.yaml", wide)!;
+    expect(course.entryIndent).toBe("");
+    expect(course.innerIndent).toBe("    ");
+  });
+
+  test("a course with no series yet offers an empty range where the first one goes", () => {
+    const empty = ["title: A", "contents:", ""].join("\n");
+    const course = parseCourseFile("courses/a.yaml", empty)!;
+    expect(course.contents).toEqual([]);
+    expect(course.contentsRange).toEqual({ start: 2, end: 2 });
+  });
+
+  test("a flow contents list offers no range to append to", () => {
+    const flow = ["title: A", "contents: []", ""].join("\n");
+    const course = parseCourseFile("courses/a.yaml", flow)!;
+    expect(course.contentsRange).toBeNull();
+  });
 });

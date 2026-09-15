@@ -1387,12 +1387,21 @@ so this isn't a decision made without a way back.
 
 Still open:
 
-- **Practice problems.** dewlab has no dropdown or multiple-choice syntax;
-  dewmark does, in a fenced `question` grammar the tutorial build does
-  not read. Is the ask to bring that grammar into dewlab (a build change
-  there first), or to give dewnote a fold-and-answer helper that writes
-  what dewlab already accepts? The second is smaller and needs no change
-  to any site.
+- **Practice problems.** Answered and built (decisions 44 and 45):
+  dewnote writes the fold-and-answer form dewlab already accepts — §6's
+  own problem, stepped hint and `dl-answer`. The editor could write
+  `dl-hint` and not `dl-answer` before this, so an answer couldn't be
+  inserted at all. Decision 44 offered the two kinds only on a page
+  declaring `practice_for`; decision 45 took that back, because front
+  matter is a poor guess at what a document is and the menu's own length
+  is no longer a reason to withhold anything.
+
+  Still open, and still a real question: whether to bring dewmark's
+  fenced `question` grammar into dewlab's build, which is what dropdowns
+  and multiple choice would need. That is a build change there first, and
+  a new fence every tutorial and every build has to understand. Not a
+  prerequisite for writing practice pages, which is what decision 44
+  settles.
 - **What this retires.** dewlab's `editor.html` overlaps step 5 entirely;
   dewmini's file mounting overlaps step 4. Decided (decision 34, asked
   directly rather than assumed): dewnote replaces it rather than the two
@@ -1695,10 +1704,12 @@ dewlab has it on the reading side.
    the fake folder and `repo-panel.spec.ts` checking the commit a
    reorder actually sends.
 
-   **Not built: "New series."** A series is an entry in a course file's
-   `contents:`, and appending one means splicing into a block whose
-   bounds `courses.ts` doesn't record. Guessing where it ends, or what
-   indent a `- title:` line carries, from the tutorials indent below it
-   is the guess this design exists to avoid. Recording that range
-   properly is its own piece of work; a course file opens in the editor
-   like any other text file in the meantime.
+   **"New series" landed too** (decision 43), once the scan learned to
+   bound a `contents:` block for real — which is harder than a
+   `tutorials:` list, because two of dewlab's six course files carry a
+   `mixed:` key afterwards and the block ends mid-file. It refuses a
+   title that collides under dewlab's own `series_key()` normalisation,
+   since "Matrices" and "matrices!" are one section to its build. That
+   work also fixed a read-side bug: a course with an empty or absent
+   `contents:` was refused outright, though dewlab builds it happily —
+   and it is the exact state a course is in before its first series.

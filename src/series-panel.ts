@@ -69,7 +69,7 @@
 
 import { canWriteFiles, openPath, readTextFile, writeTextFile } from "./active-store.ts";
 import { parseCourseFile, type Course, type CourseSeries } from "./courses.ts";
-import { addTutorial, findSeries, locateTutorial, moveTutorial, removeTutorial, idsListedBy, type WriteResult } from "./course-writer.ts";
+import { addSeries, addTutorial, findSeries, locateTutorial, moveTutorial, removeTutorial, idsListedBy, type WriteResult } from "./course-writer.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
 import { iconRail, labelToggle } from "./icon-rail.ts";
 
@@ -178,6 +178,8 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
    * identified by course path and series title rather than by position,
    * so a re-render after a write reopens the same one. */
   let adding: { coursePath: string; seriesTitle: string } | null = null;
+  /** Which course, if any, has its "New series" form open. */
+  let addingSeriesTo: string | null = null;
   let writing = false;
 
   function say(message: string): void {
@@ -394,6 +396,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     toggleAdd.textContent = open ? "Cancel" : "Add a tutorial";
     toggleAdd.addEventListener("click", () => {
       adding = open ? null : { coursePath: course.path, seriesTitle: series.title };
+      addingSeriesTo = null;
       render();
     });
     wrap.appendChild(toggleAdd);
@@ -454,6 +457,64 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
     return wrap;
   }
 
+  /** "New series" at the foot of a course. Appends to the end of its
+   * `contents:`, which is where a new one belongs: a course's series are
+   * a reading order, and the next thing to teach goes after the last
+   * thing taught. Same shape as the per-series "Add a tutorial" row
+   * above it, so the rail has one way of adding things rather than two.
+   *
+   * Only for a course whose `contents:` block courses.ts could bound. A
+   * course it could not is still read, opened and shown; it just isn't
+   * written. */
+  function renderNewSeriesRow(course: Course): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "dn-series-add dn-series-new";
+
+    const open = addingSeriesTo === course.path;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "dn-series-add-toggle";
+    toggle.textContent = open ? "Cancel" : "New series";
+    toggle.addEventListener("click", () => {
+      addingSeriesTo = open ? null : course.path;
+      adding = null;
+      render();
+    });
+    wrap.appendChild(toggle);
+    if (!open) return wrap;
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "dn-series-add-search dn-series-new-title";
+    input.placeholder = "Series title";
+    wrap.appendChild(input);
+
+    const create = document.createElement("button");
+    create.type = "button";
+    create.className = "dn-series-add-item dn-series-new-create";
+    create.textContent = "Create";
+    function submit() {
+      const title = input.value;
+      addingSeriesTo = null;
+      void applyEdit(
+        course,
+        `Add the series "${title.trim()}" to ${course.title} from dewnote`,
+        (fresh, content) => addSeries(fresh, content, title),
+        (fresh) => `Added "${title.trim()}" to ${fresh.title}. It has no tutorials yet — drop one in, or use its own "Add a tutorial".`,
+      );
+    }
+    create.addEventListener("click", submit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submit();
+      }
+    });
+    wrap.appendChild(create);
+    queueMicrotask(() => input.focus());
+    return wrap;
+  }
+
   function render() {
     const writable = canWriteFiles();
     body.replaceChildren();
@@ -486,6 +547,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
         if (editable) seriesBlock.appendChild(renderAddRow(course, series));
         section.appendChild(seriesBlock);
       }
+      if (writable && course.contentsRange) section.appendChild(renderNewSeriesRow(course));
       body.appendChild(section);
     }
 

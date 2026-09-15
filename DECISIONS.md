@@ -1499,3 +1499,162 @@ actually sitting in a reader's localStorage today.
 *Cost to change: low for all three. The cluster is one element and one
 set of handlers; the bottom bar is one media query over a container whose
 children did not change; the settings are data in one table.*
+
+**43 — "New series" lands, on a range courses.ts now records properly.**
+
+Decision 37 left this out and said why: appending a series means splicing
+into `contents:`, and courses.ts recorded the bounds of a `tutorials:`
+list but nothing about the block above it. Inferring where that block
+ends, or what indent a `- title:` line carries, from the tutorials indent
+below it was the guess the whole design exists to avoid. So the scan
+learned to do it for real.
+
+**The hard part is the end.** A `tutorials:` list ends at the first line
+that isn't one of its items. `contents:` runs until the file stops
+describing it, and two of dewlab's six real course files carry a `mixed:`
+key afterwards — so it genuinely ends mid-file, and appending past it
+would write a series into the mixed problem-set list. An entry starts
+with `<indent>- `; every line after it that is indented further belongs
+to it; a blank line is passed over but never extends it, which is what
+stops a file's own trailing newline being read as part of its last
+series. That last one was a real bug, caught by a test.
+
+**The inner indent is read off the dash, not assumed.** A mapping under
+`- ` starts at the column after the dash and its spaces, and YAML
+requires every later key to line up with it — so `-   title:` means the
+`tutorials:` beneath it sits four in, not two. Measured rather than
+guessed.
+
+**It refuses a title that collides under dewlab's own normalisation.**
+`series_key()` lowercases and hyphenates, so "Matrices" and "matrices!"
+are the same section to dewlab and its build fails on the pair. That is
+reimplemented here rather than approximated: a near-duplicate only the
+build notices is precisely the file this editor should not write.
+
+**A new series gets a bare `tutorials:` key, not `tutorials: []`.** The
+flow form is exactly what courses.ts refuses to rewrite, so writing one
+would have handed back a series nothing could ever be dragged into.
+
+**One bug in the read side, surfaced by this.** `parseCourseFile`
+returned null for a course whose `contents:` was empty or absent —
+refusing a file dewlab's own `read_course` maps to an empty list and
+builds happily, and refusing it in exactly the state a course is in
+before anybody adds its first series. Fixed, with the test that names it.
+
+*Cost to change: low. The scan is one function beside the one it mirrors,
+and `addSeries` is a two-line splice with three refusals in front of it.*
+
+**44 — Practice problems: write the form dewlab already accepts, and
+offer it only where it belongs.**
+
+§7 left this open as a question with two answers: bring dewmark's fenced
+`question` grammar into dewlab's build, or give dewnote a helper that
+writes what dewlab already reads. Asked directly rather than picked, and
+answered: the helper. It changes no site, ships on its own, and the limit
+it accepts — no dropdowns, no multiple choice — is a real limit rather
+than a hidden one.
+
+**The gap was sharper than the question suggested.** dewlab styles
+exactly two folds: `check_folds` accepts `dl-hint` and `dl-answer` and
+fails the build on anything else. This editor could write the first and
+not the second. An answer fold is the whole point of a practice page, and
+there was no way to insert one at all.
+
+**The template is §6 transcribed, not paraphrased.** The problem as
+prose, a stepped hint, then the answer — "two folds, opened in order, so
+a stuck student gets a route rather than the answer". The hint carries
+**Think about:** and **Try this next:** as prompts an author deletes
+deliberately, because §6 is explicit that they matter as much as the
+steps: "a hint that ends at the answer teaches the answer, and one that
+ends in a related question teaches the method." A template's leftover
+words are words that ship, so every one of them is the guide's own.
+
+**Offered by context, not added to everyone's menu.** The add menu is
+already six items, and an answer fold on a *tutorial* page is an
+invitation to write something §6 says belongs beside the problem on the
+practice page. So the two kinds appear when the open document declares
+`practice_for` or `practice_across`, and nowhere else.
+
+That meant filling the menu when it opens rather than once at mount —
+which is also what makes it right when somebody turns a tutorial into a
+practice page by typing `practice_for` into its front matter, without
+reopening anything.
+
+**What is still not built, and stays a real question.** dewmark's
+`question` grammar, and with it dropdowns and multiple choice. Bringing
+it in is a change to dewlab's build first, and every tutorial and every
+build would have to understand a new fence. That trade is still open;
+this decision only says it is not a prerequisite for writing practice
+pages, because the form dewlab reads today is enough to write them.
+
+*Cost to change: low. Two entries in a table of templates and one
+predicate over front matter.*
+
+**45 — One menu, searched and grouped, offering everything on every
+document.**
+
+Decision 44 ended by keeping Answer and Practice problem off a tutorial's
+menu, on two grounds: that six items was already long, and that §6 says
+an answer belongs beside its problem on the practice page. Both were
+wrong, and in the same way.
+
+**Shortening a menu by removing things from it is a trade the reader
+pays.** The kind they wanted is not missing from the app; it is missing
+from the place they looked, and nothing on screen says where else to
+look. Three separate lists had grown out of that reasoning — the "+"
+button's six, the slash menu's three, and two more that appeared only on
+a page whose front matter said `practice_for` — so what a reader could
+reach depended on which surface they were standing on.
+
+**And the editor was enforcing a rule it cannot see.** §6 is about how to
+teach, which an author applies. Front matter is a poor guess at what a
+document is: a problem set has no `practice_for` until somebody types
+one, and a tutorial can close on a worked answer without becoming a
+practice page. Withholding the block does not make the page better; it
+makes the author go and find the markdown by hand.
+
+**So the menu handles length instead of avoiding it.** It searches, and
+it groups. Two letters reaches any kind, which is what makes the list's
+length stop mattering for a reader who knows what they want; three short
+groups — Write, Run, Teach — is what makes it stop mattering for a reader
+who does not, since they read one group rather than eight rows. A tenth
+kind now costs nobody anything, which is the property the old menu did
+not have and kept paying for.
+
+**Ranked to select, grouped to draw.** A query's best match is what the
+selection starts on and what Enter takes; the results are then put back
+into their groups to be drawn. The two orders genuinely disagree —
+searching "a" selects Answer while drawing Image first — and both are
+wanted: the eye finds a kind where it always sits, and the keyboard takes
+what the ranking chose.
+
+**Each row says what it leaves behind.** One line under the label, in the
+imperative. It is what lets the menu hold eight kinds without a reader
+having to already know what a fold is, and it is why a row is two lines
+tall.
+
+**Everything is a slash command too, pickers included.** Image and Link
+were missing from the slash menu because each hands the reader to a file
+chooser or a search overlay while the block's own editor is still focused
+and live, with a blur mid-flight to account for. That was a real problem
+and the wrong answer to it. The fix belongs in the one place that places
+a picker's result: `placePickedBlock` takes the block the reader typed
+"/image" into, and replaces it *if it still reads as that slash command*
+— which it does, because the blur committed exactly those characters and
+nothing else. If it does not, the markdown lands after it instead. Losing
+the reader's own words is the one outcome worth a branch to avoid.
+
+The slash menu offers everything except Paragraph, which is not a
+shortened list: a block you can type "/" into is already a paragraph, so
+that one command alone would do nothing.
+
+**A phone gets the "+" menu as a sheet.** An 18rem popover hanging off a
+button in a 3.25rem gutter has nowhere to go, so under 40rem it is
+anchored to the bottom edge, full width, over the icon rail rather than
+above it — while a reader is choosing a block, the rail is not what they
+are reaching for. The slash menu stays a popover at every width: it opens
+under the line being typed and has to stay next to it.
+
+*Cost to change: low. The item table, the ranking and the list renderer
+are one small module with no app state in it; both menus are thirty lines
+of wiring around it.*
