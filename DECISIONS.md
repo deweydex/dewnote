@@ -1715,3 +1715,35 @@ page's own runtime is still exactly what dewlab ships.
 *Cost to change: low. Two table entries and two small template
 functions; the preview is one new branch in the same `renderBlockPreview`
 family every other fence kind already goes through.*
+
+---
+
+**47 — Maths in a question preview needed no code, only a test that says
+so.** dewlab decision 7.180 wired `$...$`/`$$...$$` through `to_html()`
+everywhere a `question` or `card` fence's own text is converted, closing
+the "no LaTeX inside a prompt or option" gap decision 46 named as still
+open. The question here was whether dewnote's own preview — a second,
+independent parse of the same text (this file's own header comment) —
+had the matching gap on its side.
+
+It did not. `render-block.ts`'s one `md` instance, shared by every
+non-fence prose block and every fence preview alike
+(`renderHintFencePreview`, `renderCardFencePreview`,
+`renderQuestionFencePreview`, `renderQuestionGaps`), was already
+configured with `markdown-it-texmath` and `katex` when the "math" block
+kind was built, long before a `question` or `card` fence existed to call
+it. Nothing route-specific ever turned that off for either. So the gap
+decision 46 inherited from dewlab was dewlab's alone; dewnote's preview
+had been rendering a question's or a card's maths correctly since the
+day each preview was written, unverified only because nobody had reason
+to check.
+
+Two tests in `render-block.test.ts` — a `$2^3$` in a multiple-choice
+prompt and option, a `$x^2 = 4$` in a card body — assert on the `katex`
+class the shared renderer emits, so the fact stays checked rather than
+assumed the next time either preview function changes.
+
+*Cost to change: none — nothing was built. If a future preview function
+introduces its own `MarkdownIt` instance rather than reusing this one,
+it inherits no maths support by default and would need this decision
+re-read.*

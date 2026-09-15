@@ -192,6 +192,13 @@ describe("renderCardFencePreview", () => {
     expect(html).toContain("&amp;z=1");
     expect(html).toContain("&lt;b&gt;");
   });
+
+  test("maths in a card's body is typeset, the same as dewlab's own build", () => {
+    const block = firstBlockOfKind("```card\nurl: a.html\n### A\nSolve $x^2 = 4$.\n```\n", "fence");
+    const html = renderCardFencePreview(block);
+    expect(html).toContain("katex");
+    expect(html).toContain("x^2 = 4");
+  });
 });
 
 describe("renderQuestionFencePreview", () => {
@@ -250,5 +257,16 @@ describe("renderQuestionFencePreview", () => {
     const block = firstBlockOfKind("```question\nid: q\ntype: multiple-choice\ncorrect: 9\n\nQ?\n\n- a\n- b\n```\n", "fence");
     const html = renderQuestionFencePreview(block);
     expect(html).not.toContain("data-correct");
+  });
+
+  test("maths in a prompt and an option is typeset, the same as dewlab's own build", () => {
+    const block = firstBlockOfKind(
+      "```question\nid: q\ntype: multiple-choice\ncorrect: 1\n\nWhich equals $2^3$?\n\n- $8$\n- $6$\n```\n",
+      "fence",
+    );
+    const html = renderQuestionFencePreview(block);
+    expect(html).toContain("katex");
+    expect(html).toContain("2^3");
+    expect(html).toContain("8");
   });
 });
