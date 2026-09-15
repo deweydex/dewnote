@@ -1543,3 +1543,49 @@ before anybody adds its first series. Fixed, with the test that names it.
 
 *Cost to change: low. The scan is one function beside the one it mirrors,
 and `addSeries` is a two-line splice with three refusals in front of it.*
+
+**44 — Practice problems: write the form dewlab already accepts, and
+offer it only where it belongs.**
+
+§7 left this open as a question with two answers: bring dewmark's fenced
+`question` grammar into dewlab's build, or give dewnote a helper that
+writes what dewlab already reads. Asked directly rather than picked, and
+answered: the helper. It changes no site, ships on its own, and the limit
+it accepts — no dropdowns, no multiple choice — is a real limit rather
+than a hidden one.
+
+**The gap was sharper than the question suggested.** dewlab styles
+exactly two folds: `check_folds` accepts `dl-hint` and `dl-answer` and
+fails the build on anything else. This editor could write the first and
+not the second. An answer fold is the whole point of a practice page, and
+there was no way to insert one at all.
+
+**The template is §6 transcribed, not paraphrased.** The problem as
+prose, a stepped hint, then the answer — "two folds, opened in order, so
+a stuck student gets a route rather than the answer". The hint carries
+**Think about:** and **Try this next:** as prompts an author deletes
+deliberately, because §6 is explicit that they matter as much as the
+steps: "a hint that ends at the answer teaches the answer, and one that
+ends in a related question teaches the method." A template's leftover
+words are words that ship, so every one of them is the guide's own.
+
+**Offered by context, not added to everyone's menu.** The add menu is
+already six items, and an answer fold on a *tutorial* page is an
+invitation to write something §6 says belongs beside the problem on the
+practice page. So the two kinds appear when the open document declares
+`practice_for` or `practice_across`, and nowhere else.
+
+That meant filling the menu when it opens rather than once at mount —
+which is also what makes it right when somebody turns a tutorial into a
+practice page by typing `practice_for` into its front matter, without
+reopening anything.
+
+**What is still not built, and stays a real question.** dewmark's
+`question` grammar, and with it dropdowns and multiple choice. Bringing
+it in is a change to dewlab's build first, and every tutorial and every
+build would have to understand a new fence. That trade is still open;
+this decision only says it is not a prerequisite for writing practice
+pages, because the form dewlab reads today is enough to write them.
+
+*Cost to change: low. Two entries in a table of templates and one
+predicate over front matter.*

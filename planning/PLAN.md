@@ -1387,12 +1387,19 @@ so this isn't a decision made without a way back.
 
 Still open:
 
-- **Practice problems.** dewlab has no dropdown or multiple-choice syntax;
-  dewmark does, in a fenced `question` grammar the tutorial build does
-  not read. Is the ask to bring that grammar into dewlab (a build change
-  there first), or to give dewnote a fold-and-answer helper that writes
-  what dewlab already accepts? The second is smaller and needs no change
-  to any site.
+- **Practice problems.** Answered, and the second half built (decision
+  44): dewnote writes the fold-and-answer form dewlab already accepts —
+  §6's own problem, stepped hint and `dl-answer`, offered only on a page
+  that declares `practice_for` or `practice_across`. The editor could
+  write `dl-hint` and not `dl-answer` before this, so an answer couldn't
+  be inserted at all.
+
+  Still open, and still a real question: whether to bring dewmark's
+  fenced `question` grammar into dewlab's build, which is what dropdowns
+  and multiple choice would need. That is a build change there first, and
+  a new fence every tutorial and every build has to understand. Not a
+  prerequisite for writing practice pages, which is what decision 44
+  settles.
 - **What this retires.** dewlab's `editor.html` overlaps step 5 entirely;
   dewmini's file mounting overlaps step 4. Decided (decision 34, asked
   directly rather than assumed): dewnote replaces it rather than the two

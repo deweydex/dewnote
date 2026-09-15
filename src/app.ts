@@ -87,7 +87,7 @@ export interface MountedDocument {
 
 const BASE_EXTENSIONS: Extension[] = [history(), keymap.of([...defaultKeymap, ...historyKeymap])];
 
-type AddKind = "paragraph" | "cell" | "math" | "hint" | "image" | "link";
+type AddKind = "paragraph" | "cell" | "math" | "hint" | "answer" | "practice" | "image" | "link";
 const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
   { kind: "paragraph", label: "Paragraph" },
   { kind: "cell", label: "Code cell" },
@@ -97,16 +97,84 @@ const ADD_MENU_ITEMS: { kind: AddKind; label: string }[] = [
   { kind: "link", label: "Link" },
 ];
 
+/** The two a practice page gets and a tutorial does not.
+ *
+ * dewlab styles exactly two folds — `check_folds` accepts `dl-hint` and
+ * `dl-answer` and fails the build on anything else — and until now this
+ * editor could write only one of them. An answer fold is the whole point
+ * of a practice page, and there was no way to insert one.
+ *
+ * Offered by context rather than added to the list everyone sees. Six
+ * items is already a long menu, and "Answer" on a tutorial page is an
+ * invitation to write something the page has no business holding —
+ * answers live beside problems on the practice page, which is
+ * PEDAGOGICAL_STYLE_GUIDE §6's own rule, not a preference. */
+const PRACTICE_MENU_ITEMS: { kind: AddKind; label: string }[] = [
+  { kind: "practice", label: "Practice problem" },
+  { kind: "answer", label: "Answer" },
+];
+
+// PEDAGOGICAL_STYLE_GUIDE §6's own worked forms, transcribed rather than
+// paraphrased — this is a template an author types over, so every word
+// it leaves behind is a word that ships.
+//
+// The hint's shape is the part worth being exact about. §6: "Two folds,
+// opened in order, so a stuck student gets a route rather than the
+// answer. The reflection and the follow-on question at the end matter as
+// much as the steps — a hint that ends at the answer teaches the answer,
+// and one that ends in a related question teaches the method." So the
+// template carries **Think about:** and **Try this next:** as prompts an
+// author has to delete deliberately, not as something they have to
+// remember to add.
+const PROBLEM_PLACEHOLDER = "The problem, written as a question.";
+const ANSWER_PLACEHOLDER = "The answer, with the working.";
+const ANSWER_FOLD = `<details class="dl-answer"><summary>answer</summary>\n\n${ANSWER_PLACEHOLDER}\n\n</details>\n\n`;
+const STEPPED_HINT = [
+  '<details class="dl-hint"><summary>stuck? here are some steps</summary>',
+  "",
+  "1. The first thing to work out.",
+  "2. What that lets you do next.",
+  "3. The step people usually miss.",
+  "",
+  "**Think about:** the question that makes the method make sense.",
+  "",
+  "**Try this next:** a related problem the same steps solve.",
+  "",
+  "</details>",
+  "",
+  "",
+].join("\n");
+
+/** Whether this document is a practice page, by its own front matter —
+ * `practice_for` for one tutorial's set, `practice_across` for a mixed
+ * one (DIALECTS.md §1). Read from the document rather than the file
+ * name, since a document being written has not been saved anywhere yet. */
+function isPracticePage(frontMatter: Document["frontMatter"]): boolean {
+  if (!frontMatter.present) return false;
+  const { fields } = frontMatter;
+  return fields["practice_for"] !== undefined || fields["practice_across"] !== undefined;
+}
+
 /** The slash-command menu's own, smaller list — everything the "+" menu
  * offers except Paragraph (typing "/" only makes sense inside one
  * already) and Image/Link, whose file-picker and search overlay each
  * have to survive a blur mid-flight in a way Cell/Math/Hint's own
  * synchronous NEW_BLOCK_SPEC never has to (see buildSlashMenu). */
-const SLASH_MENU_ITEMS: { kind: Exclude<AddKind, "paragraph" | "image" | "link">; label: string }[] = [
+type SlashKind = Exclude<AddKind, "paragraph" | "image" | "link">;
+const SLASH_MENU_ITEMS: { kind: SlashKind; label: string }[] = [
   { kind: "cell", label: "Code cell" },
   { kind: "math", label: "Math" },
   { kind: "hint", label: "Hint" },
 ];
+
+/** Everything the slash menu offers for this document — the base three,
+ * plus the practice kinds when the document is a practice page. Both
+ * extras are synchronous like the rest, so unlike Image and Link there
+ * is nothing about them that has to survive a blur mid-flight. */
+function slashItemsFor(frontMatter: Document["frontMatter"]): { kind: SlashKind; label: string }[] {
+  if (!isPracticePage(frontMatter)) return SLASH_MENU_ITEMS;
+  return [...SLASH_MENU_ITEMS, ...(PRACTICE_MENU_ITEMS as { kind: SlashKind; label: string }[])];
+}
 
 /** Set by main.ts whenever folder-panel.ts or repo-panel.ts (re)builds
  * its own file-index.ts index — a module-level singleton rather than
@@ -407,6 +475,17 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const text = '<details class="dl-hint"><summary>hint</summary>\n\nHint text.\n\n</details>\n\n';
       const at = text.indexOf("Hint text.");
       return { text, anchor: at, head: at + "Hint text.".length };
+    },
+    answer: () => {
+      const text = ANSWER_FOLD;
+      const at = text.indexOf(ANSWER_PLACEHOLDER);
+      return { text, anchor: at, head: at + ANSWER_PLACEHOLDER.length };
+    },
+    practice: () => {
+      const text = `${PROBLEM_PLACEHOLDER}\n\n${STEPPED_HINT}${ANSWER_FOLD}`;
+      // The cursor lands on the problem itself, which is the one part
+      // that has to be written before the rest means anything.
+      return { text, anchor: 0, head: PROBLEM_PLACEHOLDER.length };
     },
   };
 
@@ -733,24 +812,38 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
 
   const addMenu = document.createElement("div");
   addMenu.className = "dn-add-menu";
-  for (const { kind, label } of ADD_MENU_ITEMS) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.textContent = label;
-    item.addEventListener("click", () => {
-      closeOpenAddMenus();
-      const after = controlsIndex;
-      if (kind === "image") void insertImageAfter(after);
-      else if (kind === "link") void insertLinkAfter(after);
-      else insertAfter(after, kind);
-    });
-    addMenu.appendChild(item);
+
+  /** Rebuilt each time the menu opens rather than once at mount, because
+   * what it offers depends on the document: a practice page gets two
+   * kinds a tutorial doesn't, and a reader can turn a tutorial into a
+   * practice page by typing `practice_for` into its front matter without
+   * reopening anything. */
+  function fillAddMenu() {
+    addMenu.replaceChildren();
+    const items = isPracticePage(doc.frontMatter) ? [...ADD_MENU_ITEMS, ...PRACTICE_MENU_ITEMS] : ADD_MENU_ITEMS;
+    for (const { kind, label } of items) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.textContent = label;
+      item.addEventListener("click", () => {
+        closeOpenAddMenus();
+        const after = controlsIndex;
+        if (kind === "image") void insertImageAfter(after);
+        else if (kind === "link") void insertLinkAfter(after);
+        else insertAfter(after, kind);
+      });
+      addMenu.appendChild(item);
+    }
   }
+
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
     const wasOpen = addMenu.classList.contains("is-open");
     closeOpenAddMenus();
-    if (!wasOpen) addMenu.classList.add("is-open");
+    if (!wasOpen) {
+      fillAddMenu();
+      addMenu.classList.add("is-open");
+    }
   });
 
   const grip = document.createElement("button");
@@ -936,7 +1029,10 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const match = /^\/([a-zA-Z]*)$/.exec(text.replace(/\n+$/, ""));
       const filter = match?.[1]?.toLowerCase() ?? null;
       if (filter === null) dismissed = false;
-      items = filter === null || dismissed ? [] : SLASH_MENU_ITEMS.filter((item) => item.label.toLowerCase().startsWith(filter));
+      items =
+        filter === null || dismissed
+          ? []
+          : slashItemsFor(doc.frontMatter).filter((item) => item.label.toLowerCase().startsWith(filter));
       selected = 0;
       renderItems();
     }
