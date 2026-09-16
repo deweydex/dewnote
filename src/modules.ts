@@ -1,5 +1,7 @@
-// Where a tutorial sits in a module, read from dewlab's own `modules/`
-// directory — the replacement for the `<series>.order.yaml` files
+// Where a tutorial sits in a module, read from Dewlab's descriptor
+// directory. Current Dewlab keeps these in `courses/` for repository
+// compatibility; older checkouts used `modules/`. Both describe modules
+// in the UI and both are accepted here.
 // series.ts used to read, after dewlab moved placement out of a
 // tutorial's front matter entirely (its DECISIONS_LOG 7.17x, and the
 // spec it wrote for this editor in `refactor/EDITOR.md` §2, recoverable
@@ -106,14 +108,15 @@ export interface Module {
 const YAML_SUFFIX = ".yaml";
 
 /** Files this module reads, by path: anything directly inside a
- * `modules/` directory, except the two that aren't modules. `index.yaml`
+ * `courses/` or legacy `modules/` directory, except the two that aren't modules. `index.yaml`
  * carries the order modules are shown in and `redirects.yaml` maps old
  * addresses to new ones; neither lists tutorials. */
 export function isModuleFile(path: string): boolean {
   if (!path.endsWith(YAML_SUFFIX)) return false;
   const segments = path.split("/");
   const fileName = segments[segments.length - 1]!;
-  if (segments[segments.length - 2] !== "modules") return false;
+  const parent = segments[segments.length - 2];
+  if (parent !== "courses" && parent !== "modules") return false;
   return fileName !== "index.yaml" && fileName !== "redirects.yaml";
 }
 

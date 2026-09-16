@@ -35,7 +35,9 @@ contents:
 `;
 
 describe("isModuleFile", () => {
-  test("a module file directly inside modules/", () => {
+  test("a module file directly inside current courses/ or legacy modules/", () => {
+    expect(isModuleFile("courses/web-authoring.yaml")).toBe(true);
+    expect(isModuleFile("some/checkout/courses/web-authoring.yaml")).toBe(true);
     expect(isModuleFile("modules/web-authoring.yaml")).toBe(true);
     expect(isModuleFile("some/checkout/modules/web-authoring.yaml")).toBe(true);
   });
@@ -43,6 +45,8 @@ describe("isModuleFile", () => {
   test("index.yaml and redirects.yaml are not modules", () => {
     expect(isModuleFile("modules/index.yaml")).toBe(false);
     expect(isModuleFile("modules/redirects.yaml")).toBe(false);
+    expect(isModuleFile("courses/index.yaml")).toBe(false);
+    expect(isModuleFile("courses/redirects.yaml")).toBe(false);
   });
 
   test("anything else", () => {
@@ -50,6 +54,13 @@ describe("isModuleFile", () => {
     expect(isModuleFile("tutorials/first-steps/first-steps.md")).toBe(false);
     // A yaml file one level deeper isn't a module file.
     expect(isModuleFile("modules/old/web-authoring.yaml")).toBe(false);
+    expect(isModuleFile("courses/old/web-authoring.yaml")).toBe(false);
+  });
+
+  test("a current Dewlab course descriptor parses as a user-facing module", () => {
+    const module = parseModuleFile("courses/computational-methods.yaml", MODULE)!;
+    expect(module.id).toBe("computational-methods");
+    expect(module.title).toBe("Programming and Design Principles");
   });
 });
 

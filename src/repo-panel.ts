@@ -499,7 +499,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       }),
     );
     const read = entries.filter((e): e is { path: string; content: string } => e !== null);
-    const index = read.find((file) => file.path.endsWith("modules/index.yaml"));
+    const index = read.find((file) => /(?:^|\/)(?:courses|modules)\/index\.yaml$/.test(file.path));
     modules = parseModuleFiles(read, index ? parseModuleIndex(index.content) : []);
     host.onModulesChange?.(modules);
     return modules;

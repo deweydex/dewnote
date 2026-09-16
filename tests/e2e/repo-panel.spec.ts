@@ -93,7 +93,7 @@ async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: R
           { path: "tutorials/b-page/b-page.md", type: "blob", sha: "tree-sha-2" },
           ...(opts.includePractice ? [{ path: "tutorials/a-rule/a-rule-practice.md", type: "blob", sha: "tree-sha-practice" }] : []),
           { path: "assets/logo.png", type: "blob", sha: "tree-sha-3" },
-          { path: "modules/a-module.yaml", type: "blob", sha: "tree-sha-4" },
+          { path: "courses/a-module.yaml", type: "blob", sha: "tree-sha-4" },
         ],
       });
     }
@@ -171,7 +171,7 @@ async function setup(page: Page, opts: MockOptions): Promise<{ putBodies: Record
 
 const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n", fileSha: "file-sha-1" };
 
-/** What the refactored repo's root `modules/a-module.yaml` holds — one module, one series,
+/** What the refactored repo's root `courses/a-module.yaml` holds — one module, one series,
  * listing the id of the one markdown file in the tree that has one. */
 const MODULE_YAML = ["title: A Module", "contents:", "- title: First steps", "  tutorials:", "  - a-rule", "  - b-page", ""].join("\n");
 
@@ -228,7 +228,7 @@ test("a module file opens and pushes through the ordinary repo panel, same as a 
   await showAllFiles(page);
   await page.locator(".dn-repo-file", { hasText: "a-module.yaml" }).click();
 
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened modules/a-module.yaml.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened courses/a-module.yaml.");
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
   await page.locator(".dn-repo-push").click();
 

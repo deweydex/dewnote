@@ -108,12 +108,13 @@ describe("listModuleFiles", () => {
     return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   }
 
-  test("filters to modules/*.yaml blobs instead of .md, same tree shape", async () => {
+  test("filters to current courses/*.yaml and legacy modules/*.yaml blobs", async () => {
     globalThis.fetch = (async (_input: RequestInfo | URL) =>
       respond({
         truncated: false,
         tree: [
           { path: "modules/computational-methods.yaml", type: "blob", sha: "s1" },
+          { path: "courses/web-authoring.yaml", type: "blob", sha: "s5" },
           { path: "tutorials/filtering/filtering.md", type: "blob", sha: "s2" },
           // Yaml outside modules/, and yaml a level deeper inside it,
           // are both something else.
@@ -123,7 +124,10 @@ describe("listModuleFiles", () => {
       })) as typeof fetch;
 
     const files = await listModuleFiles({ owner: "dewlab", repo: "dewlab" }, "main", "tok");
-    expect(files).toEqual([{ path: "modules/computational-methods.yaml", sha: "s1" }]);
+    expect(files).toEqual([
+      { path: "modules/computational-methods.yaml", sha: "s1" },
+      { path: "courses/web-authoring.yaml", sha: "s5" },
+    ]);
   });
 });
 
