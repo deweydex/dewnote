@@ -34,6 +34,18 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".dn-block").first()).toBeVisible();
 });
 
+
+test("the brand mark shares the file bar without covering its filename", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  const brand = page.locator(".dn-file-bar > .dn-brand");
+  const name = page.locator(".dn-file-name");
+  await expect(brand).toBeVisible();
+  const [brandBox, nameBox] = await Promise.all([brand.boundingBox(), name.boundingBox()]);
+  expect(brandBox).not.toBeNull();
+  expect(nameBox).not.toBeNull();
+  expect(brandBox!.x + brandBox!.width).toBeLessThanOrEqual(nameBox!.x);
+});
+
 /** Simulates a drop of one markdown file onto the page. Chromium builds a
  * real DataTransfer with a real File in-page for a scripted drag, so no
  * OS-level drag is needed to exercise `openDroppedItem`. */
