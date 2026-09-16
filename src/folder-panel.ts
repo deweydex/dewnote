@@ -11,7 +11,7 @@ import type { FileBar } from "./file-bar.ts";
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseModuleFiles, parseModuleIndex, type Module } from "./modules.ts";
 import { createFile as createActiveFile, setActiveStore } from "./active-store.ts";
-import { iconRail, labelToggle } from "./icon-rail.ts";
+import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 import { todayVersion } from "./dialect.ts";
 
 export interface FolderPanel {
@@ -440,6 +440,7 @@ id: ${id}-first-cell
   labelToggle(toggle, "Folder");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
+  if (supported) dockPanel(toggle, panel);
   renderFiles();
 
   return {

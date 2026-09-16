@@ -51,7 +51,7 @@ test("the starter document renders — heading, cell, and hint fold all visible"
   await expect(page.locator("h1")).toHaveText("Untitled");
   await expect(page.locator(".dn-block-fence .cm-content")).toContainText("1 + 1");
   await expect(page.locator(".dn-block-fold summary")).toHaveText("hint");
-  await expect(page.locator(".dn-block-fold")).toContainText("dewlab and dewstack both use");
+  await expect(page.locator(".dn-block-fold")).toContainText("the same one dewlab uses");
 });
 
 test("clicking a paragraph reveals its markdown source, and blurring commits the edit", async ({ page }) => {

@@ -45,7 +45,7 @@ import {
 import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
 import { parseModuleFiles, parseModuleIndex, type Module } from "./modules.ts";
 import { setActiveStore } from "./active-store.ts";
-import { iconRail, labelToggle } from "./icon-rail.ts";
+import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 
 export interface RepoPanelHost {
   getSource(): string;
@@ -735,6 +735,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   labelToggle(toggle, "GitHub");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
+  dockPanel(toggle, panel);
   renderFiles();
   renderPush();
 

@@ -104,56 +104,53 @@ export function mountFileBar(host: FileBarHost): FileBar {
   importIpynbButton.textContent = "Import ipynb";
   importIpynbButton.title = "Opens a .ipynb file as a new document, converted to markdown.";
 
+  saveButton.textContent = "Markdown file";
+  openButton.textContent = "Markdown file…";
+  importIpynbButton.textContent = "Jupyter notebook…";
+  exportButton.textContent = "Standalone HTML";
+  exportIpynbButton.textContent = "Jupyter notebook";
+
   const status = document.createElement("span");
-  status.className = "dn-file-status";
+  status.className = "dn-file-status dn-visually-hidden";
+  status.setAttribute("aria-live", "polite");
 
-  // The three exports go behind one button.
-  //
-  // At phone width the bar's five buttons took the whole top row and left
-  // the filename as "U…" — the one thing on it a reader actually needs to
-  // read. Open and Save are what a writer reaches for constantly;
-  // exporting and importing are deliberate, occasional acts, and a menu
-  // is where occasional acts belong.
-  //
-  // Each button keeps its own class name and its own handler and simply
-  // moves inside the menu, so nothing about what they do changes — only
-  // how many of them are on screen at rest.
-  const moreButton = document.createElement("button");
-  moreButton.type = "button";
-  moreButton.className = "dn-file-more";
-  moreButton.setAttribute("aria-label", "Export and import");
-  moreButton.setAttribute("aria-expanded", "false");
-  moreButton.title = "Export and import";
-  moreButton.textContent = "⋯";
-
-  const moreMenu = document.createElement("div");
-  moreMenu.className = "dn-file-menu";
-  moreMenu.append(exportButton, exportIpynbButton, importIpynbButton);
-
-  function closeMoreMenu() {
-    moreMenu.classList.remove("is-open");
-    moreButton.setAttribute("aria-expanded", "false");
+  function menu(label: string, className: string, items: HTMLElement[]): HTMLDivElement {
+    const wrap = document.createElement("div");
+    wrap.className = "dn-file-menu-wrap";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.textContent = label;
+    button.setAttribute("aria-expanded", "false");
+    const popover = document.createElement("div");
+    popover.className = "dn-file-menu";
+    popover.append(...items);
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      document.querySelectorAll(".dn-file-menu.is-open").forEach((open) => {
+        if (open !== popover) open.classList.remove("is-open");
+      });
+      const open = !popover.classList.contains("is-open");
+      popover.classList.toggle("is-open", open);
+      button.setAttribute("aria-expanded", String(open));
+    });
+    popover.addEventListener("click", () => popover.classList.remove("is-open"));
+    document.addEventListener("click", () => {
+      popover.classList.remove("is-open");
+      button.setAttribute("aria-expanded", "false");
+    });
+    wrap.append(button, popover);
+    return wrap;
   }
-  moreButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const open = !moreMenu.classList.contains("is-open");
-    moreMenu.classList.toggle("is-open", open);
-    moreButton.setAttribute("aria-expanded", String(open));
-  });
-  // Choosing anything in the menu closes it, and so does a click
-  // elsewhere — the same rule the add menu follows.
-  moreMenu.addEventListener("click", () => closeMoreMenu());
-  document.addEventListener("click", closeMoreMenu);
 
-  const moreWrap = document.createElement("div");
-  moreWrap.className = "dn-file-more-wrap";
-  moreWrap.append(moreButton, moreMenu);
-
-  bar.append(nameLabel, openButton, saveButton, moreWrap, status);
+  const importMenu = menu("Import", "dn-file-import-menu-toggle", [openButton, importIpynbButton]);
+  const exportMenu = menu("Export", "dn-file-export-menu-toggle", [saveButton, exportButton, exportIpynbButton]);
+  bar.append(nameLabel, importMenu, exportMenu, status);
   document.body.appendChild(bar);
 
   function render() {
     nameLabel.textContent = opened ? opened.name : "Untitled";
+    nameLabel.classList.toggle("is-dirty", dirty);
     status.textContent = dirty ? "unsaved" : opened ? (opened.handle ? "saved" : "downloaded") : "";
     document.title = `${opened ? opened.name : "Untitled"}${dirty ? " •" : ""} — dewnote`;
   }

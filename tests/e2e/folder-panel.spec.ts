@@ -193,6 +193,7 @@ test("a module file opens and saves through the ordinary file bar, same as any m
   await page.locator(".dn-source-close").click();
 
   await expect(page.locator(".dn-file-status")).toHaveText("unsaved");
+  await page.locator(".dn-file-export-menu-toggle").click();
   await page.locator(".dn-file-save").click();
   await expect(page.locator(".dn-file-status")).toHaveText("saved");
 });
@@ -214,6 +215,7 @@ test("opening a file renders it in the editor and hands Save to the file bar as 
   await page.locator("body").click({ position: { x: 5, y: 5 } });
   await expect(page.locator(".dn-file-status")).toHaveText("unsaved");
 
+  await page.locator(".dn-file-export-menu-toggle").click();
   await page.locator(".dn-file-save").click();
   await expect(page.locator(".dn-file-status")).toHaveText("saved");
 });

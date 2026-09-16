@@ -70,7 +70,7 @@ import { canWriteFiles, createFile, openPath, readTextFile, writeTextFile } from
 import { parseModuleFile, type Module, type ModuleSeries } from "./modules.ts";
 import { addSeries, addTutorial, findSeries, locateTutorial, moveSeries, moveTutorial, renameSeries, removeTutorial, idsListedBy, type WriteResult } from "./module-writer.ts";
 import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
-import { iconRail, labelToggle } from "./icon-rail.ts";
+import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 
 /** What a drag carries: enough to find the tutorial again in a file
  * re-read since the drag started. Serialised through the one
@@ -674,6 +674,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
   labelToggle(toggle, "Modules");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
+  dockPanel(toggle, panel);
 
   return {
     setModules(next) {

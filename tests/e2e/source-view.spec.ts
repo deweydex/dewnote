@@ -79,10 +79,11 @@ test("Cmd/Ctrl+/ opens the view, and Escape closes it and commits", async ({ pag
   await expect(page.locator(".dn-block-render").last()).toContainText("Another paragraph.");
 });
 
-test("clicking the overlay outside the box also closes and commits, same as the close button", async ({ page }) => {
+test("switching to another sidebar tab closes and commits the source editor", async ({ page }) => {
   await page.locator(".dn-source-toggle").click();
-  await page.locator(".dn-source-overlay").click({ position: { x: 2, y: 2 } });
+  await page.locator(".dn-outline-toggle").click();
   await expect(page.locator(".dn-source-overlay")).toBeHidden();
+  await expect(page.locator(".dn-outline-panel")).toBeVisible();
 });
 
 test("the command palette can open the source view too", async ({ page }) => {

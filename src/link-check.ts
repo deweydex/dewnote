@@ -25,7 +25,7 @@
 // automatically on save is a follow-up, not a cut corner.
 
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
-import { iconRail, labelToggle } from "./icon-rail.ts";
+import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 
 /**
  * `tutorial:` is the only link scheme either site's build resolves.
@@ -164,6 +164,7 @@ export function mountLinkCheckPanel(host: LinkCheckHost): LinkCheckPanel {
   labelToggle(toggle, "Links");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
+  dockPanel(toggle, panel);
 
   return {
     destroy() {

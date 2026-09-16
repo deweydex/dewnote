@@ -48,12 +48,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 
-/** The three export/import buttons live behind the file bar's "⋯" menu
- * now — five buttons on one bar left the filename as "U…" at phone
- * width. Each keeps its own class and its own handler; only how many are
- * on screen at rest changed. */
 async function openFileMenuThen(page: import("@playwright/test").Page, selector: string) {
-  await page.locator(".dn-file-more").click();
+  const menu = selector.includes("import") ? ".dn-file-import-menu-toggle" : ".dn-file-export-menu-toggle";
+  await page.locator(menu).click();
   await page.locator(selector).click();
 }
 
