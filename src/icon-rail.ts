@@ -11,6 +11,7 @@
 // own "mounted once, independently of any particular document" lifecycle.
 
 let rail: HTMLDivElement | null = null;
+let fileActions: HTMLDivElement | null = null;
 let resizer: HTMLDivElement | null = null;
 interface DockEntry {
   toggle: HTMLButtonElement;
@@ -19,6 +20,7 @@ interface DockEntry {
   onDeactivate?: () => void;
 }
 const docked: DockEntry[] = [];
+let active: DockEntry | null = null;
 
 function setPanelWidth(width: number): void {
   const max = Math.min(720, window.innerWidth * 0.7);
@@ -29,7 +31,6 @@ function setPanelWidth(width: number): void {
 
 function ensureResizer(): void {
   if (resizer) return;
-  document.documentElement.classList.add("dn-has-inspector");
   const saved = Number(localStorage.getItem("dewnote.inspectorWidth"));
   if (Number.isFinite(saved) && saved > 0) setPanelWidth(saved);
   resizer = document.createElement("div");
@@ -38,6 +39,7 @@ function ensureResizer(): void {
   resizer.setAttribute("role", "separator");
   resizer.setAttribute("aria-orientation", "vertical");
   resizer.setAttribute("aria-label", "Resize sidebar");
+  resizer.hidden = true;
   const grip = document.createElement("span");
   grip.className = "dn-inspector-resizer-grip";
   grip.textContent = "•••";
@@ -61,17 +63,31 @@ function ensureResizer(): void {
   document.body.appendChild(resizer);
 }
 
-function activate(entry: DockEntry): void {
-  const previous = docked.find((item) => !item.panel.hidden);
-  if (previous && previous !== entry) previous.onDeactivate?.();
+function closeDock(): void {
+  if (active) active.onDeactivate?.();
   for (const item of docked) {
-    const active = item === entry;
-    item.panel.hidden = !active;
-    item.toggle.setAttribute("aria-expanded", String(active));
-    item.toggle.setAttribute("aria-selected", String(active));
-    item.toggle.classList.toggle("is-active", active);
+    item.panel.hidden = true;
+    item.toggle.setAttribute("aria-expanded", "false");
+    item.toggle.setAttribute("aria-selected", "false");
+    item.toggle.classList.remove("is-active");
   }
-  if (previous !== entry) entry.onActivate?.();
+  active = null;
+  if (resizer) resizer.hidden = true;
+}
+
+function activate(entry: DockEntry): void {
+  if (active === entry) {
+    closeDock();
+    return;
+  }
+  closeDock();
+  active = entry;
+  entry.panel.hidden = false;
+  entry.toggle.setAttribute("aria-expanded", "true");
+  entry.toggle.setAttribute("aria-selected", "true");
+  entry.toggle.classList.add("is-active");
+  if (resizer) resizer.hidden = false;
+  entry.onActivate?.();
 }
 
 /** Returns the shared toggle rail, creating and appending it to
@@ -87,11 +103,22 @@ export function iconRail(): HTMLDivElement {
   return rail;
 }
 
+/** Bottom-right home for the two file-transfer actions. */
+export function fileActionRail(): HTMLDivElement {
+  if (fileActions) return fileActions;
+  fileActions = document.createElement("div");
+  fileActions.className = "dn-file-action-rail";
+  fileActions.setAttribute("role", "tablist");
+  fileActions.setAttribute("aria-label", "Import and export");
+  document.body.appendChild(fileActions);
+  return fileActions;
+}
+
 /** Registers a right-hand panel as a persistent dock tab. */
 export function dockPanel(
   toggle: HTMLButtonElement,
   panel: HTMLElement,
-  defaultOpen = false,
+  _defaultOpen = false,
   lifecycle: Pick<DockEntry, "onActivate" | "onDeactivate"> = {},
 ): void {
   ensureResizer();
@@ -100,11 +127,7 @@ export function dockPanel(
   const entry = { toggle, panel, ...lifecycle };
   docked.push(entry);
   toggle.addEventListener("click", () => activate(entry));
-  panel.querySelector<HTMLButtonElement>('[class$="-close"]')?.addEventListener("click", () => {
-    const fallback = docked.find((item) => item !== entry && !item.toggle.disabled);
-    if (fallback) activate(fallback);
-  });
-  if (defaultOpen || docked.length === 1) activate(entry);
+  panel.querySelector<HTMLButtonElement>('[class$="-close"]')?.addEventListener("click", closeDock);
 }
 
 /** Gives a toggle a word to sit under its glyph on the bottom bar.

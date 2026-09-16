@@ -10,6 +10,7 @@
 import { downloadAsFile, openDroppedItem, openFile, saveDocument, suggestedFilename, type OpenedDocument } from "./store.ts";
 import { buildStandaloneHtmlPage, collectPageCss } from "./export-html.ts";
 import { exportToNotebook, importFromNotebook, type Notebook } from "./jupyter.ts";
+import { dockPanel, fileActionRail, labelToggle } from "./icon-rail.ts";
 
 export interface FileBarHost {
   /** The mounted document's current source, live-editor content included. */
@@ -114,38 +115,67 @@ export function mountFileBar(host: FileBarHost): FileBar {
   status.className = "dn-file-status dn-visually-hidden";
   status.setAttribute("aria-live", "polite");
 
-  function menu(label: string, className: string, items: HTMLElement[]): HTMLDivElement {
-    const wrap = document.createElement("div");
-    wrap.className = "dn-file-menu-wrap";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = className;
-    button.textContent = label;
-    button.setAttribute("aria-expanded", "false");
-    const popover = document.createElement("div");
-    popover.className = "dn-file-menu";
-    popover.append(...items);
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      document.querySelectorAll(".dn-file-menu.is-open").forEach((open) => {
-        if (open !== popover) open.classList.remove("is-open");
-      });
-      const open = !popover.classList.contains("is-open");
-      popover.classList.toggle("is-open", open);
-      button.setAttribute("aria-expanded", String(open));
-    });
-    popover.addEventListener("click", () => popover.classList.remove("is-open"));
-    document.addEventListener("click", () => {
-      popover.classList.remove("is-open");
-      button.setAttribute("aria-expanded", "false");
-    });
-    wrap.append(button, popover);
-    return wrap;
+  function actionPanel(
+    label: string,
+    glyph: string,
+    className: string,
+    items: Array<{ button: HTMLButtonElement; description: string }>,
+  ): { toggle: HTMLButtonElement; panel: HTMLDivElement } {
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = className;
+    toggle.textContent = glyph;
+    toggle.title = label;
+    toggle.setAttribute("aria-label", label);
+    toggle.setAttribute("aria-expanded", "false");
+    labelToggle(toggle, label);
+
+    const panel = document.createElement("div");
+    panel.className = `dn-file-action-panel dn-${label.toLowerCase()}-panel`;
+    panel.hidden = true;
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", label);
+    toggle.setAttribute("aria-controls", (panel.id = `dn-${label.toLowerCase()}-panel`));
+
+    const header = document.createElement("div");
+    header.className = "dn-file-panel-header";
+    const heading = document.createElement("h2");
+    heading.textContent = label;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "dn-file-panel-close";
+    close.textContent = "×";
+    close.setAttribute("aria-label", `Close ${label.toLowerCase()} panel`);
+    header.append(heading, close);
+    panel.appendChild(header);
+
+    const list = document.createElement("div");
+    list.className = "dn-file-action-list";
+    for (const item of items) {
+      const row = document.createElement("div");
+      row.className = "dn-file-action-choice";
+      const description = document.createElement("p");
+      description.textContent = item.description;
+      row.append(item.button, description);
+      list.appendChild(row);
+    }
+    panel.appendChild(list);
+    fileActionRail().appendChild(toggle);
+    document.body.appendChild(panel);
+    dockPanel(toggle, panel);
+    return { toggle, panel };
   }
 
-  const importMenu = menu("Import", "dn-file-import-menu-toggle", [openButton, importIpynbButton]);
-  const exportMenu = menu("Export", "dn-file-export-menu-toggle", [saveButton, exportButton, exportIpynbButton]);
-  bar.append(nameLabel, importMenu, exportMenu, status);
+  const importAction = actionPanel("Import", "↓", "dn-file-import-menu-toggle", [
+    { button: openButton, description: "Open a Markdown or YAML document from this device." },
+    { button: importIpynbButton, description: "Convert a Jupyter notebook into an editable document." },
+  ]);
+  const exportAction = actionPanel("Export", "↑", "dn-file-export-menu-toggle", [
+    { button: saveButton, description: "Save the editable Markdown or YAML source." },
+    { button: exportButton, description: "Download a self-contained rendered web page." },
+    { button: exportIpynbButton, description: "Download executable cells as a Jupyter notebook." },
+  ]);
+  bar.append(nameLabel, status);
   document.body.appendChild(bar);
 
   function render() {
@@ -264,6 +294,10 @@ export function mountFileBar(host: FileBarHost): FileBar {
       document.removeEventListener("dragover", onDragOver);
       document.removeEventListener("dragleave", onDragLeave);
       document.removeEventListener("drop", onDrop);
+      importAction.toggle.remove();
+      importAction.panel.remove();
+      exportAction.toggle.remove();
+      exportAction.panel.remove();
       bar.remove();
     },
   };
