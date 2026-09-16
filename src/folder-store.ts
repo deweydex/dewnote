@@ -76,14 +76,15 @@ export async function listMarkdownFiles(root: DirectoryLike): Promise<FolderFile
   return walk(root, (path) => path.endsWith(".md"));
 }
 
-/** Every module file under `root` — dewlab's own `modules/*.yaml`
+/** Every module file under `root` — Dewlab's current `courses/*.yaml`
+ * or the earlier `modules/*.yaml`
  * (modules.ts), which say which tutorials a module lists and in what
  * order, and which series-panel.ts reads alongside `listMarkdownFiles`'s
  * front-matter index. `index.yaml` and `redirects.yaml` come back too:
  * both live in the same directory, the first carries the order the
  * modules are shown in, and `isModuleFile` is what tells them apart. */
 export async function listModuleFiles(root: DirectoryLike): Promise<FolderFile[]> {
-  return walk(root, (path) => /(^|\/)modules\/[^/]+\.yaml$/.test(path));
+  return walk(root, (path) => /(^|\/)(?:courses|modules)\/[^/]+\.yaml$/.test(path));
 }
 
 export async function readFile(handle: FileSystemFileHandle): Promise<string> {

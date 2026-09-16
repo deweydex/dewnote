@@ -44,11 +44,15 @@ describe("listMarkdownFiles", () => {
 });
 
 describe("listModuleFiles", () => {
-  test("finds modules/*.yaml, ignoring markdown and yaml elsewhere", async () => {
+  test("finds current courses/*.yaml and legacy modules/*.yaml", async () => {
     const root = fakeDir({
       "README.md": { kind: "file" },
       modules: fakeDir({
         "computational-methods.yaml": { kind: "file" },
+        "index.yaml": { kind: "file" },
+      }),
+      courses: fakeDir({
+        "web-authoring.yaml": { kind: "file" },
         "index.yaml": { kind: "file" },
       }),
       tutorials: fakeDir({
@@ -61,20 +65,29 @@ describe("listModuleFiles", () => {
     });
     const files = await listModuleFiles(root);
     expect(files.map((f: { path: string }) => f.path).sort()).toEqual([
+      "courses/index.yaml",
+      "courses/web-authoring.yaml",
       "modules/computational-methods.yaml",
       "modules/index.yaml",
     ]);
   });
 
-  test("only directly inside modules/, not one level deeper", async () => {
+  test("only directly inside either descriptor directory, not one level deeper", async () => {
     const root = fakeDir({
       modules: fakeDir({
         "web-authoring.yaml": { kind: "file" },
         archive: fakeDir({ "old-module.yaml": { kind: "file" } }),
       }),
+      courses: fakeDir({
+        "database-methods.yaml": { kind: "file" },
+        archive: fakeDir({ "old-course.yaml": { kind: "file" } }),
+      }),
     });
     const files = await listModuleFiles(root);
-    expect(files.map((f: { path: string }) => f.path)).toEqual(["modules/web-authoring.yaml"]);
+    expect(files.map((f: { path: string }) => f.path).sort()).toEqual([
+      "courses/database-methods.yaml",
+      "modules/web-authoring.yaml",
+    ]);
   });
 });
 

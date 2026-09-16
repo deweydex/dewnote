@@ -335,7 +335,7 @@ id: ${id}-first-cell
       }),
     );
     const read = entries.filter((e): e is { path: string; content: string } => e !== null);
-    const index = read.find((file) => file.path.endsWith("modules/index.yaml"));
+    const index = read.find((file) => /(?:^|\/)(?:courses|modules)\/index\.yaml$/.test(file.path));
     const modules = parseModuleFiles(read, index ? parseModuleIndex(index.content) : []);
     onModulesChange?.(modules);
     return modules;

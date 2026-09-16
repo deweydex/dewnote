@@ -183,7 +183,7 @@ export async function listMarkdownFiles(repo: RepoRef, ref: string, token: strin
  * cost of one extra (cheap, per the same reasoning above) request when
  * both are actually needed. */
 export async function listModuleFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
-  return listMatchingFiles(repo, ref, token, (path) => /(^|\/)modules\/[^/]+\.yaml$/.test(path));
+  return listMatchingFiles(repo, ref, token, (path) => /(^|\/)(?:courses|modules)\/[^/]+\.yaml$/.test(path));
 }
 
 export async function getFileContent(
