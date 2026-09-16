@@ -8,7 +8,7 @@
 // now-unreferenced asset files — so what's left is the actual single-file
 // distributable the browser store and the Mac app's downloadable copy
 // both need.
-import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
 const DIST = "dist";
@@ -25,6 +25,29 @@ const cssFile = join(DIST, linkMatch[1]!.replace(/^\.\//, ""));
 const jsFile = join(DIST, scriptMatch[1]!.replace(/^\.\//, ""));
 const css = readFileSync(cssFile, "utf8");
 const js = readFileSync(jsFile, "utf8");
+
+
+// Development uses a conventional SVG file because browsers handle and
+// refresh it more reliably than a hand-written data URL. The distributable
+// still promises to be one file, so replace Bun's emitted favicon reference
+// with the same SVG encoded inline and remove the emitted copy when there is
+// one. Reading the canonical source also keeps this independent of whatever
+// hashed filename a future Bun release chooses.
+const iconMatch = /<link\b(?=[^>]*\brel=["']icon["'])[^>]*>/i.exec(html);
+if (!iconMatch) {
+  throw new Error("inline-single-file: expected one favicon link in dist/index.html");
+}
+const iconHrefMatch = /\bhref=["']([^"']+)["']/i.exec(iconMatch[0]);
+if (!iconHrefMatch) {
+  throw new Error("inline-single-file: favicon link has no href");
+}
+const emittedIconPath = iconHrefMatch[1]!.startsWith("data:")
+  ? null
+  : join(DIST, iconHrefMatch[1]!.replace(/^\.\//, ""));
+const favicon = readFileSync(join("assets", "branding", "dewnote-favicon.svg"));
+const inlineIcon = `data:image/svg+xml;base64,${favicon.toString("base64")}`;
+html = html.replace(iconMatch[0], () => iconMatch[0].replace(iconHrefMatch[0], `href="${inlineIcon}"`));
+if (emittedIconPath && existsSync(emittedIconPath)) unlinkSync(emittedIconPath);
 
 // A replacement *function* is required here, not a template string: with a
 // string replacement, `String.prototype.replace` still interprets `$&`,
