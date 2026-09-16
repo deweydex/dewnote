@@ -119,7 +119,7 @@ export function mountFileBar(host: FileBarHost): FileBar {
     label: string,
     glyph: string,
     className: string,
-    items: Array<{ button: HTMLButtonElement; description: string }>,
+    groups: Array<{ heading: string; items: Array<{ button: HTMLButtonElement; description: string }> }>,
   ): { toggle: HTMLButtonElement; panel: HTMLDivElement } {
     const toggle = document.createElement("button");
     toggle.type = "button";
@@ -151,13 +151,21 @@ export function mountFileBar(host: FileBarHost): FileBar {
 
     const list = document.createElement("div");
     list.className = "dn-file-action-list";
-    for (const item of items) {
-      const row = document.createElement("div");
-      row.className = "dn-file-action-choice";
-      const description = document.createElement("p");
-      description.textContent = item.description;
-      row.append(item.button, description);
-      list.appendChild(row);
+    for (const group of groups) {
+      const section = document.createElement("section");
+      section.className = "dn-file-action-section";
+      const subheading = document.createElement("h3");
+      subheading.textContent = group.heading;
+      section.appendChild(subheading);
+      for (const item of group.items) {
+        const row = document.createElement("div");
+        row.className = "dn-file-action-choice";
+        const description = document.createElement("p");
+        description.textContent = item.description;
+        row.append(item.button, description);
+        section.appendChild(row);
+      }
+      list.appendChild(section);
     }
     panel.appendChild(list);
     fileActionRail().appendChild(toggle);
@@ -166,14 +174,25 @@ export function mountFileBar(host: FileBarHost): FileBar {
     return { toggle, panel };
   }
 
-  const importAction = actionPanel("Import", "↓", "dn-file-import-menu-toggle", [
-    { button: openButton, description: "Open a Markdown or YAML document from this device." },
-    { button: importIpynbButton, description: "Convert a Jupyter notebook into an editable document." },
-  ]);
-  const exportAction = actionPanel("Export", "↑", "dn-file-export-menu-toggle", [
-    { button: saveButton, description: "Save the editable Markdown or YAML source." },
-    { button: exportButton, description: "Download a self-contained rendered web page." },
-    { button: exportIpynbButton, description: "Download executable cells as a Jupyter notebook." },
+  // Import and Export are one transfer task, not two unrelated global
+  // actions. Keep the old class hooks as aliases so existing keyboard
+  // commands and integrations still open this same selector.
+  const transferAction = actionPanel("Transfer", "⇅", "dn-file-transfer-toggle dn-file-import-menu-toggle dn-file-export-menu-toggle", [
+    {
+      heading: "Import",
+      items: [
+        { button: openButton, description: "Open a Markdown or YAML document from this device." },
+        { button: importIpynbButton, description: "Convert a Jupyter notebook into an editable document." },
+      ],
+    },
+    {
+      heading: "Export",
+      items: [
+        { button: saveButton, description: "Save the editable Markdown or YAML source." },
+        { button: exportButton, description: "Download a self-contained rendered web page." },
+        { button: exportIpynbButton, description: "Download executable cells as a Jupyter notebook." },
+      ],
+    },
   ]);
   bar.append(nameLabel, status);
   document.body.appendChild(bar);
@@ -294,10 +313,8 @@ export function mountFileBar(host: FileBarHost): FileBar {
       document.removeEventListener("dragover", onDragOver);
       document.removeEventListener("dragleave", onDragLeave);
       document.removeEventListener("drop", onDrop);
-      importAction.toggle.remove();
-      importAction.panel.remove();
-      exportAction.toggle.remove();
-      exportAction.panel.remove();
+      transferAction.toggle.remove();
+      transferAction.panel.remove();
       bar.remove();
     },
   };

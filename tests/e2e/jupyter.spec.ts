@@ -48,9 +48,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 
-async function openFileMenuThen(page: import("@playwright/test").Page, selector: string) {
-  const menu = selector.includes("import") ? ".dn-file-import-menu-toggle" : ".dn-file-export-menu-toggle";
-  await page.locator(menu).click();
+async function openFileMenuThen(page: Page, selector: string) {
+  const panel = page.locator(".dn-transfer-panel");
+  if (!(await panel.isVisible())) {
+    await page.locator(".dn-file-transfer-toggle").click();
+  }
   await page.locator(selector).click();
 }
 

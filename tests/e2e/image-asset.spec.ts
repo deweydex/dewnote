@@ -14,6 +14,7 @@
 // is in image-block.spec.ts.
 
 import { addBlockAfter, blockMenuItem, deleteBlock, openAddMenu, pointAt } from "./block-controls.ts";
+import { selectPanel } from "./panel-helpers.ts";
 import { test as base, expect, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -177,7 +178,7 @@ test.describe("against a local folder", () => {
     await stubDirectoryPicker(page);
     await page.goto(BUILT_APP);
     await expect(page.locator(".dn-block").first()).toBeVisible();
-    await page.locator(".dn-folder-toggle").click();
+    await selectPanel(page, ".dn-folder-toggle");
     await page.locator(".dn-folder-open").click();
     await expect(page.locator(".dn-folder-status")).toContainText("markdown file");
     await page.locator(".dn-folder-file", { hasText: "first-steps.md" }).click();
@@ -277,7 +278,7 @@ test("against a repository, the image is committed as its real bytes, not a UTF-
   await page.goto(BUILT_APP);
   await expect(page.locator(".dn-block").first()).toBeVisible();
 
-  await page.locator(".dn-repo-toggle").click();
+  await selectPanel(page, ".dn-repo-toggle");
   await page.locator('.dn-repo-panel input[type="password"]').fill("test-token");
   const ownerRepo = page.locator(".dn-repo-owner-row input");
   await ownerRepo.nth(0).fill("deweydex");

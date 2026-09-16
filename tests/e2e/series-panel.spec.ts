@@ -6,6 +6,7 @@
 // placement that doesn't line up.
 
 import { test as base, expect } from "@playwright/test";
+import { selectPanel } from "./panel-helpers.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -79,7 +80,7 @@ test("groups by module then series, in the module file's own order, preferring a
     ]);
   });
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   await expect(page.locator(".dn-series-module-title")).toHaveText("Computational Methods");
   await expect(page.locator(".dn-series-series-title")).toHaveText("Python fundamentals");
 
@@ -126,7 +127,7 @@ test("with several versions of one tutorial indexed, the list shows the live one
     ]);
   });
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   await expect(page.locator(".dn-series-list li")).toHaveText("Filtering");
 });
 
@@ -153,7 +154,7 @@ test("several modules each get their own section, in index.yaml's order rather t
     ]);
   });
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   const modules = page.locator(".dn-series-module-title");
   await expect(modules).toHaveCount(2);
   // The order modules.ts handed over, which is index.yaml's — a module's
@@ -187,7 +188,7 @@ test("a tutorial no module lists is shown under its own heading, not treated as 
     ]);
   });
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   const unlisted = page.locator(".dn-series-unlisted");
   await expect(unlisted.locator("h3")).toHaveText("On no module");
   await expect(unlisted.locator(".dn-series-list li")).toHaveText("Loose");
@@ -205,13 +206,13 @@ test("without module files read at all, nothing is reported as unlisted", async 
     hook.__dewnote.setModules([]);
   });
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   await expect(page.locator(".dn-series-unlisted")).toHaveCount(0);
   await expect(page.locator(".dn-series-empty")).toBeVisible();
 });
 
 test("with no module data at all, the panel says so instead of showing nothing", async ({ page }) => {
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   await expect(page.locator(".dn-series-empty")).toBeVisible();
 });
 

@@ -113,12 +113,12 @@ test("on a narrow screen the rail is a labelled bottom bar that fits, and nothin
   });
 
   expect(geo.pageOverflow, "the page never scrolls sideways").toBe(geo.viewport);
-  expect(geo.railFits, "all eight fit without the bar scrolling").toBe(true);
+  expect(geo.railFits, "all four launchers fit without the bar scrolling").toBe(true);
   expect(geo.railIsAtBottom).toBe(true);
   expect(geo.textClearOfRail).toBe(true);
   // Every glyph carries a word — a row of bare glyphs is a memory test,
   // and there is no tooltip to hover on a phone.
-  expect(geo.labels).toEqual(["Settings", "Modules", "Folder", "GitHub", "Outline", "Source", "Links"]);
+  expect(geo.labels).toEqual(["Workspace", "Review", "Source", "Settings"]);
   expect(geo.smallest, "touch targets stay finger-sized").toBeGreaterThanOrEqual(44);
 
   await browser.close();

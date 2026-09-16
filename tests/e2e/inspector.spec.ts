@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { selectPanel } from "./panel-helpers.ts";
 
 const BUILT_APP = new URL("../../dist/index.html", import.meta.url).href;
 
@@ -7,20 +8,47 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".dn-block").first()).toBeVisible();
 });
 
-test("right-side bubbles open, switch, and close one drawer", async ({ page }) => {
+test("grouped right-side bubbles open, switch, and close one drawer", async ({ page }) => {
   await expect(page.locator(".dn-outline-panel")).toBeHidden();
   await page.locator(".dn-settings-toggle").click();
   await expect(page.locator(".dn-settings-panel")).toBeVisible();
   await expect(page.locator(".dn-outline-panel")).toBeHidden();
   await expect(page.locator(".dn-settings-toggle")).toHaveAttribute("aria-selected", "true");
 
-  await page.locator(".dn-outline-toggle").click();
+  await selectPanel(page, ".dn-outline-toggle");
   await expect(page.locator(".dn-settings-panel")).toBeHidden();
   await expect(page.locator(".dn-outline-panel")).toBeVisible();
+  await expect(page.locator(".dn-review-toggle")).toHaveClass(/is-active/);
 
-  await page.locator(".dn-outline-toggle").click();
+  await page.locator(".dn-review-toggle").click();
   await expect(page.locator(".dn-outline-panel")).toBeHidden();
   await expect(page.locator(".dn-outline-toggle")).toHaveAttribute("aria-selected", "false");
+});
+
+test("the rail presents four purposeful menus instead of every tool as a peer", async ({ page }) => {
+  const launchers = page.locator(".dn-icon-rail > button");
+  await expect(launchers).toHaveCount(4);
+  expect(await launchers.evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.label))).toEqual([
+    "Workspace", "Review", "Source", "Settings",
+  ]);
+
+  await page.locator(".dn-workspace-toggle").click();
+  const workspace = page.locator("#dn-workspace-panel");
+  await expect(workspace).toBeVisible();
+  expect((await workspace.boundingBox())!.x).toBeGreaterThan(page.viewportSize()!.width / 2);
+  await expect(page.locator("#dn-workspace-panel .dn-dock-group-option")).toHaveCount(3);
+  expect(await page.locator("#dn-workspace-panel [data-label]").evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.label))).toEqual([
+    "Folder", "GitHub", "Modules",
+  ]);
+
+  await page.locator(".dn-workspace-toggle").click();
+  await page.locator(".dn-review-toggle").click();
+  const review = page.locator("#dn-review-panel");
+  expect((await review.boundingBox())!.x).toBeGreaterThan(page.viewportSize()!.width / 2);
+  await expect(review.locator(".dn-dock-group-option")).toHaveCount(2);
+  expect(await page.locator("#dn-review-panel [data-label]").evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.label))).toEqual([
+    "Outline", "Links",
+  ]);
 });
 
 test("legacy GitHub and Source surfaces use the same right-side drawer position", async ({ page }) => {
@@ -32,7 +60,7 @@ test("legacy GitHub and Source surfaces use the same right-side drawer position"
   ] as const;
 
   for (const [toggle, panel] of cases) {
-    await page.locator(toggle).click();
+    await selectPanel(page, toggle);
     const drawer = page.locator(panel);
     await expect(drawer).toBeVisible();
     const box = await drawer.boundingBox();
@@ -44,7 +72,7 @@ test("legacy GitHub and Source surfaces use the same right-side drawer position"
 test("the sidebar divider advertises horizontal resizing and responds to the keyboard", async ({ page }) => {
   const divider = page.locator(".dn-inspector-resizer");
   await expect(divider).toBeHidden();
-  await page.locator(".dn-outline-toggle").click();
+  await selectPanel(page, ".dn-outline-toggle");
   await expect(divider).toBeVisible();
   await expect(divider).toHaveAttribute("role", "separator");
   await expect(divider).toHaveAttribute("aria-orientation", "vertical");
@@ -60,25 +88,26 @@ test("the sidebar divider advertises horizontal resizing and responds to the key
   const after = await page.locator(".dn-outline-panel").evaluate((node) => node.getBoundingClientRect().width);
   expect(after).toBeGreaterThan(before);
   await expect(grip).toHaveText("•••");
-  await page.locator(".dn-outline-toggle").click();
+  await page.locator(".dn-review-toggle").click();
   await expect(divider).toBeHidden();
 });
 
-test("Import and Export are bottom-right bubbles with selector drawers", async ({ page }) => {
+test("Import and Export share one bottom-right Transfer selector", async ({ page }) => {
   const rail = page.locator(".dn-file-action-rail");
   await expect(rail).toBeVisible();
-  await expect(rail.locator("button")).toHaveCount(2);
+  await expect(rail.locator("button")).toHaveCount(1);
+  await expect(rail.locator("button")).toHaveAttribute("data-label", "Transfer");
   await expect(page.locator(".dn-file-bar")).toHaveText("Untitled");
 
-  await page.locator(".dn-file-import-menu-toggle").click();
-  await expect(page.locator(".dn-import-panel")).toBeVisible();
-  await expect(page.locator(".dn-import-panel button")).toContainText(["×", "Markdown file…", "Jupyter notebook…"]);
-
-  await page.locator(".dn-file-export-menu-toggle").click();
-  await expect(page.locator(".dn-import-panel")).toBeHidden();
-  await expect(page.locator(".dn-export-panel")).toBeVisible();
-  await expect(page.locator(".dn-export-panel button")).toContainText([
+  await page.locator(".dn-file-transfer-toggle").click();
+  const panel = page.locator(".dn-transfer-panel");
+  await expect(panel).toBeVisible();
+  expect((await panel.boundingBox())!.x).toBeGreaterThan(page.viewportSize()!.width / 2);
+  await expect(panel.locator("h3")).toHaveText(["Import", "Export"]);
+  await expect(panel.locator("button")).toContainText([
     "×",
+    "Markdown file…",
+    "Jupyter notebook…",
     "Markdown file",
     "Standalone HTML",
     "Jupyter notebook",
