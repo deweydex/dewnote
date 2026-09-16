@@ -51,7 +51,7 @@ jobs:
 
       - name: Build
         run: |
-          bun run build
+          DEWNOTE_EXTERNAL_FAVICON=1 bun run build
           touch dist/.nojekyll
 
       # A build that produced nothing would otherwise publish an empty
