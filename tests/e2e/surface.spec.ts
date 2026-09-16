@@ -73,6 +73,71 @@ test("clicking a paragraph reveals its markdown source, and blurring commits the
   expect(finalSource).toContain("Second paragraph, untouched.\n");
 });
 
+test("prose edits inline rather than becoming a code-looking scrolling box", async ({ page }) => {
+  await mount(page, "Answers are hidden. Indexing and slicing reward being tried rather than reasoned about.\n");
+  await page.locator(".dn-block-render").click();
+
+  const source = page.locator(".dn-block-prose-source");
+  await expect(source).toBeVisible();
+  const look = await source.evaluate((el) => {
+    const style = getComputedStyle(el);
+    const content = el.querySelector<HTMLElement>(".cm-content")!;
+    const scroller = el.querySelector<HTMLElement>(".cm-scroller")!;
+    return {
+      background: style.backgroundColor,
+      border: style.borderColor,
+      family: getComputedStyle(content).fontFamily,
+      wraps: scroller.scrollWidth <= scroller.clientWidth,
+    };
+  });
+  expect(look.background).toBe("rgba(0, 0, 0, 0)");
+  expect(look.border).toBe("rgba(0, 0, 0, 0)");
+  expect(look.family).toContain("Georgia");
+  expect(look.wraps).toBe(true);
+});
+
+test("an answer summary opens the rendered fold; editing exposes its body, not its HTML wrapper", async ({ page }) => {
+  const source = '<details class="dl-answer"><summary>answer</summary>\n\nThe **answer** is 4.\n\n</details>\n';
+  await mount(page, source);
+
+  const details = page.locator(".dn-block-fold details");
+  await details.locator("summary").click();
+  await expect(details).toHaveAttribute("open", "");
+  await expect(details.locator("strong")).toHaveText("answer");
+  await expect(page.locator(".dn-block-fold .cm-editor")).toHaveCount(0);
+
+  await details.locator("p").click();
+  await expect(page.locator(".dn-fold-editor summary")).toHaveText("answer");
+  const body = page.locator(".dn-fold-body-source .cm-content");
+  await expect(body).toContainText("The **answer** is 4.");
+  await expect(body).not.toContainText("<details");
+  await expect(body).not.toContainText("</details>");
+
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type(" Exactly.");
+  await page.locator("body").click({ position: { x: 5, y: 5 } });
+  expect(await getSource(page)).toBe(
+    '<details class="dl-answer"><summary>answer</summary>\n\nThe **answer** is 4. Exactly.\n\n</details>\n',
+  );
+});
+
+test("Python cells show syntax colours and a visible caret on the dark theme", async ({ page }) => {
+  await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+  await mount(page, "```python exec\nid: indexing-and-slicing-1\nxs = [10, 20]\nprint(xs[0])\n```\n");
+
+  const code = page.locator(".dn-cell-code .cm-content");
+  await code.click();
+  const colours = await code.locator("span").evaluateAll((spans) =>
+    [...new Set(spans.map((span) => getComputedStyle(span).color))],
+  );
+  expect(colours.length).toBeGreaterThan(1);
+
+  await expect(page.locator(".dn-cell-code .cm-editor")).toHaveClass(/cm-focused/);
+  const caret = await code.evaluate((el) => getComputedStyle(el).caretColor);
+  expect(caret).not.toBe("auto");
+  expect(caret).not.toBe("rgba(0, 0, 0, 0)");
+});
+
 test("editing one fence and then focusing a second preserves both, not just the last one focused", async ({
   page,
 }) => {
