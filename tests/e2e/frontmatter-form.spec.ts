@@ -6,6 +6,7 @@
 // than a mock (decision 9).
 
 import { test as base, expect, type Page } from "@playwright/test";
+import { selectPanel } from "./panel-helpers.ts";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -236,7 +237,7 @@ test("dewstack's module and series offer autocomplete suggestions once a folder'
   await page.goto(BUILT_APP);
   await expect(page.locator(".dn-block").first()).toBeVisible();
 
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
   await expect(page.locator(".dn-folder-file")).toHaveCount(2);
   await page.locator(".dn-folder-close").click();
@@ -373,7 +374,7 @@ test("practice_for offers autocomplete over every real id in the open folder's i
   await page.goto(BUILT_APP);
   await expect(page.locator(".dn-block").first()).toBeVisible();
 
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
   await expect(page.locator(".dn-folder-file")).toHaveCount(2);
   await page.locator(".dn-folder-close").click();

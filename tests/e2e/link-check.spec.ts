@@ -4,6 +4,7 @@
 // broken tutorial: link, and check the report names only the broken one.
 
 import { test as base, expect } from "@playwright/test";
+import { selectPanel } from "./panel-helpers.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -42,7 +43,7 @@ test("reports a tutorial: link whose id isn't in the index, and clears once fixe
     hook.__dewnote.mount("See [filtering](tutorial:filtering) and [sorting](tutorial:sorting).\n");
   });
 
-  await page.locator(".dn-linkcheck-toggle").click();
+  await selectPanel(page, ".dn-linkcheck-toggle");
   await page.locator(".dn-linkcheck-run").click();
 
   const report = page.locator(".dn-linkcheck-report li");
@@ -58,7 +59,7 @@ test("with every link resolving, the report says so instead of listing nothing s
     hook.__dewnote.mount("See [filtering](tutorial:filtering) for more.\n");
   });
 
-  await page.locator(".dn-linkcheck-toggle").click();
+  await selectPanel(page, ".dn-linkcheck-toggle");
   await page.locator(".dn-linkcheck-run").click();
 
   await expect(page.locator(".dn-linkcheck-report li")).toHaveText("No broken links found.");
@@ -80,7 +81,7 @@ test("a module: or series: link is left alone, like any other link this doesn't 
     );
   });
 
-  await page.locator(".dn-linkcheck-toggle").click();
+  await selectPanel(page, ".dn-linkcheck-toggle");
   await page.locator(".dn-linkcheck-run").click();
 
   await expect(page.locator(".dn-linkcheck-report li")).toHaveText("No broken links found.");
@@ -98,7 +99,7 @@ test("a tutorial with several versions indexed still resolves by its one id", as
     hook.__dewnote.mount("See [first steps](tutorial:first-steps).\n");
   });
 
-  await page.locator(".dn-linkcheck-toggle").click();
+  await selectPanel(page, ".dn-linkcheck-toggle");
   await page.locator(".dn-linkcheck-run").click();
 
   await expect(page.locator(".dn-linkcheck-report li")).toHaveText("No broken links found.");

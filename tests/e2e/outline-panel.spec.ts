@@ -4,6 +4,7 @@
 // block into view.
 
 import { test as base, expect } from "@playwright/test";
+import { selectPanel } from "./panel-helpers.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -45,7 +46,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("lists every heading, and clicking one scrolls its block into view", async ({ page }) => {
-  await page.locator(".dn-outline-toggle").click();
+  await selectPanel(page, ".dn-outline-toggle");
 
   const items = page.locator(".dn-outline-item button");
   await expect(items).toHaveCount(3);
@@ -61,7 +62,7 @@ test("lists every heading, and clicking one scrolls its block into view", async 
 });
 
 test("re-opening the rail after an edit reflects the new heading", async ({ page }) => {
-  await page.locator(".dn-outline-toggle").click();
+  await selectPanel(page, ".dn-outline-toggle");
   await expect(page.locator(".dn-outline-item button")).toHaveCount(3);
   await page.locator(".dn-outline-close").click();
 
@@ -70,7 +71,7 @@ test("re-opening the rail after an edit reflects the new heading", async ({ page
     hook.__dewnote.mount(hook.__dewnote.getSource() + "\n#### A new heading\n");
   });
 
-  await page.locator(".dn-outline-toggle").click();
+  await selectPanel(page, ".dn-outline-toggle");
   await expect(page.locator(".dn-outline-item button")).toHaveCount(4);
   await expect(page.locator(".dn-outline-item button").last()).toHaveText("A new heading");
 });

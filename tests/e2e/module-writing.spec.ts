@@ -14,6 +14,7 @@
 // checked for having left them exactly as they were.
 
 import { test as base, expect, type Page } from "@playwright/test";
+import { selectPanel } from "./panel-helpers.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -144,11 +145,11 @@ async function stubDirectoryPicker(page: Page) {
  * have caught up — a tutorial's title only appears once the front-matter
  * index has read it, and the rail renders before that finishes. */
 async function openRail(page: Page) {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
   await expect(page.locator(".dn-folder-status")).toContainText("module files");
   await page.locator(".dn-folder-close").click();
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   await expect(page.locator(".dn-series-block").first().locator(".dn-series-link").first()).toHaveText("First Steps");
 }
 
@@ -316,7 +317,7 @@ test("with no folder or repository open, the rail is read-only rather than offer
     ]);
   });
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   await expect(page.locator(".dn-series-list li")).toHaveCount(1);
   await expect(page.locator(".dn-series-grip")).toHaveCount(0);
   await expect(page.locator(".dn-series-remove")).toHaveCount(0);

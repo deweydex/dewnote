@@ -6,6 +6,7 @@
 // than reached over the network.
 
 import { addBlockAfter } from "./block-controls.ts";
+import { selectPanel } from "./panel-helpers.ts";
 import { test as base, expect, type Page, type Route } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -84,10 +85,10 @@ async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: R
     if (method === "GET" && /\/git\/trees\//.test(path)) {
       return fulfillJson(route, 200, {
         tree: [
-          { path: "content/tutorials/a-rule.md", type: "blob", sha: "tree-sha-1" },
-          { path: "content/tutorials/sub/b-page.md", type: "blob", sha: "tree-sha-2" },
+          { path: "tutorials/a-rule/a-rule.md", type: "blob", sha: "tree-sha-1" },
+          { path: "tutorials/b-page/b-page.md", type: "blob", sha: "tree-sha-2" },
           { path: "assets/logo.png", type: "blob", sha: "tree-sha-3" },
-          { path: "content/modules/a-module.yaml", type: "blob", sha: "tree-sha-4" },
+          { path: "modules/a-module.yaml", type: "blob", sha: "tree-sha-4" },
         ],
       });
     }
@@ -148,7 +149,7 @@ async function setup(page: Page, opts: MockOptions): Promise<{ putBodies: Record
   });
   await page.goto(BUILT_APP);
   await expect(page.locator(".dn-block").first()).toBeVisible();
-  await page.locator(".dn-repo-toggle").click();
+  await selectPanel(page, ".dn-repo-toggle");
   await page.locator('.dn-repo-panel input[type="password"]').fill("test-token");
   const ownerRepo = page.locator(".dn-repo-owner-row input");
   await ownerRepo.nth(0).fill("dewlab");
@@ -158,7 +159,7 @@ async function setup(page: Page, opts: MockOptions): Promise<{ putBodies: Record
 
 const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n", fileSha: "file-sha-1" };
 
-/** What `content/modules/a-module.yaml` holds — one module, one series,
+/** What the refactored repo's root `modules/a-module.yaml` holds — one module, one series,
  * listing the id of the one markdown file in the tree that has one. */
 const MODULE_YAML = ["title: A Module", "contents:", "- title: First steps", "  tutorials:", "  - a-rule", "  - b-page", ""].join("\n");
 
@@ -169,12 +170,12 @@ test("loading a repository lists its markdown and module files, and search filte
 
   const items = page.locator(".dn-repo-file");
   await expect(items).toHaveCount(3);
-  await expect(items.nth(0)).toHaveText("content/tutorials/a-rule.md");
-  await expect(items.nth(1)).toHaveText("content/tutorials/sub/b-page.md");
+  await expect(items.nth(0)).toHaveText("tutorials/a-rule/a-rule.md");
+  await expect(items.nth(1)).toHaveText("tutorials/b-page/b-page.md");
 
-  await page.locator(".dn-repo-search").fill("sub");
+  await page.locator(".dn-repo-search").fill("b-page");
   await expect(page.locator(".dn-repo-file")).toHaveCount(1);
-  await expect(page.locator(".dn-repo-file")).toHaveText("content/tutorials/sub/b-page.md");
+  await expect(page.locator(".dn-repo-file")).toHaveText("tutorials/b-page/b-page.md");
 });
 
 // Step 4's own follow-up, raised alongside the series view: a module
@@ -186,7 +187,7 @@ test("a module file opens and pushes through the ordinary repo panel, same as a 
   await page.locator(".dn-repo-load").click();
   await page.locator(".dn-repo-file", { hasText: "a-module.yaml" }).click();
 
-  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened content/modules/a-module.yaml.");
+  await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened modules/a-module.yaml.");
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
   await page.locator(".dn-repo-push").click();
 
@@ -208,7 +209,7 @@ test("loading a repository builds the file index the link picker searches", asyn
 
   const items = page.locator(".dn-link-item button");
   await expect(items).toHaveCount(2);
-  await expect(items).toContainText(["content/tutorials/a-rule.md", "content/tutorials/sub/b-page.md"]);
+  await expect(items).toContainText(["tutorials/a-rule/a-rule.md", "tutorials/b-page/b-page.md"]);
 });
 
 test("opening a file renders its real content in the editor", async ({ page }) => {
@@ -343,7 +344,7 @@ test("reordering a module writes it back through the working branch, with the sh
   await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 module file.");
   await page.locator(".dn-repo-close").click();
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   const list = page.locator(".dn-series-list").first();
   await expect(list.locator("li")).toHaveCount(2);
   await list.locator("li").nth(1).locator(".dn-series-grip").dragTo(list.locator("li").nth(0), { targetPosition: { x: 5, y: 1 } });
@@ -363,13 +364,13 @@ test("a write against a repository never disturbs an already-open file's own pus
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
   await page.locator(".dn-repo-close").click();
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   await page.locator(".dn-series-list").first().locator("li").nth(0).locator(".dn-series-remove").click();
   await expect(page.locator(".dn-series-status")).toContainText("still there, on no module");
 
   // Still pointed at a-rule.md, not silently repointed at the module file.
   await page.locator(".dn-series-close").click();
-  await page.locator(".dn-repo-toggle").click();
+  await selectPanel(page, ".dn-repo-toggle");
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
   await expect(page.locator("h1")).toHaveText("A Rule");
 });

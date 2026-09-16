@@ -11,6 +11,7 @@
 // applies to GitHub's REST API via page.route.
 
 import { addBlockAfter } from "./block-controls.ts";
+import { selectPanel } from "./panel-helpers.ts";
 import { test as base, expect, type Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
@@ -131,7 +132,7 @@ test("the folder toggle is enabled once a directory picker exists", async ({ pag
 });
 
 test("opening a folder lists its markdown files recursively, and search filters them", async ({ page }) => {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
 
   await expect(page.locator(".dn-folder-status").first()).toHaveText('2 markdown files, 1 module file, in "tutorials".');
@@ -148,7 +149,7 @@ test("opening a folder lists its markdown files recursively, and search filters 
 // changed outside dewnote means asking for it — Refresh re-walks the
 // already-open folder without reopening the OS picker.
 test("Refresh re-scans the open folder, picking up a file added outside dewnote, without reopening the picker", async ({ page }) => {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await expect(page.locator(".dn-folder-refresh")).toBeDisabled();
 
   await page.locator(".dn-folder-open").click();
@@ -177,7 +178,7 @@ test("Refresh re-scans the open folder, picking up a file added outside dewnote,
 // have. That stays true now the panel can show modules: the panel reads
 // them, and this is still the way to edit one by hand.
 test("a module file opens and saves through the ordinary file bar, same as any markdown file", async ({ page }) => {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
   await page.locator(".dn-folder-file", { hasText: "modules/a-module.yaml" }).click();
 
@@ -199,7 +200,7 @@ test("a module file opens and saves through the ordinary file bar, same as any m
 });
 
 test("opening a file renders it in the editor and hands Save to the file bar as a real handle", async ({ page }) => {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
   await page.locator(".dn-folder-file", { hasText: "a-rule.md" }).click();
 
@@ -225,7 +226,7 @@ test("opening a file renders it in the editor and hands Save to the file bar as 
 // the link picker itself, since that's the only observable consumer, not
 // by reaching into folder-panel.ts's internals.
 test("opening a folder builds the file index the link picker searches", async ({ page }) => {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
   await expect(page.locator(".dn-folder-file")).toHaveCount(3);
   await page.locator(".dn-folder-close").click();
@@ -242,12 +243,12 @@ test("opening a folder builds the file index the link picker searches", async ({
 // clickable button there, opening the exact file this folder already
 // has, the same as clicking it directly in this rail's own file list.
 test("the modules panel can open a listed tutorial by clicking it", async ({ page }) => {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
   await expect(page.locator(".dn-folder-file")).toHaveCount(3);
   await page.locator(".dn-folder-close").click();
 
-  await page.locator(".dn-series-toggle").click();
+  await selectPanel(page, ".dn-series-toggle");
   await expect(page.locator(".dn-series-module-title")).toHaveText("A Module");
   await expect(page.locator(".dn-series-series-title")).toHaveText("A Series");
   const link = page.locator(".dn-series-link", { hasText: "A Rule" });
@@ -268,7 +269,7 @@ test("the modules panel can open a listed tutorial by clicking it", async ({ pag
 test("the folder rail can create a new tutorial from a template, which then appears in the file list and opens", async ({
   page,
 }) => {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await expect(page.locator(".dn-folder-create-button")).toBeDisabled();
 
   await page.locator(".dn-folder-open").click();
@@ -297,7 +298,7 @@ test("the folder rail can create a new tutorial from a template, which then appe
 test("creating a tutorial with an id already in use is refused, rather than silently overwriting it", async ({
   page,
 }) => {
-  await page.locator(".dn-folder-toggle").click();
+  await selectPanel(page, ".dn-folder-toggle");
   await page.locator(".dn-folder-open").click();
 
   await page.locator(".dn-folder-create-field[placeholder^='tutorial-id']").fill("a-tutorial");

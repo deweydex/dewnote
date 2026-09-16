@@ -1,5 +1,6 @@
 import "katex/dist/katex.min.css";
 import "./theme/dewlab-tokens.css";
+import "./brand.css";
 import "./app.css";
 import { getFileIndex, mountDocument, setFileIndex, type MountedDocument } from "./app.ts";
 import { applySettings, loadSettings } from "./settings.ts";
@@ -13,6 +14,7 @@ import { mountLinkCheckPanel } from "./link-check.ts";
 import { mountSeriesPanel } from "./series-panel.ts";
 import { mountCommandPalette } from "./command-palette.ts";
 import { todayVersion } from "./dialect.ts";
+import { groupDockPanels, iconRail } from "./icon-rail.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
@@ -91,6 +93,28 @@ mountSourceView({
   },
 });
 mountLinkCheckPanel({ getSource: () => current.getSource(), getFileIndex });
+
+// Five purposeful launchers instead of nine peer circles. Workspace is
+// where content comes from and where its module structure is managed;
+// Review holds non-editing views over the current document. Source and
+// Settings remain direct because each is a distinct, frequently used
+// mode rather than a choice among related tools.
+const workspaceToggle = groupDockPanels("Workspace", "▤", "dn-workspace-toggle", [
+  { selector: ".dn-folder-toggle", description: "Open and manage a local Dewlab folder." },
+  { selector: ".dn-repo-toggle", description: "Open and publish through a GitHub repository." },
+  { selector: ".dn-series-toggle", description: "Read and reorder modules, series, and tutorials." },
+]);
+const reviewToggle = groupDockPanels("Review", "✓", "dn-review-toggle", [
+  { selector: ".dn-outline-toggle", description: "Navigate the headings in the current document." },
+  { selector: ".dn-linkcheck-toggle", description: "Check tutorial links against the open workspace." },
+]);
+const rail = iconRail();
+rail.prepend(reviewToggle);
+rail.prepend(workspaceToggle);
+const sourceToggle = rail.querySelector(".dn-source-toggle");
+const settingsToggle = rail.querySelector(".dn-settings-toggle");
+if (sourceToggle) rail.appendChild(sourceToggle);
+if (settingsToggle) rail.appendChild(settingsToggle);
 mountCommandPalette();
 
 // Playwright (tests/e2e/) drives this same built page directly rather than

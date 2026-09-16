@@ -18,6 +18,7 @@ interface DockEntry {
   panel: HTMLElement;
   onActivate?: () => void;
   onDeactivate?: () => void;
+  groupToggle?: HTMLButtonElement;
 }
 const docked: DockEntry[] = [];
 let active: DockEntry | null = null;
@@ -81,7 +82,7 @@ function closeDock(): void {
 }
 
 function activate(entry: DockEntry): void {
-  if (active === entry) {
+  if (active === entry || active?.groupToggle === entry.toggle) {
     closeDock();
     return;
   }
@@ -91,6 +92,11 @@ function activate(entry: DockEntry): void {
   entry.toggle.setAttribute("aria-expanded", "true");
   entry.toggle.setAttribute("aria-selected", "true");
   entry.toggle.classList.add("is-active");
+  if (entry.groupToggle) {
+    entry.groupToggle.setAttribute("aria-expanded", "true");
+    entry.groupToggle.setAttribute("aria-selected", "true");
+    entry.groupToggle.classList.add("is-active");
+  }
   if (resizer) resizer.hidden = false;
   entry.onActivate?.();
 }
@@ -133,6 +139,70 @@ export function dockPanel(
   docked.push(entry);
   toggle.addEventListener("click", () => activate(entry));
   panel.querySelector<HTMLButtonElement>('[class$="-close"]')?.addEventListener("click", closeDock);
+}
+
+export interface DockGroupItem {
+  selector: string;
+  description: string;
+}
+
+/** Replaces several peer launchers with one meaningful menu. The child
+ * toggles stay the real controls — command-palette clicks and each
+ * panel's own lifecycle still go through exactly the same button — but
+ * they live in the selector drawer instead of competing for rail space. */
+export function groupDockPanels(
+  label: string,
+  glyph: string,
+  className: string,
+  items: DockGroupItem[],
+): HTMLButtonElement {
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = className;
+  toggle.textContent = glyph;
+  toggle.title = label;
+  toggle.setAttribute("aria-label", label);
+  toggle.setAttribute("aria-expanded", "false");
+  labelToggle(toggle, label);
+
+  const panel = document.createElement("div");
+  panel.className = "dn-dock-group-panel";
+  panel.hidden = true;
+  panel.setAttribute("role", "dialog");
+  panel.setAttribute("aria-label", label);
+  toggle.setAttribute("aria-controls", (panel.id = `dn-${label.toLowerCase()}-panel`));
+
+  const header = document.createElement("div");
+  header.className = "dn-dock-group-header";
+  const heading = document.createElement("h2");
+  heading.textContent = label;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "dn-dock-group-close";
+  close.textContent = "×";
+  close.setAttribute("aria-label", `Close ${label.toLowerCase()} menu`);
+  header.append(heading, close);
+  panel.appendChild(header);
+
+  const options = document.createElement("div");
+  options.className = "dn-dock-group-options";
+  for (const item of items) {
+    const child = document.querySelector<HTMLButtonElement>(item.selector);
+    if (!child) continue;
+    const entry = docked.find((candidate) => candidate.toggle === child);
+    if (entry) entry.groupToggle = toggle;
+    const option = document.createElement("div");
+    option.className = "dn-dock-group-option";
+    const description = document.createElement("p");
+    description.textContent = item.description;
+    option.append(child, description);
+    options.appendChild(option);
+  }
+  panel.appendChild(options);
+  iconRail().appendChild(toggle);
+  document.body.appendChild(panel);
+  dockPanel(toggle, panel);
+  return toggle;
 }
 
 /** Gives a toggle a word to sit under its glyph on the bottom bar.

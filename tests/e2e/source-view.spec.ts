@@ -5,6 +5,7 @@
 // and that Cmd+/ toggles the same view Escape and the close button do.
 
 import { test as base, expect } from "@playwright/test";
+import { selectPanel } from "./panel-helpers.ts";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -81,7 +82,7 @@ test("Cmd/Ctrl+/ opens the view, and Escape closes it and commits", async ({ pag
 
 test("switching to another sidebar tab closes and commits the source editor", async ({ page }) => {
   await page.locator(".dn-source-toggle").click();
-  await page.locator(".dn-outline-toggle").click();
+  await selectPanel(page, ".dn-outline-toggle");
   await expect(page.locator(".dn-source-overlay")).toBeHidden();
   await expect(page.locator(".dn-outline-panel")).toBeVisible();
 });
