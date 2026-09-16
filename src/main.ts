@@ -1,5 +1,6 @@
 import "katex/dist/katex.min.css";
 import "./theme/dewlab-tokens.css";
+import "./brand.css";
 import "./app.css";
 import { getFileIndex, mountDocument, setFileIndex, type MountedDocument } from "./app.ts";
 import { applySettings, loadSettings } from "./settings.ts";
