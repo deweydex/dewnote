@@ -132,7 +132,7 @@ export function mountOutlinePanel(host: OutlinePanelHost): OutlinePanel {
   labelToggle(toggle, "Outline");
   iconRail().appendChild(toggle);
   document.body.appendChild(panel);
-  dockPanel(toggle, panel, true);
+  dockPanel(toggle, panel);
 
   return {
     destroy() {

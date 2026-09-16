@@ -1010,7 +1010,8 @@ body {
 /* Labels are the default on every screen, not only on the phone bar.
    The setting can collapse the rail to familiar icons or remove the
    decorative glyphs entirely without changing accessible names. */
-.dn-icon-rail > button {
+.dn-icon-rail > button,
+.dn-file-action-rail > button {
   width: 4.25rem;
   min-width: 4.25rem;
   height: 4.25rem;
@@ -1184,13 +1185,6 @@ body {
   z-index: 20 !important;
 }
 
-@media (min-width: 40.01rem) {
-  .dn-has-inspector .dn-page {
-    margin-left: auto;
-    margin-right: calc(var(--dn-inspector-width) + var(--dn-rail-space));
-  }
-}
-
 .dn-source-overlay.dn-docked-panel {
   padding: 0;
   background: transparent;
@@ -1217,10 +1211,116 @@ body {
   background: var(--dn-control-bg);
 }
 
-.dn-icon-rail > button.is-active {
+.dn-icon-rail > button.is-active,
+.dn-file-action-rail > button.is-active {
   color: var(--dl-orange);
   border-color: var(--dl-orange);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--dl-orange) 20%, transparent);
+}
+
+.dn-file-action-rail {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 22;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.dn-file-action-rail > button {
+  width: 4.25rem;
+  min-width: 4.25rem;
+  height: 4.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.45rem;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 50%;
+  background: var(--dn-control-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  font-size: 1.05rem;
+  cursor: pointer;
+}
+
+.dn-file-action-rail > button[data-label]::after {
+  content: attr(data-label);
+  font-family: var(--dl-font-family);
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--dl-fg);
+}
+
+.dn-file-action-panel {
+  overflow-y: auto;
+  padding: 1rem 1.25rem 2rem;
+  background: var(--dl-panel-bg);
+  border-left: 1px solid var(--dl-cell-border);
+  box-shadow: -4px 0 16px var(--dl-shadow);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+}
+
+.dn-file-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.dn-file-panel-header h2 {
+  margin: 0;
+  font-size: 1.1em;
+}
+
+.dn-file-panel-close {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dl-fg);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.dn-file-action-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dn-file-action-choice {
+  padding: 0.75rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 8px;
+  background: var(--dn-control-bg);
+}
+
+.dn-file-action-choice button {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 6px;
+  background: var(--dl-panel-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dn-file-action-choice button:hover,
+.dn-file-action-choice button:focus-visible {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}
+
+.dn-file-action-choice p {
+  margin: 0.4rem 0 0;
+  color: var(--dl-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 .dn-inspector-resizer {
@@ -1283,31 +1383,6 @@ button:focus-visible {
   border-color: var(--dn-control-border);
 }
 
-.dn-file-menu-wrap {
-  position: relative;
-  display: inline-flex;
-}
-
-.dn-file-import-menu-toggle,
-.dn-file-export-menu-toggle {
-  border: 1px solid var(--dn-control-border);
-  border-radius: 6px;
-  background: var(--dn-control-bg);
-  color: var(--dl-fg);
-  font: inherit;
-  font-weight: 650;
-  padding: 0.3rem 0.65rem;
-  cursor: pointer;
-}
-
-.dn-file-import-menu-toggle:hover,
-.dn-file-export-menu-toggle:hover,
-.dn-file-import-menu-toggle[aria-expanded="true"],
-.dn-file-export-menu-toggle[aria-expanded="true"] {
-  color: var(--dl-orange);
-  border-color: var(--dl-orange);
-}
-
 .dn-file-name.is-dirty::after {
   content: " •";
   color: var(--dl-orange);
@@ -1337,6 +1412,16 @@ button:focus-visible {
   .dn-inspector-resizer {
     right: calc(min(var(--dn-inspector-width), 100vw) - 7px);
     bottom: 4rem;
+  }
+  .dn-file-action-rail {
+    right: 0.75rem;
+    bottom: 4.75rem;
+    flex-direction: row;
+  }
+  .dn-file-action-rail > button {
+    width: 3.75rem;
+    min-width: 3.75rem;
+    height: 3.75rem;
   }
 }
 
@@ -2774,75 +2859,6 @@ button:focus-visible {
   color: var(--dl-muted);
   font-size: 0.9em;
   font-style: italic;
-}
-
-/* The file bar's export/import menu (file-bar.ts). A real popover like
-   the add menu: closed means absent, not hidden, so its items stay out of
-   the tab order until a reader opens it. */
-.dn-file-more-wrap {
-  position: relative;
-  display: inline-flex;
-}
-.dn-file-more {
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: none;
-  color: var(--dl-muted);
-  font-family: var(--dl-font-family);
-  font-size: 1em;
-  line-height: 1;
-  padding: 0.15rem 0.45rem;
-  cursor: pointer;
-}
-.dn-file-more:hover,
-.dn-file-more:focus-visible {
-  color: var(--dl-orange);
-  border-color: var(--dl-cell-border);
-  outline: none;
-}
-.dn-file-menu {
-  display: none;
-  position: absolute;
-  left: 0;
-  top: 100%;
-  z-index: 11;
-  flex-direction: column;
-  min-width: 10rem;
-  margin-top: 0.25rem;
-  padding: 0.25rem;
-  border: 1px solid var(--dl-cell-border);
-  border-radius: 6px;
-  background: var(--dl-panel-bg);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
-}
-.dn-file-menu.is-open {
-  display: flex;
-}
-.dn-file-menu button {
-  border: none;
-  background: none;
-  color: var(--dl-fg);
-  font-family: var(--dl-font-family);
-  font-size: 0.9em;
-  text-align: left;
-  padding: 0.35rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.dn-file-menu button:hover,
-.dn-file-menu button:focus-visible {
-  background: var(--dl-cell-bg);
-  color: var(--dl-orange);
-  outline: none;
-}
-@media (hover: none) {
-  .dn-file-more {
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-  }
-  .dn-file-menu button {
-    min-height: 2.75rem;
-  }
 }
 
 /* Everything else a finger has to hit. The rail, the block controls and
