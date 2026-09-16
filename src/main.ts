@@ -94,7 +94,7 @@ mountSourceView({
 });
 mountLinkCheckPanel({ getSource: () => current.getSource(), getFileIndex });
 
-// Five purposeful launchers instead of nine peer circles. Workspace is
+// Four purposeful rail launchers instead of seven peer circles. Workspace is
 // where content comes from and where its module structure is managed;
 // Review holds non-editing views over the current document. Source and
 // Settings remain direct because each is a distinct, frequently used
