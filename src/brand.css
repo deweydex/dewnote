@@ -16,12 +16,11 @@
 }
 
 .dn-brand {
-  position: fixed;
-  z-index: 35;
-  inset-block-start: 1rem;
-  inset-inline-start: 1rem;
-  width: 2.75rem;
-  height: 2.75rem;
+  position: static;
+  display: block;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
   filter: drop-shadow(0 2px 8px var(--dl-shadow));
   pointer-events: none;
 }
@@ -50,9 +49,7 @@
 
 @media (max-width: 34rem) {
   .dn-brand {
-    inset-block-start: 0.75rem;
-    inset-inline-start: 0.75rem;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 2rem;
+    height: 2rem;
   }
 }
