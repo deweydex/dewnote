@@ -33,7 +33,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { sourceLanguageExtension } from "./lang.ts";
-import { iconRail, labelToggle } from "./icon-rail.ts";
+import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 
 export interface SourceViewHost {
   getSource(): string;
@@ -88,14 +88,12 @@ export function mountSourceView(host: SourceViewHost): SourceViewPanel {
    * the same "reparse the whole thing" path every structural edit in
    * app.ts already takes, since this view can touch anything from one
    * character to every block at once. */
-  function commitAndClose() {
+  function commit() {
     if (view) {
       host.loadDocument(view.state.doc.toString(), "source.md");
       view.destroy();
       view = null;
     }
-    overlay.hidden = true;
-    toggle.setAttribute("aria-expanded", "false");
   }
 
   function open() {
@@ -107,28 +105,16 @@ export function mountSourceView(host: SourceViewHost): SourceViewPanel {
       }),
       parent: editorHost,
     });
-    overlay.hidden = false;
-    toggle.setAttribute("aria-expanded", "true");
     queueMicrotask(() => view?.focus());
   }
-
-  function toggleOpen() {
-    if (overlay.hidden) open();
-    else commitAndClose();
-  }
-
-  toggle.addEventListener("click", toggleOpen);
-  closeButton.addEventListener("click", commitAndClose);
-  overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) commitAndClose();
-  });
 
   function onGlobalKeydown(event: KeyboardEvent) {
     if ((event.metaKey || event.ctrlKey) && event.key === "/") {
       event.preventDefault();
-      toggleOpen();
+      if (overlay.hidden) toggle.click();
+      else closeButton.click();
     } else if (event.key === "Escape" && !overlay.hidden) {
-      commitAndClose();
+      closeButton.click();
     }
   }
   document.addEventListener("keydown", onGlobalKeydown);
@@ -136,6 +122,7 @@ export function mountSourceView(host: SourceViewHost): SourceViewPanel {
   labelToggle(toggle, "Source");
   iconRail().appendChild(toggle);
   document.body.appendChild(overlay);
+  dockPanel(toggle, overlay, false, { onActivate: open, onDeactivate: commit });
 
   return {
     destroy() {

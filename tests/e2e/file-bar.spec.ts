@@ -75,6 +75,7 @@ test("editing marks the document dirty, and Save clears it and downloads", async
   await expect(page.locator(".dn-file-status")).toHaveText("unsaved", { timeout: 2000 });
   await expect(page).toHaveTitle(/^draft\.md • — dewnote/);
 
+  await page.locator(".dn-file-export-menu-toggle").click();
   const [download] = await Promise.all([page.waitForEvent("download"), page.locator(".dn-file-save").click()]);
   expect(download.suggestedFilename()).toBe("draft.md");
   await expect(page.locator(".dn-file-status")).toHaveText("downloaded");

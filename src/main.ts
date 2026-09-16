@@ -7,7 +7,6 @@ import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountFileBar } from "./file-bar.ts";
 import { mountRepoPanel } from "./repo-panel.ts";
 import { mountFolderPanel } from "./folder-panel.ts";
-import { mountDialectPanel } from "./dialect-panel.ts";
 import { mountOutlinePanel } from "./outline-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountLinkCheckPanel } from "./link-check.ts";
@@ -17,7 +16,7 @@ import { todayVersion } from "./dialect.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
-// choice takes effect (decision 7, dewstack's own "FAQ's way").
+// choice takes effect.
 applySettings(loadSettings());
 
 // dewlab, not plain markdown: dewnote's own default texture is already
@@ -25,10 +24,6 @@ applySettings(loadSettings());
 // module_title: never sees the per-field form (decision 11) or any
 // other dialect-aware polish gated on a real dialect — the very things
 // most worth showing in a first five minutes (decision 29's own note).
-// A reader who wants plain markdown instead is one click away: the
-// dialect-convert panel (⇄) already converts a dewlab document down to
-// plain, dropping these fields rather than asking anyone to type a
-// blank set by hand.
 // Decision 31: the starter models a real dialect rather than plain
 // markdown, and the dialect is dewlab — so a first-time reader meets the
 // per-field form rather than the raw-YAML caption plain markdown gets.
@@ -59,7 +54,7 @@ id: first-cell
 
 <details class="dl-hint"><summary>hint</summary>
 
-This is a hint fold — the same one dewlab and dewstack both use.
+This is a hint fold — the same one dewlab uses.
 
 </details>
 `;
@@ -86,13 +81,6 @@ mountRepoPanel({
   },
   onIndexChange: setFileIndex,
   onModulesChange: seriesPanel.setModules,
-});
-mountDialectPanel({
-  getSource: () => current.getSource(),
-  loadDocument(source, _name) {
-    current.destroy();
-    current = mountDocument(page, source);
-  },
 });
 mountOutlinePanel({ getSource: () => current.getSource() });
 mountSourceView({

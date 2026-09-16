@@ -13,14 +13,13 @@ interface Command {
 }
 
 const COMMANDS: Command[] = [
-  { id: "open", label: "Open file…", selector: ".dn-file-open" },
-  { id: "save", label: "Save", selector: ".dn-file-save" },
+  { id: "open", label: "Import Markdown file…", selector: ".dn-file-open" },
+  { id: "save", label: "Export Markdown file", selector: ".dn-file-save" },
   { id: "export-html", label: "Export as HTML", selector: ".dn-file-export-html" },
   { id: "export-ipynb", label: "Export as Jupyter notebook", selector: ".dn-file-export-ipynb" },
   { id: "import-ipynb", label: "Import Jupyter notebook…", selector: ".dn-file-import-ipynb" },
   { id: "folder", label: "Open a folder…", selector: ".dn-folder-toggle" },
   { id: "repo", label: "GitHub repository…", selector: ".dn-repo-toggle" },
-  { id: "dialect", label: "Convert dialect…", selector: ".dn-dialect-toggle" },
   { id: "outline", label: "Outline", selector: ".dn-outline-toggle" },
   { id: "source", label: "Whole-file source", selector: ".dn-source-toggle" },
   { id: "check-links", label: "Check links", selector: ".dn-linkcheck-toggle" },
