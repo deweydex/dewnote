@@ -954,6 +954,66 @@ body {
   border-color: var(--dl-orange);
 }
 
+/* Dewlab's where-you-are tree, adapted to an editor as three compact
+   dropdown rungs. It is navigation rather than a drawer, so it stays on
+   the left while every editing/inspection panel remains on the right. */
+.dn-workspace-nav {
+  position: fixed;
+  top: 4.75rem;
+  left: 1rem;
+  z-index: 8;
+  display: grid;
+  width: 13rem;
+  gap: 0.4rem;
+  padding: 0.65rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--dl-panel-bg) 94%, transparent);
+  box-shadow: 0 5px 18px var(--dl-shadow);
+  font-family: var(--dl-font-family);
+  font-size: 0.78rem;
+}
+.dn-workspace-nav-heading {
+  color: var(--dl-muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.dn-workspace-nav select {
+  width: 100%;
+  min-height: 2.35rem;
+  box-sizing: border-box;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 6px;
+  background: var(--dn-control-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  padding: 0.3rem 1.65rem 0.3rem 0.45rem;
+}
+.dn-workspace-nav select:focus-visible {
+  border-color: var(--dl-orange);
+  outline: 2px solid color-mix(in srgb, var(--dl-orange) 28%, transparent);
+}
+
+@media (max-width: 64rem) {
+  .dn-workspace-nav {
+    left: 0.5rem;
+    width: 8.5rem;
+  }
+}
+
+@media (max-width: 50rem) {
+  .dn-workspace-nav {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: auto;
+    margin: 4.75rem 1rem 0;
+    grid-template-columns: auto repeat(3, minmax(0, 1fr));
+    align-items: center;
+  }
+}
+
 .dn-file-name {
   color: var(--dl-fg);
   max-width: 14rem;
@@ -1653,6 +1713,7 @@ button:focus-visible {
 .dn-repo-load,
 .dn-repo-new-file,
 .dn-repo-push,
+.dn-repo-release,
 .dn-repo-pr,
 .dn-repo-conflict-keep,
 .dn-repo-conflict-take {
@@ -1669,6 +1730,7 @@ button:focus-visible {
 .dn-repo-load:hover,
 .dn-repo-new-file:hover,
 .dn-repo-push:hover,
+.dn-repo-release:hover,
 .dn-repo-pr:hover,
 .dn-repo-conflict-keep:hover,
 .dn-repo-conflict-take:hover {
@@ -1678,12 +1740,126 @@ button:focus-visible {
 .dn-repo-load,
 .dn-repo-new-file,
 .dn-repo-push,
+.dn-repo-release,
 .dn-repo-pr,
 .dn-repo-conflict-keep,
 .dn-repo-conflict-take {
   display: block;
   width: 100%;
   margin-top: 0.4rem;
+}
+
+.dn-repo-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+  padding: 0.75rem 0 0;
+}
+.dn-repo-tab {
+  min-height: 2.5rem;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 999px;
+  background: var(--dn-control-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.dn-repo-tab.is-active {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+  background: color-mix(in srgb, var(--dl-orange) 10%, var(--dl-panel-bg));
+}
+.dn-repo-module-list {
+  display: grid;
+  gap: 0.4rem;
+}
+.dn-repo-organize-modules {
+  width: 100%;
+  min-height: 2.6rem;
+  margin-bottom: 0.7rem;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 7px;
+  background: var(--dn-control-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.dn-repo-organize-modules:hover,
+.dn-repo-organize-modules:focus-visible {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+}
+.dn-repo-module-choice {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 7px;
+  background: var(--dn-control-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+.dn-repo-module-choice.is-active {
+  border-color: var(--dl-orange);
+  color: var(--dl-orange);
+}
+.dn-repo-module-detail {
+  margin-top: 1rem;
+}
+.dn-repo-module-detail-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.dn-repo-module-detail-heading h3,
+.dn-repo-module-series h4 {
+  margin: 0;
+  color: var(--dl-heading);
+}
+.dn-repo-module-detail-heading button {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+}
+.dn-repo-module-series {
+  margin-top: 0.9rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--dl-rule);
+}
+.dn-repo-module-series h4 {
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+.dn-repo-module-page {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.15rem 0;
+}
+.dn-repo-module-page button {
+  flex: 1;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0.35rem 0.45rem !important;
+  text-align: left;
+  cursor: pointer;
+}
+.dn-repo-module-page.is-practice {
+  margin-left: 1rem;
+}
+.dn-repo-module-page.is-practice button::before {
+  content: "Practice · ";
+  color: var(--dl-muted);
+  font-size: 0.82em;
+}
+.dn-repo-module-page span {
+  color: var(--dl-error-fg);
+  font-size: 0.75rem;
 }
 
 .dn-repo-hint {
@@ -2179,6 +2355,9 @@ button:focus-visible {
   cursor: pointer;
   opacity: 0.6;
   transition: opacity 0.1s;
+}
+.dn-series-toggle[hidden] {
+  display: none !important;
 }
 .dn-series-toggle:hover,
 .dn-series-toggle:focus-visible {

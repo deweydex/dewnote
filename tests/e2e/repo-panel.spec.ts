@@ -64,6 +64,9 @@ interface MockOptions {
    * "start a new file") gets GitHub's real 422 back, as if something
    * were already sitting at that path — every other PUT still succeeds. */
   newFileAlreadyExists?: boolean;
+  /** Include a focused practice page so the module-aware view can prove
+   * it derives practice placement from `practice_for`. */
+  includePractice?: boolean;
 }
 
 /** Stubs the exact GitHub calls this slice makes, keyed by method + a
@@ -73,9 +76,10 @@ interface MockOptions {
  * decoded request body, in order, so a test can check exactly what a
  * push actually sent (whether `sha` was included at all) without
  * reaching into repo-panel.ts's own state. */
-async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: Record<string, unknown>[] }> {
+async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: Record<string, unknown>[]; putPaths: string[] }> {
   let putCalls = 0;
   const putBodies: Record<string, unknown>[] = [];
+  const putPaths: string[] = [];
   await page.route("https://api.github.com/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -87,6 +91,7 @@ async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: R
         tree: [
           { path: "tutorials/a-rule/a-rule.md", type: "blob", sha: "tree-sha-1" },
           { path: "tutorials/b-page/b-page.md", type: "blob", sha: "tree-sha-2" },
+          ...(opts.includePractice ? [{ path: "tutorials/a-rule/a-rule-practice.md", type: "blob", sha: "tree-sha-practice" }] : []),
           { path: "assets/logo.png", type: "blob", sha: "tree-sha-3" },
           { path: "modules/a-module.yaml", type: "blob", sha: "tree-sha-4" },
         ],
@@ -100,6 +105,12 @@ async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: R
       // nothing about a module actually being read.
       if (path.endsWith(".yaml")) {
         return fulfillJson(route, 200, { content: toBase64(MODULE_YAML), sha: "module-sha" });
+      }
+      if (path.endsWith("a-rule-practice.md")) {
+        return fulfillJson(route, 200, {
+          content: toBase64(["---", "title: A Rule — Practice", "practice_for: a-rule", "---", "", "# Practice", ""].join("\n")),
+          sha: "practice-sha",
+        });
       }
       const onBranch = url.searchParams.get("ref") === "dewnote-edits";
       if (onBranch && opts.branchContent !== undefined) {
@@ -122,6 +133,7 @@ async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: R
       putCalls += 1;
       const body = req.postDataJSON() as Record<string, unknown>;
       putBodies.push(body);
+      putPaths.push(decodeURIComponent(path.split("/contents/")[1] ?? ""));
       if (opts.conflictOnFirstPush && putCalls === 1) {
         return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ message: "sha does not match" }) });
       }
@@ -137,10 +149,10 @@ async function mockGithub(page: Page, opts: MockOptions): Promise<{ putBodies: R
 
     throw new Error(`repo-panel.spec.ts: unexpected GitHub call ${method} ${path}`);
   });
-  return { putBodies };
+  return { putBodies, putPaths };
 }
 
-async function setup(page: Page, opts: MockOptions): Promise<{ putBodies: Record<string, unknown>[] }> {
+async function setup(page: Page, opts: MockOptions): Promise<{ putBodies: Record<string, unknown>[]; putPaths: string[] }> {
   // Stubbed before navigation, so anything main.ts fires on load is covered too.
   const mock = await mockGithub(page, opts);
   // window.open would try to pop a real tab; no-op it before any click reaches it.
@@ -163,10 +175,38 @@ const DEFAULT_OPTS: MockOptions = { fileContent: "# A Rule\n\nWhere it lives.\n"
  * listing the id of the one markdown file in the tree that has one. */
 const MODULE_YAML = ["title: A Module", "contents:", "- title: First steps", "  tutorials:", "  - a-rule", "  - b-page", ""].join("\n");
 
+async function showAllFiles(page: Page): Promise<void> {
+  await page.locator(".dn-repo-tab", { hasText: "All files" }).click();
+}
+
+test("a repository opens as modules, pairs practice with its tutorial, and locks the session to GitHub", async ({ page }) => {
+  await setup(page, { ...DEFAULT_OPTS, includePractice: true });
+  await page.locator(".dn-repo-load").click();
+
+  await expect(page.locator(".dn-repo-tab", { hasText: "Modules" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator(".dn-repo-module-choice")).toHaveText("A Module");
+  const series = page.locator(".dn-repo-module-series", { hasText: "First steps" });
+  await expect(series).toBeVisible();
+  await expect(series.locator(".dn-repo-module-page")).toHaveCount(3);
+  await expect(series.locator(".dn-repo-module-page.is-practice button")).toHaveText("A Rule — Practice");
+
+  const nav = page.locator(".dn-workspace-nav");
+  await expect(nav).toBeVisible();
+  await expect(nav.locator(".dn-workspace-nav-module")).toHaveValue("a-module");
+  await expect(nav.locator(".dn-workspace-nav-series")).toHaveValue("First steps");
+  await expect(nav.locator(".dn-workspace-nav-page option")).toHaveCount(3);
+  await expect(page.locator(".dn-folder-toggle")).toBeDisabled();
+
+  await series.locator(".dn-repo-module-page:not(.is-practice) button").first().click();
+  await expect(page.locator("h1")).toHaveText("A Rule");
+  await expect(nav.locator(".dn-workspace-nav-page")).toHaveValue("tutorials/a-rule/a-rule.md");
+});
+
 test("loading a repository lists its markdown and module files, and search filters them", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
   await expect(page.locator(".dn-repo-status").first()).toHaveText("2 markdown files, 1 module file.");
+  await showAllFiles(page);
 
   const items = page.locator(".dn-repo-file");
   await expect(items).toHaveCount(3);
@@ -185,6 +225,7 @@ test("loading a repository lists its markdown and module files, and search filte
 test("a module file opens and pushes through the ordinary repo panel, same as a markdown file", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
+  await showAllFiles(page);
   await page.locator(".dn-repo-file", { hasText: "a-module.yaml" }).click();
 
   await expect(page.locator(".dn-repo-status").first()).toHaveText("Opened modules/a-module.yaml.");
@@ -215,6 +256,7 @@ test("loading a repository builds the file index the link picker searches", asyn
 test("opening a file renders its real content in the editor", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
+  await showAllFiles(page);
   await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
 
   await expect(page.locator("h1")).toHaveText("A Rule");
@@ -224,6 +266,7 @@ test("opening a file renders its real content in the editor", async ({ page }) =
 test("pushing an edit creates the working branch, commits, and offers a draft PR", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
+  await showAllFiles(page);
   await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
   await expect(page.locator("h1")).toHaveText("A Rule");
 
@@ -238,6 +281,37 @@ test("pushing an edit creates the working branch, commits, and offers a draft PR
   await expect(pushStatus).toContainText("https://github.com/dewlab/dewlab/pull/42");
 });
 
+test("pushing as a new version freezes the committed release and updates the live file", async ({ page }) => {
+  const original = ["---", "title: A Rule", "version: 2026.09.15.1", "---", "", "# A Rule", "", "Original.", ""].join("\n");
+  const { putBodies, putPaths } = await setup(page, { fileContent: original, fileSha: "file-sha-1" });
+  await page.locator(".dn-repo-load").click();
+  await showAllFiles(page);
+  await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
+  await page.locator(".dn-block-render", { hasText: "Original." }).click();
+  const prose = page.locator(".dn-block-prose-source .cm-content");
+  await prose.click();
+  await page.keyboard.press("Meta+A");
+  await page.keyboard.type("Revised.");
+  expect(await page.evaluate(() => {
+    return (window as unknown as { __dewnote: { getSource(): string } }).__dewnote.getSource();
+  })).toContain("Revised.");
+
+  await page.locator(".dn-repo-release").click();
+  const pushStatus = page.locator(".dn-repo-section", { has: page.locator(".dn-repo-push") }).locator(".dn-repo-status");
+  await expect(pushStatus).toContainText("Pushed version 2026.09.16.1");
+  expect(putPaths).toEqual([
+    "tutorials/a-rule/v2026.09.15.1.md",
+    "tutorials/a-rule/a-rule.md",
+  ]);
+  expect(Buffer.from(putBodies[0]!["content"] as string, "base64").toString("utf-8")).toBe(original);
+  expect(putBodies[0]).not.toHaveProperty("sha");
+  const released = Buffer.from(putBodies[1]!["content"] as string, "base64").toString("utf-8");
+  expect(released).toContain("version: 2026.09.16.1");
+  expect(released).toContain("supersedes: 2026.09.15.1");
+  expect(released).toContain("Revised.");
+  expect(putBodies[1]).toHaveProperty("sha", "file-sha-1");
+});
+
 test("a conflicting push shows both versions, and keeping mine overwrites theirs", async ({ page }) => {
   await setup(page, {
     ...DEFAULT_OPTS,
@@ -246,6 +320,7 @@ test("a conflicting push shows both versions, and keeping mine overwrites theirs
     branchContentSha: "branch-sha-1",
   });
   await page.locator(".dn-repo-load").click();
+  await showAllFiles(page);
   await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
   await expect(page.locator("h1")).toHaveText("A Rule");
 
@@ -273,6 +348,7 @@ test("a conflicting push can also discard mine and load theirs into the editor",
     branchContentSha: "branch-sha-1",
   });
   await page.locator(".dn-repo-load").click();
+  await showAllFiles(page);
   await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
   await page.locator(".dn-repo-push").click();
   await expect(page.locator(".dn-repo-conflict-text")).toHaveCount(2);
@@ -360,6 +436,7 @@ test("reordering a module writes it back through the working branch, with the sh
 test("a write against a repository never disturbs an already-open file's own push target", async ({ page }) => {
   await setup(page, DEFAULT_OPTS);
   await page.locator(".dn-repo-load").click();
+  await showAllFiles(page);
   await page.locator(".dn-repo-file", { hasText: "a-rule.md" }).click();
   await expect(page.locator(".dn-repo-push")).toHaveText("Push to dewnote-edits");
   await page.locator(".dn-repo-close").click();

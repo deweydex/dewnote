@@ -76,6 +76,9 @@ export interface Module {
    * doesn't set one. */
   status?: string;
   contents: ModuleSeries[];
+  /** Mixed practice pages are module-level rather than members of one
+   * series. Paired practice pages are discovered through `practice_for`. */
+  mixed?: string[];
   /** Half-open `[start, end)` line range of the entries under this
    * module's own `contents:` key — where a new series is appended. Null
    * when the scan couldn't be sure of it, the same refusal
@@ -145,7 +148,7 @@ export function parseModuleFile(path: string, content: string): Module | null {
     return null;
   }
   if (!data || typeof data !== "object") return null;
-  const { title, status, contents } = data as Record<string, unknown>;
+  const { title, status, contents, mixed } = data as Record<string, unknown>;
   if (typeof title !== "string" || !title.trim()) return null;
   // `contents:` with nothing under it parses as null, and dewlab's own
   // read_module maps that to an empty list rather than failing — a
@@ -194,6 +197,7 @@ export function parseModuleFile(path: string, content: string): Module | null {
     title: title.trim(),
     ...(typeof status === "string" ? { status } : {}),
     contents: series,
+    mixed: Array.isArray(mixed) ? mixed.filter((one): one is string => typeof one === "string") : [],
     // The scan has to agree with js-yaml about how many entries there
     // are, the same cross-check each series' own range makes. A block
     // whose entry count differs from the parsed one means the scan

@@ -65,10 +65,7 @@ describe("tutorialsOnNoModule", () => {
     expect(found[0]!.path).toBe("tutorials/first-steps/first-steps.md");
   });
 
-  test("a practice page is its own tutorial to place", () => {
-    // `<id>-practice.md` has an id of its own (build.py's id_of), so a
-    // practice page no module lists is its own line, not folded into the
-    // tutorial it belongs to.
+  test("a focused practice page follows its tutorial rather than becoming loose content", () => {
     const index: FileIndexEntry[] = [
       {
         path: "tutorials/first-steps/first-steps.md",
@@ -80,9 +77,10 @@ describe("tutorialsOnNoModule", () => {
         path: "tutorials/first-steps/first-steps-practice.md",
         id: "first-steps-practice",
         title: "First Steps — Practice",
+        practiceFor: "first-steps",
         modules: [],
       },
     ];
-    expect(tutorialsOnNoModule(index).map((e) => e.id)).toEqual(["first-steps-practice"]);
+    expect(tutorialsOnNoModule(index)).toEqual([]);
   });
 });

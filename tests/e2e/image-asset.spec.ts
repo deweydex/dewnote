@@ -284,6 +284,7 @@ test("against a repository, the image is committed as its real bytes, not a UTF-
   await ownerRepo.nth(0).fill("deweydex");
   await ownerRepo.nth(1).fill("dewlab");
   await page.locator(".dn-repo-load").click();
+  await page.locator(".dn-repo-tab", { hasText: "All files" }).click();
   await page.locator(".dn-repo-file", { hasText: "first-steps.md" }).click();
   await expect(page.locator(".dn-repo-status").first()).toContainText("Opened");
   await page.locator(".dn-repo-close").click();

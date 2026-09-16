@@ -36,9 +36,9 @@ test("the rail presents four purposeful menus instead of every tool as a peer", 
   const workspace = page.locator("#dn-workspace-panel");
   await expect(workspace).toBeVisible();
   expect((await workspace.boundingBox())!.x).toBeGreaterThan(page.viewportSize()!.width / 2);
-  await expect(page.locator("#dn-workspace-panel .dn-dock-group-option")).toHaveCount(3);
+  await expect(page.locator("#dn-workspace-panel .dn-dock-group-option")).toHaveCount(2);
   expect(await page.locator("#dn-workspace-panel [data-label]").evaluateAll((buttons) => buttons.map((button) => (button as HTMLElement).dataset.label))).toEqual([
-    "Folder", "GitHub", "Modules",
+    "Folder", "GitHub",
   ]);
 
   await page.locator(".dn-workspace-toggle").click();
