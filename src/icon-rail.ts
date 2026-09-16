@@ -39,20 +39,25 @@ function ensureResizer(): void {
   resizer.setAttribute("role", "separator");
   resizer.setAttribute("aria-orientation", "vertical");
   resizer.setAttribute("aria-label", "Resize sidebar");
+  resizer.title = "Drag to resize sidebar";
   resizer.hidden = true;
   const grip = document.createElement("span");
   grip.className = "dn-inspector-resizer-grip";
   grip.textContent = "•••";
   resizer.appendChild(grip);
   resizer.addEventListener("pointerdown", (event) => {
+    resizer?.classList.add("is-dragging");
     resizer?.setPointerCapture(event.pointerId);
     const move = (next: PointerEvent) => setPanelWidth(window.innerWidth - next.clientX - 104);
-    const up = () => {
+    const finish = () => {
+      resizer?.classList.remove("is-dragging");
       resizer?.removeEventListener("pointermove", move);
-      resizer?.removeEventListener("pointerup", up);
+      resizer?.removeEventListener("pointerup", finish);
+      resizer?.removeEventListener("pointercancel", finish);
     };
     resizer?.addEventListener("pointermove", move);
-    resizer?.addEventListener("pointerup", up);
+    resizer?.addEventListener("pointerup", finish);
+    resizer?.addEventListener("pointercancel", finish);
   });
   resizer.addEventListener("keydown", (event) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
