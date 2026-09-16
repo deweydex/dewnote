@@ -71,6 +71,42 @@ interface FoldParts {
   bodyMarkdown: string;
 }
 
+/** The editable part of a fold, with the exact wrapper text kept either
+ * side of it. This lets the author edit an answer's Markdown without
+ * turning the `<details>` implementation into visible document content. */
+export interface EditableFoldSource {
+  prefix: string;
+  body: string;
+  suffix: string;
+}
+
+export function editableFoldSource(text: string): EditableFoldSource | null {
+  const openMatch = FOLD_OPEN_RE.exec(text);
+  if (!openMatch) return null;
+  const tag = openMatch[1]!.toLowerCase();
+  const closeRe = new RegExp(`</${tag}\\s*>`, "gi");
+  let lastClose = -1;
+  for (let match = closeRe.exec(text); match; match = closeRe.exec(text)) lastClose = match.index;
+  if (lastClose === -1) return null;
+
+  const bodyStart = openMatch.index + openMatch[0].length;
+  const rawBody = text.slice(bodyStart, lastClose);
+  const leading = rawBody.match(/^\s*/)?.[0] ?? "";
+  const trailing = rawBody.slice(leading.length).match(/\s*$/)?.[0] ?? "";
+  const contentStart = bodyStart + leading.length;
+  const bodyEnd = lastClose - trailing.length;
+  return {
+    prefix: text.slice(0, contentStart),
+    body: text.slice(contentStart, bodyEnd),
+    suffix: text.slice(bodyEnd),
+  };
+}
+
+export function replaceFoldBody(text: string, body: string): string {
+  const editable = editableFoldSource(text);
+  return editable ? `${editable.prefix}${body}${editable.suffix}` : text;
+}
+
 /** Split a fold block's raw text into its wrapper and its body, so the
  * body can be parsed as markdown independently — CommonMark's own raw-HTML-
  * block rule would otherwise swallow it un-rendered (checked directly: this

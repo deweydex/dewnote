@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseFold, renderBlockPreview, renderCardFencePreview, renderHintFencePreview, renderQuestionFencePreview } from "./render-block.ts";
+import { editableFoldSource, parseFold, renderBlockPreview, renderCardFencePreview, renderHintFencePreview, renderQuestionFencePreview, replaceFoldBody } from "./render-block.ts";
 import { parseDocument } from "./blocks.ts";
 
 function firstBlockOfKind(source: string, kind: string) {
@@ -109,6 +109,16 @@ describe("renderBlockPreview: fold", () => {
     const html = renderBlockPreview(block, "dewlab");
     expect(html).toContain("<pre>");
     expect(html).toContain("1 + 1");
+  });
+});
+
+describe("editableFoldSource", () => {
+  test("exposes only the Markdown body and preserves the wrapper byte for byte", () => {
+    const source = '<details class="dl-answer"><summary>answer</summary>\n\nThe **answer**.\n\n</details>\n';
+    expect(editableFoldSource(source)?.body).toBe("The **answer**.");
+    expect(replaceFoldBody(source, "A changed **answer**.")).toBe(
+      '<details class="dl-answer"><summary>answer</summary>\n\nA changed **answer**.\n\n</details>\n',
+    );
   });
 });
 

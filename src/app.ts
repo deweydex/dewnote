@@ -33,11 +33,13 @@
 import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
 import { EditorSelection, EditorState, Prec, type Extension } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { parseDocument, serialize, type Block, type Document } from "./blocks.ts";
 import { detectDialect } from "./dialect.ts";
 import { setFrontMatterField } from "./frontmatter.ts";
 import { frontMatterFieldsFor, isScalarField, type FrontMatterFieldSpec } from "./frontmatter-fields.ts";
-import { renderBlockPreview, renderCardFencePreview, renderHintFencePreview, renderQuestionFencePreview } from "./render-block.ts";
+import { editableFoldSource, renderBlockPreview, renderCardFencePreview, renderHintFencePreview, renderQuestionFencePreview, replaceFoldBody } from "./render-block.ts";
 import { buildBlockMenuList, BLOCK_MENU_ITEMS, SLASH_MENU_ITEMS, type BlockKind } from "./block-menu.ts";
 import { languageExtensionFor, sourceLanguageExtension } from "./lang.ts";
 import { distinctValues, type FileIndexEntry } from "./file-index.ts";
@@ -87,7 +89,35 @@ export interface MountedDocument {
   destroy(): void;
 }
 
-const BASE_EXTENSIONS: Extension[] = [history(), keymap.of([...defaultKeymap, ...historyKeymap])];
+const EDITOR_HIGHLIGHT = HighlightStyle.define([
+  { tag: tags.comment, color: "var(--dl-muted)", fontStyle: "italic" },
+  { tag: [tags.keyword, tags.operatorKeyword, tags.controlKeyword], color: "var(--dl-orange)" },
+  { tag: [tags.string, tags.special(tags.string)], color: "var(--dl-pass-fg)" },
+  { tag: [tags.number, tags.bool, tags.null], color: "var(--dl-type-html)" },
+  { tag: [tags.function(tags.variableName), tags.definition(tags.variableName)], color: "var(--dl-type-css)" },
+  { tag: [tags.typeName, tags.className], color: "var(--dl-type-js)" },
+  { tag: [tags.heading, tags.strong], color: "var(--dl-heading)", fontWeight: "700" },
+  { tag: tags.emphasis, fontStyle: "italic" },
+  { tag: [tags.link, tags.url], color: "var(--dl-link)", textDecoration: "underline" },
+  { tag: [tags.meta, tags.processingInstruction], color: "var(--dl-muted)" },
+]);
+
+const EDITOR_THEME = EditorView.theme({
+  "&": { color: "var(--dl-fg)", backgroundColor: "transparent" },
+  ".cm-content": { caretColor: "var(--dl-orange)" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--dl-orange)", borderLeftWidth: "2px" },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection": {
+    backgroundColor: "color-mix(in srgb, var(--dl-orange) 28%, transparent)",
+  },
+});
+
+const BASE_EXTENSIONS: Extension[] = [
+  history(),
+  keymap.of([...defaultKeymap, ...historyKeymap]),
+  EditorView.lineWrapping,
+  EDITOR_THEME,
+  syntaxHighlighting(EDITOR_HIGHLIGHT),
+];
 
 // PEDAGOGICAL_STYLE_GUIDE §6's own worked forms, transcribed rather than
 // paraphrased — this is a template an author types over, so every word
@@ -239,6 +269,9 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
    * this view's content standing in for the whole block the way every
    * other live editor's does. */
   const fenceCodeViews = new Map<number, EditorView>();
+  /** A fold edits only its Markdown body; the `<details>` wrapper remains
+   * rendered chrome and is reattached byte-for-byte by blockTexts(). */
+  const foldBodyViews = new Map<number, EditorView>();
   const blockElements: HTMLElement[] = [];
   let focusedProseIndex: number | null = null;
   // Front matter's own edit state has two views (decision 11): the
@@ -287,6 +320,8 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     return doc.blocks.map((block, index) => {
       const codeView = fenceCodeViews.get(index);
       if (codeView) return replaceCellCode(block.text, codeView.state.doc.toString());
+      const foldView = foldBodyViews.get(index);
+      if (foldView) return replaceFoldBody(block.text, foldView.state.doc.toString());
       return liveViews.get(index)?.state.doc.toString() ?? block.text;
     });
   }
@@ -300,6 +335,8 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     liveViews.delete(index);
     fenceCodeViews.get(index)?.destroy();
     fenceCodeViews.delete(index);
+    foldBodyViews.get(index)?.destroy();
+    foldBodyViews.delete(index);
   }
 
   function teardownLiveViews() {
@@ -308,6 +345,8 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     liveViews.clear();
     for (const view of fenceCodeViews.values()) view.destroy();
     fenceCodeViews.clear();
+    for (const view of foldBodyViews.values()) view.destroy();
+    foldBodyViews.clear();
     suppressBlurCommit = false;
     focusedProseIndex = null;
     frontMatterRawMode = false;
@@ -1938,9 +1977,30 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       }
     }
 
+    if (block.kind === "fold" && index === focusedProseIndex) {
+      const editable = editableFoldSource(block.text);
+      if (editable) {
+        const shell = document.createElement("div");
+        shell.className = "dn-block-render dn-fold-editor";
+        shell.innerHTML = renderBlockPreview(block, detectDialect(doc.frontMatter));
+        const fold = shell.querySelector<HTMLDetailsElement>("details");
+        if (fold) {
+          fold.open = true;
+          for (const child of [...fold.children]) if (child.tagName !== "SUMMARY") child.remove();
+          const host = document.createElement("div");
+          host.className = "dn-fold-body-source";
+          fold.appendChild(host);
+          wrapper.appendChild(shell);
+          const view = mountEditor(host, index, editable.body, [sourceLanguageExtension()], foldBodyViews);
+          queueMicrotask(() => view.focus());
+          return wrapper;
+        }
+      }
+    }
+
     if (index === focusedProseIndex) {
       const host = document.createElement("div");
-      host.className = "dn-block-source";
+      host.className = `dn-block-source${block.kind === "prose" ? " dn-block-prose-source" : ""}`;
       wrapper.appendChild(host);
 
       // Slash commands (buildSlashMenu) apply only to a real prose
@@ -1978,7 +2038,14 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
     // markdown keeps the bare name either way.
     resolveSiblingImages(rendered);
     rendered.tabIndex = 0;
-    rendered.addEventListener("click", () => enterEdit(index));
+    rendered.addEventListener("click", (event) => {
+      // Opening or closing an answer/hint is a reading action, not a
+      // request to replace the fold with its source. Editing starts from
+      // its open body (or from the keyboard), while the native summary
+      // remains a native disclosure control.
+      if (block.kind === "fold" && (event.target as Element).closest("summary")) return;
+      enterEdit(index);
+    });
     rendered.addEventListener("keydown", (event) => {
       if (event.key === "Enter") enterEdit(index);
     });
