@@ -1176,6 +1176,10 @@ body {
 
 .dn-docked-panel {
   top: 0 !important;
+  /* Several panels predate the shared dock. In particular, GitHub used
+     `left: 0` and Source used `inset: 0`; without clearing that legacy
+     edge they remain over-constrained and the browser keeps them left. */
+  left: auto !important;
   right: var(--dn-rail-space) !important;
   bottom: 0 !important;
   width: var(--dn-inspector-width) !important;
@@ -1183,6 +1187,12 @@ body {
   height: 100% !important;
   box-sizing: border-box;
   z-index: 20 !important;
+}
+
+.dn-repo-panel.dn-docked-panel {
+  border-right: 0;
+  border-left: 1px solid var(--dl-cell-border);
+  box-shadow: -4px 0 16px var(--dl-shadow);
 }
 
 .dn-source-overlay.dn-docked-panel {
@@ -1341,13 +1351,16 @@ body {
   inset: 0 auto 0 6px;
   width: 2px;
   background: var(--dl-cell-border);
-  transition: background 120ms, width 120ms;
+  opacity: 0.28;
+  transition: background 120ms, width 120ms, opacity 120ms;
 }
 
 .dn-inspector-resizer:hover::before,
-.dn-inspector-resizer:focus-visible::before {
+.dn-inspector-resizer:focus-visible::before,
+.dn-inspector-resizer.is-dragging::before {
   width: 3px;
   background: var(--dl-orange);
+  opacity: 1;
 }
 
 .dn-inspector-resizer-grip {
@@ -1361,15 +1374,20 @@ body {
   border: 1px solid var(--dn-control-border);
   border-radius: 8px;
   background: var(--dl-panel-bg);
-  color: var(--dl-fg);
+  color: var(--dl-muted);
   writing-mode: vertical-rl;
   letter-spacing: 1px;
+  opacity: 0.22;
+  transition: color 120ms, border-color 120ms, opacity 120ms, box-shadow 120ms;
 }
 
 .dn-inspector-resizer:hover .dn-inspector-resizer-grip,
-.dn-inspector-resizer:focus-visible .dn-inspector-resizer-grip {
+.dn-inspector-resizer:focus-visible .dn-inspector-resizer-grip,
+.dn-inspector-resizer.is-dragging .dn-inspector-resizer-grip {
   color: var(--dl-orange);
   border-color: var(--dl-orange);
+  opacity: 1;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--dl-orange) 16%, transparent);
 }
 
 button:focus-visible {
