@@ -74,6 +74,21 @@ export function mountFileBar(host: FileBarHost): FileBar {
   const bar = document.createElement("div");
   bar.className = "dn-file-bar";
 
+
+  // The product mark belongs to the same fixed identity cluster as the
+  // filename. Keeping both in one flex row means neither can cover the
+  // other as the viewport narrows (a separate fixed mark did exactly that).
+  const brand = document.createElement("span");
+  brand.className = "dn-brand";
+  brand.setAttribute("role", "img");
+  brand.setAttribute("aria-label", "Dewnote");
+  brand.innerHTML = `<svg viewBox="0 0 512 512" aria-hidden="true" focusable="false">
+    <rect class="dn-brand-field" width="512" height="512" rx="104" />
+    <path class="dn-brand-mark" d="M256 76c-67 68-111 132-111 210 0 65 41 111 88 132l23 31 23-31c47-21 88-67 88-132 0-78-44-142-111-210Z" />
+    <circle class="dn-brand-cut-fill" cx="256" cy="256" r="22" />
+    <path class="dn-brand-cut-stroke" d="M256 278v126" />
+  </svg>`;
+
   const nameLabel = document.createElement("span");
   nameLabel.className = "dn-file-name";
 
@@ -194,7 +209,7 @@ export function mountFileBar(host: FileBarHost): FileBar {
       ],
     },
   ]);
-  bar.append(nameLabel, status);
+  bar.append(brand, nameLabel, status);
   document.body.appendChild(bar);
 
   function render() {
