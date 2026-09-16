@@ -3,12 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!-- Kept inline so the distributable remains a single HTML file. The
-         editable source is assets/branding/dewnote-mark.svg. -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='104' fill='%231b2a4a'/%3E%3Cpath fill='%23d4692a' d='M256 76c-67 68-111 132-111 210 0 65 41 111 88 132l23 31 23-31c47-21 88-67 88-132 0-78-44-142-111-210Z'/%3E%3Ccircle cx='256' cy='256' r='22' fill='%231b2a4a'/%3E%3Cpath d='M256 278v126' stroke='%231b2a4a' stroke-width='18' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./assets/branding/dewnote-favicon.svg" />
     <title>dewnote</title>
   </head>
   <body>
+    <div class="dn-brand" role="img" aria-label="Dewnote">
+      <svg viewBox="0 0 512 512" aria-hidden="true" focusable="false">
+        <rect class="dn-brand-field" width="512" height="512" rx="104" />
+        <path class="dn-brand-mark" d="M256 76c-67 68-111 132-111 210 0 65 41 111 88 132l23 31 23-31c47-21 88-67 88-132 0-78-44-142-111-210Z" />
+        <circle class="dn-brand-cut-fill" cx="256" cy="256" r="22" />
+        <path class="dn-brand-cut-stroke" d="M256 278v126" />
+      </svg>
+    </div>
     <div id="dn-page" class="dn-page"></div>
     <script type="module" src="./src/main.ts"></script>
   </body>
