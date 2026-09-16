@@ -45,6 +45,12 @@ export interface FileIndexEntry {
   slug?: string;
   module?: string;
   series?: string;
+  /** A practice page follows this tutorial onto every module that lists it;
+   * it is deliberately not listed in the module file itself. */
+  practiceFor?: string;
+  /** A mixed practice page draws on several tutorials and is placed by a
+   * module's top-level `mixed:` list rather than inside a series. */
+  practiceAcross?: string[];
   /** Ids of the modules whose own `contents` list this entry's id, filled
    * in by `buildFileIndex` when it's given the module files. Empty (not
    * absent) for an indexed dewlab tutorial no module lists — which is a
@@ -103,12 +109,18 @@ export function indexEntryFor(path: string, content: string): FileIndexEntry {
   const series = stringField(fields, "series");
   const status = stringField(fields, "status");
   const version = stringField(fields, "version");
+  const practiceFor = stringField(fields, "practice_for");
+  const practiceAcross = Array.isArray(fields["practice_across"])
+    ? fields["practice_across"].filter((value): value is string => typeof value === "string")
+    : undefined;
   if (title !== undefined) entry.title = title;
   if (slug !== undefined) entry.slug = slug;
   if (module !== undefined) entry.module = module;
   if (series !== undefined) entry.series = series;
   if (status !== undefined) entry.status = status;
   if (version !== undefined) entry.version = version;
+  if (practiceFor !== undefined) entry.practiceFor = practiceFor;
+  if (practiceAcross !== undefined) entry.practiceAcross = practiceAcross;
   return entry;
 }
 
@@ -124,6 +136,11 @@ export function moduleMembership(modules: Module[]): Map<string, string[]> {
         if (!already) listedBy.set(id, [module.id]);
         else if (!already.includes(module.id)) already.push(module.id);
       }
+    }
+    for (const id of module.mixed ?? []) {
+      const already = listedBy.get(id);
+      if (!already) listedBy.set(id, [module.id]);
+      else if (!already.includes(module.id)) already.push(module.id);
     }
   }
   return listedBy;
@@ -143,7 +160,10 @@ export function buildFileIndex(
   if (modules.length === 0) return index;
   const listedBy = moduleMembership(modules);
   for (const entry of index) {
-    entry.modules = entry.id ? (listedBy.get(entry.id) ?? []) : [];
+    // A focused practice page inherits its tutorial's placement. Mixed
+    // practice is listed explicitly in a module's top-level `mixed:` list.
+    const membershipId = entry.practiceFor ?? entry.id;
+    entry.modules = membershipId ? (listedBy.get(membershipId) ?? []) : [];
   }
   return index;
 }

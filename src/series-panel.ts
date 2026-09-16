@@ -109,6 +109,9 @@ export function tutorialsOnNoModule(index: FileIndexEntry[]): FileIndexEntry[] {
   for (const entry of index) {
     if (!entry.id || entry.modules === undefined || entry.modules.length > 0) continue;
     if (!entry.path.includes("tutorials/")) continue;
+    // Practice pages follow their owning tutorial, or a module's `mixed:`
+    // list. They are never loose tutorials to place independently.
+    if (entry.practiceFor || entry.practiceAcross?.length) continue;
     if (seen.has(entry.id)) continue;
     seen.add(entry.id);
     const best = defaultEntryFor(index, entry.id);

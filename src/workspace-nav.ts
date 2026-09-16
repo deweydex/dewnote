@@ -1,0 +1,148 @@
+import { openPath } from "./active-store.ts";
+import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
+import type { Module, ModuleSeries } from "./modules.ts";
+
+interface NavPage {
+  path: string;
+  label: string;
+  id: string;
+  practice: boolean;
+}
+
+function pagesFor(series: ModuleSeries, index: FileIndexEntry[]): NavPage[] {
+  const pages: NavPage[] = [];
+  for (const id of series.tutorials) {
+    const tutorial = defaultEntryFor(index, id);
+    if (tutorial) pages.push({ path: tutorial.path, label: tutorial.title ?? id, id, practice: false });
+    for (const practice of index.filter((entry) => entry.practiceFor === id)) {
+      pages.push({ path: practice.path, label: practice.title ?? practice.id ?? practice.path, id: practice.id ?? practice.path, practice: true });
+    }
+  }
+  return pages;
+}
+
+function mixedPages(module: Module, index: FileIndexEntry[]): NavPage[] {
+  return (module.mixed ?? []).flatMap((id) => {
+    const entry = defaultEntryFor(index, id);
+    return entry ? [{ path: entry.path, label: entry.title ?? id, id, practice: true }] : [];
+  });
+}
+
+/** Dewlab's left-hand “where you are” idea, expressed as three compact
+ * dropdown rungs for an editor: module → series → tutorial/practice. */
+export function mountWorkspaceNav() {
+  let modules: Module[] = [];
+  let index: FileIndexEntry[] = [];
+  let currentPath: string | null = null;
+  let chosenModule = "";
+  let chosenSeries = "";
+
+  const nav = document.createElement("nav");
+  nav.className = "dn-workspace-nav";
+  nav.setAttribute("aria-label", "Where this document sits");
+  nav.hidden = true;
+  const heading = document.createElement("span");
+  heading.className = "dn-workspace-nav-heading";
+  heading.textContent = "Where you are";
+  const moduleSelect = document.createElement("select");
+  moduleSelect.className = "dn-workspace-nav-module";
+  moduleSelect.setAttribute("aria-label", "Module");
+  const seriesSelect = document.createElement("select");
+  seriesSelect.className = "dn-workspace-nav-series";
+  seriesSelect.setAttribute("aria-label", "Series");
+  const pageSelect = document.createElement("select");
+  pageSelect.className = "dn-workspace-nav-page";
+  pageSelect.setAttribute("aria-label", "Tutorial or practice page");
+  nav.append(heading, moduleSelect, seriesSelect, pageSelect);
+  document.body.appendChild(nav);
+
+  function currentEntry(): FileIndexEntry | undefined {
+    return currentPath ? index.find((entry) => entry.path === currentPath) : undefined;
+  }
+
+  function moduleForCurrent(): Module | undefined {
+    const entry = currentEntry();
+    const id = entry?.practiceFor ?? entry?.id;
+    return modules.find((module) => module.contents.some((series) => series.tutorials.includes(id ?? "")) || (module.mixed ?? []).includes(id ?? ""));
+  }
+
+  function fillPages(module: Module, seriesKey: string): void {
+    const series = module.contents.find((item) => item.title === seriesKey);
+    const pages = series ? pagesFor(series, index) : mixedPages(module, index);
+    pageSelect.replaceChildren();
+    for (const page of pages) {
+      const option = document.createElement("option");
+      option.value = page.path;
+      option.textContent = `${page.practice ? "Practice · " : ""}${page.label}`;
+      option.selected = page.path === currentPath;
+      pageSelect.appendChild(option);
+    }
+    pageSelect.disabled = pages.length === 0;
+  }
+
+  function render(): void {
+    nav.hidden = modules.length === 0;
+    if (nav.hidden) return;
+    const currentModule = moduleForCurrent();
+    if (!chosenModule || !modules.some((module) => module.id === chosenModule)) chosenModule = currentModule?.id ?? modules[0]!.id;
+    if (currentModule && currentPath) chosenModule = currentModule.id;
+
+    moduleSelect.replaceChildren();
+    for (const module of modules) {
+      const option = document.createElement("option");
+      option.value = module.id;
+      option.textContent = module.title;
+      option.selected = module.id === chosenModule;
+      moduleSelect.appendChild(option);
+    }
+    const module = modules.find((item) => item.id === chosenModule) ?? modules[0]!;
+    const current = currentEntry();
+    const ownerId = current?.practiceFor ?? current?.id;
+    const currentSeries = module.contents.find((series) => series.tutorials.includes(ownerId ?? ""));
+    if (!chosenSeries || (!module.contents.some((series) => series.title === chosenSeries) && chosenSeries !== "__mixed")) {
+      chosenSeries = currentSeries?.title ?? module.contents[0]?.title ?? ((module.mixed?.length ?? 0) ? "__mixed" : "");
+    }
+    if (currentSeries && currentPath) chosenSeries = currentSeries.title;
+    if (current && (module.mixed ?? []).includes(current.id ?? "")) chosenSeries = "__mixed";
+
+    seriesSelect.replaceChildren();
+    for (const series of module.contents) {
+      const option = document.createElement("option");
+      option.value = series.title;
+      option.textContent = series.title;
+      option.selected = series.title === chosenSeries;
+      seriesSelect.appendChild(option);
+    }
+    if (module.mixed?.length) {
+      const option = document.createElement("option");
+      option.value = "__mixed";
+      option.textContent = "Mixed practice";
+      option.selected = chosenSeries === "__mixed";
+      seriesSelect.appendChild(option);
+    }
+    seriesSelect.disabled = seriesSelect.options.length === 0;
+    fillPages(module, chosenSeries);
+  }
+
+  moduleSelect.addEventListener("change", () => {
+    chosenModule = moduleSelect.value;
+    chosenSeries = "";
+    currentPath = null;
+    render();
+  });
+  seriesSelect.addEventListener("change", () => {
+    chosenSeries = seriesSelect.value;
+    currentPath = null;
+    render();
+  });
+  pageSelect.addEventListener("change", () => {
+    if (pageSelect.value) void openPath(pageSelect.value);
+  });
+
+  return {
+    setModules(next: Module[]) { modules = next; render(); },
+    setIndex(next: FileIndexEntry[]) { index = next; render(); },
+    setCurrentPath(path: string | null) { currentPath = path; render(); },
+    destroy() { nav.remove(); },
+  };
+}

@@ -42,10 +42,11 @@ import {
   type RepoFile,
   type RepoRef,
 } from "./github.ts";
-import { buildFileIndex, type FileIndexEntry } from "./file-index.ts";
+import { buildFileIndex, defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
 import { parseModuleFiles, parseModuleIndex, type Module } from "./modules.ts";
 import { setActiveStore } from "./active-store.ts";
 import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
+import { prepareRelease } from "./release.ts";
 
 export interface RepoPanelHost {
   getSource(): string;
@@ -57,6 +58,11 @@ export interface RepoPanelHost {
   /** modules.ts's own read of every `modules/*.yaml` file in the
    * repository, handed the same way, for series-panel.ts. */
   onModulesChange?(modules: Module[]): void;
+  /** A repository has become the active workspace session. */
+  onSessionOpen?(): void;
+  /** A repository file was opened into the editor. */
+  onDocumentOpen?(path: string): void;
+  onOrganizeModules?(): void;
 }
 
 export interface RepoPanel {
@@ -113,11 +119,14 @@ function textInput(placeholder: string, value: string): HTMLInputElement {
 export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   const settings = loadRepoSettings();
   let files: RepoFile[] = [];
+  let modules: Module[] = [];
+  let fileIndex: FileIndexEntry[] = [];
+  let selectedModuleId = "";
   /** `file.sha` is only absent for a document `startNewFile` just pointed
    * at a path with nothing there yet (decision 32) — every other path
    * here (`openRepoFile`, a conflict's own keep/take) always has a real
    * sha, since it came from a file GitHub already told us about. */
-  let opened: { repo: RepoRef; file: { path: string; sha?: string }; ref: string } | null = null;
+  let opened: { repo: RepoRef; file: { path: string; sha?: string }; ref: string; originalContent?: string } | null = null;
 
   const toggle = document.createElement("button");
   toggle.type = "button";
@@ -211,9 +220,49 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   repoSection.appendChild(repoStatus);
   panel.appendChild(repoSection);
 
+  // ---------------------------------------------------- repository views
+  // A known Dewlab repository opens onto its curriculum, not a dump of
+  // paths. The complete file list remains one click away for assets,
+  // module descriptors and unusual files that do not sit on a module.
+  const viewTabs = document.createElement("div");
+  viewTabs.className = "dn-repo-tabs";
+  viewTabs.setAttribute("role", "tablist");
+  viewTabs.setAttribute("aria-label", "Repository view");
+  const modulesTab = document.createElement("button");
+  modulesTab.type = "button";
+  modulesTab.className = "dn-repo-tab is-active";
+  modulesTab.textContent = "Modules";
+  modulesTab.setAttribute("role", "tab");
+  modulesTab.setAttribute("aria-selected", "true");
+  const filesTab = document.createElement("button");
+  filesTab.type = "button";
+  filesTab.className = "dn-repo-tab";
+  filesTab.textContent = "All files";
+  filesTab.setAttribute("role", "tab");
+  filesTab.setAttribute("aria-selected", "false");
+  viewTabs.append(modulesTab, filesTab);
+  viewTabs.hidden = true;
+  panel.appendChild(viewTabs);
+
+  const moduleSection = document.createElement("section");
+  moduleSection.className = "dn-repo-section dn-repo-modules";
+  moduleSection.hidden = true;
+  const moduleList = document.createElement("div");
+  moduleList.className = "dn-repo-module-list";
+  const organizeModules = document.createElement("button");
+  organizeModules.type = "button";
+  organizeModules.className = "dn-repo-organize-modules";
+  organizeModules.textContent = "Arrange modules and series";
+  organizeModules.addEventListener("click", () => host.onOrganizeModules?.());
+  const moduleDetail = document.createElement("div");
+  moduleDetail.className = "dn-repo-module-detail";
+  moduleSection.append(organizeModules, moduleList, moduleDetail);
+  panel.appendChild(moduleSection);
+
   // -------------------------------------------------------- search
   const searchSection = document.createElement("section");
   searchSection.className = "dn-repo-section";
+  searchSection.hidden = true;
   const searchInput = textInput("Search files…", "");
   searchInput.className = "dn-repo-search";
   searchSection.appendChild(searchInput);
@@ -255,6 +304,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     }
     const ref = baseInput.value.trim() || "main";
     opened = { repo, file: { path }, ref };
+    host.onDocumentOpen?.(path);
     hideConflict();
     renderPush();
     repoStatus.textContent = `Ready to push a new file at ${path}.`;
@@ -292,6 +342,112 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   }
   searchInput.addEventListener("input", renderFiles);
 
+  function openIndexed(entry: FileIndexEntry): void {
+    const file = files.find((candidate) => candidate.path === entry.path);
+    if (file) void openRepoFile(file);
+  }
+
+  function appendPageButton(parent: HTMLElement, entry: FileIndexEntry | undefined, fallback: string, practice = false): void {
+    const row = document.createElement("div");
+    row.className = `dn-repo-module-page${practice ? " is-practice" : ""}`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = entry?.title ?? fallback;
+    if (entry) button.addEventListener("click", () => openIndexed(entry));
+    else {
+      button.disabled = true;
+      button.title = "The module lists this id, but no matching tutorial file was found.";
+    }
+    row.appendChild(button);
+    if (!entry) {
+      const missing = document.createElement("span");
+      missing.textContent = "No file";
+      row.appendChild(missing);
+    }
+    parent.appendChild(row);
+  }
+
+  function renderModuleDetail(module: Module): void {
+    moduleDetail.replaceChildren();
+    const heading = document.createElement("div");
+    heading.className = "dn-repo-module-detail-heading";
+    const title = document.createElement("h3");
+    title.textContent = module.title;
+    const descriptor = document.createElement("button");
+    descriptor.type = "button";
+    descriptor.textContent = "Edit module details";
+    descriptor.addEventListener("click", () => {
+      const file = files.find((candidate) => candidate.path === module.path);
+      if (file) void openRepoFile(file);
+    });
+    heading.append(title, descriptor);
+    moduleDetail.appendChild(heading);
+
+    for (const series of module.contents) {
+      const block = document.createElement("section");
+      block.className = "dn-repo-module-series";
+      const seriesTitle = document.createElement("h4");
+      seriesTitle.textContent = series.title;
+      block.appendChild(seriesTitle);
+      for (const id of series.tutorials) {
+        appendPageButton(block, defaultEntryFor(fileIndex, id), id);
+        for (const practice of fileIndex.filter((entry) => entry.practiceFor === id)) {
+          appendPageButton(block, practice, practice.id ?? practice.path, true);
+        }
+      }
+      moduleDetail.appendChild(block);
+    }
+
+    if (module.mixed?.length) {
+      const block = document.createElement("section");
+      block.className = "dn-repo-module-series";
+      const title = document.createElement("h4");
+      title.textContent = "Mixed practice";
+      block.appendChild(title);
+      for (const id of module.mixed) appendPageButton(block, defaultEntryFor(fileIndex, id), id, true);
+      moduleDetail.appendChild(block);
+    }
+  }
+
+  function renderModules(): void {
+    moduleList.replaceChildren();
+    if (!selectedModuleId || !modules.some((module) => module.id === selectedModuleId)) selectedModuleId = modules[0]?.id ?? "";
+    for (const module of modules) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "dn-repo-module-choice";
+      button.classList.toggle("is-active", module.id === selectedModuleId);
+      button.textContent = module.title;
+      button.setAttribute("aria-pressed", String(module.id === selectedModuleId));
+      button.addEventListener("click", () => {
+        selectedModuleId = module.id;
+        renderModules();
+      });
+      moduleList.appendChild(button);
+    }
+    const selected = modules.find((module) => module.id === selectedModuleId);
+    if (selected) renderModuleDetail(selected);
+    else {
+      moduleDetail.replaceChildren();
+      const empty = document.createElement("p");
+      empty.className = "dn-repo-hint";
+      empty.textContent = "No modules were found in this repository.";
+      moduleDetail.appendChild(empty);
+    }
+  }
+
+  function selectRepoView(view: "modules" | "files"): void {
+    const showingModules = view === "modules";
+    modulesTab.classList.toggle("is-active", showingModules);
+    filesTab.classList.toggle("is-active", !showingModules);
+    modulesTab.setAttribute("aria-selected", String(showingModules));
+    filesTab.setAttribute("aria-selected", String(!showingModules));
+    moduleSection.hidden = !showingModules;
+    searchSection.hidden = showingModules;
+  }
+  modulesTab.addEventListener("click", () => selectRepoView("modules"));
+  filesTab.addEventListener("click", () => selectRepoView("files"));
+
   /** §5.10's own index, over the repository this time — one
    * getFileContent per markdown file, the only way to read front matter
    * through the REST API at all (there is no "just the first few lines"
@@ -307,8 +463,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
    * `modules` is what lets each entry carry the modules that list its id
    * (file-index.ts's own join), so the modules are read first and this
    * runs after them. */
-  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[], modules: Module[]) {
-    if (!host.onIndexChange) return;
+  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[], modules: Module[]): Promise<FileIndexEntry[]> {
     const entries = await Promise.all(
       markdownFiles.map(async (file) => {
         try {
@@ -319,12 +474,13 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
         }
       }),
     );
-    host.onIndexChange(
-      buildFileIndex(
-        entries.filter((e): e is { path: string; content: string } => e !== null),
-        modules,
-      ),
+    fileIndex = buildFileIndex(
+      entries.filter((e): e is { path: string; content: string } => e !== null),
+      modules,
     );
+    host.onIndexChange?.(fileIndex);
+    renderModules();
+    return fileIndex;
   }
 
   /** Mirrors refreshIndex's own shape, over the module files
@@ -344,7 +500,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     );
     const read = entries.filter((e): e is { path: string; content: string } => e !== null);
     const index = read.find((file) => file.path.endsWith("modules/index.yaml"));
-    const modules = parseModuleFiles(read, index ? parseModuleIndex(index.content) : []);
+    modules = parseModuleFiles(read, index ? parseModuleIndex(index.content) : []);
     host.onModulesChange?.(modules);
     return modules;
   }
@@ -519,6 +675,9 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       // list its id, so it needs them already parsed.
       const modules = await refreshModules(repo, ref, token, moduleFiles);
       await refreshIndex(repo, ref, token, markdownFiles, modules);
+      viewTabs.hidden = false;
+      selectRepoView("modules");
+      host.onSessionOpen?.();
     } catch (err) {
       repoStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {
@@ -538,8 +697,9 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     repoStatus.textContent = `Opening ${file.path}…`;
     try {
       const { content, sha } = await getFileContent(repo, file.path, ref, token);
-      opened = { repo, file: { path: file.path, sha }, ref };
+      opened = { repo, file: { path: file.path, sha }, ref, originalContent: content };
       host.loadDocument(content, file.path);
+      host.onDocumentOpen?.(file.path);
       hideConflict();
       renderPush();
       repoStatus.textContent = `Opened ${file.path}.`;
@@ -558,6 +718,21 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   pushButton.type = "button";
   pushButton.className = "dn-repo-push";
   pushSection.appendChild(pushButton);
+
+  const releaseButton = document.createElement("button");
+  releaseButton.type = "button";
+  releaseButton.className = "dn-repo-release";
+  releaseButton.textContent = "Push as new version";
+  releaseButton.title = "Freeze the committed release and push these edits as the new live version.";
+  pushSection.appendChild(releaseButton);
+  // A pointer click moves focus before `click` fires. Capture the live
+  // editor source first so a blur/commit cannot make the release compare
+  // against a transiently re-rendered document. Keyboard activation has
+  // no pointerdown and reads the source normally in the click handler.
+  let releaseSourceOnPointerDown: string | null = null;
+  releaseButton.addEventListener("pointerdown", () => {
+    releaseSourceOnPointerDown = host.getSource();
+  });
 
   const prButton = document.createElement("button");
   prButton.type = "button";
@@ -639,7 +814,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     keepMineButton.disabled = true;
     try {
       const result = await putFileContent(opened.repo, opened.file.path, mine, theirsSha, branch, `Edit ${opened.file.path} from dewnote`, token);
-      opened = { ...opened, file: { path: opened.file.path, sha: result.sha } };
+      opened = { ...opened, file: { path: opened.file.path, sha: result.sha }, originalContent: mine };
       hideConflict();
       renderPush();
       pushStatus.textContent = `Pushed to ${branch}.`;
@@ -654,7 +829,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   takeTheirsButton.addEventListener("click", () => {
     if (!opened || !conflict) return;
     host.loadDocument(conflict.theirsContent, opened.file.path);
-    opened = { ...opened, file: { path: opened.file.path, sha: conflict.theirsSha } };
+    opened = { ...opened, file: { path: opened.file.path, sha: conflict.theirsSha }, originalContent: conflict.theirsContent };
     pushStatus.textContent = "Loaded their version — your edit was discarded.";
     hideConflict();
   });
@@ -664,6 +839,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     if (!opened) return;
     const branch = branchInput.value.trim() || "dewnote-edits";
     pushButton.textContent = opened.file.sha ? `Push to ${branch}` : `Push new file to ${branch}`;
+    releaseButton.hidden = !opened.file.sha || !opened.originalContent || !/^(?:.*\/)?tutorials\/([^/]+)\/\1\.md$/.test(opened.file.path);
   }
   branchInput.addEventListener("input", renderPush);
 
@@ -685,7 +861,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       await ensureBranch(opened.repo, branch, base, token);
       const message = `${isNewFile ? "Add" : "Edit"} ${opened.file.path} from dewnote`;
       const result = await putFileContent(opened.repo, opened.file.path, mine, opened.file.sha, branch, message, token);
-      opened = { ...opened, file: { path: opened.file.path, sha: result.sha } };
+      opened = { ...opened, file: { path: opened.file.path, sha: result.sha }, originalContent: mine };
       renderPush();
       pushStatus.textContent = `Pushed to ${branch}.`;
       prButton.hidden = false;
@@ -707,6 +883,84 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
         pushStatus.textContent = err instanceof Error ? err.message : String(err);
       }
     } finally {
+      pushButton.disabled = false;
+    }
+  });
+
+  releaseButton.addEventListener("click", async () => {
+    if (!opened?.file.sha || opened.originalContent === undefined) return;
+    const token = currentToken();
+    if (!token) {
+      pushStatus.textContent = "Enter a token first.";
+      return;
+    }
+    const mine = releaseSourceOnPointerDown ?? host.getSource();
+    releaseSourceOnPointerDown = null;
+    const entry = fileIndex.find((item) => item.path === opened!.file.path);
+    const family = fileIndex.filter((item) => item.id && item.id === entry?.id).map((item) => item.version);
+    const prepared = prepareRelease(opened.file.path, opened.originalContent, mine, family);
+    if ("error" in prepared) {
+      pushStatus.textContent = prepared.error;
+      return;
+    }
+    const branch = branchInput.value.trim() || "dewnote-edits";
+    const base = baseInput.value.trim() || "main";
+    releaseButton.disabled = true;
+    pushButton.disabled = true;
+    pushStatus.textContent = `Creating version ${prepared.nextVersion} on ${branch}…`;
+    try {
+      await ensureBranch(opened.repo, branch, base, token);
+      let frozenSha: string | undefined;
+      try {
+        frozenSha = (await putFileContent(
+          opened.repo,
+          prepared.frozenPath,
+          prepared.frozenContent,
+          undefined,
+          branch,
+          `Freeze ${prepared.previousVersion} of ${entry?.title ?? entry?.id ?? opened.file.path} from dewnote`,
+          token,
+        )).sha;
+      } catch (err) {
+        // A retry after the first half succeeded is safe when the file on
+        // the branch is byte-for-byte the committed release we meant to
+        // freeze. Anything else remains a real collision.
+        if (!(err instanceof GithubApiError) || err.status !== 422) throw err;
+        const existing = await getFileContent(opened.repo, prepared.frozenPath, branch, token);
+        if (existing.content !== prepared.frozenContent) throw err;
+        frozenSha = existing.sha;
+      }
+      const result = await putFileContent(
+        opened.repo,
+        prepared.currentPath,
+        prepared.releasedContent,
+        opened.file.sha,
+        branch,
+        `Release ${entry?.title ?? entry?.id ?? opened.file.path} as ${prepared.nextVersion} from dewnote`,
+        token,
+      );
+      if (!files.some((file) => file.path === prepared.frozenPath)) files.push({ path: prepared.frozenPath, sha: frozenSha! });
+      fileIndex = fileIndex.map((item) => item.path === prepared.currentPath ? { ...item, version: prepared.nextVersion } : item);
+      opened = {
+        ...opened,
+        file: { path: prepared.currentPath, sha: result.sha },
+        originalContent: prepared.releasedContent,
+      };
+      host.loadDocument(prepared.releasedContent, prepared.currentPath);
+      host.onDocumentOpen?.(prepared.currentPath);
+      renderFiles();
+      renderModules();
+      renderPush();
+      pushStatus.textContent = `Pushed version ${prepared.nextVersion}. ${prepared.previousVersion} is preserved as ${prepared.frozenPath}.`;
+      prButton.hidden = false;
+    } catch (err) {
+      if (err instanceof GithubApiError && err.status === 409) {
+        pushStatus.textContent = "The live file changed on the working branch. Reload it before creating a new version.";
+      } else {
+        pushStatus.textContent = err instanceof Error ? err.message : String(err);
+      }
+    } finally {
+      releaseButton.disabled = false;
       pushButton.disabled = false;
     }
   });

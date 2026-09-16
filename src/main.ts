@@ -15,6 +15,7 @@ import { mountSeriesPanel } from "./series-panel.ts";
 import { mountCommandPalette } from "./command-palette.ts";
 import { todayVersion } from "./dialect.ts";
 import { groupDockPanels, iconRail } from "./icon-rail.ts";
+import { mountWorkspaceNav } from "./workspace-nav.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
@@ -65,24 +66,64 @@ const page = document.querySelector<HTMLDivElement>("#dn-page");
 if (!page) throw new Error("index.html is missing #dn-page");
 
 let current: MountedDocument = mountDocument(page, STARTER_DOCUMENT);
+const workspaceNav = mountWorkspaceNav();
+let session: "local" | "github" | null = null;
+
+function chooseSession(next: "local" | "github"): void {
+  if (session && session !== next) return;
+  session = next;
+  const folder = document.querySelector<HTMLButtonElement>(".dn-folder-toggle");
+  const repository = document.querySelector<HTMLButtonElement>(".dn-repo-toggle");
+  if (folder) {
+    folder.disabled = next === "github";
+    if (folder.disabled) folder.title = "This session is connected to GitHub. Reload to choose a local workspace instead.";
+  }
+  if (repository) {
+    repository.disabled = next === "local";
+    if (repository.disabled) repository.title = "This is a local session. Reload to connect a GitHub repository instead.";
+  }
+  document.body.dataset["workspaceSession"] = next;
+}
+
 mountSettingsPanel();
 const fileBar = mountFileBar({
   getSource: () => current.getSource(),
-  loadDocument(source, _name) {
+  loadDocument(source, name) {
     current.destroy();
     current = mountDocument(page, source);
+    workspaceNav.setCurrentPath(name);
+  },
+  onLocalOpen: () => {
+    if (session === "github") {
+      window.alert("This session is connected to GitHub. Reload Dewnote to start a separate local session.");
+      return false;
+    }
+    chooseSession("local");
+    return true;
   },
 });
 const seriesPanel = mountSeriesPanel(getFileIndex);
-mountFolderPanel(fileBar, setFileIndex, seriesPanel.setModules);
+const updateIndex = (index: Parameters<typeof setFileIndex>[0]) => {
+  setFileIndex(index);
+  workspaceNav.setIndex(index);
+};
+const updateModules = (modules: Parameters<typeof seriesPanel.setModules>[0]) => {
+  seriesPanel.setModules(modules);
+  workspaceNav.setModules(modules);
+};
+mountFolderPanel(fileBar, updateIndex, updateModules, () => chooseSession("local"));
 mountRepoPanel({
   getSource: () => current.getSource(),
-  loadDocument(source, _name) {
+  loadDocument(source, name) {
     current.destroy();
     current = mountDocument(page, source);
+    workspaceNav.setCurrentPath(name);
   },
-  onIndexChange: setFileIndex,
-  onModulesChange: seriesPanel.setModules,
+  onIndexChange: updateIndex,
+  onModulesChange: updateModules,
+  onSessionOpen: () => chooseSession("github"),
+  onDocumentOpen: (path) => workspaceNav.setCurrentPath(path),
+  onOrganizeModules: () => document.querySelector<HTMLButtonElement>(".dn-series-toggle")?.click(),
 });
 mountOutlinePanel({ getSource: () => current.getSource() });
 mountSourceView({
@@ -100,9 +141,8 @@ mountLinkCheckPanel({ getSource: () => current.getSource(), getFileIndex });
 // Settings remain direct because each is a distinct, frequently used
 // mode rather than a choice among related tools.
 const workspaceToggle = groupDockPanels("Workspace", "▤", "dn-workspace-toggle", [
-  { selector: ".dn-folder-toggle", description: "Open and manage a local Dewlab folder." },
-  { selector: ".dn-repo-toggle", description: "Open and publish through a GitHub repository." },
-  { selector: ".dn-series-toggle", description: "Read and reorder modules, series, and tutorials." },
+  { selector: ".dn-folder-toggle", description: "Start a local session from a Dewlab folder." },
+  { selector: ".dn-repo-toggle", description: "Start a repository session with module navigation and publishing." },
 ]);
 const reviewToggle = groupDockPanels("Review", "✓", "dn-review-toggle", [
   { selector: ".dn-outline-toggle", description: "Navigate the headings in the current document." },
@@ -115,6 +155,17 @@ const sourceToggle = rail.querySelector(".dn-source-toggle");
 const settingsToggle = rail.querySelector(".dn-settings-toggle");
 if (sourceToggle) rail.appendChild(sourceToggle);
 if (settingsToggle) rail.appendChild(settingsToggle);
+// Module organisation is entered from the active repository rather than
+// presented as a third kind of workspace. The real toggle remains as the
+// dock controller used by the repository's “Arrange” action.
+const legacyModulesToggle = document.querySelector<HTMLButtonElement>(".dn-series-toggle");
+if (legacyModulesToggle) {
+  legacyModulesToggle.hidden = true;
+  // It remains a private dock controller for “Arrange modules and
+  // series”, but it is no longer a fifth rail item in the UI or the
+  // accessibility tree.
+  document.body.appendChild(legacyModulesToggle);
+}
 mountCommandPalette();
 
 // Playwright (tests/e2e/) drives this same built page directly rather than

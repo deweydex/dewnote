@@ -1,11 +1,18 @@
 import type { Page } from "@playwright/test";
 
-const WORKSPACE = new Set([".dn-folder-toggle", ".dn-repo-toggle", ".dn-series-toggle"]);
+const WORKSPACE = new Set([".dn-folder-toggle", ".dn-repo-toggle"]);
 const REVIEW = new Set([".dn-outline-toggle", ".dn-linkcheck-toggle"]);
 
 /** Choose one of the tools now housed behind a grouped rail launcher. */
 export async function selectPanel(page: Page, selector: string): Promise<void> {
   const child = page.locator(selector);
+  // The module organiser is now reached from the repository's Modules
+  // screen rather than advertised as a third kind of workspace. Older
+  // focused tests still use its internal trigger directly.
+  if (selector === ".dn-series-toggle") {
+    await child.evaluate((button: HTMLButtonElement) => button.click());
+    return;
+  }
   if (await child.isVisible()) {
     await child.click();
     return;

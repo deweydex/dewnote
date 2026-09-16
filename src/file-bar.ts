@@ -17,6 +17,8 @@ export interface FileBarHost {
   getSource(): string;
   /** Tears down the current mount and mounts `source` in its place. */
   loadDocument(source: string, name: string): void;
+  /** A file from the device, rather than a repository, became the session. */
+  onLocalOpen?(name: string): boolean | void;
 }
 
 export interface FileBar {
@@ -73,7 +75,6 @@ export function mountFileBar(host: FileBarHost): FileBar {
 
   const bar = document.createElement("div");
   bar.className = "dn-file-bar";
-
 
   // The product mark belongs to the same fixed identity cluster as the
   // filename. Keeping both in one flex row means neither can cover the
@@ -226,6 +227,7 @@ export function mountFileBar(host: FileBarHost): FileBar {
 
   async function open(next: OpenedDocument | null) {
     if (!next) return;
+    if (host.onLocalOpen?.(next.name) === false) return;
     opened = next;
     dirty = false;
     host.loadDocument(next.content, next.name);

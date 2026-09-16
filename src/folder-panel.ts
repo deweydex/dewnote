@@ -43,6 +43,7 @@ export function mountFolderPanel(
   fileBar: FileBar,
   onIndexChange?: (index: FileIndexEntry[]) => void,
   onModulesChange?: (modules: Module[]) => void,
+  onSessionOpen?: () => void,
 ): FolderPanel {
   let files: FolderFile[] = [];
   let folderName = "";
@@ -375,6 +376,7 @@ id: ${id}-first-cell
     const root = await chooseFolder();
     if (!root) return;
     currentRoot = root;
+    onSessionOpen?.();
     folderName = root.name;
     openButton.textContent = `Open folder… (${folderName})`;
     refreshButton.disabled = false;

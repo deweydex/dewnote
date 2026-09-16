@@ -169,6 +169,33 @@ describe("buildFileIndex", () => {
     );
     expect(index[0]!.modules).toEqual(["computational-methods"]);
   });
+
+  test("a focused practice page inherits its tutorial's module", () => {
+    const modules = [parseModuleFile("modules/computational-methods.yaml", MODULE)!];
+    const index = buildFileIndex(
+      [{
+        path: "tutorials/first-steps/first-steps-practice.md",
+        content: "---\ntitle: Practice\npractice_for: first-steps\n---\n",
+      }],
+      modules,
+    );
+    expect(index[0]!.practiceFor).toBe("first-steps");
+    expect(index[0]!.modules).toEqual(["computational-methods"]);
+  });
+
+  test("mixed practice is placed by a module's top-level mixed list", () => {
+    const source = `${MODULE}mixed:\n- cumulative-practice\n`;
+    const modules = [parseModuleFile("modules/computational-methods.yaml", source)!];
+    expect(moduleMembership(modules).get("cumulative-practice")).toEqual(["computational-methods"]);
+    const index = buildFileIndex(
+      [{
+        path: "tutorials/cumulative-practice/cumulative-practice.md",
+        content: "---\ntitle: Cumulative practice\npractice_across:\n- first-steps\n- working-with-tables\n---\n",
+      }],
+      modules,
+    );
+    expect(index[0]!.modules).toEqual(["computational-methods"]);
+  });
 });
 
 describe("distinctValues", () => {
