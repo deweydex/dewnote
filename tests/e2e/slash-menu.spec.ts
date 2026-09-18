@@ -67,8 +67,10 @@ test("typing '/' then a letter opens the menu, filtered to matching kinds", asyn
   // "check"), Practice problem by the letter sitting in the middle of
   // it — several tiers at once, and Code cell selected because a label
   // that starts with the query beats every other one.
-  await expect(slashLabels(page)).toHaveText(["Code cell", "Multiple choice", "Hint", "Fill in the blank", "Practice problem"]);
-  await expect(page.locator(".dn-slash-menu .dn-block-menu-item.is-selected .dn-block-menu-label")).toHaveText("Code cell");
+  await expect(slashLabels(page)).toHaveText([
+    "Code block", "Card", "Code cell", "SQL cell", "Site playground", "Multiple choice", "Hint", "Staged hint", "Fill in the blank", "Practice problem",
+  ]);
+  await expect(page.locator(".dn-slash-menu .dn-block-menu-item.is-selected .dn-block-menu-label")).toHaveText("Code block");
 });
 
 test("'/' alone offers everything the \"+\" button does, bar the paragraph it is already in", async ({ page }) => {
@@ -82,9 +84,14 @@ test("'/' alone offers everything the \"+\" button does, bar the paragraph it is
   await expect(slashLabels(page)).toHaveText([
     "Link",
     "Image",
+    "Code block",
+    "Card",
     "Code cell",
+    "SQL cell",
+    "Site playground",
     "Math",
     "Hint",
+    "Staged hint",
     "Answer",
     "Practice problem",
     "Multiple choice",
@@ -115,7 +122,7 @@ test("the best match is selected even when its group draws it last", async ({ pa
   // takes what the ranking chose.
   await freshParagraph(page);
   await page.keyboard.type("/a");
-  await expect(slashLabels(page)).toHaveText(["Image", "Math", "Answer", "Practice problem", "Fill in the blank"]);
+  await expect(slashLabels(page)).toHaveText(["Image", "Card", "Site playground", "Math", "Answer", "Staged hint", "Practice problem", "Fill in the blank"]);
   await expect(page.locator(".dn-slash-menu .dn-block-menu-item.is-selected .dn-block-menu-label")).toHaveText("Answer");
 
   await page.keyboard.press("Enter");
@@ -137,6 +144,27 @@ test("confirming with a mouse click replaces the block in place, not after it", 
   await expect(page.locator(".dn-block-fence")).toHaveCount(1);
 });
 
+test("the slash menu creates every specialised Dewlab fence the editor supports", async ({ page }) => {
+  const cases = [
+    ["Code block", "```python\n# Example code"],
+    ["SQL cell", "```sql exec\nid: new-sql-1"],
+    ["Site playground", "```html site\nid: new-site-1-html"],
+    ["Card", "```card\nurl: tutorial:example"],
+    ["Staged hint", "```hint\nafter: errors:5"],
+  ] as const;
+
+  for (const [label, expected] of cases) {
+    // Keep a real block boundary after the first paragraph. Without the
+    // blank line, inserting a paragraph simply extends "One." and there
+    // is no separate empty prose block in which a slash menu can open.
+    await mount(page, "One.\n\nTwo.\n");
+    await freshParagraph(page);
+    await page.keyboard.type("/");
+    await blockMenuItem(page, ".dn-slash-menu", label).click();
+    expect(await getSource(page), label).toContain(expected);
+  }
+});
+
 test("confirming with Enter uses the item the arrow keys landed on, not always the first", async ({ page }) => {
   await freshParagraph(page);
   // Fill in the blank's own label starts with the letter, so it is
@@ -147,7 +175,7 @@ test("confirming with Enter uses the item the arrow keys landed on, not always t
   // on Hint, the next wraps to Answer only because Answer is Hint's own
   // neighbour in the drawn Teach group.
   await page.keyboard.type("/f");
-  await expect(slashLabels(page)).toHaveText(["Image", "Math", "Fill in the blank", "Hint", "Answer"]);
+  await expect(slashLabels(page)).toHaveText(["Image", "Code block", "Math", "Fill in the blank", "Hint", "Answer"]);
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("ArrowDown");
   await expect(page.locator(".dn-slash-menu .dn-block-menu-item.is-selected .dn-block-menu-label")).toHaveText("Answer");
@@ -160,7 +188,7 @@ test("confirming with Enter uses the item the arrow keys landed on, not always t
 
 test("the new block's own live editor is focused immediately, cursor ready to type", async ({ page }) => {
   await freshParagraph(page);
-  await page.keyboard.type("/c");
+  await page.keyboard.type("/py");
   await page.keyboard.press("Enter");
   await page.keyboard.type("6 * 7");
 
