@@ -469,6 +469,24 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       // kinds here, this offset was never into the full spliced text.
       return { text, anchor: 0, head: 0 };
     },
+    "sql-cell": () => {
+      const text = `\`\`\`sql exec\nid: ${generateBlockId("new-sql")}\n\n\`\`\`\n\n`;
+      return { text, anchor: 0, head: 0 };
+    },
+    "code-block": () => {
+      const text = "```python\n# Example code\n\n```\n\n";
+      const at = text.indexOf("# Example code");
+      return { text, anchor: at, head: at + "# Example code".length };
+    },
+    site: () => {
+      const site = generateBlockId("new-site");
+      const text =
+        `\`\`\`html site\nid: ${site}-html\nsite: ${site}\n<div class="example">Hello</div>\n\`\`\`\n\n` +
+        `\`\`\`css site\nid: ${site}-css\nsite: ${site}\n.example {\n  color: tomato;\n}\n\`\`\`\n\n` +
+        `\`\`\`js site\nid: ${site}-js\nsite: ${site}\nconsole.log("Site ready");\n\`\`\`\n\n`;
+      const at = text.indexOf("<div");
+      return { text, anchor: at, head: at + '<div class="example">Hello</div>'.length };
+    },
     math: () => {
       const text = "$$\n\n$$\n\n";
       const at = text.indexOf("\n\n") + 1;
@@ -478,6 +496,11 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const text = '<details class="dl-hint"><summary>hint</summary>\n\nHint text.\n\n</details>\n\n';
       const at = text.indexOf("Hint text.");
       return { text, anchor: at, head: at + "Hint text.".length };
+    },
+    "staged-hint": () => {
+      const text = "```hint\nafter: errors:5\ntitle: Let’s slow down a moment…\n\nWrite the next useful clue here.\n```\n\n";
+      const at = text.indexOf("Write the next useful clue here.");
+      return { text, anchor: at, head: at + "Write the next useful clue here.".length };
     },
     answer: () => {
       const text = ANSWER_FOLD;
@@ -508,6 +531,11 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       const text = "```question\n" + `id: ${generateBlockId("new-question")}\n` + "type: fill-in-the-blank\n\n" + `${QUESTION_SENTENCE_PLACEHOLDER}\n` + "```\n\n";
       const at = text.indexOf(QUESTION_SENTENCE_PLACEHOLDER);
       return { text, anchor: at, head: at + QUESTION_SENTENCE_PLACEHOLDER.length };
+    },
+    card: () => {
+      const text = "```card\nurl: tutorial:example\nstatus: live\nmeta: Tutorial\n\n## Card title\n\nDescribe what the reader will learn.\n```\n\n";
+      const at = text.indexOf("Card title");
+      return { text, anchor: at, head: at + "Card title".length };
     },
   };
 
@@ -1972,7 +2000,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
         const caption = document.createElement("p");
         caption.className = "dn-frontmatter-plain-caption";
         caption.textContent =
-          "No dewlab or dewstack fields recognized here, so this is plain YAML — add year: (dewlab) or module_title: (dewstack) for the per-field form instead.";
+          "No Dewlab fields were recognised here, so this is plain YAML — add year: to use the structured document fields instead.";
         wrapper.appendChild(caption);
       }
     }
