@@ -164,7 +164,7 @@ export function mountSeriesPanel(getFileIndex: () => FileIndexEntry[]): SeriesPa
 
   const empty = document.createElement("p");
   empty.className = "dn-series-empty";
-  empty.textContent = "No module files found — open a Dewlab folder or repository containing its course descriptors.";
+  empty.textContent = "No module files found — open a Dewlab folder or repository containing its module descriptors.";
   panel.appendChild(empty);
 
   /** What the last edit did, or why it didn't happen. One line for the
