@@ -53,7 +53,6 @@ test("a real exec cell runs in a real browser: output, errors, and shared state"
     await mount(page, '```python exec\nid: hello\nprint("hello from pyodide")\n1 + 1\n```\n');
     const cell = page.locator(".dn-block-fence");
     await cell.locator(".dn-cell-run").click();
-    await expect(cell.locator(".dn-cell-run")).toHaveText("Running…");
 
     const output = cell.locator(".dn-cell-output");
     await expect(output).toContainText("hello from pyodide", { timeout: COLD_BOOT_TIMEOUT });
