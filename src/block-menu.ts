@@ -34,12 +34,17 @@
 export type BlockKind =
   | "paragraph"
   | "cell"
+  | "sql-cell"
+  | "code-block"
+  | "site"
   | "math"
   | "hint"
+  | "staged-hint"
   | "answer"
   | "practice"
   | "multiple-choice"
   | "fill-in-the-blank"
+  | "card"
   | "image"
   | "link";
 
@@ -73,9 +78,14 @@ export const BLOCK_MENU_ITEMS: readonly BlockMenuItem[] = [
   { kind: "paragraph", label: "Paragraph", group: "Write", detail: "Start writing prose.", keywords: ["text", "prose", "writing"] },
   { kind: "link", label: "Link", group: "Write", detail: "Link to another tutorial, or anywhere.", keywords: ["url", "href", "tutorial", "reference"], picks: true },
   { kind: "image", label: "Image", group: "Write", detail: "Put a picture beside this document.", keywords: ["picture", "photo", "figure", "diagram", "png", "screenshot"], picks: true },
-  { kind: "cell", label: "Code cell", group: "Run", detail: "Code a student can edit and run.", keywords: ["python", "code", "run", "exec", "sql"] },
+  { kind: "code-block", label: "Code block", group: "Write", detail: "Show code without running it.", keywords: ["example", "illustrative", "fence", "snippet"] },
+  { kind: "card", label: "Card", group: "Write", detail: "Add a linked Dewlab content card.", keywords: ["tile", "module", "index", "navigation"] },
+  { kind: "cell", label: "Code cell", group: "Run", detail: "Run editable Python.", keywords: ["python", "code", "run", "exec"] },
+  { kind: "sql-cell", label: "SQL cell", group: "Run", detail: "Run SQL against the page database.", keywords: ["database", "query", "table", "exec"] },
+  { kind: "site", label: "Site playground", group: "Run", detail: "Edit HTML, CSS and JavaScript together.", keywords: ["html", "css", "javascript", "js", "web", "preview"] },
   { kind: "math", label: "Math", group: "Run", detail: "A displayed equation.", keywords: ["equation", "latex", "formula", "maths"] },
   { kind: "hint", label: "Hint", group: "Teach", detail: "A fold that opens to a nudge.", keywords: ["fold", "details", "clue", "help", "stuck"] },
+  { kind: "staged-hint", label: "Staged hint", group: "Teach", detail: "Reveal a hint after repeated difficulty.", keywords: ["adaptive", "errors", "attempts", "trigger", "clue"] },
   { kind: "answer", label: "Answer", group: "Teach", detail: "A fold that opens to the working.", keywords: ["fold", "details", "solution", "worked"] },
   {
     kind: "practice",
