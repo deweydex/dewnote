@@ -43,7 +43,7 @@ import {
   type RepoRef,
 } from "./github.ts";
 import { buildFileIndex, defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
-import { parseModuleFiles, parseModuleIndex, type Module } from "./modules.ts";
+import { isModuleFile, parseModuleFile, parseModuleFiles, parseModuleIndex, type Module } from "./modules.ts";
 import { setActiveStore } from "./active-store.ts";
 import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 import { prepareRelease } from "./release.ts";
@@ -62,10 +62,15 @@ export interface RepoPanelHost {
   onSessionOpen?(): void;
   /** A repository file was opened into the editor. */
   onDocumentOpen?(path: string): void;
+  /** The current repository document was persisted successfully. */
+  onDocumentSaved?(): void;
+  /** A raw descriptor should open in the whole-document source editor. */
+  onOpenSource?(): void;
   onOrganizeModules?(): void;
 }
 
 export interface RepoPanel {
+  pushCurrent(): Promise<boolean>;
   destroy(): void;
 }
 
@@ -113,6 +118,23 @@ function textInput(placeholder: string, value: string): HTMLInputElement {
   input.autocomplete = "off";
   input.spellcheck = false;
   return input;
+}
+
+/** GitHub's contents endpoint has to be called once per document to build
+ * the searchable index. Keep that work bounded: an unbounded Promise.all
+ * turns a medium-sized teaching repository into an API burst and makes a
+ * secondary-rate-limit failure look like missing content. */
+async function mapWithConcurrency<T, R>(items: readonly T[], limit: number, read: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const at = next++;
+      results[at] = await read(items[at]!);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
 }
 
 /** Mounted once, independently of any particular document. */
@@ -304,6 +326,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     }
     const ref = baseInput.value.trim() || "main";
     opened = { repo, file: { path }, ref };
+    host.onSessionOpen?.();
     host.onDocumentOpen?.(path);
     hideConflict();
     renderPush();
@@ -376,9 +399,9 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     const descriptor = document.createElement("button");
     descriptor.type = "button";
     descriptor.textContent = "Edit module details";
-    descriptor.addEventListener("click", () => {
+    descriptor.addEventListener("click", async () => {
       const file = files.find((candidate) => candidate.path === module.path);
-      if (file) void openRepoFile(file);
+      if (file && await openRepoFile(file)) host.onOpenSource?.();
     });
     heading.append(title, descriptor);
     moduleDetail.appendChild(heading);
@@ -463,16 +486,20 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
    * `modules` is what lets each entry carry the modules that list its id
    * (file-index.ts's own join), so the modules are read first and this
    * runs after them. */
-  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[], modules: Module[]): Promise<FileIndexEntry[]> {
-    const entries = await Promise.all(
-      markdownFiles.map(async (file) => {
+  async function refreshIndex(repo: RepoRef, ref: string, token: string, markdownFiles: RepoFile[], modules: Module[]): Promise<{ index: FileIndexEntry[]; failures: string[] }> {
+    const failures: string[] = [];
+    const entries = await mapWithConcurrency(
+      markdownFiles,
+      8,
+      async (file) => {
         try {
           const { content } = await getFileContent(repo, file.path, ref, token);
           return { path: file.path, content };
-        } catch {
+        } catch (error) {
+          failures.push(`${file.path}: ${error instanceof Error ? error.message : String(error)}`);
           return null;
         }
-      }),
+      },
     );
     fileIndex = buildFileIndex(
       entries.filter((e): e is { path: string; content: string } => e !== null),
@@ -480,29 +507,34 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     );
     host.onIndexChange?.(fileIndex);
     renderModules();
-    return fileIndex;
+    return { index: fileIndex, failures };
   }
 
   /** Mirrors refreshIndex's own shape, over the module files
    * loadRepoFiles's own tree walk already listed — no separate fetch of
    * the tree a second time just for this. Returns the parsed modules as
    * well as handing them on, since the index needs them too. */
-  async function refreshModules(repo: RepoRef, ref: string, token: string, moduleFiles: RepoFile[]): Promise<Module[]> {
-    const entries = await Promise.all(
-      moduleFiles.map(async (file) => {
+  async function refreshModules(repo: RepoRef, ref: string, token: string, moduleFiles: RepoFile[]): Promise<{ modules: Module[]; failures: string[]; invalid: string[] }> {
+    const failures: string[] = [];
+    const entries = await mapWithConcurrency(
+      moduleFiles,
+      6,
+      async (file) => {
         try {
           const { content } = await getFileContent(repo, file.path, ref, token);
           return { path: file.path, content };
-        } catch {
+        } catch (error) {
+          failures.push(`${file.path}: ${error instanceof Error ? error.message : String(error)}`);
           return null;
         }
-      }),
+      },
     );
     const read = entries.filter((e): e is { path: string; content: string } => e !== null);
     const index = read.find((file) => /(?:^|\/)(?:courses|modules)\/index\.yaml$/.test(file.path));
     modules = parseModuleFiles(read, index ? parseModuleIndex(index.content) : []);
+    const invalid = read.filter((file) => isModuleFile(file.path) && !parseModuleFile(file.path, file.content)).map((file) => file.path);
     host.onModulesChange?.(modules);
-    return modules;
+    return { modules, failures, invalid };
   }
 
   async function loadRepoFiles() {
@@ -575,6 +607,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           const base = baseInput.value.trim() || "main";
           await ensureBranch(repo, branch, base, token);
           await putFileContent(repo, path, content, undefined, branch, `Add ${path} from dewnote`, token);
+          markBranchChanged();
         },
         // The read-modify-write half, for a caller editing a file it
         // never opened into the editor — series-panel.ts writing a
@@ -613,6 +646,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
             sha = undefined;
           }
           await putFileContent(repo, path, content, sha, branch, message, token);
+          markBranchChanged();
         },
         // An image copied in beside a tutorial, committed to the working
         // branch like any other new file. `putFileContent` base64s the
@@ -626,6 +660,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           const base = baseInput.value.trim() || "main";
           await ensureBranch(repo, branch, base, token);
           await putFileContent(repo, path, bytes, undefined, branch, `Add ${path} from dewnote`, token);
+          markBranchChanged();
         },
         async readBinaryFile(path) {
           const token = currentToken();
@@ -673,11 +708,22 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       });
       // Modules first: the index joins each entry to the modules that
       // list its id, so it needs them already parsed.
-      const modules = await refreshModules(repo, ref, token, moduleFiles);
-      await refreshIndex(repo, ref, token, markdownFiles, modules);
+      repoStatus.textContent = `Reading ${moduleFiles.length} module descriptor${moduleFiles.length === 1 ? "" : "s"}…`;
+      const moduleResult = await refreshModules(repo, ref, token, moduleFiles);
+      repoStatus.textContent = `Indexing ${markdownFiles.length} document${markdownFiles.length === 1 ? "" : "s"}…`;
+      const indexResult = await refreshIndex(repo, ref, token, markdownFiles, moduleResult.modules);
       viewTabs.hidden = false;
       selectRepoView("modules");
       host.onSessionOpen?.();
+      const warnings = [
+        ...moduleResult.failures,
+        ...moduleResult.invalid.map((path) => `${path}: invalid module YAML`),
+        ...indexResult.failures,
+      ];
+      const summary = `${markdownFiles.length} markdown file${markdownFiles.length === 1 ? "" : "s"}, ${moduleFiles.length} module file${moduleFiles.length === 1 ? "" : "s"}.`;
+      repoStatus.textContent = warnings.length
+        ? `${summary} ${warnings.length} file${warnings.length === 1 ? "" : "s"} could not be indexed. First problem: ${warnings[0]}`
+        : summary;
     } catch (err) {
       repoStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {
@@ -686,11 +732,11 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   }
   loadButton.addEventListener("click", () => loadRepoFiles());
 
-  async function openRepoFile(file: RepoFile) {
+  async function openRepoFile(file: RepoFile): Promise<boolean> {
     const token = currentToken();
     if (!token) {
       repoStatus.textContent = "Enter a token first.";
-      return;
+      return false;
     }
     const repo = currentRepo();
     const ref = baseInput.value.trim() || "main";
@@ -703,8 +749,10 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       hideConflict();
       renderPush();
       repoStatus.textContent = `Opened ${file.path}.`;
+      return true;
     } catch (err) {
       repoStatus.textContent = err instanceof Error ? err.message : String(err);
+      return false;
     }
   }
 
@@ -818,7 +866,8 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       hideConflict();
       renderPush();
       pushStatus.textContent = `Pushed to ${branch}.`;
-      prButton.hidden = false;
+      markBranchChanged();
+      host.onDocumentSaved?.();
     } catch (err) {
       pushStatus.textContent = err instanceof Error ? err.message : String(err);
     } finally {
@@ -835,7 +884,12 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   });
 
   function renderPush() {
-    pushSection.hidden = !opened;
+    // A module descriptor can be changed without opening a tutorial in
+    // the editor. Keep the publishing section available in that case so
+    // its pull-request action is not hidden by its own parent.
+    pushSection.hidden = !opened && prButton.hidden;
+    pushButton.hidden = !opened;
+    releaseButton.hidden = !opened;
     if (!opened) return;
     const branch = branchInput.value.trim() || "dewnote-edits";
     pushButton.textContent = opened.file.sha ? `Push to ${branch}` : `Push new file to ${branch}`;
@@ -843,12 +897,17 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   }
   branchInput.addEventListener("input", renderPush);
 
-  pushButton.addEventListener("click", async () => {
-    if (!opened) return;
+  function markBranchChanged(): void {
+    prButton.hidden = false;
+    pushSection.hidden = false;
+  }
+
+  async function pushCurrent(): Promise<boolean> {
+    if (!opened) return false;
     const token = currentToken();
     if (!token) {
       pushStatus.textContent = "Enter a token first.";
-      return;
+      return false;
     }
     const branch = branchInput.value.trim() || "dewnote-edits";
     const base = baseInput.value.trim() || "main";
@@ -864,7 +923,9 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       opened = { ...opened, file: { path: opened.file.path, sha: result.sha }, originalContent: mine };
       renderPush();
       pushStatus.textContent = `Pushed to ${branch}.`;
-      prButton.hidden = false;
+      markBranchChanged();
+      host.onDocumentSaved?.();
+      return true;
     } catch (err) {
       if (err instanceof GithubApiError && err.status === 409 && !isNewFile) {
         try {
@@ -882,10 +943,12 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       } else {
         pushStatus.textContent = err instanceof Error ? err.message : String(err);
       }
+      return false;
     } finally {
       pushButton.disabled = false;
     }
-  });
+  }
+  pushButton.addEventListener("click", () => void pushCurrent());
 
   releaseButton.addEventListener("click", async () => {
     if (!opened?.file.sha || opened.originalContent === undefined) return;
@@ -952,7 +1015,8 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       renderModules();
       renderPush();
       pushStatus.textContent = `Pushed version ${prepared.nextVersion}. ${prepared.previousVersion} is preserved as ${prepared.frozenPath}.`;
-      prButton.hidden = false;
+      markBranchChanged();
+      host.onDocumentSaved?.();
     } catch (err) {
       if (err instanceof GithubApiError && err.status === 409) {
         pushStatus.textContent = "The live file changed on the working branch. Reload it before creating a new version.";
@@ -966,7 +1030,6 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   });
 
   prButton.addEventListener("click", async () => {
-    if (!opened) return;
     const token = currentToken();
     if (!token) {
       pushStatus.textContent = "Enter a token first.";
@@ -976,7 +1039,13 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     const base = baseInput.value.trim() || "main";
     prButton.disabled = true;
     try {
-      const pr = await openPullRequest(opened.repo, branch, base, `Edit ${opened.file.path} from dewnote`, token);
+      const repo = currentRepo();
+      if (!repo.owner || !repo.repo) {
+        pushStatus.textContent = "Enter an owner and repo.";
+        return;
+      }
+      const title = opened ? `Edit ${opened.file.path} from dewnote` : "Update modules from dewnote";
+      const pr = await openPullRequest(repo, branch, base, title, token);
       pushStatus.textContent = `Draft PR: ${pr.html_url}`;
       window.open(pr.html_url, "_blank", "noopener");
     } catch (err) {
@@ -994,6 +1063,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   renderPush();
 
   return {
+    pushCurrent,
     destroy() {
       toggle.remove();
       panel.remove();

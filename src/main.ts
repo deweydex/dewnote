@@ -6,7 +6,7 @@ import { getFileIndex, mountDocument, setFileIndex, type MountedDocument } from 
 import { applySettings, loadSettings } from "./settings.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountFileBar } from "./file-bar.ts";
-import { mountRepoPanel } from "./repo-panel.ts";
+import { mountRepoPanel, type RepoPanel } from "./repo-panel.ts";
 import { mountFolderPanel } from "./folder-panel.ts";
 import { mountOutlinePanel } from "./outline-panel.ts";
 import { mountSourceView } from "./source-view.ts";
@@ -86,6 +86,7 @@ function chooseSession(next: "local" | "github"): void {
 }
 
 mountSettingsPanel();
+let repoPanel: RepoPanel | null = null;
 const fileBar = mountFileBar({
   getSource: () => current.getSource(),
   loadDocument(source, name) {
@@ -101,6 +102,7 @@ const fileBar = mountFileBar({
     chooseSession("local");
     return true;
   },
+  onExternalSave: () => repoPanel?.pushCurrent() ?? false,
 });
 const seriesPanel = mountSeriesPanel(getFileIndex);
 const updateIndex = (index: Parameters<typeof setFileIndex>[0]) => {
@@ -112,17 +114,23 @@ const updateModules = (modules: Parameters<typeof seriesPanel.setModules>[0]) =>
   workspaceNav.setModules(modules);
 };
 mountFolderPanel(fileBar, updateIndex, updateModules, () => chooseSession("local"));
-mountRepoPanel({
+repoPanel = mountRepoPanel({
   getSource: () => current.getSource(),
   loadDocument(source, name) {
     current.destroy();
     current = mountDocument(page, source);
     workspaceNav.setCurrentPath(name);
+    fileBar.openExternal(name);
   },
   onIndexChange: updateIndex,
   onModulesChange: updateModules,
   onSessionOpen: () => chooseSession("github"),
-  onDocumentOpen: (path) => workspaceNav.setCurrentPath(path),
+  onDocumentOpen: (path) => {
+    workspaceNav.setCurrentPath(path);
+    fileBar.openExternal(path);
+  },
+  onDocumentSaved: () => fileBar.markSaved(),
+  onOpenSource: () => document.querySelector<HTMLButtonElement>(".dn-source-toggle")?.click(),
   onOrganizeModules: () => document.querySelector<HTMLButtonElement>(".dn-series-toggle")?.click(),
 });
 mountOutlinePanel({ getSource: () => current.getSource() });

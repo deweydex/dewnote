@@ -298,7 +298,10 @@ test("pushing as a new version freezes the committed release and updates the liv
 
   await page.locator(".dn-repo-release").click();
   const pushStatus = page.locator(".dn-repo-section", { has: page.locator(".dn-repo-push") }).locator(".dn-repo-status");
-  await expect(pushStatus).toContainText("Pushed version 2026.09.16.1");
+  const today = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" })
+    .format(new Date())
+    .replaceAll("-", ".");
+  await expect(pushStatus).toContainText(`Pushed version ${today}.1`);
   expect(putPaths).toEqual([
     "tutorials/a-rule/v2026.09.15.1.md",
     "tutorials/a-rule/a-rule.md",
@@ -306,7 +309,7 @@ test("pushing as a new version freezes the committed release and updates the liv
   expect(Buffer.from(putBodies[0]!["content"] as string, "base64").toString("utf-8")).toBe(original);
   expect(putBodies[0]).not.toHaveProperty("sha");
   const released = Buffer.from(putBodies[1]!["content"] as string, "base64").toString("utf-8");
-  expect(released).toContain("version: 2026.09.16.1");
+  expect(released).toContain(`version: ${today}.1`);
   expect(released).toContain("supersedes: 2026.09.15.1");
   expect(released).toContain("Revised.");
   expect(putBodies[1]).toHaveProperty("sha", "file-sha-1");
@@ -431,6 +434,12 @@ test("reordering a module writes it back through the working branch, with the sh
   expect(putBodies[0]!["branch"]).toBe("dewnote-edits");
   const content = Buffer.from(putBodies[0]!["content"] as string, "base64").toString("utf-8");
   expect(content).toBe(["title: A Module", "contents:", "- title: First steps", "  tutorials:", "  - b-page", "  - a-rule", ""].join("\n"));
+
+  // A descriptor-only change still has a complete publishing route; it
+  // no longer depends on pushing an unrelated editor document first.
+  await page.locator(".dn-series-close").click();
+  await selectPanel(page, ".dn-repo-toggle");
+  await expect(page.locator(".dn-repo-pr")).toBeVisible();
 });
 
 test("a write against a repository never disturbs an already-open file's own push target", async ({ page }) => {
