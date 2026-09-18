@@ -97,7 +97,9 @@ test("Import and Export share one bottom-right Transfer selector", async ({ page
   await expect(rail).toBeVisible();
   await expect(rail.locator("button")).toHaveCount(1);
   await expect(rail.locator("button")).toHaveAttribute("data-label", "Transfer");
-  await expect(page.locator(".dn-file-bar")).toHaveText("Untitled");
+  await expect(page.locator(".dn-brand-name")).toHaveText("dewnote");
+  await expect(page.locator(".dn-file-name")).toBeVisible();
+  await expect(page.locator(".dn-file-name")).toHaveText("Untitled");
 
   await page.locator(".dn-file-transfer-toggle").click();
   const panel = page.locator(".dn-transfer-panel");
