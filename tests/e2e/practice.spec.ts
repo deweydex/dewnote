@@ -69,9 +69,14 @@ const EVERY_KIND = [
   "Paragraph",
   "Link",
   "Image",
+  "Code block",
+  "Card",
   "Code cell",
+  "SQL cell",
+  "Site playground",
   "Math",
   "Hint",
+  "Staged hint",
   "Answer",
   "Practice problem",
   "Multiple choice",
@@ -176,6 +181,6 @@ test("the slash menu offers them on an ordinary tutorial too", async ({ page }) 
   await page.keyboard.type("/pr");
 
   const items = page.locator(".dn-slash-menu .dn-block-menu-label");
-  await expect(items).toHaveCount(1);
-  await expect(items).toHaveText("Practice problem");
+  await expect(items).toHaveText(["Site playground", "Practice problem"]);
+  await expect(page.locator(".dn-slash-menu .dn-block-menu-item.is-selected .dn-block-menu-label")).toHaveText("Practice problem");
 });
