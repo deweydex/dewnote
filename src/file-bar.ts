@@ -19,6 +19,9 @@ export interface FileBarHost {
   loadDocument(source: string, name: string): void;
   /** A file from the device, rather than a repository, became the session. */
   onLocalOpen?(name: string): boolean | void;
+  /** Cmd/Ctrl+S while a repository document is open means “push this
+   * document”, not “download an unrelated local copy”. */
+  onExternalSave?(): Promise<boolean> | boolean;
 }
 
 export interface FileBar {
@@ -28,6 +31,11 @@ export interface FileBar {
    * here. Feeds the same Save button and dirty indicator a single-file
    * open already has, rather than a second, parallel save mechanism. */
   open(opened: OpenedDocument): void;
+  /** Tracks a document owned by another store (currently GitHub) without
+   * pretending the local Save button owns a writable file handle. */
+  openExternal(name: string): void;
+  /** The owning store successfully persisted the current source. */
+  markSaved(): void;
 }
 
 function isMarkdownDrag(event: DragEvent): boolean {
@@ -71,24 +79,24 @@ function promptForNotebookFile(): Promise<{ name: string; markdown: string } | n
  * settings panel, this outlives `main.ts`'s own `mountDocument` calls. */
 export function mountFileBar(host: FileBarHost): FileBar {
   let opened: OpenedDocument | null = null;
+  let externalName: string | null = null;
   let dirty = false;
+  let lastSeen = host.getSource();
 
   const bar = document.createElement("div");
   bar.className = "dn-file-bar";
 
-  // The product mark belongs to the same fixed identity cluster as the
-  // filename. Keeping both in one flex row means neither can cover the
-  // other as the viewport narrows (a separate fixed mark did exactly that).
+  // The product mark and current file name form one compact, persistent
+  // identity. Repository paths are especially important here: a heading
+  // says what the document is called, not which file a push will replace.
   const brand = document.createElement("span");
   brand.className = "dn-brand";
-  brand.setAttribute("role", "img");
-  brand.setAttribute("aria-label", "Dewnote");
   brand.innerHTML = `<svg viewBox="0 0 512 512" aria-hidden="true" focusable="false">
     <rect class="dn-brand-field" width="512" height="512" rx="104" />
     <path class="dn-brand-mark" d="M256 76c-67 68-111 132-111 210 0 65 41 111 88 132l23 31 23-31c47-21 88-67 88-132 0-78-44-142-111-210Z" />
     <circle class="dn-brand-cut-fill" cx="256" cy="256" r="22" />
     <path class="dn-brand-cut-stroke" d="M256 278v126" />
-  </svg>`;
+  </svg><span class="dn-brand-name">dewnote</span>`;
 
   const nameLabel = document.createElement("span");
   nameLabel.className = "dn-file-name";
@@ -214,10 +222,11 @@ export function mountFileBar(host: FileBarHost): FileBar {
   document.body.appendChild(bar);
 
   function render() {
-    nameLabel.textContent = opened ? opened.name : "Untitled";
+    const name = externalName ?? opened?.name ?? "Untitled";
+    nameLabel.textContent = name;
     nameLabel.classList.toggle("is-dirty", dirty);
-    status.textContent = dirty ? "unsaved" : opened ? (opened.handle ? "saved" : "downloaded") : "";
-    document.title = `${opened ? opened.name : "Untitled"}${dirty ? " •" : ""} — dewnote`;
+    status.textContent = dirty ? "unsaved" : externalName ? "pushed" : opened ? (opened.handle ? "saved" : "downloaded") : "";
+    document.title = `${name}${dirty ? " •" : ""} — dewnote`;
   }
 
   function markDirty() {
@@ -225,12 +234,20 @@ export function mountFileBar(host: FileBarHost): FileBar {
     render();
   }
 
+  function markSaved() {
+    dirty = false;
+    lastSeen = host.getSource();
+    render();
+  }
+
   async function open(next: OpenedDocument | null) {
     if (!next) return;
     if (host.onLocalOpen?.(next.name) === false) return;
     opened = next;
+    externalName = null;
     dirty = false;
     host.loadDocument(next.content, next.name);
+    lastSeen = host.getSource();
     render();
   }
 
@@ -240,7 +257,9 @@ export function mountFileBar(host: FileBarHost): FileBar {
     saveButton.disabled = true;
     try {
       opened = await saveDocument(current, content);
+      externalName = null;
       dirty = false;
+      lastSeen = content;
       render();
     } finally {
       saveButton.disabled = false;
@@ -272,10 +291,14 @@ export function mountFileBar(host: FileBarHost): FileBar {
     });
   });
 
-  function onKeydown(event: KeyboardEvent) {
+  async function onKeydown(event: KeyboardEvent) {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
-      save();
+      if (externalName && host.onExternalSave) {
+        if (await host.onExternalSave()) markSaved();
+      } else {
+        await save();
+      }
     }
   }
   document.addEventListener("keydown", onKeydown);
@@ -285,7 +308,6 @@ export function mountFileBar(host: FileBarHost): FileBar {
   // interaction cadence rather than wiring a callback through every one
   // of app.ts's own commit paths for a status label that only needs to be
   // roughly right.
-  let lastSeen = host.getSource();
   const dirtyCheck = window.setInterval(() => {
     const current = host.getSource();
     if (current !== lastSeen) {
@@ -324,6 +346,14 @@ export function mountFileBar(host: FileBarHost): FileBar {
 
   return {
     open,
+    openExternal(name) {
+      opened = null;
+      externalName = name;
+      dirty = false;
+      lastSeen = host.getSource();
+      render();
+    },
+    markSaved,
     destroy() {
       window.clearInterval(dirtyCheck);
       document.removeEventListener("keydown", onKeydown);
