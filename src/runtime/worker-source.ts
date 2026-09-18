@@ -102,7 +102,11 @@ async function runCell(msg) {
   // or Python) actually needs it first, the same "pay for what's used"
   // discipline read_sql's own sqlite3 load already follows.
   if (msg.sql && !sharedDbSeeded) {
-    await pyodide.runPythonAsync("import sqlite3, dewnote_tools\ndewnote_tools._page_globals['db'] = sqlite3.connect(':memory:')");
+    // This code lives inside the JavaScript source string returned by
+    // buildWorkerSource. Keep the newline escaped in that generated
+    // program; a literal newline inside its quoted string prevents the
+    // worker from parsing, which leaves every Python cell at “Running…”.
+    await pyodide.runPythonAsync("import sqlite3, dewnote_tools\\ndewnote_tools._page_globals['db'] = sqlite3.connect(':memory:')");
     sharedDbSeeded = true;
   }
   post({ type: "status", text: "" });
