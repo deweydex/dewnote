@@ -60,10 +60,21 @@ export function mountWorkspaceNav() {
     return currentPath ? index.find((entry) => entry.path === currentPath) : undefined;
   }
 
+  function moduleContains(module: Module, id: string): boolean {
+    return module.contents.some((series) => series.tutorials.includes(id)) || (module.mixed ?? []).includes(id);
+  }
+
   function moduleForCurrent(): Module | undefined {
     const entry = currentEntry();
     const id = entry?.practiceFor ?? entry?.id;
-    return modules.find((module) => module.contents.some((series) => series.tutorials.includes(id ?? "")) || (module.mixed ?? []).includes(id ?? ""));
+    if (!id) return undefined;
+    // A tutorial may intentionally appear in more than one module. Keep
+    // the module the reader navigated from when it still contains the
+    // opened page; only fall back to the first membership when a file was
+    // opened from somewhere with no module context (All files, for example).
+    const chosen = modules.find((module) => module.id === chosenModule);
+    if (chosen && moduleContains(chosen, id)) return chosen;
+    return modules.find((module) => moduleContains(module, id));
   }
 
   function fillPages(module: Module, seriesKey: string): void {
