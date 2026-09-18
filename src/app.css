@@ -59,6 +59,13 @@ body {
   cursor: text;
   border-radius: 4px;
   outline: none;
+  min-height: 1lh;
+}
+.dn-block-render > :first-child {
+  margin-top: 0;
+}
+.dn-block-render > :last-child {
+  margin-bottom: 0;
 }
 .dn-block-render:hover,
 .dn-block-render:focus-visible {
@@ -92,8 +99,16 @@ body {
   font-size: 1em;
 }
 .dn-block-prose-source .cm-content {
+  padding-block: 0;
   padding-inline: 0;
   font-family: var(--dl-font-family);
+}
+.dn-block-prose-source .cm-scroller,
+.dn-block-prose-source .cm-line {
+  line-height: inherit;
+}
+.dn-block-prose-source .cm-line {
+  padding-inline: 0;
 }
 
 /* A fold keeps its disclosure wrapper visible while only its Markdown
