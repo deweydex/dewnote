@@ -34,16 +34,19 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".dn-block").first()).toBeVisible();
 });
 
-
-test("the brand mark shares the file bar without covering its filename", async ({ page }) => {
+test("the dewnote wordmark and current filename remain visible without overlapping", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 700 });
   const brand = page.locator(".dn-file-bar > .dn-brand");
-  const name = page.locator(".dn-file-name");
+  const mark = brand.locator("svg");
+  const word = brand.locator(".dn-brand-name");
   await expect(brand).toBeVisible();
-  const [brandBox, nameBox] = await Promise.all([brand.boundingBox(), name.boundingBox()]);
-  expect(brandBox).not.toBeNull();
-  expect(nameBox).not.toBeNull();
-  expect(brandBox!.x + brandBox!.width).toBeLessThanOrEqual(nameBox!.x);
+  await expect(word).toHaveText("dewnote");
+  await expect(page.locator(".dn-file-name")).toBeVisible();
+  await expect(page.locator(".dn-file-name")).toHaveText("Untitled");
+  const [markBox, wordBox] = await Promise.all([mark.boundingBox(), word.boundingBox()]);
+  expect(markBox).not.toBeNull();
+  expect(wordBox).not.toBeNull();
+  expect(markBox!.x + markBox!.width).toBeLessThanOrEqual(wordBox!.x);
 });
 
 /** Simulates a drop of one markdown file onto the page. Chromium builds a
@@ -71,6 +74,11 @@ test("dropping a file opens it, renders it, and updates the filename", async ({ 
   await expect(page.locator("h1")).toHaveText("A Rule");
   await expect(page.locator(".dn-file-name")).toHaveText("a-rule-and-where-it-lives.md");
   await expect(page).toHaveTitle(/a-rule-and-where-it-lives\.md — dewnote/);
+  // Opening is not an edit: the polling dirty tracker must adopt the new
+  // source instead of comparing it with the previous Untitled document.
+  await page.waitForTimeout(650);
+  await expect(page.locator(".dn-file-status")).toHaveText("downloaded");
+  await expect(page).not.toHaveTitle(/ • — dewnote/);
 });
 
 test("editing marks the document dirty, and Save clears it and downloads", async ({ page }) => {
