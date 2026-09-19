@@ -15,6 +15,7 @@ import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 import { todayVersion } from "./dialect.ts";
 
 export interface FolderPanel {
+  choose(): Promise<boolean>;
   destroy(): void;
 }
 
@@ -43,7 +44,7 @@ export function mountFolderPanel(
   fileBar: FileBar,
   onIndexChange?: (index: FileIndexEntry[]) => void,
   onModulesChange?: (modules: Module[]) => void,
-  onSessionOpen?: () => void,
+  onSessionOpen?: (name: string) => void,
 ): FolderPanel {
   let files: FolderFile[] = [];
   let folderName = "";
@@ -372,11 +373,10 @@ id: ${id}-first-cell
     }
   }
 
-  openButton.addEventListener("click", async () => {
+  async function choose(): Promise<boolean> {
     const root = await chooseFolder();
-    if (!root) return;
+    if (!root) return false;
     currentRoot = root;
-    onSessionOpen?.();
     folderName = root.name;
     openButton.textContent = `Open folder… (${folderName})`;
     refreshButton.disabled = false;
@@ -433,7 +433,11 @@ id: ${id}-first-cell
       listNamesIn: (folder) => listNamesIn(root, folder),
     });
     await loadFromRoot(root, folderName, "Reading");
-  });
+    onSessionOpen?.(folderName);
+    return true;
+  }
+
+  openButton.addEventListener("click", () => { void choose(); });
 
   refreshButton.addEventListener("click", () => {
     if (currentRoot) void loadFromRoot(currentRoot, folderName, "Refreshing");
@@ -446,6 +450,7 @@ id: ${id}-first-cell
   renderFiles();
 
   return {
+    choose,
     destroy() {
       toggle.remove();
       panel.remove();

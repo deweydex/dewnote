@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html");
+const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html") + "?legacy=1";
 
 // repo-panel.spec.ts's own reasoning: the working branch not existing
 // yet is how `ensureBranch` finds out it has to create one, so the 404

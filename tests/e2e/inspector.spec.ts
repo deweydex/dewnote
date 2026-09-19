@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { selectPanel } from "./panel-helpers.ts";
 
-const BUILT_APP = new URL("../../dist/index.html", import.meta.url).href;
+const BUILT_APP = new URL("../../dist/index.html?legacy=1", import.meta.url).href;
 
 test.beforeEach(async ({ page }) => {
   await page.goto(BUILT_APP);

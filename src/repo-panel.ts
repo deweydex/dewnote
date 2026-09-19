@@ -59,18 +59,36 @@ export interface RepoPanelHost {
    * repository, handed the same way, for series-panel.ts. */
   onModulesChange?(modules: Module[]): void;
   /** A repository has become the active workspace session. */
-  onSessionOpen?(): void;
+  onSessionOpen?(context: RepoSessionContext): void;
+  /** The initial repository chooser was dismissed before a session was
+   * selected, so the source-choice screen can become interactive again. */
+  onChooserClose?(): void;
   /** A repository file was opened into the editor. */
   onDocumentOpen?(path: string): void;
   /** The current repository document was persisted successfully. */
   onDocumentSaved?(): void;
+  /** Any commit made through the repository store, including module and
+   * asset writes that do not involve the open editor document. */
+  onBranchChange?(path: string): void;
   /** A raw descriptor should open in the whole-document source editor. */
   onOpenSource?(): void;
   onOrganizeModules?(): void;
 }
 
+export interface RepoSessionContext {
+  label: string;
+  base: string;
+  branch: string;
+}
+
 export interface RepoPanel {
   pushCurrent(): Promise<boolean>;
+  pushNewVersion(): Promise<boolean>;
+  canPushNewVersion(): boolean;
+  openPullRequest(): Promise<string | null>;
+  showChooser(): void;
+  hide(): void;
+  getContext(): RepoSessionContext;
   destroy(): void;
 }
 
@@ -183,6 +201,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   closeButton.addEventListener("click", () => {
     panel.hidden = true;
     toggle.setAttribute("aria-expanded", "false");
+    host.onChooserClose?.();
   });
   header.append(heading, closeButton);
   panel.appendChild(header);
@@ -326,7 +345,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     }
     const ref = baseInput.value.trim() || "main";
     opened = { repo, file: { path }, ref };
-    host.onSessionOpen?.();
+    host.onSessionOpen?.({ label: `${repo.owner}/${repo.repo}`, base: ref, branch: branchInput.value.trim() || "dewnote-edits" });
     host.onDocumentOpen?.(path);
     hideConflict();
     renderPush();
@@ -607,7 +626,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           const base = baseInput.value.trim() || "main";
           await ensureBranch(repo, branch, base, token);
           await putFileContent(repo, path, content, undefined, branch, `Add ${path} from dewnote`, token);
-          markBranchChanged();
+          markBranchChanged(path);
         },
         // The read-modify-write half, for a caller editing a file it
         // never opened into the editor — series-panel.ts writing a
@@ -646,7 +665,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
             sha = undefined;
           }
           await putFileContent(repo, path, content, sha, branch, message, token);
-          markBranchChanged();
+          markBranchChanged(path);
         },
         // An image copied in beside a tutorial, committed to the working
         // branch like any other new file. `putFileContent` base64s the
@@ -660,7 +679,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           const base = baseInput.value.trim() || "main";
           await ensureBranch(repo, branch, base, token);
           await putFileContent(repo, path, bytes, undefined, branch, `Add ${path} from dewnote`, token);
-          markBranchChanged();
+          markBranchChanged(path);
         },
         async readBinaryFile(path) {
           const token = currentToken();
@@ -714,7 +733,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       const indexResult = await refreshIndex(repo, ref, token, markdownFiles, moduleResult.modules);
       viewTabs.hidden = false;
       selectRepoView("modules");
-      host.onSessionOpen?.();
+      host.onSessionOpen?.({ label: `${repo.owner}/${repo.repo}`, base: ref, branch: branchInput.value.trim() || "dewnote-edits" });
       const warnings = [
         ...moduleResult.failures,
         ...moduleResult.invalid.map((path) => `${path}: invalid module YAML`),
@@ -866,7 +885,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       hideConflict();
       renderPush();
       pushStatus.textContent = `Pushed to ${branch}.`;
-      markBranchChanged();
+      markBranchChanged(opened.file.path);
       host.onDocumentSaved?.();
     } catch (err) {
       pushStatus.textContent = err instanceof Error ? err.message : String(err);
@@ -897,9 +916,10 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   }
   branchInput.addEventListener("input", renderPush);
 
-  function markBranchChanged(): void {
+  function markBranchChanged(path = opened?.file.path ?? "Repository changes"): void {
     prButton.hidden = false;
     pushSection.hidden = false;
+    host.onBranchChange?.(path);
   }
 
   async function pushCurrent(): Promise<boolean> {
@@ -923,7 +943,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       opened = { ...opened, file: { path: opened.file.path, sha: result.sha }, originalContent: mine };
       renderPush();
       pushStatus.textContent = `Pushed to ${branch}.`;
-      markBranchChanged();
+      markBranchChanged(opened.file.path);
       host.onDocumentSaved?.();
       return true;
     } catch (err) {
@@ -950,12 +970,12 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   }
   pushButton.addEventListener("click", () => void pushCurrent());
 
-  releaseButton.addEventListener("click", async () => {
-    if (!opened?.file.sha || opened.originalContent === undefined) return;
+  async function pushNewVersion(): Promise<boolean> {
+    if (!opened?.file.sha || opened.originalContent === undefined) return false;
     const token = currentToken();
     if (!token) {
       pushStatus.textContent = "Enter a token first.";
-      return;
+      return false;
     }
     const mine = releaseSourceOnPointerDown ?? host.getSource();
     releaseSourceOnPointerDown = null;
@@ -964,7 +984,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     const prepared = prepareRelease(opened.file.path, opened.originalContent, mine, family);
     if ("error" in prepared) {
       pushStatus.textContent = prepared.error;
-      return;
+      return false;
     }
     const branch = branchInput.value.trim() || "dewnote-edits";
     const base = baseInput.value.trim() || "main";
@@ -1015,25 +1035,28 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       renderModules();
       renderPush();
       pushStatus.textContent = `Pushed version ${prepared.nextVersion}. ${prepared.previousVersion} is preserved as ${prepared.frozenPath}.`;
-      markBranchChanged();
+      markBranchChanged(prepared.currentPath);
       host.onDocumentSaved?.();
+      return true;
     } catch (err) {
       if (err instanceof GithubApiError && err.status === 409) {
         pushStatus.textContent = "The live file changed on the working branch. Reload it before creating a new version.";
       } else {
         pushStatus.textContent = err instanceof Error ? err.message : String(err);
       }
+      return false;
     } finally {
       releaseButton.disabled = false;
       pushButton.disabled = false;
     }
-  });
+  }
+  releaseButton.addEventListener("click", () => { void pushNewVersion(); });
 
-  prButton.addEventListener("click", async () => {
+  async function openCurrentPullRequest(): Promise<string | null> {
     const token = currentToken();
     if (!token) {
       pushStatus.textContent = "Enter a token first.";
-      return;
+      return null;
     }
     const branch = branchInput.value.trim() || "dewnote-edits";
     const base = baseInput.value.trim() || "main";
@@ -1042,18 +1065,21 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       const repo = currentRepo();
       if (!repo.owner || !repo.repo) {
         pushStatus.textContent = "Enter an owner and repo.";
-        return;
+        return null;
       }
       const title = opened ? `Edit ${opened.file.path} from dewnote` : "Update modules from dewnote";
       const pr = await openPullRequest(repo, branch, base, title, token);
       pushStatus.textContent = `Draft PR: ${pr.html_url}`;
       window.open(pr.html_url, "_blank", "noopener");
+      return pr.html_url;
     } catch (err) {
       pushStatus.textContent = err instanceof Error ? err.message : String(err);
+      return null;
     } finally {
       prButton.disabled = false;
     }
-  });
+  }
+  prButton.addEventListener("click", () => { void openCurrentPullRequest(); });
 
   labelToggle(toggle, "GitHub");
   iconRail().appendChild(toggle);
@@ -1064,6 +1090,25 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
 
   return {
     pushCurrent,
+    pushNewVersion,
+    canPushNewVersion() {
+      return Boolean(opened?.file.sha && opened.originalContent !== undefined && /^(?:.*\/)?tutorials\/([^/]+)\/\1\.md$/.test(opened.file.path));
+    },
+    openPullRequest: openCurrentPullRequest,
+    showChooser() {
+      if (panel.hidden) toggle.click();
+    },
+    hide() {
+      if (!panel.hidden) closeButton.click();
+    },
+    getContext() {
+      const repo = currentRepo();
+      return {
+        label: repo.owner && repo.repo ? `${repo.owner}/${repo.repo}` : "GitHub repository",
+        base: baseInput.value.trim() || "main",
+        branch: branchInput.value.trim() || "dewnote-edits",
+      };
+    },
     destroy() {
       toggle.remove();
       panel.remove();
