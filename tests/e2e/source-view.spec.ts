@@ -87,9 +87,9 @@ test("switching to another sidebar tab closes and commits the source editor", as
   await expect(page.locator(".dn-outline-panel")).toBeVisible();
 });
 
-test("the command palette can open the source view too", async ({ page }) => {
+test("the workspace palette can open the source view too", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-palette-input").fill("Whole-file");
-  await page.locator(".dn-palette-item button").first().click();
+  await page.locator(".dn-wp-input").fill("whole-file source");
+  await page.locator(".dn-wp-row.is-active").click();
   await expect(page.locator(".dn-source-overlay")).toBeVisible();
 });

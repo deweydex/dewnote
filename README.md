@@ -6,6 +6,7 @@ in whichever dialect a target site expects (dewlab, dewstack, or none), so
 nothing the editor writes is private to the editor. It runs as a single
 HTML file in a browser, and as a Mac application built from the same code.
 
+`docs/USING_DEWNOTE.md` is the guide for the person writing tutorials.
 `planning/PLAN.md` is the design and the order of work; `planning/DIALECTS.md`
 is the inventory of what the files it must open and save look like;
 `DECISIONS.md` records what was decided and why, in the same spirit as
@@ -35,9 +36,10 @@ rendering when blurred and editing when focused; Python and SQL cells
 that run on Pyodide in the page; a local-folder store and a GitHub store
 with branches, conflicts and draft pull requests; Jupyter import and
 export, standalone HTML export, and conversion between dialects; the
-progressive workspace shell (`workflow-shell.ts`) that replaces the old
-rails with one source choice, one document header and transient
-choosers.
+progressive shell — one source choice (`workflow-shell.ts`), a caption
+in the left margin carrying identity, location, outline and save state
+(`spine.ts`), and one key that reaches every tutorial, page, series and
+command in the workspace (`workspace-palette.ts`, over `commands.ts`).
 
 Not built: the Mac app (plan step 7), an OPFS private vault, and
 dewstack's `site=`/`app=` cells. `planning/PLAN.md` has the full list of

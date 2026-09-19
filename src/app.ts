@@ -97,6 +97,20 @@ const EDITOR_HIGHLIGHT = HighlightStyle.define([
   { tag: [tags.function(tags.variableName), tags.definition(tags.variableName)], color: "var(--dl-type-css)" },
   { tag: [tags.typeName, tags.className], color: "var(--dl-type-js)" },
   { tag: [tags.heading, tags.strong], color: "var(--dl-heading)", fontWeight: "700" },
+  // A heading is a size, not only a weight. `@codemirror/lang-markdown`
+  // tags each level separately, so this is the framework's own one rule
+  // per level — the sizes are the ones the rendered document already
+  // gets from the browser's defaults scaled to the body size, in `em`
+  // so they follow the reader's own text-size setting. Without them,
+  // typing `# ` turned a line navy and bold and left it body-sized,
+  // which is the one place the editing surface stopped looking like the
+  // page it is editing.
+  { tag: tags.heading1, fontSize: "2em" },
+  { tag: tags.heading2, fontSize: "1.5em" },
+  { tag: tags.heading3, fontSize: "1.17em" },
+  { tag: tags.heading4, fontSize: "1em" },
+  { tag: tags.heading5, fontSize: "0.83em" },
+  { tag: tags.heading6, fontSize: "0.67em" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: [tags.link, tags.url], color: "var(--dl-link)", textDecoration: "underline" },
   { tag: [tags.meta, tags.processingInstruction], color: "var(--dl-muted)" },
@@ -119,6 +133,14 @@ const BASE_EXTENSIONS: Extension[] = [
   syntaxHighlighting(EDITOR_HIGHLIGHT),
 ];
 
+/** The marks that fold away while the caret is elsewhere. A list's `-`
+ * and a quotation's `>` are deliberately not here: hiding either leaves
+ * the line with nothing in its place, where a rendered list has a bullet
+ * and a rendered quotation has a rule. Both would need a widget and a
+ * line decoration rather than a plain hide, so they keep their own
+ * punctuation for now and say so in `docs/USING_DEWNOTE.md`. */
+const FOLDED_MARKS = ["EmphasisMark", "LinkMark", "URL", "CodeMark", "HeaderMark"];
+
 /** An Obsidian-style editing layer for inline Markdown. Formatting stays
  * recognisable and punctuation stays folded until the caret enters that
  * particular construct. Source remains the editor's real document; these
@@ -130,9 +152,24 @@ function proseMarkdownDecorations(view: EditorView): DecorationSet {
   syntaxTree(view.state).iterate({
     enter(node) {
       const parent = node.node.parent;
-      const active = Boolean(parent && caret >= parent.from && caret <= parent.to);
-      if (!active && ["EmphasisMark", "LinkMark", "URL", "CodeMark"].includes(node.name)) {
-        ranges.push(Decoration.replace({}).range(node.from, node.to));
+      // A URL answers to its own range, not to the whole link's. Putting
+      // the caret in a link's *label* used to reveal the address too,
+      // and an address is long: measured on a real tutorial,
+      // `(tutorial:grid-of-numbers)` appearing re-wrapped the paragraph
+      // onto a fourth line and pushed everything below it down 29px,
+      // for a caret nowhere near the part that changed. Editing the
+      // words of a link does not require seeing where it points. The
+      // brackets still reveal with the label, so the address is one
+      // arrow key away and visibly there to reach.
+      const scope = node.name === "URL" ? node.node : parent;
+      const active = Boolean(scope && caret >= scope.from && caret <= scope.to);
+      if (!active && FOLDED_MARKS.includes(node.name)) {
+        // A heading's hashes own the space after them: hiding `#` alone
+        // would leave the line starting with a space it does not have
+        // when rendered, and the first word would sit a space to the
+        // right of where it sits on the page.
+        const to = node.name === "HeaderMark" && doc.sliceString(node.to, node.to + 1) === " " ? node.to + 1 : node.to;
+        ranges.push(Decoration.replace({}).range(node.from, to));
         return;
       }
       if (node.name === "StrongEmphasis") {

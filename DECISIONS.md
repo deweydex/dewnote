@@ -1800,3 +1800,167 @@ opened — a header naming one branch while pushes go to another is worse
 than no header at all. The field is still the same single input the
 push controls use; nothing is duplicated.
 *Cost to change: low. One `appendChild` and one callback.*
+
+**51 — The chrome is set in the document's own typeface, or it does not
+exist.** planning/UI_REVIEW.md §5, built. The header answered three
+questions — where am I, what state is this document in, how do I get
+somewhere else — and answered the first two with a toolbar: a bordered
+breadcrumb pill that read as a search field, a filename, and a solid
+orange Save that was the loudest thing on a screen whose whole aesthetic
+is restraint. The first two need a caption. `spine.ts` is that caption,
+in the margin the page already had and was not using — at 1440px with
+dewlab's 34rem measure there is about 450px of empty gutter each side —
+carrying the filename, the breadcrumb, the workspace and its branch, the
+document's own headings, the save state, and a held refusal. One side
+does a book's job; the other stays empty on purpose, which is also where
+a transient panel now lands without displacing anything.
+
+Save has no button. Cmd+S saves, the state line says whether it did, and
+clicking that line saves when there is something to save (it is disabled,
+and out of the tab order, when there is not). The dirty marker is a dot
+after the filename rather than a word, because a word beside a filename
+is louder than the filename.
+
+How much room the margin has depends on the window *and* on `measure`
+and `margins`, which are reader settings (decision 7) that reach the
+page as custom properties. A media query cannot read a custom property,
+so a CSS-only rule would have to hard-code a measure this app lets
+people change. A `ResizeObserver` on the page element reports the real
+gutter instead — it moves for a window resize and a settings change
+alike, since both resize that very element — and `<html>` gets
+`data-spine="margin"` or `"folded"` from it. Folded is the narrow
+treatment: the same lines across the top, in reading order, rather than
+a desktop column squeezed until nothing in it is legible.
+*Cost to change: moderate. One module and one block of CSS; nothing in
+the document surface or the stores knows the spine exists.*
+
+**52 — One key reaches the workspace, and a command exists once.**
+`command-palette.ts` held a dozen fixed rows, each of which found a
+hidden rail button by CSS selector and clicked it. It could do nothing a
+menu could not, and the workflow shell's own menu held the same actions
+under different names — what the menu called "Open a Markdown or YAML
+file…" the palette called "Import Markdown file…". Two vocabularies for
+one set of actions is how an interface stops being learnable: there is
+no name to remember, because there are two.
+
+`commands.ts` is the one list, registered by whoever owns the operation.
+`workspace-palette.ts` reads it, and reads the file index and the module
+descriptors beside it, so the four things it offers are Tutorials, Pages,
+Series and Do. dewlab has 122 tutorials across seven modules; three
+letters and Enter is an interface that scales to that, and the three
+dependent `<select>` elements it replaces are not. `workspace-nav.ts`
+stays mounted as the thing that still works out which module and series
+the open document sits in — the spine's breadcrumb — and no longer draws
+a surface of its own. The palette is what arrives when a workspace opens,
+because choosing a document is the next thing to do.
+
+Two decisions inside it are worth naming. **The sections are for the eye
+and the highlight is for the hand**, and answering both with one number
+was a real bug rather than a subtlety: typing "appear" put the cursor on
+the first *tutorial* whose letters contained a-p-p-e-a-r and Enter opened
+it instead of the appearance settings. `rankRows` returns the list in its
+fixed section order plus the index of the best-scoring row anywhere in
+it. And **the two unbounded sets are capped where commands are not**:
+eight tutorials and four pages, because a palette listing ninety
+tutorials is a file list with a text box on top — but every command,
+because there are a dozen, this is the only place they live now, and a
+reader who opens the palette with nothing typed is looking to find out
+what there is.
+
+The preview pane is what lets this replace a file list rather than sit
+beside one: a list of paths says where a file is, and this says what it
+says — the opening sentence and the headings, read from the file through
+the store. Only a store that can read without opening offers one; a
+repository would spend an API call per highlighted row, so its pane shows
+what the index already knows.
+*Cost to change: low for a command (one entry), moderate for the palette
+itself, which is one module with its ranking unit-tested.*
+
+**53 — dewlab's own site pages are documents like any other.**
+`pages/about.md`, `pages/home.md`, `pages/features.md` — what dewlab's
+`build.py` reads through `read_page()` and places in no module. They were
+always in the index and always openable, and they were filed under
+"Tutorials" with a blank note, which is the sort of small lie that makes
+a list untrustworthy. They get their own section and their own note now.
+Nothing else changed: they are ordinary markdown, and they open, edit and
+save back byte for byte through the same path a tutorial does.
+*Cost to change: low. One path test.*
+
+**54 — A hidden keyword is worth less than a visible label, and a weak
+match is worth nothing.** Found by photographing the palette against the
+real dewlab rather than a fixture. Typing "matri" returned eight
+tutorials, none of them the one called "What a Matrix Does to a Picture",
+and every series in one module. Three faults, all in the ranking:
+
+*Greedy scanning misses the alignment a reader means.* "grid" against
+"Multiplying Grids" takes the `g` in "Multiplying" and scatters the
+rest, scoring it below "A Grid of Numbers" although the word is right
+there. `fuzzyScore` now also scores the whole query as one contiguous
+run and takes the better of the two — one `indexOf`, rather than the
+backtracking a real fuzzy algorithm would need.
+
+*Subsequence matching says yes to far more than anyone means.* "matri"
+is inside "A Model That Corrects Itself" if you take the letters far
+enough apart. Once something has matched properly, anything well below
+it is padding, so the best score sets a bar at 60% and the rest are
+dropped. An empty query has no bar, since nothing is being asked for.
+
+*A slug is a subsequence goldmine.* Every hyphen in
+`mit-pdp-maths-prog-integration` reads as a word start, worth 6, so
+matching a series on its module id pulled in every series of that module
+ahead of the tutorial whose own title said "Matrix". Keyword matches —
+paths, ids, synonyms — are now worth 0.7 of a label match: enough to
+find a row nothing visible would have found ("ipynb" still finds "Export
+a Jupyter notebook"), not enough to outrank a row whose own title says
+it.
+*Cost to change: low. Three numbers, each with its own test.*
+
+**55 — A URL answers to its own range, not to its link's.** The inline
+live preview (decision 2's own upgrade path, built in #69) folds
+Markdown punctuation away and reveals it only where the caret is, and
+`active` was computed from a node's parent — so a caret anywhere in a
+link revealed its address too. Measured on a real tutorial: putting the
+caret in the words of `[the next tutorial](tutorial:grid-of-numbers)`
+re-wrapped the paragraph onto a fourth line and pushed every block below
+it down 29 pixels, for a caret nowhere near the part that changed. Every
+other construct was already still: clicking into a paragraph moves
+nothing at all, and revealing a `**` pair costs two characters that fit
+on the line they were already on.
+
+Editing the words of a link does not require seeing where it points, so
+a `URL` node now answers to its own range. The brackets still reveal with
+the label — `[the next tutorial]()` — so the link is visibly a link and
+the address has somewhere to be reached from; one arrow key past the `(`
+reveals and edits it.
+*Cost to change: low. One line, and a test that measures the paragraph
+and the block below it.*
+
+**56 — A heading is a size, not only a weight.** Raised as a question
+about the framework, and the question was right: `@codemirror/lang-markdown`
+tags each heading level separately (`tags.heading1` … `heading6`), so
+sizing them in the editor is the framework's own standard mechanism —
+one `fontSize` per level in the `HighlightStyle` that was already there.
+`EDITOR_HIGHLIGHT` set `color` and `fontWeight` on the generic
+`tags.heading` and no size, so typing `# ` turned a line navy and bold
+and left it body-sized: the one place the editing surface stopped
+looking like the page it was editing.
+
+The sizes are `2em`, `1.5em`, `1.17em`, `1em`, `0.83em`, `0.67em` — the
+browser's own defaults, which is what the rendered document already
+gets, in `em` so they follow the reader's text-size setting rather than
+pinning a number beside a control that changes it. Measured: a rendered
+`##` and the same heading focused are both 27px in the same box at the
+same coordinates, and typing `# ` takes the line from 29.2px to 58.3px
+as the space is typed.
+
+`HeaderMark` joins the marks that fold when the caret is elsewhere, and
+takes the space after it with it — hiding `#` alone would start the line
+with a space the rendered page does not have, and every word would sit
+one space to the right of where it belongs.
+
+`ListMark` and `QuoteMark` deliberately stay visible. Hiding either
+leaves nothing in its place, where the rendered page has a bullet and a
+rule; both need a replacement widget and a line decoration rather than a
+plain hide, which is a different piece of work rather than another name
+in the same array.
+*Cost to change: low. Six rules and one name.*

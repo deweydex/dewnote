@@ -9,29 +9,12 @@ export interface WorkflowShellHost {
   chooseLocal(): Promise<boolean>;
   chooseGithub(): void;
   saveCurrent(): Promise<boolean>;
-  saveNewVersion(): Promise<boolean>;
-  canSaveNewVersion(): boolean;
   openPullRequest(): Promise<string | null>;
   /** Brings whichever store refused a save forward, so a choice only it
    * can offer — a push conflict's two versions — is reachable. */
   revealStore(reason: "conflict"): void;
-  toggleLocation(): void;
-  openLocation(): void;
-  closeLocation(): void;
-  locationIsOpen(): boolean;
-  locationContains(target: Node): boolean;
   closePanels(): void;
   panelContains(target: Node): boolean;
-  openRawFiles(): void;
-  openDocumentSource(): void;
-  openOutline(): void;
-  openLinkCheck(): void;
-  openModuleOrganizer(): void;
-  openSettings(): void;
-  openDeviceFile(): Promise<void>;
-  importNotebook(): Promise<void>;
-  exportNotebook(): void;
-  exportHtml(): void;
   resetWorkspace(): void;
 }
 
@@ -46,6 +29,12 @@ export interface WorkflowShell {
    * save succeeds — never as a notice that fades while the document is
    * still unsaved. */
   reportProblem(problem: SaveProblem): void;
+  /** Whether the working branch has anything on it, so the palette can
+   * leave the review command out until there is something to review. */
+  hasBranchChanges(): boolean;
+  openReview(): void;
+  /** Change workspace, with the unsaved-work question asked once. */
+  requestReset(): void;
   cancelSourceChoice(): void;
   closeTransient(): void;
   destroy(): void;
@@ -94,82 +83,6 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   gate.appendChild(gateInner);
   document.body.appendChild(gate);
 
-  const header = document.createElement("header");
-  header.className = "dn-workflow-header";
-  header.hidden = true;
-  const workspaceButton = button("☰", "dn-workflow-menu-button");
-  workspaceButton.setAttribute("aria-label", "Workspace and file menu");
-  workspaceButton.setAttribute("aria-expanded", "false");
-  const identity = document.createElement("div");
-  identity.className = "dn-workflow-identity";
-  const identityName = document.createElement("strong");
-  const identityDetail = document.createElement("span");
-  identity.append(identityName, identityDetail);
-  const locationButton = button("Choose a document", "dn-workflow-location");
-  locationButton.setAttribute("aria-expanded", "false");
-  const documentIdentity = document.createElement("div");
-  documentIdentity.className = "dn-workflow-document";
-  const fileName = document.createElement("strong");
-  fileName.className = "dn-workflow-file-name";
-  documentIdentity.append(fileName, locationButton);
-  const saveArea = document.createElement("div");
-  saveArea.className = "dn-workflow-save-area";
-  const saveState = document.createElement("span");
-  saveState.className = "dn-workflow-save-state";
-  const saveButton = button("Save", "dn-workflow-save");
-  const saveMore = button("▾", "dn-workflow-save-more");
-  saveMore.setAttribute("aria-label", "More save options");
-  saveMore.setAttribute("aria-expanded", "false");
-  const changesButton = button("Changes", "dn-workflow-changes");
-  changesButton.hidden = true;
-  saveArea.append(changesButton, saveState, saveButton, saveMore);
-  const left = document.createElement("div");
-  left.className = "dn-workflow-left";
-  left.append(workspaceButton, identity);
-  header.append(left, documentIdentity, saveArea);
-  document.body.appendChild(header);
-
-  const workspaceMenu = document.createElement("div");
-  workspaceMenu.className = "dn-workflow-popover dn-workflow-menu";
-  workspaceMenu.hidden = true;
-  workspaceMenu.setAttribute("role", "menu");
-  const section = (label: string, ...items: HTMLButtonElement[]) => {
-    const group = document.createElement("section");
-    group.className = "dn-workflow-menu-section";
-    const heading = document.createElement("h2");
-    heading.textContent = label;
-    group.append(heading, ...items);
-    return group;
-  };
-  const findDocument = button("Find a document…");
-  const rawFiles = button("Browse workspace files…");
-  const openFile = button("Open a Markdown or YAML file…");
-  const importNotebook = button("Import Jupyter notebook…");
-  const exportNotebook = button("Export Jupyter notebook");
-  const exportHtml = button("Export standalone HTML");
-  const source = button("Whole-file source");
-  const outline = button("Document outline");
-  const links = button("Check tutorial links");
-  const modules = button("Arrange modules and series");
-  const settings = button("Settings");
-  const changeWorkspace = button("Change workspace…", "dn-workflow-change-workspace");
-  workspaceMenu.append(
-    section("Open", findDocument, rawFiles, openFile),
-    section("Transfer", importNotebook, exportNotebook, exportHtml),
-    section("Document", outline, source, links),
-    section("Workspace", modules, settings, changeWorkspace),
-  );
-  document.body.appendChild(workspaceMenu);
-
-  const saveMenu = document.createElement("div");
-  saveMenu.className = "dn-workflow-popover dn-workflow-save-menu";
-  saveMenu.hidden = true;
-  saveMenu.setAttribute("role", "menu");
-  const saveCurrent = button("Save current file");
-  const saveVersion = button("Save as a new version…");
-  saveMenu.append(saveCurrent, saveVersion);
-  document.body.appendChild(saveMenu);
-
   // One slot, two jobs with opposite lifetimes. A confirmation is a
   // courtesy and leaves on its own; a refusal is the only thing standing
   // between an author and a lost edit, so it stays until it is dismissed
@@ -210,41 +123,20 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   review.append(reviewHeader, reviewMain);
   document.body.appendChild(review);
 
+  /** The shell owns no menus of its own any more — the spine carries
+   * identity and state, and the palette carries every command that used
+   * to hang off the header. What is left to close is whichever dock
+   * panel a command opened. */
   function closeTransient(): void {
-    workspaceMenu.hidden = true;
-    saveMenu.hidden = true;
-    workspaceButton.setAttribute("aria-expanded", "false");
-    saveMore.setAttribute("aria-expanded", "false");
-    if (host.locationIsOpen()) host.closeLocation();
-    locationButton.setAttribute("aria-expanded", "false");
     host.closePanels();
   }
 
-  function toggle(menu: HTMLElement, trigger: HTMLButtonElement): void {
-    const opening = menu.hidden;
-    closeTransient();
-    menu.hidden = !opening;
-    trigger.setAttribute("aria-expanded", String(opening));
-    if (opening) menu.querySelector<HTMLButtonElement>("button")?.focus();
-  }
-
   function render(): void {
-    fileName.textContent = location.page ? fileState.name : "No document selected";
-    saveState.textContent = fileState.dirty ? "Unsaved changes" : "Saved";
-    saveState.classList.toggle("is-dirty", fileState.dirty);
-    identityName.textContent = session === "github" ? repoContext.label : identityName.textContent || "Local workspace";
-    identityDetail.textContent = session === "github" ? `${repoContext.base} → ${repoContext.branch}` : "Local folder";
-    const parts = [location.module, location.series, location.page].filter(Boolean);
-    locationButton.textContent = parts.length ? parts.join(" › ") : location.available ? "Choose a document" : "Browse files";
-    locationButton.setAttribute("aria-label", location.available ? `Current location: ${parts.join(", ")}. Choose another document.` : "Browse workspace files");
-    saveVersion.hidden = session !== "github" || !host.canSaveNewVersion();
-    modules.hidden = !location.available;
     // A refusal takes the same slot a confirmation uses, so the
     // branch-review offer steps aside while one is showing rather than
     // sitting beside a sentence saying nothing was saved.
     const offerReview = problem === null && session === "github" && changedPaths.size > 0;
     reviewButton.hidden = !offerReview;
-    changesButton.hidden = !offerReview;
   }
 
   // One slot, two jobs with opposite lifetimes. A confirmation is a
@@ -287,7 +179,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     render();
   }
 
-  async function save(primary = true): Promise<void> {
+  async function save(): Promise<void> {
     closeTransient();
     const ok = await host.saveCurrent();
     // A store that refused reports why through `reportProblem`, which
@@ -301,7 +193,6 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
       return;
     }
     showToast(session === "github" ? `Saved to ${repoContext.branch}` : `Saved ${fileState.name}`);
-    if (primary) saveButton.focus();
   }
 
   localChoice.addEventListener("click", async () => {
@@ -313,46 +204,16 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     document.body.classList.add("dn-choosing-repository");
     host.chooseGithub();
   });
-  workspaceButton.addEventListener("click", () => toggle(workspaceMenu, workspaceButton));
-  saveMore.addEventListener("click", () => toggle(saveMenu, saveMore));
-  saveButton.addEventListener("click", () => { void save(); });
-  saveCurrent.addEventListener("click", () => { void save(false); });
-  saveVersion.addEventListener("click", async () => {
-    closeTransient();
-    if (await host.saveNewVersion()) showToast(`Created a new version on ${repoContext.branch}`);
-    else if (!problem) showProblem({ message: "That version was not created. Nothing has changed on the branch.", conflict: false });
-  });
-  locationButton.addEventListener("click", () => {
-    closeTransient();
-    if (!location.available) {
-      host.openRawFiles();
-      return;
-    }
-    host.toggleLocation();
-    locationButton.setAttribute("aria-expanded", String(host.locationIsOpen()));
-  });
-  findDocument.addEventListener("click", () => {
-    closeTransient();
-    if (location.available) {
-      host.openLocation();
-      locationButton.setAttribute("aria-expanded", "true");
-    } else host.openRawFiles();
-  });
-  rawFiles.addEventListener("click", () => { closeTransient(); host.openRawFiles(); });
-  openFile.addEventListener("click", () => { closeTransient(); void host.openDeviceFile(); });
-  importNotebook.addEventListener("click", () => { closeTransient(); void host.importNotebook(); });
-  exportNotebook.addEventListener("click", () => { closeTransient(); host.exportNotebook(); });
-  exportHtml.addEventListener("click", () => { closeTransient(); host.exportHtml(); });
-  source.addEventListener("click", () => { closeTransient(); host.openDocumentSource(); });
-  outline.addEventListener("click", () => { closeTransient(); host.openOutline(); });
-  links.addEventListener("click", () => { closeTransient(); host.openLinkCheck(); });
-  modules.addEventListener("click", () => { closeTransient(); host.openModuleOrganizer(); });
-  settings.addEventListener("click", () => { closeTransient(); host.openSettings(); });
-  changeWorkspace.addEventListener("click", () => {
+
+  /** Change workspace, asked for from the palette now rather than a
+   * menu. The unsaved-work question is asked here, once, so the reset
+   * path cannot lose work whichever surface reached it. */
+  function requestReset(): void {
     closeTransient();
     if (fileState.dirty && !window.confirm("Discard unsaved changes and choose another workspace?")) return;
     host.resetWorkspace();
-  });
+  }
+
   resolveButton.addEventListener("click", () => {
     host.revealStore("conflict");
     hideToast();
@@ -372,7 +233,6 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     review.hidden = false;
   };
   reviewButton.addEventListener("click", openReview);
-  changesButton.addEventListener("click", openReview);
   dismissToast.addEventListener("click", hideToast);
   const closeReview = () => { review.hidden = true; };
   back.addEventListener("click", closeReview);
@@ -392,8 +252,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     else closeTransient();
   });
   document.addEventListener("pointerdown", (event) => {
-    const target = event.target as Node;
-    if (workspaceMenu.contains(target) || saveMenu.contains(target) || header.contains(target) || host.locationContains(target) || host.panelContains(target)) return;
+    if (host.panelContains(event.target as Node)) return;
     closeTransient();
   });
 
@@ -401,27 +260,24 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   localChoice.focus();
 
   return {
-    setSession(kind, label, detail) {
+    setSession(kind, _label, _detail) {
       session = kind;
       gate.hidden = true;
       gate.classList.remove("is-choosing-repository");
       document.body.classList.remove("dn-choosing-repository");
-      header.hidden = false;
-      identityName.textContent = label;
-      identityDetail.textContent = detail ?? (kind === "github" ? `${repoContext.base} → ${repoContext.branch}` : "Local folder");
+      document.body.classList.add("dn-has-session");
       render();
       host.closePanels();
-      if (location.available) {
-        host.openLocation();
-        locationButton.setAttribute("aria-expanded", "true");
-      } else host.openRawFiles();
     },
     setRepoContext(context) { repoContext = context; render(); },
     setFileState(state) { fileState = state; render(); },
     setLocation(next) { location = next; render(); },
     noteBranchChange(path) { changedPaths.add(path); showToast(`Saved change on ${repoContext.branch}`); },
-    documentSaved() { saveState.textContent = "Saved"; render(); },
+    documentSaved() { render(); },
     reportProblem: showProblem,
+    hasBranchChanges: () => changedPaths.size > 0,
+    openReview,
+    requestReset,
     cancelSourceChoice() {
       gate.classList.remove("is-choosing-repository");
       document.body.classList.remove("dn-choosing-repository");
@@ -431,7 +287,8 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
       window.clearTimeout(toastTimer);
       document.body.classList.remove("dn-progressive");
       document.body.classList.remove("dn-choosing-repository");
-      gate.remove(); header.remove(); workspaceMenu.remove(); saveMenu.remove(); toast.remove(); review.remove();
+      document.body.classList.remove("dn-has-session");
+      gate.remove(); toast.remove(); review.remove();
     },
   };
 }

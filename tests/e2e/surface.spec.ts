@@ -147,6 +147,71 @@ test("inactive inline Markdown stays folded instead of reflowing the paragraph",
   expect(Math.abs(nextAfter - nextBefore)).toBeLessThanOrEqual(0.5);
 });
 
+test("a heading is a size in the editor, not only a weight, and it changes as you type", async ({ page }) => {
+  await mount(page, "## A Heading in the Middle\n\nFollowing paragraph that must not move.\n");
+  const heading = page.locator(".dn-block").first();
+  const next = page.locator(".dn-block").nth(1);
+
+  const painted = () => heading.evaluate((el) => {
+    const span = el.querySelector(".cm-line span") ?? el.querySelector("h2")!;
+    return getComputedStyle(span as Element).fontSize;
+  });
+  const beforeSize = await painted();
+  const beforeHeight = await heading.evaluate((el) => el.getBoundingClientRect().height);
+  const nextBefore = await next.evaluate((el) => el.getBoundingClientRect().y);
+
+  await heading.locator(".dn-block-render").click();
+
+  // The rendered heading and the editable one are the same size in the
+  // same place: the editor is dressed as the page it is editing.
+  expect(await painted()).toBe(beforeSize);
+  expect(Math.abs((await heading.evaluate((el) => el.getBoundingClientRect().height)) - beforeHeight)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs((await next.evaluate((el) => el.getBoundingClientRect().y)) - nextBefore)).toBeLessThanOrEqual(0.5);
+
+  // And typing the marker resizes the line as it is typed.
+  await mount(page, "Some text here.\n\nSecond paragraph.\n");
+  const first = page.locator(".dn-block").first();
+  await first.locator(".dn-block-render").click();
+  await page.keyboard.press("Home");
+  const lineHeight = () => first.evaluate((el) => el.querySelector(".cm-line")!.getBoundingClientRect().height);
+  const plain = await lineHeight();
+  await page.keyboard.type("# ");
+  expect(await lineHeight()).toBeGreaterThan(plain * 1.5);
+
+  // Clicking away folds the hashes and keeps the size.
+  await page.locator(".dn-block").nth(1).locator(".dn-block-render").click();
+  await expect(first).toHaveText("Some text here.");
+  await expect(first.locator("h1")).toHaveText("Some text here.");
+});
+
+test("a caret in a link's words reveals its brackets, not its address", async ({ page }) => {
+  // Editing the words of a link does not require seeing where it points,
+  // and an address is long: revealing one for a caret in the label
+  // re-wrapped the paragraph and pushed everything below it down a line.
+  await mount(page, "Read the [next tutorial](https://example.com/a/very/long/url/that/would/reflow/the/paragraph) before continuing with this exercise about it.\n\nFollowing paragraph.\n");
+  const first = page.locator(".dn-block").first();
+  const second = page.locator(".dn-block").nth(1);
+  const beforeHeight = await first.evaluate((element) => element.getBoundingClientRect().height);
+  const nextBefore = await second.evaluate((element) => element.getBoundingClientRect().y);
+
+  await first.locator(".dn-block-render").click();
+  await page.getByText("next tutorial").last().click();
+
+  // The brackets say it is a link and give the address somewhere to be
+  // reached from; the address itself stays folded.
+  await expect(first.locator(".cm-content")).toContainText("[next tutorial]()");
+  await expect(first.locator(".cm-content")).not.toContainText("example.com");
+  expect(Math.abs((await first.evaluate((e) => e.getBoundingClientRect().height)) - beforeHeight)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs((await second.evaluate((e) => e.getBoundingClientRect().y)) - nextBefore)).toBeLessThanOrEqual(0.5);
+
+  // Walking into the address reveals it, so it stays editable.
+  for (let step = 0; step < 20; step += 1) {
+    await page.keyboard.press("ArrowRight");
+    if ((await first.locator(".cm-content").innerText()).includes("example.com")) break;
+  }
+  await expect(first.locator(".cm-content")).toContainText("example.com");
+});
+
 test("an answer summary opens the rendered fold; editing exposes its body, not its HTML wrapper", async ({ page }) => {
   const source = '<details class="dl-answer"><summary>answer</summary>\n\nThe **answer** is 4.\n\n</details>\n';
   await mount(page, source);

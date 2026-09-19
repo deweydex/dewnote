@@ -36,9 +36,11 @@ export interface WorkspaceLocation {
 }
 
 export interface WorkspaceNavOptions {
-  /** In the progressive shell the same controls are a transient location
-   * chooser. The default preserves the old persistent test harness and
-   * embedders until they opt in. */
+  /** In the progressive shell these controls never draw at all: the
+   * workspace palette is the navigator, and this stays mounted for the
+   * one job it is still the only thing that does — working out which
+   * module and series the open document sits in, for the spine's
+   * breadcrumb. The legacy shell still shows it as a chooser. */
   progressive?: boolean;
   onLocationChange?(location: WorkspaceLocation): void;
   onNavigate?(): void;

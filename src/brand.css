@@ -15,20 +15,37 @@
   }
 }
 
+/* The mark and the wordmark are two things side by side, not one thing
+   inside the other. Before this the whole brand was a 2.25rem square
+   with `display: block`, so the wordmark was laid out inside the mark's
+   own box and sat on top of it at any width where the bar was tight —
+   `tests/e2e/file-bar.spec.ts` has caught this at 320px for a while. */
 .dn-brand {
   position: static;
-  display: block;
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
   flex: 0 0 auto;
-  width: 2.25rem;
-  height: 2.25rem;
-  filter: drop-shadow(0 2px 8px var(--dl-shadow));
+  min-width: 0;
   pointer-events: none;
 }
 
 .dn-brand svg {
   display: block;
-  width: 100%;
-  height: 100%;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  filter: drop-shadow(0 2px 8px var(--dl-shadow));
+}
+
+.dn-brand-name {
+  overflow: hidden;
+  font-family: var(--dl-font-family);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--dl-heading);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dn-brand-field,
