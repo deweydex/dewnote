@@ -98,10 +98,25 @@ export function mountWorkspaceNav(options: WorkspaceNavOptions = {}) {
     return modules.find((module) => moduleContains(module, id));
   }
 
+  /** A `<select>` selects its first option whether or not that option is
+   * true of anything, which cost this two things at once: the chooser
+   * showed the first tutorial in a series as though it were the open
+   * one, and choosing it fired no `change` event — so the one page the
+   * chooser already pointed at was the one page that route could not
+   * open. A placeholder option answers both, and leaves the Open
+   * document button with nothing to do until a real choice is made. */
   function fillPages(module: Module, seriesKey: string): void {
     const series = module.contents.find((item) => item.title === seriesKey);
     const pages = series ? pagesFor(series, index) : mixedPages(module, index);
+    const open = pages.some((page) => page.path === currentPath);
     pageSelect.replaceChildren();
+    if (!open) {
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = pages.length ? "Choose a document…" : "Nothing here yet";
+      placeholder.selected = true;
+      pageSelect.appendChild(placeholder);
+    }
     for (const page of pages) {
       const option = document.createElement("option");
       option.value = page.path;

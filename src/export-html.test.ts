@@ -45,7 +45,10 @@ describe("buildStandaloneHtmlPage", () => {
     const source = "---\ntitle: A Rule\n---\n\n# A Rule\n\nWhere it lives.\n";
     const page = buildStandaloneHtmlPage(source, ".dn-page { color: red; }");
     expect(page).toContain("<title>A Rule</title>");
-    expect(page).toContain("<style>.dn-page { color: red; }</style>");
+    // The page's own rules come first; the export-only rules for markup
+    // the live editor never produces (a fence as a plain <pre>) follow.
+    expect(page).toContain("<style>.dn-page { color: red; }");
+    expect(page).toContain(".dn-block-fence pre {");
     expect(page).toContain('<div class="dn-page">');
     expect(page).toContain("<h1>A Rule</h1>");
     expect(page).toStartWith("<!doctype html>");

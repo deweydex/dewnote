@@ -21,20 +21,30 @@ bun test          # the document model's tests, fixtures/ included
 bun run typecheck
 ```
 
-`src/full-corpus.test.ts` additionally round-trips every tutorial in
-`../dewlab` and `../dewstack` when those repositories are checked out as
-siblings of this one; it skips itself otherwise.
-
 ## Where things are
 
-The plan's step 1 (`planning/PLAN.md` §6) — the document model — is
-built: `src/lines.ts` indexes a document by line span, `src/frontmatter.ts`
-and `src/dialect.ts` read a document's front matter and decide dewlab,
-dewstack, or plain, and `src/blocks.ts` splits a document into the blocks
-described in the plan's §5.2 (fences, display maths, folds, front matter,
-and blank-line-separated prose), recording only byte offsets. Every
-tutorial in `fixtures/`, and every tutorial in dewlab and dewstack when
-checked out alongside this repository, round-trips through it byte for
-byte — see `src/roundtrip.test.ts` and `src/full-corpus.test.ts`. Nothing
-past that (the editing surface, running cells, files, GitHub, exports, the
-Mac app) is built yet; §6 has the rest of the order.
+`planning/PLAN.md` §6 is the order of work and records what each step
+built; `planning/UI_REVIEW.md` is a review of the shipped interface
+against that plan, with what has been fixed and what has not.
+
+Built: the document model (`lines.ts`, `frontmatter.ts`, `dialect.ts`,
+`blocks.ts` — every tutorial in `fixtures/`, and in dewlab and dewstack
+when checked out alongside, round-trips byte for byte); the block
+editing surface, with prose, maths, folds, front matter and cell headers
+rendering when blurred and editing when focused; Python and SQL cells
+that run on Pyodide in the page; a local-folder store and a GitHub store
+with branches, conflicts and draft pull requests; Jupyter import and
+export, standalone HTML export, and conversion between dialects; the
+progressive workspace shell (`workflow-shell.ts`) that replaces the old
+rails with one source choice, one document header and transient
+choosers.
+
+Not built: the Mac app (plan step 7), an OPFS private vault, and
+dewstack's `site=`/`app=` cells. `planning/PLAN.md` has the full list of
+what each step deliberately left open.
+
+`src/full-corpus.test.ts` round-trips every tutorial in `../dewlab` and
+`../dewstack` when those repositories are checked out as siblings of
+this one; it skips itself otherwise. The Playwright suite
+(`bun run test:e2e`) drives the real built app and stays out of CI, the
+same split dewlab makes.

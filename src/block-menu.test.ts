@@ -98,10 +98,10 @@ describe("filterBlockMenu", () => {
 
   test("ties keep the table's own order rather than sorting by name", () => {
     // Fill in the blank's own label starts with the letter, so it leads;
-    // behind it, "figure" on Image, "formula" on Math, "fold" on both
-    // Hint and Answer are four items at the same (lower) tier, so the
-    // table decides their order among themselves.
-    expect(labels(filterBlockMenu("f"))).toEqual(["Fill in the blank", "Image", "Math", "Hint", "Answer"]);
+    // behind it, "figure" on Image, "fence" on Code block, "formula" on
+    // Math and "fold" on both Hint and Answer are five items at the same
+    // (lower) tier, so the table decides their order among themselves.
+    expect(labels(filterBlockMenu("f"))).toEqual(["Fill in the blank", "Image", "Code block", "Math", "Hint", "Answer"]);
   });
 
   test("a query nothing matches is empty, not everything", () => {
@@ -131,7 +131,16 @@ describe("groupBlockMenu", () => {
     // ranking chose. This is the case that proves they can differ.
     const ranked = filterBlockMenu("a", SLASH_MENU_ITEMS);
     expect(ranked[0]!.label).toBe("Answer");
-    expect(labels(visualOrder(ranked))).toEqual(["Image", "Math", "Answer", "Practice problem", "Fill in the blank"]);
+    expect(labels(visualOrder(ranked))).toEqual([
+      "Image",
+      "Card",
+      "Site playground",
+      "Math",
+      "Answer",
+      "Staged hint",
+      "Practice problem",
+      "Fill in the blank",
+    ]);
   });
 
   test("every item survives the regrouping exactly once", () => {

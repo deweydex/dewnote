@@ -194,7 +194,9 @@ test("a repository opens as modules, pairs practice with its tutorial, and locks
   await expect(nav).toBeVisible();
   await expect(nav.locator(".dn-workspace-nav-module")).toHaveValue("a-module");
   await expect(nav.locator(".dn-workspace-nav-series")).toHaveValue("First steps");
-  await expect(nav.locator(".dn-workspace-nav-page option")).toHaveCount(3);
+  // Two tutorials and a practice page, plus the placeholder that keeps
+  // the header from claiming an open document before one is chosen.
+  await expect(nav.locator(".dn-workspace-nav-page option")).toHaveCount(4);
   await expect(page.locator(".dn-folder-toggle")).toBeDisabled();
 
   await series.locator(".dn-repo-module-page:not(.is-practice) button").first().click();
@@ -330,7 +332,10 @@ test("a conflicting push shows both versions, and keeping mine overwrites theirs
   await page.locator(".dn-repo-push").click();
 
   const pushStatus = page.locator(".dn-repo-section", { has: page.locator(".dn-repo-push") }).locator(".dn-repo-status");
-  await expect(pushStatus).toHaveText("Conflict — choose a version below.");
+  // The same sentence now has to work in two places — here, and in the
+  // shell's own banner for a reader with this panel closed — so it names
+  // the branch rather than pointing at controls only one of them has.
+  await expect(pushStatus).toHaveText("dewnote-edits already has a different version of this file. Choose which one to keep.");
 
   const conflictTexts = page.locator(".dn-repo-conflict-text");
   await expect(conflictTexts).toHaveCount(2);

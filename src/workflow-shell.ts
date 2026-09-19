@@ -1,6 +1,7 @@
 import type { FileBarState } from "./file-bar.ts";
 import type { RepoSessionContext } from "./repo-panel.ts";
 import type { WorkspaceLocation } from "./workspace-nav.ts";
+import type { SaveProblem } from "./save-problem.ts";
 
 export type SessionKind = "local" | "github";
 
@@ -11,6 +12,9 @@ export interface WorkflowShellHost {
   saveNewVersion(): Promise<boolean>;
   canSaveNewVersion(): boolean;
   openPullRequest(): Promise<string | null>;
+  /** Brings whichever store refused a save forward, so a choice only it
+   * can offer — a push conflict's two versions — is reachable. */
+  revealStore(reason: "conflict"): void;
   toggleLocation(): void;
   openLocation(): void;
   closeLocation(): void;
@@ -38,6 +42,10 @@ export interface WorkflowShell {
   setLocation(location: WorkspaceLocation): void;
   noteBranchChange(path: string): void;
   documentSaved(): void;
+  /** A store refused a save. Shown until it is dismissed or another
+   * save succeeds — never as a notice that fades while the document is
+   * still unsaved. */
+  reportProblem(problem: SaveProblem): void;
   cancelSourceChoice(): void;
   closeTransient(): void;
   destroy(): void;
@@ -162,15 +170,21 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   saveMenu.append(saveCurrent, saveVersion);
   document.body.appendChild(saveMenu);
 
+  // One slot, two jobs with opposite lifetimes. A confirmation is a
+  // courtesy and leaves on its own; a refusal is the only thing standing
+  // between an author and a lost edit, so it stays until it is dismissed
+  // or another save succeeds.
   const toast = document.createElement("div");
   toast.className = "dn-workflow-toast";
   toast.hidden = true;
   toast.setAttribute("aria-live", "polite");
   const toastMessage = document.createElement("span");
+  const resolveButton = button("Show me");
+  resolveButton.hidden = true;
   const reviewButton = button("Review repository changes");
   const dismissToast = button("×", "dn-workflow-toast-dismiss");
   dismissToast.setAttribute("aria-label", "Dismiss notification");
-  toast.append(toastMessage, reviewButton, dismissToast);
+  toast.append(toastMessage, resolveButton, reviewButton, dismissToast);
   document.body.appendChild(toast);
 
   const review = document.createElement("section");
@@ -225,23 +239,67 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     locationButton.setAttribute("aria-label", location.available ? `Current location: ${parts.join(", ")}. Choose another document.` : "Browse workspace files");
     saveVersion.hidden = session !== "github" || !host.canSaveNewVersion();
     modules.hidden = !location.available;
-    reviewButton.hidden = session !== "github" || changedPaths.size === 0;
-    changesButton.hidden = session !== "github" || changedPaths.size === 0;
+    // A refusal takes the same slot a confirmation uses, so the
+    // branch-review offer steps aside while one is showing rather than
+    // sitting beside a sentence saying nothing was saved.
+    const offerReview = problem === null && session === "github" && changedPaths.size > 0;
+    reviewButton.hidden = !offerReview;
+    changesButton.hidden = !offerReview;
   }
 
-  let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  // One slot, two jobs with opposite lifetimes. A confirmation is a
+  // courtesy and leaves on its own; a refusal is the only thing standing
+  // between an author and a lost edit, so it stays until it is dismissed
+  // or another save succeeds.
+  const CONFIRMATION_MS = 5000;
+  let toastTimer = 0;
+  let problem: SaveProblem | null = null;
+
+  function hideToast(): void {
+    window.clearTimeout(toastTimer);
+    toastTimer = 0;
+    problem = null;
+    toast.hidden = true;
+    toast.classList.remove("is-problem");
+    resolveButton.hidden = true;
+    render();
+  }
+
   function showToast(message: string): void {
-    if (toastTimer) clearTimeout(toastTimer);
+    window.clearTimeout(toastTimer);
+    problem = null;
+    toast.classList.remove("is-problem");
+    resolveButton.hidden = true;
     toastMessage.textContent = message;
     toast.hidden = false;
+    toastTimer = window.setTimeout(hideToast, CONFIRMATION_MS);
     render();
-    toastTimer = setTimeout(() => { toast.hidden = true; }, 5000);
+  }
+
+  function showProblem(next: SaveProblem): void {
+    window.clearTimeout(toastTimer);
+    toastTimer = 0;
+    problem = next;
+    toastMessage.textContent = next.message;
+    toast.classList.add("is-problem");
+    resolveButton.hidden = !next.conflict;
+    toast.hidden = false;
+    render();
   }
 
   async function save(primary = true): Promise<void> {
     closeTransient();
     const ok = await host.saveCurrent();
-    if (!ok) return;
+    // A store that refused reports why through `reportProblem`, which
+    // has already run by the time this resolves. Never announce a save
+    // that did not happen, and never let a refusal pass unsaid: a
+    // store with nothing to say still leaves the author with an
+    // unexplained dirty marker, so say something generic rather than
+    // nothing at all.
+    if (!ok) {
+      if (!problem) showProblem({ message: "That save did not go through. The document is still unsaved.", conflict: false });
+      return;
+    }
     showToast(session === "github" ? `Saved to ${repoContext.branch}` : `Saved ${fileState.name}`);
     if (primary) saveButton.focus();
   }
@@ -262,6 +320,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   saveVersion.addEventListener("click", async () => {
     closeTransient();
     if (await host.saveNewVersion()) showToast(`Created a new version on ${repoContext.branch}`);
+    else if (!problem) showProblem({ message: "That version was not created. Nothing has changed on the branch.", conflict: false });
   });
   locationButton.addEventListener("click", () => {
     closeTransient();
@@ -294,6 +353,10 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     if (fileState.dirty && !window.confirm("Discard unsaved changes and choose another workspace?")) return;
     host.resetWorkspace();
   });
+  resolveButton.addEventListener("click", () => {
+    host.revealStore("conflict");
+    hideToast();
+  });
   const openReview = () => {
     closeTransient();
     reviewCopy.textContent = `Changes on ${repoContext.branch}, ready to compare with ${repoContext.base}.`;
@@ -310,7 +373,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   };
   reviewButton.addEventListener("click", openReview);
   changesButton.addEventListener("click", openReview);
-  dismissToast.addEventListener("click", () => { toast.hidden = true; });
+  dismissToast.addEventListener("click", hideToast);
   const closeReview = () => { review.hidden = true; };
   back.addEventListener("click", closeReview);
   keepEditing.addEventListener("click", closeReview);
@@ -319,11 +382,13 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     try {
       const url = await host.openPullRequest();
       if (url) showToast(`Pull request opened: ${url}`);
+      else if (!problem) showProblem({ message: "The pull request was not opened.", conflict: false });
     } finally { openPr.disabled = false; }
   });
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (!review.hidden) closeReview();
+    else if (!toast.hidden && problem) hideToast();
     else closeTransient();
   });
   document.addEventListener("pointerdown", (event) => {
@@ -356,13 +421,14 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     setLocation(next) { location = next; render(); },
     noteBranchChange(path) { changedPaths.add(path); showToast(`Saved change on ${repoContext.branch}`); },
     documentSaved() { saveState.textContent = "Saved"; render(); },
+    reportProblem: showProblem,
     cancelSourceChoice() {
       gate.classList.remove("is-choosing-repository");
       document.body.classList.remove("dn-choosing-repository");
     },
     closeTransient,
     destroy() {
-      if (toastTimer) clearTimeout(toastTimer);
+      window.clearTimeout(toastTimer);
       document.body.classList.remove("dn-progressive");
       document.body.classList.remove("dn-choosing-repository");
       gate.remove(); header.remove(); workspaceMenu.remove(); saveMenu.remove(); toast.remove(); review.remove();

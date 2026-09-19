@@ -158,6 +158,12 @@ repoPanel = mountRepoPanel({
     workflow?.documentSaved();
   },
   onBranchChange: (path) => workflow?.noteBranchChange(path),
+  onContextChange: (context) => workflow?.setRepoContext(context),
+  // A refused push used to land only in the repository panel's own
+  // status line, which the progressive shell keeps closed — so Save
+  // could fail in complete silence. The shell shows it now; the panel
+  // still says the same thing for anyone who has it open.
+  onProblem: (problem) => workflow?.reportProblem(problem),
   onOpenSource: () => document.querySelector<HTMLButtonElement>(".dn-source-toggle")?.click(),
   onOrganizeModules: () => document.querySelector<HTMLButtonElement>(".dn-series-toggle")?.click(),
 });
@@ -214,6 +220,7 @@ if (!legacyShell) {
     saveNewVersion: () => repoPanel?.pushNewVersion() ?? Promise.resolve(false),
     canSaveNewVersion: () => repoPanel?.canPushNewVersion() ?? false,
     openPullRequest: () => repoPanel?.openPullRequest() ?? Promise.resolve(null),
+    revealStore: (reason) => repoPanel?.reveal(reason),
     toggleLocation: () => workspaceNav.toggle(),
     openLocation: () => workspaceNav.open(),
     closeLocation: () => workspaceNav.close(),
