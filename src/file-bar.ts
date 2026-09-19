@@ -22,6 +22,17 @@ export interface FileBarHost {
   /** Cmd/Ctrl+S while a repository document is open means “push this
    * document”, not “download an unrelated local copy”. */
   onExternalSave?(): Promise<boolean> | boolean;
+  /** The progressive header is the visible owner of file identity and
+   * dirty state. The legacy bar still detects both; hand its state up
+   * rather than making the new shell poll its DOM. */
+  onStateChange?(state: FileBarState): void;
+}
+
+export interface FileBarState {
+  name: string;
+  dirty: boolean;
+  external: boolean;
+  status: string;
 }
 
 export interface FileBar {
@@ -36,6 +47,12 @@ export interface FileBar {
   openExternal(name: string): void;
   /** The owning store successfully persisted the current source. */
   markSaved(): void;
+  getState(): FileBarState;
+  saveCurrent(): Promise<boolean>;
+  openDeviceFile(): Promise<void>;
+  importNotebook(): Promise<void>;
+  exportHtml(): void;
+  exportNotebook(): void;
 }
 
 function isMarkdownDrag(event: DragEvent): boolean {
@@ -227,6 +244,7 @@ export function mountFileBar(host: FileBarHost): FileBar {
     nameLabel.classList.toggle("is-dirty", dirty);
     status.textContent = dirty ? "unsaved" : externalName ? "pushed" : opened ? (opened.handle ? "saved" : "downloaded") : "";
     document.title = `${name}${dirty ? " •" : ""} — dewnote`;
+    host.onStateChange?.({ name, dirty, external: externalName !== null, status: status.textContent });
   }
 
   function markDirty() {
@@ -251,7 +269,7 @@ export function mountFileBar(host: FileBarHost): FileBar {
     render();
   }
 
-  async function save() {
+  async function save(): Promise<boolean> {
     const content = host.getSource();
     const current = opened ?? { name: suggestedFilename(content), content, handle: null };
     saveButton.disabled = true;
@@ -261,35 +279,39 @@ export function mountFileBar(host: FileBarHost): FileBar {
       dirty = false;
       lastSeen = content;
       render();
+      return true;
+    } catch {
+      return false;
     } finally {
       saveButton.disabled = false;
     }
   }
 
-  openButton.addEventListener("click", () => {
-    openFile().then(open);
-  });
+  const openDeviceFile = async () => { await open(await openFile()); };
+  openButton.addEventListener("click", () => { void openDeviceFile(); });
   saveButton.addEventListener("click", () => {
     save();
   });
-  exportButton.addEventListener("click", () => {
+  const exportHtml = () => {
     const content = host.getSource();
     const html = buildStandaloneHtmlPage(content, collectPageCss());
     const baseName = (opened?.name ?? suggestedFilename(content)).replace(/\.md$/i, "");
     downloadAsFile(`${baseName}.html`, html, "text/html");
-  });
-  exportIpynbButton.addEventListener("click", () => {
+  };
+  exportButton.addEventListener("click", exportHtml);
+  const exportNotebook = () => {
     const content = host.getSource();
     const notebook = exportToNotebook(content);
     const baseName = (opened?.name ?? suggestedFilename(content)).replace(/\.md$/i, "");
     downloadAsFile(`${baseName}.ipynb`, JSON.stringify(notebook, null, 1), "application/x-ipynb+json");
-  });
-  importIpynbButton.addEventListener("click", () => {
-    promptForNotebookFile().then((result) => {
-      if (!result) return;
-      open({ name: result.name, content: result.markdown, handle: null });
-    });
-  });
+  };
+  exportIpynbButton.addEventListener("click", exportNotebook);
+  const importNotebook = async () => {
+    const result = await promptForNotebookFile();
+    if (!result) return;
+    await open({ name: result.name, content: result.markdown, handle: null });
+  };
+  importIpynbButton.addEventListener("click", () => { void importNotebook(); });
 
   async function onKeydown(event: KeyboardEvent) {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
@@ -354,6 +376,27 @@ export function mountFileBar(host: FileBarHost): FileBar {
       render();
     },
     markSaved,
+    getState() {
+      const name = externalName ?? opened?.name ?? "Untitled";
+      return {
+        name,
+        dirty,
+        external: externalName !== null,
+        status: dirty ? "unsaved" : externalName ? "pushed" : opened ? (opened.handle ? "saved" : "downloaded") : "",
+      };
+    },
+    async saveCurrent() {
+      if (externalName && host.onExternalSave) {
+        const saved = await host.onExternalSave();
+        if (saved) markSaved();
+        return saved;
+      }
+      return save();
+    },
+    openDeviceFile,
+    importNotebook,
+    exportHtml,
+    exportNotebook,
     destroy() {
       window.clearInterval(dirtyCheck);
       document.removeEventListener("keydown", onKeydown);

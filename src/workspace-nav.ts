@@ -28,14 +28,31 @@ function mixedPages(module: Module, index: FileIndexEntry[]): NavPage[] {
   });
 }
 
-/** Dewlab's left-hand “where you are” idea, expressed as three compact
- * dropdown rungs for an editor: module → series → tutorial/practice. */
-export function mountWorkspaceNav() {
+export interface WorkspaceLocation {
+  module: string;
+  series: string;
+  page: string;
+  available: boolean;
+}
+
+export interface WorkspaceNavOptions {
+  /** In the progressive shell the same controls are a transient location
+   * chooser. The default preserves the old persistent test harness and
+   * embedders until they opt in. */
+  progressive?: boolean;
+  onLocationChange?(location: WorkspaceLocation): void;
+  onNavigate?(): void;
+}
+
+/** Dewlab's “where you are” structure, expressed as three dependent
+ * rungs: module → series → tutorial/practice. */
+export function mountWorkspaceNav(options: WorkspaceNavOptions = {}) {
   let modules: Module[] = [];
   let index: FileIndexEntry[] = [];
   let currentPath: string | null = null;
   let chosenModule = "";
   let chosenSeries = "";
+  let requestedOpen = !options.progressive;
 
   const nav = document.createElement("nav");
   nav.className = "dn-workspace-nav";
@@ -92,8 +109,12 @@ export function mountWorkspaceNav() {
   }
 
   function render(): void {
-    nav.hidden = modules.length === 0;
-    if (nav.hidden) return;
+    const available = modules.length > 0;
+    nav.hidden = !available || !requestedOpen;
+    if (!available) {
+      options.onLocationChange?.({ module: "", series: "", page: "", available: false });
+      return;
+    }
     const currentModule = moduleForCurrent();
     if (!chosenModule || !modules.some((module) => module.id === chosenModule)) chosenModule = currentModule?.id ?? modules[0]!.id;
     if (currentModule && currentPath) chosenModule = currentModule.id;
@@ -133,6 +154,12 @@ export function mountWorkspaceNav() {
     }
     seriesSelect.disabled = seriesSelect.options.length === 0;
     fillPages(module, chosenSeries);
+    options.onLocationChange?.({
+      module: module.title,
+      series: chosenSeries === "__mixed" ? "Mixed practice" : chosenSeries,
+      page: pageSelect.selectedOptions[0]?.textContent ?? currentEntry()?.title ?? currentEntry()?.path ?? "Choose a document",
+      available: true,
+    });
   }
 
   moduleSelect.addEventListener("change", () => {
@@ -146,14 +173,24 @@ export function mountWorkspaceNav() {
     currentPath = null;
     render();
   });
-  pageSelect.addEventListener("change", () => {
-    if (pageSelect.value) void openPath(pageSelect.value);
+  pageSelect.addEventListener("change", async () => {
+    if (!pageSelect.value) return;
+    if (await openPath(pageSelect.value)) {
+      if (options.progressive) requestedOpen = false;
+      render();
+      options.onNavigate?.();
+    }
   });
 
   return {
     setModules(next: Module[]) { modules = next; render(); },
     setIndex(next: FileIndexEntry[]) { index = next; render(); },
     setCurrentPath(path: string | null) { currentPath = path; render(); },
+    open() { requestedOpen = true; render(); },
+    close() { requestedOpen = false; render(); },
+    toggle() { requestedOpen = !requestedOpen; render(); },
+    isOpen() { return !nav.hidden; },
+    element: nav,
     destroy() { nav.remove(); },
   };
 }

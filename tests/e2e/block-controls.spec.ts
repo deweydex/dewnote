@@ -12,7 +12,7 @@ import { dirname, resolve } from "node:path";
 import { arm, pointAt } from "./block-controls.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html");
+const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html") + "?legacy=1";
 
 const test = base.extend<{ failOnConsoleErrors: void }>({
   failOnConsoleErrors: [

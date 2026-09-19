@@ -12,6 +12,430 @@ body {
   color: var(--dl-fg);
 }
 
+/* ------------------------------------------ progressive workspace shell */
+
+/* The document is the resting state. The old controls remain mounted as
+   operation owners, but the workflow shell is their only visible entry
+   point and exposes one decision surface at a time. */
+.dn-progressive .dn-file-bar,
+.dn-progressive .dn-icon-rail,
+.dn-progressive .dn-file-action-rail,
+.dn-progressive .dn-inspector-resizer {
+  display: none !important;
+}
+
+.dn-progressive .dn-page {
+  padding-top: 7.5rem;
+}
+
+.dn-source-gate[hidden],
+.dn-workflow-header[hidden],
+.dn-workflow-popover[hidden],
+.dn-workflow-toast[hidden],
+.dn-change-review[hidden],
+.dn-progressive .dn-workspace-nav[hidden] {
+  display: none !important;
+}
+
+.dn-source-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  overflow-y: auto;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+}
+
+.dn-source-gate-inner {
+  width: min(52rem, 100%);
+}
+
+.dn-source-brand {
+  margin: 0 0 2.5rem;
+  color: var(--dl-orange);
+  font-size: 1.05rem;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+
+.dn-source-gate h1 {
+  margin: 0;
+  color: var(--dl-heading);
+  font-size: clamp(2.15rem, 7vw, 4.7rem);
+  line-height: 0.98;
+}
+
+.dn-source-gate h1 + p {
+  max-width: 42rem;
+  margin: 1.2rem 0 2.25rem;
+  color: var(--dl-muted);
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.dn-source-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.dn-source-choice {
+  min-height: 10rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.75rem;
+  padding: 1.35rem;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 14px;
+  background: var(--dn-control-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dn-source-choice strong {
+  color: var(--dl-heading);
+  font-size: 1.25rem;
+}
+
+.dn-source-choice span {
+  color: var(--dl-muted);
+  line-height: 1.45;
+}
+
+.dn-source-choice:hover,
+.dn-source-choice:focus-visible {
+  border-color: var(--dl-orange);
+  outline: 3px solid color-mix(in srgb, var(--dl-orange) 20%, transparent);
+}
+
+.dn-source-gate.is-choosing-repository .dn-source-gate-inner {
+  visibility: hidden;
+}
+
+/* Repository connection is the detail step of the initial GitHub choice,
+   so it temporarily occupies the same stage rather than opening as an
+   unrelated sidebar beside it. */
+.dn-progressive.dn-choosing-repository .dn-repo-panel.dn-docked-panel {
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: 50% !important;
+  width: min(42rem, calc(100vw - 2rem)) !important;
+  max-width: none !important;
+  height: min(46rem, calc(100vh - 2rem)) !important;
+  z-index: 120 !important;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--dn-control-border);
+  border-radius: 14px;
+  box-shadow: 0 20px 70px var(--dl-shadow);
+}
+
+.dn-workflow-header {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 70;
+  min-height: 4.25rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 1rem;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--dl-rule);
+  background: color-mix(in srgb, var(--dl-bg) 94%, transparent);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+  backdrop-filter: blur(14px);
+}
+
+.dn-workflow-left,
+.dn-workflow-save-area {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.dn-workflow-save-area {
+  justify-content: flex-end;
+}
+
+.dn-workflow-identity {
+  min-width: 0;
+  display: grid;
+  line-height: 1.18;
+}
+
+.dn-workflow-identity strong,
+.dn-workflow-identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dn-workflow-identity span,
+.dn-workflow-save-state {
+  color: var(--dl-muted);
+  font-size: 0.74rem;
+}
+
+.dn-workflow-save-state.is-dirty {
+  color: var(--dl-orange);
+}
+
+.dn-workflow-header button,
+.dn-workflow-popover button,
+.dn-workflow-toast button,
+.dn-change-review button {
+  min-height: 2.75rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 8px;
+  background: var(--dn-control-bg);
+  color: var(--dl-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dn-workflow-header button:hover,
+.dn-workflow-header button:focus-visible,
+.dn-workflow-popover button:hover,
+.dn-workflow-popover button:focus-visible,
+.dn-workflow-toast button:hover,
+.dn-workflow-toast button:focus-visible,
+.dn-change-review button:hover,
+.dn-change-review button:focus-visible {
+  color: var(--dl-orange);
+  border-color: var(--dl-orange);
+  outline: 2px solid color-mix(in srgb, var(--dl-orange) 22%, transparent);
+}
+
+.dn-workflow-menu-button {
+  width: 2.75rem;
+  padding-inline: 0 !important;
+  font-size: 1.15rem !important;
+}
+
+.dn-workflow-location {
+  overflow: hidden;
+  background: transparent !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dn-workflow-save,
+.dn-workflow-primary {
+  border-color: var(--dl-orange) !important;
+  background: var(--dl-orange) !important;
+  color: var(--dl-bg) !important;
+  font-weight: 750 !important;
+}
+
+.dn-workflow-save-more {
+  width: 2.75rem;
+  margin-left: -0.66rem;
+  padding-inline: 0 !important;
+  border-left-color: color-mix(in srgb, var(--dl-bg) 35%, transparent) !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+
+.dn-workflow-save {
+  border-radius: 8px 0 0 8px !important;
+}
+
+.dn-workflow-popover {
+  position: fixed;
+  z-index: 80;
+  display: grid;
+  gap: 0.3rem;
+  width: min(20rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 6rem);
+  padding: 0.65rem;
+  overflow-y: auto;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 10px;
+  background: var(--dl-panel-bg);
+  box-shadow: 0 14px 40px var(--dl-shadow);
+  font-family: var(--dl-font-family);
+}
+
+.dn-workflow-menu {
+  top: 4.6rem;
+  left: 1rem;
+}
+
+.dn-workflow-save-menu {
+  top: 4.6rem;
+  right: 1rem;
+}
+
+.dn-workflow-popover button {
+  width: 100%;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.dn-workflow-current-file {
+  margin: 0 0 0.35rem;
+  padding: 0.55rem 0.8rem 0.75rem;
+  overflow: hidden;
+  border-bottom: 1px solid var(--dl-rule);
+  color: var(--dl-muted);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dn-workflow-change-workspace {
+  margin-top: 0.35rem;
+  border-top: 1px solid var(--dl-rule) !important;
+  border-radius: 0 !important;
+}
+
+/* The three Dewlab breadcrumbs are a chooser only while requested. */
+.dn-progressive .dn-workspace-nav {
+  top: 4.6rem;
+  left: 50%;
+  z-index: 80;
+  width: min(46rem, calc(100vw - 2rem));
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  transform: translateX(-50%);
+  box-shadow: 0 14px 40px var(--dl-shadow);
+}
+
+.dn-workflow-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: min(34rem, calc(100vw - 2rem));
+  padding: 0.65rem 0.75rem 0.65rem 1rem;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 12px;
+  background: var(--dl-panel-bg);
+  box-shadow: 0 10px 32px var(--dl-shadow);
+  font-family: var(--dl-font-family);
+}
+
+.dn-change-review {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow-y: auto;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+  font-family: var(--dl-font-family);
+}
+
+.dn-change-review > header {
+  min-height: 4.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--dl-rule);
+}
+
+.dn-change-review > main {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 4rem 1.25rem;
+}
+
+.dn-change-review-list {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0;
+  list-style: none;
+}
+
+.dn-change-review-list li {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 8px;
+  background: var(--dn-control-bg);
+}
+
+.dn-change-review-list span {
+  color: var(--dl-muted);
+  font-size: 0.8rem;
+}
+
+.dn-change-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 2rem;
+}
+
+/* Old operation panels become temporary right-hand sheets. They do not
+   resize or displace the document and dockPanel still guarantees that
+   only one is visible. */
+.dn-progressive:not(.dn-choosing-repository) .dn-docked-panel {
+  top: 4.25rem !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: auto !important;
+  width: min(28rem, calc(100vw - 1rem)) !important;
+  max-width: none !important;
+  height: auto !important;
+  z-index: 65 !important;
+  border-left: 1px solid var(--dn-control-border);
+  box-shadow: -12px 0 40px var(--dl-shadow);
+}
+
+@media (max-width: 48rem) {
+  .dn-source-choices {
+    grid-template-columns: 1fr;
+  }
+
+  .dn-workflow-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dn-workflow-location {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .dn-progressive .dn-page {
+    padding-top: 10rem;
+  }
+
+  .dn-progressive .dn-workspace-nav {
+    top: 7.75rem;
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    margin: 0;
+    grid-template-columns: 1fr;
+    transform: none;
+  }
+
+  .dn-workflow-save-state {
+    display: none;
+  }
+
+  .dn-progressive:not(.dn-choosing-repository) .dn-docked-panel {
+    top: 7.5rem !important;
+    width: 100vw !important;
+  }
+}
+
 /* The settings panel's own layer on top of dewlab's tokens (settings.ts) —
  * a cell's background blended toward the page background as
  * --dn-cell-tint falls from 1 (dewlab's own tint, the default) to 0

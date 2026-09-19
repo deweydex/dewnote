@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html");
+const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html") + "?legacy=1";
 
 // An auto fixture, not a beforeEach/afterEach pair: the array it pushes
 // into stays live across the whole test (setup through teardown), so an

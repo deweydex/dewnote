@@ -5,9 +5,9 @@ import "./app.css";
 import { getFileIndex, mountDocument, setFileIndex, type MountedDocument } from "./app.ts";
 import { applySettings, loadSettings } from "./settings.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
-import { mountFileBar } from "./file-bar.ts";
+import { mountFileBar, type FileBarState } from "./file-bar.ts";
 import { mountRepoPanel, type RepoPanel } from "./repo-panel.ts";
-import { mountFolderPanel } from "./folder-panel.ts";
+import { mountFolderPanel, type FolderPanel } from "./folder-panel.ts";
 import { mountOutlinePanel } from "./outline-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountLinkCheckPanel } from "./link-check.ts";
@@ -16,6 +16,7 @@ import { mountCommandPalette } from "./command-palette.ts";
 import { todayVersion } from "./dialect.ts";
 import { groupDockPanels, iconRail } from "./icon-rail.ts";
 import { mountWorkspaceNav } from "./workspace-nav.ts";
+import { mountWorkflowShell, type WorkflowShell } from "./workflow-shell.ts";
 
 // Applied before the document mounts, not after, so there is never a
 // flash of default texture before a returning reader's own saved
@@ -66,7 +67,14 @@ const page = document.querySelector<HTMLDivElement>("#dn-page");
 if (!page) throw new Error("index.html is missing #dn-page");
 
 let current: MountedDocument = mountDocument(page, STARTER_DOCUMENT);
-const workspaceNav = mountWorkspaceNav();
+const legacyShell = new URLSearchParams(window.location.search).has("legacy");
+let workflow: WorkflowShell | null = null;
+let latestFileState: FileBarState | null = null;
+const workspaceNav = mountWorkspaceNav({
+  progressive: !legacyShell,
+  onLocationChange: (location) => workflow?.setLocation(location),
+  onNavigate: () => workflow?.closeTransient(),
+});
 let session: "local" | "github" | null = null;
 
 function chooseSession(next: "local" | "github"): void {
@@ -103,6 +111,10 @@ const fileBar = mountFileBar({
     return true;
   },
   onExternalSave: () => repoPanel?.pushCurrent() ?? false,
+  onStateChange: (state) => {
+    latestFileState = state;
+    workflow?.setFileState(state);
+  },
 });
 const seriesPanel = mountSeriesPanel(getFileIndex);
 const updateIndex = (index: Parameters<typeof setFileIndex>[0]) => {
@@ -113,7 +125,11 @@ const updateModules = (modules: Parameters<typeof seriesPanel.setModules>[0]) =>
   seriesPanel.setModules(modules);
   workspaceNav.setModules(modules);
 };
-mountFolderPanel(fileBar, updateIndex, updateModules, () => chooseSession("local"));
+let folderPanel: FolderPanel | null = null;
+folderPanel = mountFolderPanel(fileBar, updateIndex, updateModules, (name) => {
+  chooseSession("local");
+  workflow?.setSession("local", name, "Local folder");
+});
 repoPanel = mountRepoPanel({
   getSource: () => current.getSource(),
   loadDocument(source, name) {
@@ -124,12 +140,24 @@ repoPanel = mountRepoPanel({
   },
   onIndexChange: updateIndex,
   onModulesChange: updateModules,
-  onSessionOpen: () => chooseSession("github"),
+  onSessionOpen: (context) => {
+    chooseSession("github");
+    if (!legacyShell) repoPanel?.hide();
+    workflow?.setRepoContext(context);
+    workflow?.setSession("github", context.label, `${context.base} → ${context.branch}`);
+  },
+  onChooserClose: () => {
+    if (!session) workflow?.cancelSourceChoice();
+  },
   onDocumentOpen: (path) => {
     workspaceNav.setCurrentPath(path);
     fileBar.openExternal(path);
   },
-  onDocumentSaved: () => fileBar.markSaved(),
+  onDocumentSaved: () => {
+    fileBar.markSaved();
+    workflow?.documentSaved();
+  },
+  onBranchChange: (path) => workflow?.noteBranchChange(path),
   onOpenSource: () => document.querySelector<HTMLButtonElement>(".dn-source-toggle")?.click(),
   onOrganizeModules: () => document.querySelector<HTMLButtonElement>(".dn-series-toggle")?.click(),
 });
@@ -148,21 +176,23 @@ mountLinkCheckPanel({ getSource: () => current.getSource(), getFileIndex });
 // Review holds non-editing views over the current document. Source and
 // Settings remain direct because each is a distinct, frequently used
 // mode rather than a choice among related tools.
-const workspaceToggle = groupDockPanels("Workspace", "▤", "dn-workspace-toggle", [
-  { selector: ".dn-folder-toggle", description: "Start a local session from a Dewlab folder." },
-  { selector: ".dn-repo-toggle", description: "Start a repository session with module navigation and publishing." },
-]);
-const reviewToggle = groupDockPanels("Review", "✓", "dn-review-toggle", [
-  { selector: ".dn-outline-toggle", description: "Navigate the headings in the current document." },
-  { selector: ".dn-linkcheck-toggle", description: "Check tutorial links against the open workspace." },
-]);
-const rail = iconRail();
-rail.prepend(reviewToggle);
-rail.prepend(workspaceToggle);
-const sourceToggle = rail.querySelector(".dn-source-toggle");
-const settingsToggle = rail.querySelector(".dn-settings-toggle");
-if (sourceToggle) rail.appendChild(sourceToggle);
-if (settingsToggle) rail.appendChild(settingsToggle);
+if (legacyShell) {
+  const workspaceToggle = groupDockPanels("Workspace", "▤", "dn-workspace-toggle", [
+    { selector: ".dn-folder-toggle", description: "Start a local session from a Dewlab folder." },
+    { selector: ".dn-repo-toggle", description: "Start a repository session with module navigation and publishing." },
+  ]);
+  const reviewToggle = groupDockPanels("Review", "✓", "dn-review-toggle", [
+    { selector: ".dn-outline-toggle", description: "Navigate the headings in the current document." },
+    { selector: ".dn-linkcheck-toggle", description: "Check tutorial links against the open workspace." },
+  ]);
+  const rail = iconRail();
+  rail.prepend(reviewToggle);
+  rail.prepend(workspaceToggle);
+  const sourceToggle = rail.querySelector(".dn-source-toggle");
+  const settingsToggle = rail.querySelector(".dn-settings-toggle");
+  if (sourceToggle) rail.appendChild(sourceToggle);
+  if (settingsToggle) rail.appendChild(settingsToggle);
+}
 // Module organisation is entered from the active repository rather than
 // presented as a third kind of workspace. The real toggle remains as the
 // dock controller used by the repository's “Arrange” action.
@@ -173,6 +203,33 @@ if (legacyModulesToggle) {
   // series”, but it is no longer a fifth rail item in the UI or the
   // accessibility tree.
   document.body.appendChild(legacyModulesToggle);
+}
+
+if (!legacyShell) {
+  const clickToggle = (selector: string) => document.querySelector<HTMLButtonElement>(selector)?.click();
+  workflow = mountWorkflowShell({
+    chooseLocal: () => folderPanel?.choose() ?? Promise.resolve(false),
+    chooseGithub: () => repoPanel?.showChooser(),
+    saveCurrent: () => fileBar.saveCurrent(),
+    saveNewVersion: () => repoPanel?.pushNewVersion() ?? Promise.resolve(false),
+    openPullRequest: () => repoPanel?.openPullRequest() ?? Promise.resolve(null),
+    toggleLocation: () => workspaceNav.toggle(),
+    closeLocation: () => workspaceNav.close(),
+    locationIsOpen: () => workspaceNav.isOpen(),
+    locationContains: (target) => workspaceNav.element.contains(target),
+    openRawFiles: () => session === "github" ? repoPanel?.showChooser() : clickToggle(".dn-folder-toggle"),
+    openDocumentSource: () => clickToggle(".dn-source-toggle"),
+    openOutline: () => clickToggle(".dn-outline-toggle"),
+    openLinkCheck: () => clickToggle(".dn-linkcheck-toggle"),
+    openModuleOrganizer: () => clickToggle(".dn-series-toggle"),
+    openSettings: () => clickToggle(".dn-settings-toggle"),
+    openDeviceFile: () => fileBar.openDeviceFile(),
+    importNotebook: () => fileBar.importNotebook(),
+    exportNotebook: () => fileBar.exportNotebook(),
+    exportHtml: () => fileBar.exportHtml(),
+    resetWorkspace: () => window.location.reload(),
+  });
+  if (latestFileState) workflow.setFileState(latestFileState);
 }
 mountCommandPalette();
 

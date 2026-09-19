@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html");
+const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html") + "?legacy=1";
 
 // A js site pane's own uncaught error (one test below throws one on
 // purpose, to check the console relay) still reaches the *browser's*
