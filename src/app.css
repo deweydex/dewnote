@@ -174,6 +174,22 @@ body {
   line-height: 1.18;
 }
 
+.dn-workflow-document {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  line-height: 1.15;
+}
+
+.dn-workflow-file-name {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--dl-heading);
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .dn-workflow-identity strong,
 .dn-workflow-identity span {
   overflow: hidden;
@@ -225,10 +241,21 @@ body {
 }
 
 .dn-workflow-location {
+  min-height: 1.7rem !important;
+  padding: 0.15rem 0.35rem !important;
   overflow: hidden;
+  border-color: transparent !important;
   background: transparent !important;
+  color: var(--dl-muted) !important;
+  font-size: 0.76rem !important;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dn-workflow-location:hover,
+.dn-workflow-location:focus-visible {
+  color: var(--dl-fg) !important;
+  border-color: var(--dn-control-border) !important;
 }
 
 .dn-workflow-save,
@@ -284,6 +311,26 @@ body {
   text-align: left;
 }
 
+.dn-workflow-menu-section {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.2rem 0 0.45rem;
+  border-bottom: 1px solid var(--dl-rule);
+}
+
+.dn-workflow-menu-section:last-child {
+  border-bottom: 0;
+}
+
+.dn-workflow-menu-section h2 {
+  margin: 0;
+  padding: 0.35rem 0.8rem 0.15rem;
+  color: var(--dl-muted);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .dn-workflow-current-file {
   margin: 0 0 0.35rem;
   padding: 0.55rem 0.8rem 0.75rem;
@@ -307,9 +354,21 @@ body {
   left: 50%;
   z-index: 80;
   width: min(46rem, calc(100vw - 2rem));
-  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+  grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto;
   transform: translateX(-50%);
   box-shadow: 0 14px 40px var(--dl-shadow);
+}
+
+.dn-workspace-nav-open {
+  min-height: 2.35rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--dl-orange);
+  border-radius: 6px;
+  background: var(--dl-orange);
+  color: var(--dl-bg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .dn-workflow-toast {
@@ -327,6 +386,13 @@ body {
   background: var(--dl-panel-bg);
   box-shadow: 0 10px 32px var(--dl-shadow);
   font-family: var(--dl-font-family);
+}
+
+.dn-workflow-toast-dismiss {
+  min-width: 2.25rem !important;
+  padding-inline: 0 !important;
+  border-color: transparent !important;
+  background: transparent !important;
 }
 
 .dn-change-review {
@@ -515,8 +581,12 @@ body {
 /* Prose edits in place: CodeMirror supplies the caret, history and
    Markdown intelligence, but not a second code-cell-looking box. */
 .dn-block-prose-source {
-  border-color: transparent;
+  border: 0;
   background: transparent;
+}
+.dn-block-prose-source:focus-within {
+  outline: 1px solid color-mix(in srgb, var(--dl-orange) 28%, transparent);
+  outline-offset: 3px;
 }
 .dn-block-prose-source .cm-editor {
   font-family: var(--dl-font-family);
@@ -533,6 +603,22 @@ body {
 }
 .dn-block-prose-source .cm-line {
   padding-inline: 0;
+}
+.dn-block-prose-source .dn-md-strong {
+  font-weight: 700;
+}
+.dn-block-prose-source .dn-md-emphasis {
+  font-style: italic;
+}
+.dn-block-prose-source .dn-md-link {
+  color: var(--dl-link);
+  text-decoration: underline;
+}
+.dn-block-prose-source .dn-md-code {
+  border-radius: 3px;
+  background: var(--dn-cell-bg);
+  font-family: var(--dl-mono);
+  font-size: 0.9em;
 }
 
 /* A fold keeps its disclosure wrapper visible while only its Markdown

@@ -81,6 +81,19 @@ function closeDock(): void {
   if (resizer) resizer.hidden = true;
 }
 
+/** Lets the progressive workflow shell treat the older operation panels
+ * as part of the same transient-surface system as its menus and chooser. */
+export function closeDockPanels(): void {
+  closeDock();
+}
+
+/** True only while `target` is inside the currently open operation panel.
+ * The workflow shell uses this to avoid treating a click in a panel as an
+ * outside click while still closing the panel for clicks elsewhere. */
+export function activeDockContains(target: Node): boolean {
+  return Boolean(active?.panel.contains(target));
+}
+
 function activate(entry: DockEntry): void {
   if (active === entry || active?.groupToggle === entry.toggle) {
     closeDock();

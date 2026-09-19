@@ -14,7 +14,7 @@ import { mountLinkCheckPanel } from "./link-check.ts";
 import { mountSeriesPanel } from "./series-panel.ts";
 import { mountCommandPalette } from "./command-palette.ts";
 import { todayVersion } from "./dialect.ts";
-import { groupDockPanels, iconRail } from "./icon-rail.ts";
+import { activeDockContains, closeDockPanels, groupDockPanels, iconRail } from "./icon-rail.ts";
 import { mountWorkspaceNav } from "./workspace-nav.ts";
 import { mountWorkflowShell, type WorkflowShell } from "./workflow-shell.ts";
 
@@ -215,9 +215,12 @@ if (!legacyShell) {
     canSaveNewVersion: () => repoPanel?.canPushNewVersion() ?? false,
     openPullRequest: () => repoPanel?.openPullRequest() ?? Promise.resolve(null),
     toggleLocation: () => workspaceNav.toggle(),
+    openLocation: () => workspaceNav.open(),
     closeLocation: () => workspaceNav.close(),
     locationIsOpen: () => workspaceNav.isOpen(),
     locationContains: (target) => workspaceNav.element.contains(target),
+    closePanels: closeDockPanels,
+    panelContains: activeDockContains,
     openRawFiles: () => session === "github" ? repoPanel?.showChooser() : clickToggle(".dn-folder-toggle"),
     openDocumentSource: () => clickToggle(".dn-source-toggle"),
     openOutline: () => clickToggle(".dn-outline-toggle"),
