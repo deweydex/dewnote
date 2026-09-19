@@ -72,20 +72,22 @@ test("starts with one source decision and no editing chrome", async ({ page }) =
   await expect(page.locator(".dn-file-action-rail")).toBeHidden();
 });
 
-test("a local choice becomes a quiet document header with transient navigation", async ({ page }) => {
+test("a local choice asks for a real document before showing its breadcrumb", async ({ page }) => {
   await page.getByRole("button", { name: /Open a local folder/ }).click();
   await expect(page.locator(".dn-source-gate")).toBeHidden();
   await expect(page.locator(".dn-workflow-header")).toBeVisible();
   await expect(page.locator(".dn-workflow-identity strong")).toHaveText("Teaching notes");
-  await expect(page.locator(".dn-workflow-location")).toContainText("Foundations");
-
-  await page.locator(".dn-workflow-location").click();
+  await expect(page.locator(".dn-workflow-file-name")).toHaveText("No document selected");
+  await expect(page.locator(".dn-workflow-location")).toHaveText("Choose a document");
   await expect(page.locator(".dn-workspace-nav")).toBeVisible();
   await expect(page.locator(".dn-workspace-nav-module")).toHaveValue("foundations");
   await expect(page.locator(".dn-workspace-nav-series")).toHaveValue("First steps");
 
-  await page.locator(".dn-page").click({ position: { x: 4, y: 240 } });
+  await page.locator(".dn-workspace-nav-open").click();
   await expect(page.locator(".dn-workspace-nav")).toBeHidden();
+  await expect(page.locator(".dn-workflow-file-name")).toHaveText("tutorials/a-rule/a-rule.md");
+  await expect(page.locator(".dn-workflow-location")).toContainText("Foundations › First steps › A Rule");
+  await expect(page.locator(".dn-page h1")).toHaveText("A Rule");
 });
 
 test("workspace and save choices are mutually exclusive and dismiss with Escape", async ({ page }) => {
@@ -94,6 +96,7 @@ test("workspace and save choices are mutually exclusive and dismiss with Escape"
   await expect(page.locator(".dn-workflow-menu")).toBeVisible();
   await expect(page.locator(".dn-workflow-menu")).toContainText("Import Jupyter notebook");
   await expect(page.locator(".dn-workflow-menu")).toContainText("Export standalone HTML");
+  await expect(page.locator(".dn-workflow-menu-section h2")).toHaveText(["Open", "Transfer", "Document", "Workspace"]);
 
   await page.locator(".dn-workflow-save-more").click();
   await expect(page.locator(".dn-workflow-menu")).toBeHidden();
@@ -102,6 +105,13 @@ test("workspace and save choices are mutually exclusive and dismiss with Escape"
 
   await page.keyboard.press("Escape");
   await expect(page.locator(".dn-workflow-save-menu")).toBeHidden();
+
+  await page.locator(".dn-workflow-menu-button").click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator(".dn-settings-panel")).toBeVisible();
+  await page.locator(".dn-workflow-menu-button").click();
+  await expect(page.locator(".dn-settings-panel")).toBeHidden();
+  await expect(page.locator(".dn-workflow-menu")).toBeVisible();
 });
 
 test("GitHub connection discovers modules, then yields to the document workflow", async ({ page }) => {
@@ -118,11 +128,13 @@ test("GitHub connection discovers modules, then yields to the document workflow"
   await expect(page.locator(".dn-source-gate")).toBeHidden();
   await expect(repository).toBeHidden();
   await expect(page.locator(".dn-workflow-identity strong")).toHaveText("deweydex/dewlab");
-  await expect(page.locator(".dn-workflow-location")).toContainText("Foundations");
-
-  await page.locator(".dn-workflow-location").click();
+  await expect(page.locator(".dn-workflow-file-name")).toHaveText("No document selected");
+  await expect(page.locator(".dn-workspace-nav")).toBeVisible();
   await expect(page.locator(".dn-workspace-nav-module")).toHaveValue("foundations");
   await expect(page.locator(".dn-workspace-nav-page option")).toHaveCount(1);
+  await page.locator(".dn-workspace-nav-open").click();
+  await expect(page.locator(".dn-workflow-file-name")).toHaveText("tutorials/a-rule/a-rule.md");
+  await expect(page.locator(".dn-workflow-location")).toContainText("Foundations › First steps › A Rule");
 });
 
 test("closing repository setup returns to the source choice", async ({ page }) => {

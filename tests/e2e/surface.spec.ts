@@ -54,14 +54,15 @@ test("the starter document renders — heading, cell, and hint fold all visible"
   await expect(page.locator(".dn-block-fold")).toContainText("the same one dewlab uses");
 });
 
-test("clicking a paragraph reveals its markdown source, and blurring commits the edit", async ({ page }) => {
+test("clicking a paragraph edits in place, and blurring commits the Markdown source", async ({ page }) => {
   await mount(page, "First **bold** paragraph.\n\nSecond paragraph, untouched.\n");
 
   const first = page.locator(".dn-block-render").first();
   await first.click();
 
   const source = page.locator(".dn-block-source .cm-content").first();
-  await expect(source).toContainText("First **bold** paragraph.");
+  await expect(source).toContainText("First bold paragraph.");
+  expect(await getSource(page)).toContain("First **bold** paragraph.");
 
   await page.keyboard.press("End");
   await page.keyboard.type(" Edited.");
@@ -85,15 +86,65 @@ test("prose edits inline rather than becoming a code-looking scrolling box", asy
     const scroller = el.querySelector<HTMLElement>(".cm-scroller")!;
     return {
       background: style.backgroundColor,
-      border: style.borderColor,
+      borderStyle: style.borderStyle,
       family: getComputedStyle(content).fontFamily,
       wraps: scroller.scrollWidth <= scroller.clientWidth,
     };
   });
   expect(look.background).toBe("rgba(0, 0, 0, 0)");
-  expect(look.border).toBe("rgba(0, 0, 0, 0)");
+  expect(look.borderStyle).toBe("none");
   expect(look.family).toContain("Georgia");
   expect(look.wraps).toBe(true);
+});
+
+test("plain prose keeps its baseline and following content fixed while editing", async ({ page }) => {
+  await mount(page, "A plain paragraph that wraps across the available line width without changing its place.\n\nThe next paragraph stays put.\n");
+  const first = page.locator(".dn-block").first();
+  const second = page.locator(".dn-block").nth(1);
+  const before = await first.locator(".dn-block-render p").evaluate((element) => {
+    const range = document.createRange();
+    const text = element.firstChild!;
+    range.setStart(text, 0);
+    range.setEnd(text, 1);
+    const glyph = range.getBoundingClientRect();
+    return { x: glyph.x, y: glyph.y, blockHeight: element.closest(".dn-block")!.getBoundingClientRect().height };
+  });
+  const nextBefore = await second.evaluate((element) => element.getBoundingClientRect().y);
+
+  await first.locator(".dn-block-render").click();
+
+  const after = await first.locator(".cm-line").first().evaluate((element) => {
+    const range = document.createRange();
+    const text = element.firstChild!;
+    range.setStart(text, 0);
+    range.setEnd(text, 1);
+    const glyph = range.getBoundingClientRect();
+    return { x: glyph.x, y: glyph.y, blockHeight: element.closest(".dn-block")!.getBoundingClientRect().height };
+  });
+  const nextAfter = await second.evaluate((element) => element.getBoundingClientRect().y);
+
+  expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(after.blockHeight - before.blockHeight)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(nextAfter - nextBefore)).toBeLessThanOrEqual(0.5);
+});
+
+test("inactive inline Markdown stays folded instead of reflowing the paragraph", async ({ page }) => {
+  await mount(page, "Read **carefully** and use [the guide](https://example.com/a/very/long/url/that/used/to/reflow/the/whole/paragraph) before continuing with the exercise.\n\nFollowing paragraph.\n");
+  const first = page.locator(".dn-block").first();
+  const second = page.locator(".dn-block").nth(1);
+  const beforeHeight = await first.evaluate((element) => element.getBoundingClientRect().height);
+  const nextBefore = await second.evaluate((element) => element.getBoundingClientRect().y);
+
+  await first.locator(".dn-block-render").click();
+
+  await expect(first.locator(".cm-content")).not.toContainText("https://example.com");
+  await expect(first.locator(".dn-md-strong")).toHaveText("carefully");
+  await expect(first.locator(".dn-md-link")).toHaveText("the guide");
+  const afterHeight = await first.evaluate((element) => element.getBoundingClientRect().height);
+  const nextAfter = await second.evaluate((element) => element.getBoundingClientRect().y);
+  expect(Math.abs(afterHeight - beforeHeight)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(nextAfter - nextBefore)).toBeLessThanOrEqual(0.5);
 });
 
 test("an answer summary opens the rendered fold; editing exposes its body, not its HTML wrapper", async ({ page }) => {

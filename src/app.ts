@@ -30,10 +30,10 @@
 // back to a full rebuild, since indices no longer line up cleanly enough
 // to patch in place.
 
-import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
-import { EditorSelection, EditorState, Prec, type Extension } from "@codemirror/state";
+import { Decoration, EditorView, keymap, ViewPlugin, type DecorationSet, type KeyBinding } from "@codemirror/view";
+import { EditorSelection, EditorState, Prec, type Extension, type Range } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, syntaxHighlighting, syntaxTree } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { parseDocument, serialize, type Block, type Document } from "./blocks.ts";
 import { detectDialect } from "./dialect.ts";
@@ -118,6 +118,51 @@ const BASE_EXTENSIONS: Extension[] = [
   EDITOR_THEME,
   syntaxHighlighting(EDITOR_HIGHLIGHT),
 ];
+
+/** An Obsidian-style editing layer for inline Markdown. Formatting stays
+ * recognisable and punctuation stays folded until the caret enters that
+ * particular construct. Source remains the editor's real document; these
+ * are display decorations only, so round-tripping is untouched. */
+function proseMarkdownDecorations(view: EditorView): DecorationSet {
+  const ranges: Range<Decoration>[] = [];
+  const caret = view.state.selection.main.head;
+  const doc = view.state.doc;
+  syntaxTree(view.state).iterate({
+    enter(node) {
+      const parent = node.node.parent;
+      const active = Boolean(parent && caret >= parent.from && caret <= parent.to);
+      if (!active && ["EmphasisMark", "LinkMark", "URL", "CodeMark"].includes(node.name)) {
+        ranges.push(Decoration.replace({}).range(node.from, node.to));
+        return;
+      }
+      if (node.name === "StrongEmphasis") {
+        const text = doc.sliceString(node.from, node.to);
+        const inset = text.startsWith("**") || text.startsWith("__") ? 2 : 1;
+        ranges.push(Decoration.mark({ class: "dn-md-strong" }).range(node.from + inset, node.to - inset));
+      } else if (node.name === "Emphasis") {
+        ranges.push(Decoration.mark({ class: "dn-md-emphasis" }).range(node.from + 1, node.to - 1));
+      } else if (node.name === "InlineCode") {
+        ranges.push(Decoration.mark({ class: "dn-md-code" }).range(node.from + 1, node.to - 1));
+      } else if (node.name === "Link") {
+        const text = doc.sliceString(node.from, node.to);
+        const closeLabel = text.indexOf("]");
+        if (closeLabel > 1) ranges.push(Decoration.mark({ class: "dn-md-link" }).range(node.from + 1, node.from + closeLabel));
+      }
+    },
+  });
+  return Decoration.set(ranges, true);
+}
+
+const proseMarkdownPreview = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) { this.decorations = proseMarkdownDecorations(view); }
+    update(update: { view: EditorView; docChanged: boolean; selectionSet: boolean; viewportChanged: boolean }) {
+      if (update.docChanged || update.selectionSet || update.viewportChanged) this.decorations = proseMarkdownDecorations(update.view);
+    }
+  },
+  { decorations: (plugin) => plugin.decorations },
+);
 
 // PEDAGOGICAL_STYLE_GUIDE §6's own worked forms, transcribed rather than
 // paraphrased — this is a template an author types over, so every word
@@ -322,7 +367,13 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
       if (codeView) return replaceCellCode(block.text, codeView.state.doc.toString());
       const foldView = foldBodyViews.get(index);
       if (foldView) return replaceFoldBody(block.text, foldView.state.doc.toString());
-      return liveViews.get(index)?.state.doc.toString() ?? block.text;
+      const liveText = liveViews.get(index)?.state.doc.toString();
+      if (liveText === undefined) return block.text;
+      // A prose block's terminal newlines are document separators, not
+      // visible content. They are omitted from the inline editor so they
+      // cannot create a phantom final line, then restored byte-for-byte.
+      if (block.kind === "prose") return liveText + (block.text.match(/\n+$/)?.[0] ?? "");
+      return liveText;
     });
   }
 
@@ -2039,6 +2090,7 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
         const slashMenu = buildSlashMenu(index);
         wrapper.appendChild(slashMenu.element);
         extensions.push(
+          proseMarkdownPreview,
           // Prec.highest: BASE_EXTENSIONS' own defaultKeymap already
           // binds Enter (insertNewlineAndIndent) and the arrow keys at
           // the same default precedence CodeMirror gives a plain
@@ -2052,7 +2104,8 @@ export function mountDocument(container: HTMLElement, initialSource: string): Mo
         );
       }
 
-      const view = mountEditor(host, index, block.text, extensions);
+      const editorText = block.kind === "prose" ? block.text.replace(/\n+$/, "") : block.text;
+      const view = mountEditor(host, index, editorText, extensions);
       queueMicrotask(() => view.focus());
       return wrapper;
     }

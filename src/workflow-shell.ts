@@ -12,9 +12,12 @@ export interface WorkflowShellHost {
   canSaveNewVersion(): boolean;
   openPullRequest(): Promise<string | null>;
   toggleLocation(): void;
+  openLocation(): void;
   closeLocation(): void;
   locationIsOpen(): boolean;
   locationContains(target: Node): boolean;
+  closePanels(): void;
+  panelContains(target: Node): boolean;
   openRawFiles(): void;
   openDocumentSource(): void;
   openOutline(): void;
@@ -75,7 +78,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   const choices = document.createElement("div");
   choices.className = "dn-source-choices";
   const localChoice = button("Open a local folder", "dn-source-choice");
-  localChoice.innerHTML = "<strong>Open a local folder</strong><span>Edit files on this computer, or begin with a blank document.</span>";
+  localChoice.innerHTML = "<strong>Open a local folder</strong><span>Browse its modules and edit files directly on this computer.</span>";
   const githubChoice = button("Connect a GitHub repository", "dn-source-choice");
   githubChoice.innerHTML = "<strong>Connect a GitHub repository</strong><span>Browse its modules and save through a working branch.</span>";
   choices.append(localChoice, githubChoice);
@@ -96,6 +99,11 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   identity.append(identityName, identityDetail);
   const locationButton = button("Choose a document", "dn-workflow-location");
   locationButton.setAttribute("aria-expanded", "false");
+  const documentIdentity = document.createElement("div");
+  documentIdentity.className = "dn-workflow-document";
+  const fileName = document.createElement("strong");
+  fileName.className = "dn-workflow-file-name";
+  documentIdentity.append(fileName, locationButton);
   const saveArea = document.createElement("div");
   saveArea.className = "dn-workflow-save-area";
   const saveState = document.createElement("span");
@@ -104,19 +112,28 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   const saveMore = button("▾", "dn-workflow-save-more");
   saveMore.setAttribute("aria-label", "More save options");
   saveMore.setAttribute("aria-expanded", "false");
-  saveArea.append(saveState, saveButton, saveMore);
+  const changesButton = button("Changes", "dn-workflow-changes");
+  changesButton.hidden = true;
+  saveArea.append(changesButton, saveState, saveButton, saveMore);
   const left = document.createElement("div");
   left.className = "dn-workflow-left";
   left.append(workspaceButton, identity);
-  header.append(left, locationButton, saveArea);
+  header.append(left, documentIdentity, saveArea);
   document.body.appendChild(header);
 
   const workspaceMenu = document.createElement("div");
   workspaceMenu.className = "dn-workflow-popover dn-workflow-menu";
   workspaceMenu.hidden = true;
   workspaceMenu.setAttribute("role", "menu");
-  const currentFile = document.createElement("p");
-  currentFile.className = "dn-workflow-current-file";
+  const section = (label: string, ...items: HTMLButtonElement[]) => {
+    const group = document.createElement("section");
+    group.className = "dn-workflow-menu-section";
+    const heading = document.createElement("h2");
+    heading.textContent = label;
+    group.append(heading, ...items);
+    return group;
+  };
+  const findDocument = button("Find a document…");
   const rawFiles = button("Browse workspace files…");
   const openFile = button("Open a Markdown or YAML file…");
   const importNotebook = button("Import Jupyter notebook…");
@@ -128,7 +145,12 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   const modules = button("Arrange modules and series");
   const settings = button("Settings");
   const changeWorkspace = button("Change workspace…", "dn-workflow-change-workspace");
-  workspaceMenu.append(currentFile, rawFiles, openFile, importNotebook, exportNotebook, exportHtml, source, outline, links, modules, settings, changeWorkspace);
+  workspaceMenu.append(
+    section("Open", findDocument, rawFiles, openFile),
+    section("Transfer", importNotebook, exportNotebook, exportHtml),
+    section("Document", outline, source, links),
+    section("Workspace", modules, settings, changeWorkspace),
+  );
   document.body.appendChild(workspaceMenu);
 
   const saveMenu = document.createElement("div");
@@ -146,7 +168,9 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   toast.setAttribute("aria-live", "polite");
   const toastMessage = document.createElement("span");
   const reviewButton = button("Review repository changes");
-  toast.append(toastMessage, reviewButton);
+  const dismissToast = button("×", "dn-workflow-toast-dismiss");
+  dismissToast.setAttribute("aria-label", "Dismiss notification");
+  toast.append(toastMessage, reviewButton, dismissToast);
   document.body.appendChild(toast);
 
   const review = document.createElement("section");
@@ -179,6 +203,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     saveMore.setAttribute("aria-expanded", "false");
     if (host.locationIsOpen()) host.closeLocation();
     locationButton.setAttribute("aria-expanded", "false");
+    host.closePanels();
   }
 
   function toggle(menu: HTMLElement, trigger: HTMLButtonElement): void {
@@ -190,7 +215,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   }
 
   function render(): void {
-    currentFile.textContent = fileState.name;
+    fileName.textContent = location.page ? fileState.name : "No document selected";
     saveState.textContent = fileState.dirty ? "Unsaved changes" : "Saved";
     saveState.classList.toggle("is-dirty", fileState.dirty);
     identityName.textContent = session === "github" ? repoContext.label : identityName.textContent || "Local workspace";
@@ -201,12 +226,16 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     saveVersion.hidden = session !== "github" || !host.canSaveNewVersion();
     modules.hidden = !location.available;
     reviewButton.hidden = session !== "github" || changedPaths.size === 0;
+    changesButton.hidden = session !== "github" || changedPaths.size === 0;
   }
 
+  let toastTimer: ReturnType<typeof setTimeout> | null = null;
   function showToast(message: string): void {
+    if (toastTimer) clearTimeout(toastTimer);
     toastMessage.textContent = message;
     toast.hidden = false;
     render();
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 5000);
   }
 
   async function save(primary = true): Promise<void> {
@@ -243,6 +272,13 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     host.toggleLocation();
     locationButton.setAttribute("aria-expanded", String(host.locationIsOpen()));
   });
+  findDocument.addEventListener("click", () => {
+    closeTransient();
+    if (location.available) {
+      host.openLocation();
+      locationButton.setAttribute("aria-expanded", "true");
+    } else host.openRawFiles();
+  });
   rawFiles.addEventListener("click", () => { closeTransient(); host.openRawFiles(); });
   openFile.addEventListener("click", () => { closeTransient(); void host.openDeviceFile(); });
   importNotebook.addEventListener("click", () => { closeTransient(); void host.importNotebook(); });
@@ -258,7 +294,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     if (fileState.dirty && !window.confirm("Discard unsaved changes and choose another workspace?")) return;
     host.resetWorkspace();
   });
-  reviewButton.addEventListener("click", () => {
+  const openReview = () => {
     closeTransient();
     reviewCopy.textContent = `Changes on ${repoContext.branch}, ready to compare with ${repoContext.base}.`;
     changes.replaceChildren(...[...changedPaths].map((path) => {
@@ -271,7 +307,10 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
       return item;
     }));
     review.hidden = false;
-  });
+  };
+  reviewButton.addEventListener("click", openReview);
+  changesButton.addEventListener("click", openReview);
+  dismissToast.addEventListener("click", () => { toast.hidden = true; });
   const closeReview = () => { review.hidden = true; };
   back.addEventListener("click", closeReview);
   keepEditing.addEventListener("click", closeReview);
@@ -289,7 +328,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   });
   document.addEventListener("pointerdown", (event) => {
     const target = event.target as Node;
-    if (workspaceMenu.contains(target) || saveMenu.contains(target) || header.contains(target) || host.locationContains(target)) return;
+    if (workspaceMenu.contains(target) || saveMenu.contains(target) || header.contains(target) || host.locationContains(target) || host.panelContains(target)) return;
     closeTransient();
   });
 
@@ -306,6 +345,11 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
       identityName.textContent = label;
       identityDetail.textContent = detail ?? (kind === "github" ? `${repoContext.base} → ${repoContext.branch}` : "Local folder");
       render();
+      host.closePanels();
+      if (location.available) {
+        host.openLocation();
+        locationButton.setAttribute("aria-expanded", "true");
+      } else host.openRawFiles();
     },
     setRepoContext(context) { repoContext = context; render(); },
     setFileState(state) { fileState = state; render(); },
@@ -318,6 +362,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     },
     closeTransient,
     destroy() {
+      if (toastTimer) clearTimeout(toastTimer);
       document.body.classList.remove("dn-progressive");
       document.body.classList.remove("dn-choosing-repository");
       gate.remove(); header.remove(); workspaceMenu.remove(); saveMenu.remove(); toast.remove(); review.remove();

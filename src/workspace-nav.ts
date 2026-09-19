@@ -70,7 +70,11 @@ export function mountWorkspaceNav(options: WorkspaceNavOptions = {}) {
   const pageSelect = document.createElement("select");
   pageSelect.className = "dn-workspace-nav-page";
   pageSelect.setAttribute("aria-label", "Tutorial or practice page");
-  nav.append(heading, moduleSelect, seriesSelect, pageSelect);
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.className = "dn-workspace-nav-open";
+  openButton.textContent = "Open document";
+  nav.append(heading, moduleSelect, seriesSelect, pageSelect, openButton);
   document.body.appendChild(nav);
 
   function currentEntry(): FileIndexEntry | undefined {
@@ -154,10 +158,24 @@ export function mountWorkspaceNav(options: WorkspaceNavOptions = {}) {
     }
     seriesSelect.disabled = seriesSelect.options.length === 0;
     fillPages(module, chosenSeries);
+    if (!currentPath) {
+      options.onLocationChange?.({ module: "", series: "", page: "", available: true });
+      return;
+    }
+    const actual = currentEntry();
+    if (!currentModule) {
+      options.onLocationChange?.({
+        module: "",
+        series: "",
+        page: actual?.title ?? actual?.path ?? currentPath.split("/").at(-1) ?? currentPath,
+        available: true,
+      });
+      return;
+    }
     options.onLocationChange?.({
-      module: module.title,
+      module: currentModule.title,
       series: chosenSeries === "__mixed" ? "Mixed practice" : chosenSeries,
-      page: pageSelect.selectedOptions[0]?.textContent ?? currentEntry()?.title ?? currentEntry()?.path ?? "Choose a document",
+      page: actual?.title ?? actual?.path ?? currentPath,
       available: true,
     });
   }
@@ -173,14 +191,16 @@ export function mountWorkspaceNav(options: WorkspaceNavOptions = {}) {
     currentPath = null;
     render();
   });
-  pageSelect.addEventListener("change", async () => {
+  async function openSelected(): Promise<void> {
     if (!pageSelect.value) return;
     if (await openPath(pageSelect.value)) {
       if (options.progressive) requestedOpen = false;
       render();
       options.onNavigate?.();
     }
-  });
+  }
+  pageSelect.addEventListener("change", () => { void openSelected(); });
+  openButton.addEventListener("click", () => { void openSelected(); });
 
   return {
     setModules(next: Module[]) { modules = next; render(); },
