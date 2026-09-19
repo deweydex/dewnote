@@ -105,9 +105,9 @@ test("a tutorial with several versions indexed still resolves by its one id", as
   await expect(page.locator(".dn-linkcheck-report li")).toHaveText("No broken links found.");
 });
 
-test("the command palette can open the link checker too", async ({ page }) => {
+test("the workspace palette can open the link checker too", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-palette-input").fill("Check links");
-  await page.locator(".dn-palette-item button").first().click();
+  await page.locator(".dn-wp-input").fill("check tutorial links");
+  await page.locator(".dn-wp-row.is-active").click();
   await expect(page.locator(".dn-linkcheck-panel")).toBeVisible();
 });

@@ -139,7 +139,12 @@ export function mountSettingsPanel(): SettingsPanel {
   railDisplaySelect.addEventListener("change", () =>
     commit({ ...settings, railDisplay: railDisplaySelect.value as Settings["railDisplay"] }),
   );
-  appearance.appendChild(row("Sidebar buttons", railDisplaySelect));
+  // The sidebar this governs belongs to the legacy shell. Offering a
+  // control for chrome that is not on screen is worse than offering
+  // none — the row stays for `?legacy`, and goes everywhere else.
+  const railDisplayRow = row("Sidebar buttons", railDisplaySelect);
+  railDisplayRow.hidden = !new URLSearchParams(window.location.search).has("legacy");
+  appearance.appendChild(railDisplayRow);
 
   const fontSelect = select(
     [

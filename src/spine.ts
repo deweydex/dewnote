@@ -1,0 +1,278 @@
+// The spine: the left margin doing a book's job.
+//
+// It replaces the workflow header, and the reasoning is the one in
+// planning/UI_REVIEW.md §5. The chrome above the document answered three
+// questions — where am I, what state is this document in, how do I get
+// somewhere else — and answered the first two with a toolbar: a bordered
+// breadcrumb pill that read as a search field, a filename, and a solid
+// orange Save that was the loudest thing on a screen whose whole
+// aesthetic is restraint. The first two questions need a caption, not a
+// toolbar. The third is what one key is for (workspace-palette.ts).
+//
+// So this is a caption, set in the document's own Georgia at caption
+// size, in the margin the page already had and was not using: at
+// 1440px with dewlab's 34rem measure there is about 450px of empty
+// gutter on each side. One side now carries the running head and the
+// thumb index a book would have. The other stays empty on purpose.
+//
+// ## Why the layout is measured rather than declared
+//
+// How much room the margin has depends on the window AND on two reader
+// settings — `measure` and `margins` (settings.ts) — which reach the
+// page as CSS custom properties. A media query cannot read a custom
+// property, so a CSS-only rule for "is there room for a spine" would
+// have to hard-code a measure this app lets people change. Instead a
+// `ResizeObserver` on the page element reports the real gutter, which
+// moves both when the window resizes and when a setting changes, and
+// `<html>` gets `data-spine="margin"` or `"folded"` from it. Folded is
+// the phone treatment: the same lines across the top, in reading order,
+// rather than a desktop column squeezed until nothing in it is legible.
+
+import { parseDocument } from "./blocks.ts";
+
+export interface SpineHost {
+  getSource(): string;
+  /** ⌘K's own surface. The filename and the breadcrumb both open it:
+   * "where am I" and "take me elsewhere" are one gesture. */
+  openPalette(): void;
+  /** Save, for a click on the state line. Returns false when it did not
+   * happen, so the line can stop claiming it did. */
+  save(): Promise<boolean>;
+}
+
+export interface SpineFile {
+  name: string;
+  dirty: boolean;
+}
+
+export interface SpineLocation {
+  module: string;
+  series: string;
+  page: string;
+}
+
+export interface SpineWorkspace {
+  /** "dewlab", or a folder's own name. Empty before a session opens. */
+  label: string;
+  /** "main → typography-pass" for a repository; empty for a folder. */
+  detail: string;
+}
+
+export interface Spine {
+  setFile(file: SpineFile): void;
+  setLocation(location: SpineLocation): void;
+  setWorkspace(workspace: SpineWorkspace): void;
+  /** Re-reads the document's headings. Cheap — one parse of text this
+   * app already holds — so callers fire it on whatever they have rather
+   * than trying to detect a heading change. */
+  refreshOutline(): void;
+  /** A held state that outlives a confirmation: a refused save, with
+   * an optional way to reach whatever can resolve it. Null clears it. */
+  setProblem(problem: { message: string; action?: { label: string; run(): void } } | null): void;
+  show(): void;
+  destroy(): void;
+}
+
+const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
+
+interface Heading {
+  level: number;
+  text: string;
+  blockIndex: number;
+}
+
+/** Prose only, the same rule outline-panel.ts has always used: a `#` in
+ * a fence is a comment or a shell prompt, and no other block kind in any
+ * dialect DIALECTS.md describes carries a heading. */
+function headingsFrom(source: string): Heading[] {
+  const headings: Heading[] = [];
+  parseDocument(source).blocks.forEach((block, blockIndex) => {
+    if (block.kind !== "prose") return;
+    for (const line of block.text.split("\n")) {
+      const match = HEADING_RE.exec(line);
+      if (match) headings.push({ level: match[1]!.length, text: match[2]!, blockIndex });
+    }
+  });
+  return headings;
+}
+
+/** The narrowest margin worth putting a spine in. Below it the column
+ * would be too tight for a tutorial title to survive on two lines, and
+ * a squeezed desktop layout is the failure the folded mode exists to
+ * avoid rather than reproduce. */
+const MARGIN_MINIMUM = 250;
+const SPINE_MAXIMUM = 310;
+const SPINE_GAP = 28;
+
+export function mountSpine(host: SpineHost): Spine {
+  let file: SpineFile = { name: "Untitled", dirty: false };
+  let location: SpineLocation = { module: "", series: "", page: "" };
+  let workspace: SpineWorkspace = { label: "", detail: "" };
+  let problem: { message: string; action?: { label: string; run(): void } } | null = null;
+  let headings: Heading[] = [];
+
+  const spine = document.createElement("aside");
+  spine.className = "dn-spine";
+  spine.setAttribute("aria-label", "This document");
+  spine.hidden = true;
+
+  const identity = document.createElement("div");
+  identity.className = "dn-spine-identity";
+
+  // A button, not a div with a click handler: "where am I" and "take me
+  // elsewhere" are the same gesture, and it has to be reachable by Tab.
+  const nameButton = document.createElement("button");
+  nameButton.type = "button";
+  nameButton.className = "dn-spine-name";
+  const breadcrumb = document.createElement("span");
+  breadcrumb.className = "dn-spine-breadcrumb";
+  const context = document.createElement("span");
+  context.className = "dn-spine-context";
+  nameButton.append(breadcrumb, context);
+
+  const fileName = document.createElement("span");
+  fileName.className = "dn-spine-file";
+  identity.append(fileName, nameButton);
+
+  const rule = document.createElement("div");
+  rule.className = "dn-spine-rule";
+
+  const problemBox = document.createElement("div");
+  problemBox.className = "dn-spine-problem";
+  problemBox.hidden = true;
+  problemBox.setAttribute("role", "status");
+  const problemText = document.createElement("p");
+  const problemAction = document.createElement("button");
+  problemAction.type = "button";
+  problemAction.className = "dn-spine-problem-action";
+  problemAction.hidden = true;
+  problemBox.append(problemText, problemAction);
+
+  const outline = document.createElement("nav");
+  outline.className = "dn-spine-outline";
+  outline.setAttribute("aria-label", "Headings in this document");
+
+  const foot = document.createElement("div");
+  foot.className = "dn-spine-foot";
+  const state = document.createElement("button");
+  state.type = "button";
+  state.className = "dn-spine-state";
+  const hint = document.createElement("span");
+  hint.className = "dn-spine-hint";
+  hint.textContent = "⌘K  anywhere";
+  foot.append(state, hint);
+
+  spine.append(identity, rule, problemBox, outline, foot);
+  document.body.appendChild(spine);
+
+  function renderIdentity(): void {
+    fileName.textContent = file.name;
+    fileName.classList.toggle("is-dirty", file.dirty);
+    const parts = [location.module, location.series, location.page].filter(Boolean);
+    breadcrumb.textContent = parts.length ? parts.join(" › ") : "Choose a document…";
+    breadcrumb.classList.toggle("is-empty", parts.length === 0);
+    context.textContent = [workspace.label, workspace.detail].filter(Boolean).join(" · ");
+    context.hidden = context.textContent === "";
+    nameButton.setAttribute(
+      "aria-label",
+      parts.length ? `${parts.join(", ")}. Open another document.` : "Choose a document to open",
+    );
+  }
+
+  function renderOutline(): void {
+    outline.replaceChildren();
+    // One heading is the title and tells a reader nothing they cannot
+    // already see at the top of the page; an outline of it is furniture.
+    if (headings.length < 2) return;
+    const top = Math.min(...headings.map((heading) => heading.level));
+    for (const heading of headings) {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "dn-spine-heading";
+      item.dataset["level"] = String(heading.level);
+      item.style.paddingInlineStart = `${(heading.level - top) * 14}px`;
+      item.textContent = heading.text;
+      item.addEventListener("click", () => {
+        document
+          .querySelector(`.dn-block[data-index="${heading.blockIndex}"]`)
+          ?.scrollIntoView({ block: "start", behavior: "smooth" });
+      });
+      outline.appendChild(item);
+    }
+  }
+
+  function renderState(): void {
+    state.textContent = file.dirty ? "Save this" : "Saved";
+    state.classList.toggle("is-dirty", file.dirty);
+    // Nothing to save is nothing to press. It stays in the tab order
+    // only while it is a real action.
+    state.disabled = !file.dirty;
+    state.setAttribute("aria-label", file.dirty ? `Save ${file.name}` : `${file.name} is saved`);
+  }
+
+  function renderProblem(): void {
+    problemBox.hidden = problem === null;
+    if (!problem) return;
+    problemText.textContent = problem.message;
+    problemAction.hidden = !problem.action;
+    if (problem.action) problemAction.textContent = problem.action.label;
+  }
+
+  function render(): void {
+    renderIdentity();
+    renderState();
+    renderProblem();
+  }
+
+  /** The real gutter, read off the page rather than computed from the
+   * settings — `measure`, `margins` and the window all move it, and the
+   * element already knows the answer to all three at once. */
+  function measureLayout(): void {
+    const page = document.querySelector<HTMLElement>("#dn-page");
+    if (!page) return;
+    const gutter = page.getBoundingClientRect().left;
+    const folded = gutter < MARGIN_MINIMUM;
+    document.documentElement.setAttribute("data-spine", folded ? "folded" : "margin");
+    document.documentElement.style.setProperty(
+      "--dn-spine-width",
+      folded ? "auto" : `${Math.min(SPINE_MAXIMUM, Math.round(gutter) - SPINE_GAP)}px`,
+    );
+  }
+
+  nameButton.addEventListener("click", host.openPalette);
+  state.addEventListener("click", () => { void host.save(); });
+  problemAction.addEventListener("click", () => problem?.action?.run());
+
+  const onResize = () => measureLayout();
+  window.addEventListener("resize", onResize);
+  // Catches a settings change too: measure and margins both resize this
+  // very element, so there is no second thing to subscribe to.
+  const observer = new ResizeObserver(onResize);
+  const page = document.querySelector<HTMLElement>("#dn-page");
+  if (page) observer.observe(page);
+
+  render();
+  measureLayout();
+
+  return {
+    setFile(next) { file = next; render(); },
+    setLocation(next) { location = next; renderIdentity(); },
+    setWorkspace(next) { workspace = next; renderIdentity(); },
+    refreshOutline() {
+      headings = headingsFrom(host.getSource());
+      renderOutline();
+    },
+    setProblem(next) { problem = next; renderProblem(); },
+    show() {
+      spine.hidden = false;
+      measureLayout();
+    },
+    destroy() {
+      window.removeEventListener("resize", onResize);
+      observer.disconnect();
+      document.documentElement.removeAttribute("data-spine");
+      document.documentElement.style.removeProperty("--dn-spine-width");
+      spine.remove();
+    },
+  };
+}

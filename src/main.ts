@@ -12,7 +12,11 @@ import { mountOutlinePanel } from "./outline-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountLinkCheckPanel } from "./link-check.ts";
 import { mountSeriesPanel } from "./series-panel.ts";
-import { mountCommandPalette } from "./command-palette.ts";
+import { mountWorkspacePalette, type WorkspacePalette } from "./workspace-palette.ts";
+import { mountSpine, type Spine } from "./spine.ts";
+import { registerCommands } from "./commands.ts";
+import type { Module } from "./modules.ts";
+import { canWriteFiles, openPath, readTextFile } from "./active-store.ts";
 import { todayVersion } from "./dialect.ts";
 import { activeDockContains, closeDockPanels, groupDockPanels, iconRail } from "./icon-rail.ts";
 import { mountWorkspaceNav } from "./workspace-nav.ts";
@@ -69,12 +73,29 @@ if (!page) throw new Error("index.html is missing #dn-page");
 let current: MountedDocument = mountDocument(page, STARTER_DOCUMENT);
 const legacyShell = new URLSearchParams(window.location.search).has("legacy");
 let workflow: WorkflowShell | null = null;
+let spine: Spine | null = null;
+let palette: WorkspacePalette | null = null;
+let modules: Module[] = [];
 let latestFileState: FileBarState | null = null;
 const workspaceNav = mountWorkspaceNav({
   progressive: !legacyShell,
-  onLocationChange: (location) => workflow?.setLocation(location),
+  onLocationChange: (location) => {
+    workflow?.setLocation(location);
+    spine?.setLocation({ module: location.module, series: location.series, page: location.page });
+  },
   onNavigate: () => workflow?.closeTransient(),
 });
+
+/** Every path that swaps the mounted document runs through here, so the
+ * spine's outline is never one document behind what is on screen. A
+ * `const` rather than a declaration: a hoisted function could be called
+ * before `page`'s own null check, which is exactly what the narrowing
+ * is there to prevent. */
+const remount = (source: string): void => {
+  current.destroy();
+  current = mountDocument(page, source);
+  spine?.refreshOutline();
+};
 let session: "local" | "github" | null = null;
 
 function chooseSession(next: "local" | "github"): void {
@@ -98,8 +119,7 @@ let repoPanel: RepoPanel | null = null;
 const fileBar = mountFileBar({
   getSource: () => current.getSource(),
   loadDocument(source, name) {
-    current.destroy();
-    current = mountDocument(page, source);
+    remount(source);
     workspaceNav.setCurrentPath(name);
   },
   onLocalOpen: () => {
@@ -114,6 +134,7 @@ const fileBar = mountFileBar({
   onStateChange: (state) => {
     latestFileState = state;
     workflow?.setFileState(state);
+    spine?.setFile({ name: state.name, dirty: state.dirty });
   },
 });
 const seriesPanel = mountSeriesPanel(getFileIndex);
@@ -121,20 +142,23 @@ const updateIndex = (index: Parameters<typeof setFileIndex>[0]) => {
   setFileIndex(index);
   workspaceNav.setIndex(index);
 };
-const updateModules = (modules: Parameters<typeof seriesPanel.setModules>[0]) => {
-  seriesPanel.setModules(modules);
-  workspaceNav.setModules(modules);
+const updateModules = (next: Module[]) => {
+  modules = next;
+  seriesPanel.setModules(next);
+  workspaceNav.setModules(next);
 };
 let folderPanel: FolderPanel | null = null;
 folderPanel = mountFolderPanel(fileBar, updateIndex, updateModules, (name) => {
   chooseSession("local");
   workflow?.setSession("local", name, "Local folder");
+  spine?.setWorkspace({ label: name, detail: "" });
+  spine?.show();
+  offerTheWorkspace();
 });
 repoPanel = mountRepoPanel({
   getSource: () => current.getSource(),
   loadDocument(source, name) {
-    current.destroy();
-    current = mountDocument(page, source);
+    remount(source);
     workspaceNav.setCurrentPath(name);
     fileBar.openExternal(name);
   },
@@ -145,6 +169,9 @@ repoPanel = mountRepoPanel({
     if (!legacyShell) repoPanel?.hide();
     workflow?.setRepoContext(context);
     workflow?.setSession("github", context.label, `${context.base} → ${context.branch}`);
+    spine?.setWorkspace({ label: context.label, detail: `${context.base} \u2192 ${context.branch}` });
+    spine?.show();
+    offerTheWorkspace();
   },
   onChooserClose: () => {
     if (!session) workflow?.cancelSourceChoice();
@@ -156,14 +183,24 @@ repoPanel = mountRepoPanel({
   onDocumentSaved: () => {
     fileBar.markSaved();
     workflow?.documentSaved();
+    spine?.setProblem(null);
   },
   onBranchChange: (path) => workflow?.noteBranchChange(path),
-  onContextChange: (context) => workflow?.setRepoContext(context),
+  onContextChange: (context) => {
+    workflow?.setRepoContext(context);
+    spine?.setWorkspace({ label: context.label, detail: `${context.base} \u2192 ${context.branch}` });
+  },
   // A refused push used to land only in the repository panel's own
   // status line, which the progressive shell keeps closed — so Save
   // could fail in complete silence. The shell shows it now; the panel
   // still says the same thing for anyone who has it open.
-  onProblem: (problem) => workflow?.reportProblem(problem),
+  onProblem: (problem) => {
+    workflow?.reportProblem(problem);
+    spine?.setProblem({
+      message: problem.message,
+      ...(problem.conflict ? { action: { label: "Show both", run: () => repoPanel?.reveal("conflict") } } : {}),
+    });
+  },
   onOpenSource: () => document.querySelector<HTMLButtonElement>(".dn-source-toggle")?.click(),
   onOrganizeModules: () => document.querySelector<HTMLButtonElement>(".dn-series-toggle")?.click(),
 });
@@ -171,8 +208,7 @@ mountOutlinePanel({ getSource: () => current.getSource() });
 mountSourceView({
   getSource: () => current.getSource(),
   loadDocument(source, _name) {
-    current.destroy();
-    current = mountDocument(page, source);
+    remount(source);
   },
 });
 mountLinkCheckPanel({ getSource: () => current.getSource(), getFileIndex });
@@ -211,33 +247,30 @@ if (legacyModulesToggle) {
   document.body.appendChild(legacyModulesToggle);
 }
 
+const clickToggle = (selector: string) => document.querySelector<HTMLButtonElement>(selector)?.click();
+
+/** A workspace has just opened and no document in it has. The palette is
+ * the one navigator now, so it is what arrives — rather than the three
+ * dependent `<select>` elements, which stay mounted as the thing that
+ * works out module › series › page for whatever is open (the spine's own
+ * breadcrumb) and no longer draw a surface of their own. */
+function offerTheWorkspace(): void {
+  // Only in the progressive shell. The legacy shell's rails are its own
+  // navigator, and a palette opening over them on arrival would be a
+  // second one nobody asked for.
+  if (legacyShell) return;
+  palette?.open();
+}
+
 if (!legacyShell) {
-  const clickToggle = (selector: string) => document.querySelector<HTMLButtonElement>(selector)?.click();
   workflow = mountWorkflowShell({
     chooseLocal: () => folderPanel?.choose() ?? Promise.resolve(false),
     chooseGithub: () => repoPanel?.showChooser(),
     saveCurrent: () => fileBar.saveCurrent(),
-    saveNewVersion: () => repoPanel?.pushNewVersion() ?? Promise.resolve(false),
-    canSaveNewVersion: () => repoPanel?.canPushNewVersion() ?? false,
     openPullRequest: () => repoPanel?.openPullRequest() ?? Promise.resolve(null),
     revealStore: (reason) => repoPanel?.reveal(reason),
-    toggleLocation: () => workspaceNav.toggle(),
-    openLocation: () => workspaceNav.open(),
-    closeLocation: () => workspaceNav.close(),
-    locationIsOpen: () => workspaceNav.isOpen(),
-    locationContains: (target) => workspaceNav.element.contains(target),
     closePanels: closeDockPanels,
     panelContains: activeDockContains,
-    openRawFiles: () => session === "github" ? repoPanel?.showChooser() : clickToggle(".dn-folder-toggle"),
-    openDocumentSource: () => clickToggle(".dn-source-toggle"),
-    openOutline: () => clickToggle(".dn-outline-toggle"),
-    openLinkCheck: () => clickToggle(".dn-linkcheck-toggle"),
-    openModuleOrganizer: () => clickToggle(".dn-series-toggle"),
-    openSettings: () => clickToggle(".dn-settings-toggle"),
-    openDeviceFile: () => fileBar.openDeviceFile(),
-    importNotebook: () => fileBar.importNotebook(),
-    exportNotebook: () => fileBar.exportNotebook(),
-    exportHtml: () => fileBar.exportHtml(),
     resetWorkspace: () => {
       // The shell has already asked whether dirty work may be discarded.
       // Clear the unload guard so the same decision is not asked twice.
@@ -247,7 +280,45 @@ if (!legacyShell) {
   });
   if (latestFileState) workflow.setFileState(latestFileState);
 }
-mountCommandPalette();
+// The spine and the palette: planning/UI_REVIEW.md §5, made real. The
+// spine is the header's replacement — identity, location and save state
+// as a caption in the margin the page already had. The palette is the
+// third question the header used to answer with a breadcrumb pill.
+if (!legacyShell) {
+  spine = mountSpine({
+    getSource: () => current.getSource(),
+    openPalette: () => palette?.open(),
+    save: () => fileBar.saveCurrent(),
+  });
+}
+
+// The palette is the app's, not one shell's: it replaced
+// `command-palette.ts`, which was always mounted, and every command in
+// it works the same whichever chrome is on screen.
+palette = mountWorkspacePalette({
+  getIndex: getFileIndex,
+  getModules: () => modules,
+  openPath,
+  // Only a store that can read a file without opening it can fill the
+  // preview pane. A folder can; a repository would spend a real API
+  // call per highlighted row, so it does not offer one and the pane
+  // shows what the index already knows.
+  readPath: async (path) => (canWriteFiles() ? readTextFile(path).catch(() => null) : null),
+});
+registerCommands([
+  { id: "appearance", label: "Appearance\u2026", section: "Appearance", keywords: ["settings", "theme", "dark", "font", "size", "measure", "margins", "tint", "line height"], detail: "Theme, typeface, text size, measure, margins, cell tint, and where Python loads from.", run: () => clickToggle(".dn-settings-toggle") },
+  { id: "source", label: "Whole-file source", section: "Document", keywords: ["markdown", "raw", "yaml", "cmd+/"], detail: "The whole file in one editor, front matter and fence markers included.", run: () => clickToggle(".dn-source-toggle") },
+  { id: "links", label: "Check tutorial links", section: "Document", keywords: ["tutorial:", "broken", "slug"], detail: "Reads every tutorial: link here and reports any whose slug is not in this workspace.", run: () => clickToggle(".dn-linkcheck-toggle") },
+  { id: "export-html", label: "Export a standalone HTML page", section: "Document", keywords: ["share", "send", "web"], detail: "The rendered document with its stylesheet inlined. Nothing to run.", run: () => fileBar.exportHtml() },
+  { id: "export-ipynb", label: "Export a Jupyter notebook", section: "Document", keywords: ["ipynb", "jupyter"], detail: "Exec cells become real code cells; the original fence text rides along so the trip back is lossless.", run: () => fileBar.exportNotebook() },
+  { id: "import-ipynb", label: "Import a Jupyter notebook\u2026", section: "Document", keywords: ["ipynb", "jupyter", "open"], detail: "Opens a .ipynb as a new markdown document.", run: () => { void fileBar.importNotebook(); } },
+  { id: "open-file", label: "Open a Markdown or YAML file\u2026", section: "Workspace", keywords: ["device", "disk"], detail: "One file from this device, outside whatever workspace is open.", run: () => { void fileBar.openDeviceFile(); } },
+  { id: "browse", label: "Browse workspace files\u2026", section: "Workspace", keywords: ["all files", "paths", "assets", "order.yaml"], detail: "The full file list, for assets, descriptors and anything the index does not carry.", run: () => { if (session === "github") repoPanel?.showChooser(); else clickToggle(".dn-folder-toggle"); } },
+  { id: "modules", label: "Arrange modules and series", section: "Workspace", keywords: ["reorder", "order", "curriculum", "course"], detail: "Move a tutorial within a series, or add one.", available: () => modules.length > 0, run: () => clickToggle(".dn-series-toggle") },
+  { id: "change-workspace", label: "Change workspace\u2026", section: "Workspace", keywords: ["folder", "repository", "switch"], detail: "Start again from the source choice.", available: () => session !== null, run: () => workflow?.requestReset() },
+  { id: "new-version", label: "Save as a new version\u2026", section: "Publish", keywords: ["release", "freeze", "version"], detail: "Freeze the committed release and push this as the new live version.", available: () => repoPanel?.canPushNewVersion() ?? false, run: () => { void repoPanel?.pushNewVersion(); } },
+  { id: "review", label: "Review repository changes", section: "Publish", keywords: ["publish", "pull request", "pr", "branch", "commit"], detail: "Everything changed on the working branch, and the way to a pull request.", available: () => workflow?.hasBranchChanges() ?? false, run: () => workflow?.openReview() },
+]);
 
 // Playwright (tests/e2e/) drives this same built page directly rather than
 // a second harness entry point, remounting whatever source a test needs
@@ -256,16 +327,19 @@ interface DewnoteTestHook {
   mount(source: string): void;
   getSource(): string;
   setFileIndex(index: Parameters<typeof setFileIndex>[0]): void;
-  setModules(modules: Parameters<typeof seriesPanel.setModules>[0]): void;
+  setModules(modules: Module[]): void;
 }
 (window as unknown as { __dewnote: DewnoteTestHook }).__dewnote = {
   mount(source: string): void {
-    current.destroy();
-    current = mountDocument(page, source);
+    remount(source);
   },
   getSource(): string {
     return current.getSource();
   },
-  setFileIndex,
-  setModules: seriesPanel.setModules,
+  // The same two functions a real open goes through, not the one
+  // consumer each used to reach: a test that sets an index or a set of
+  // modules should leave every reader of them agreeing, which is the
+  // whole point of there being one place to set them.
+  setFileIndex: updateIndex,
+  setModules: updateModules,
 };

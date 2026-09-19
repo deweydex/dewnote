@@ -35,9 +35,10 @@ rendering when blurred and editing when focused; Python and SQL cells
 that run on Pyodide in the page; a local-folder store and a GitHub store
 with branches, conflicts and draft pull requests; Jupyter import and
 export, standalone HTML export, and conversion between dialects; the
-progressive workspace shell (`workflow-shell.ts`) that replaces the old
-rails with one source choice, one document header and transient
-choosers.
+progressive shell — one source choice (`workflow-shell.ts`), a caption
+in the left margin carrying identity, location, outline and save state
+(`spine.ts`), and one key that reaches every tutorial, page, series and
+command in the workspace (`workspace-palette.ts`, over `commands.ts`).
 
 Not built: the Mac app (plan step 7), an OPFS private vault, and
 dewstack's `site=`/`app=` cells. `planning/PLAN.md` has the full list of

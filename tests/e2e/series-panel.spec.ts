@@ -216,9 +216,23 @@ test("with no module data at all, the panel says so instead of showing nothing",
   await expect(page.locator(".dn-series-empty")).toBeVisible();
 });
 
-test("the command palette can open the modules rail too", async ({ page }) => {
+test("the workspace palette can open the module organiser too", async ({ page }) => {
+  // The command is offered only once there are modules to arrange: a
+  // row that opens a panel saying "nothing here" is worse than no row.
+  await page.evaluate(() => {
+    const hook = window as unknown as { __dewnote: { setModules(modules: unknown[]): void } };
+    hook.__dewnote.setModules([
+      {
+        id: "data",
+        path: "modules/data.yaml",
+        title: "Data",
+        contents: [{ title: "A series", tutorials: ["filtering"], tutorialsRange: null, indent: "  " }],
+      },
+    ]);
+  });
+
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-palette-input").fill("Modules");
-  await page.locator(".dn-palette-item button").first().click();
+  await page.locator(".dn-wp-input").fill("arrange modules");
+  await page.locator(".dn-wp-row.is-active").click();
   await expect(page.locator(".dn-series-panel")).toBeVisible();
 });

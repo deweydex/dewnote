@@ -1800,3 +1800,88 @@ opened — a header naming one branch while pushes go to another is worse
 than no header at all. The field is still the same single input the
 push controls use; nothing is duplicated.
 *Cost to change: low. One `appendChild` and one callback.*
+
+**51 — The chrome is set in the document's own typeface, or it does not
+exist.** planning/UI_REVIEW.md §5, built. The header answered three
+questions — where am I, what state is this document in, how do I get
+somewhere else — and answered the first two with a toolbar: a bordered
+breadcrumb pill that read as a search field, a filename, and a solid
+orange Save that was the loudest thing on a screen whose whole aesthetic
+is restraint. The first two need a caption. `spine.ts` is that caption,
+in the margin the page already had and was not using — at 1440px with
+dewlab's 34rem measure there is about 450px of empty gutter each side —
+carrying the filename, the breadcrumb, the workspace and its branch, the
+document's own headings, the save state, and a held refusal. One side
+does a book's job; the other stays empty on purpose, which is also where
+a transient panel now lands without displacing anything.
+
+Save has no button. Cmd+S saves, the state line says whether it did, and
+clicking that line saves when there is something to save (it is disabled,
+and out of the tab order, when there is not). The dirty marker is a dot
+after the filename rather than a word, because a word beside a filename
+is louder than the filename.
+
+How much room the margin has depends on the window *and* on `measure`
+and `margins`, which are reader settings (decision 7) that reach the
+page as custom properties. A media query cannot read a custom property,
+so a CSS-only rule would have to hard-code a measure this app lets
+people change. A `ResizeObserver` on the page element reports the real
+gutter instead — it moves for a window resize and a settings change
+alike, since both resize that very element — and `<html>` gets
+`data-spine="margin"` or `"folded"` from it. Folded is the narrow
+treatment: the same lines across the top, in reading order, rather than
+a desktop column squeezed until nothing in it is legible.
+*Cost to change: moderate. One module and one block of CSS; nothing in
+the document surface or the stores knows the spine exists.*
+
+**52 — One key reaches the workspace, and a command exists once.**
+`command-palette.ts` held a dozen fixed rows, each of which found a
+hidden rail button by CSS selector and clicked it. It could do nothing a
+menu could not, and the workflow shell's own menu held the same actions
+under different names — what the menu called "Open a Markdown or YAML
+file…" the palette called "Import Markdown file…". Two vocabularies for
+one set of actions is how an interface stops being learnable: there is
+no name to remember, because there are two.
+
+`commands.ts` is the one list, registered by whoever owns the operation.
+`workspace-palette.ts` reads it, and reads the file index and the module
+descriptors beside it, so the four things it offers are Tutorials, Pages,
+Series and Do. dewlab has 122 tutorials across seven modules; three
+letters and Enter is an interface that scales to that, and the three
+dependent `<select>` elements it replaces are not. `workspace-nav.ts`
+stays mounted as the thing that still works out which module and series
+the open document sits in — the spine's breadcrumb — and no longer draws
+a surface of its own. The palette is what arrives when a workspace opens,
+because choosing a document is the next thing to do.
+
+Two decisions inside it are worth naming. **The sections are for the eye
+and the highlight is for the hand**, and answering both with one number
+was a real bug rather than a subtlety: typing "appear" put the cursor on
+the first *tutorial* whose letters contained a-p-p-e-a-r and Enter opened
+it instead of the appearance settings. `rankRows` returns the list in its
+fixed section order plus the index of the best-scoring row anywhere in
+it. And **the two unbounded sets are capped where commands are not**:
+eight tutorials and four pages, because a palette listing ninety
+tutorials is a file list with a text box on top — but every command,
+because there are a dozen, this is the only place they live now, and a
+reader who opens the palette with nothing typed is looking to find out
+what there is.
+
+The preview pane is what lets this replace a file list rather than sit
+beside one: a list of paths says where a file is, and this says what it
+says — the opening sentence and the headings, read from the file through
+the store. Only a store that can read without opening offers one; a
+repository would spend an API call per highlighted row, so its pane shows
+what the index already knows.
+*Cost to change: low for a command (one entry), moderate for the palette
+itself, which is one module with its ranking unit-tested.*
+
+**53 — dewlab's own site pages are documents like any other.**
+`pages/about.md`, `pages/home.md`, `pages/features.md` — what dewlab's
+`build.py` reads through `read_page()` and places in no module. They were
+always in the index and always openable, and they were filed under
+"Tutorials" with a blank note, which is the sort of small lie that makes
+a list untrustworthy. They get their own section and their own note now.
+Nothing else changed: they are ordinary markdown, and they open, edit and
+save back byte for byte through the same path a tutorial does.
+*Cost to change: low. One path test.*

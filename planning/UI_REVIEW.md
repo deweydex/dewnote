@@ -334,6 +334,10 @@ lands off-screen.
 
 ### A direction worth considering
 
+*(Built. `src/spine.ts`, `src/commands.ts`, `src/workspace-palette.ts`,
+decisions 51–53. What follows is the argument as it was made; §8 below
+says what landed and what it cost.)
+
 Taking the invitation to be bold seriously, the strongest move available
 is to stop having a header at all and let the palette be the interface.
 
@@ -431,3 +435,41 @@ without `block-menu.test.ts` learning about them, which had left CI red.
 - **`tests/e2e/pyodide.spec.ts`**, which cannot pass in this environment:
   the sandbox blocks `cdn.jsdelivr.net`, as `PLAN.md` step 3 already
   records.
+
+
+## 8. The direction, built
+
+§5 argued for stopping having a header and letting the palette be the
+interface. That is what `src/spine.ts`, `src/commands.ts` and
+`src/workspace-palette.ts` now are, and decisions 51–53 have the
+reasoning. What it turned out to mean in practice:
+
+**The header is gone rather than restyled.** `workflow-shell.ts` kept
+the source gate, the save banner and the change-review screen and lost
+everything else — the header, the workspace menu, the save menu. What
+they carried is either a caption in the margin or a row in the palette.
+The shell's host interface went from 24 methods to 7.
+
+**The three dropdowns are gone as a surface, not as code.**
+`workspace-nav.ts` stays mounted and still does the one thing nothing
+else does: work out which module and series the open document sits in,
+for the breadcrumb. It just never draws. That is the difference between
+retiring a surface and deleting a capability, and it is why the
+breadcrumb still knows where a practice page belongs.
+
+**The measured layout was the piece that had to be right.** `measure`
+and `margins` are reader settings, so the gutter the spine lives in is
+not a number anyone can write in CSS. A `ResizeObserver` on the page
+element answers for the window and the settings at once. Widening the
+measure to its maximum narrows the spine, and narrowing the window past
+the point where a column would be legible folds it to a line across the
+top — the responsive behaviour §3 said was promised and missing.
+
+**What is still open here.** The right margin now takes a docked panel,
+which is a happy accident rather than a designed place for one. The
+folded spine has no obvious touch affordance for the palette beyond the
+breadcrumb being a button. The palette has no preview against a
+repository, by choice, so a GitHub session gets a thinner pane than a
+folder one. And §4's four GitHub-store findings — the 350-call load, the
+commit per file, the in-memory change set, the reused branch — are
+untouched: none of them is chrome.
