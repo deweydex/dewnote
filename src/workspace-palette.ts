@@ -94,6 +94,12 @@ const SECTION_OF: Record<RowKind, string> = {
  * gesture meant to reveal it. */
 const LIMIT: Record<RowKind, number> = { tutorial: 8, page: 4, series: 6, command: Number.POSITIVE_INFINITY };
 
+/** How much a match on a hidden keyword — a path, an id, a synonym — is
+ * worth against a match on the words a reader can see. Enough to find a
+ * row nothing visible would have found, not enough to outrank one whose
+ * own title says it. */
+const KEYWORD_WEIGHT = 0.7;
+
 function ordinal(position: number): string {
   const names = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"];
   return names[position] ?? `${position + 1}th`;
@@ -179,18 +185,33 @@ export function headingsOf(source: string): string[] {
 export function rankRows(rows: readonly Row[], query: string): { rows: Row[]; best: number } {
   const scored: { row: Row; score: number }[] = [];
   for (const row of rows) {
-    const against = [row.label, ...(row.keywords ?? [])];
-    let best: number | null = null;
-    for (const text of against) {
-      const score = fuzzyScore(query, text);
-      if (score !== null && (best === null || score > best)) best = score;
+    // A keyword is invisible, so a row matched only by one is a weaker
+    // answer than a row matched by the words on screen — and without
+    // the discount the hidden text wins outright, because a slug is a
+    // subsequence goldmine: every hyphen in
+    // `mit-pdp-maths-prog-integration` scores as a word start, so
+    // "matri" pulled in every series of that module ahead of the
+    // tutorial actually called "What a Matrix Does to a Picture".
+    let best = fuzzyScore(query, row.label);
+    for (const keyword of row.keywords ?? []) {
+      const score = fuzzyScore(query, keyword);
+      if (score === null) continue;
+      const discounted = score * KEYWORD_WEIGHT;
+      if (best === null || discounted > best) best = discounted;
     }
     if (best !== null) scored.push({ row, score: best });
   }
   const kinds: RowKind[] = ["tutorial", "page", "series", "command"];
   const out: { row: Row; score: number }[] = [];
+  // Subsequence matching says yes to far more than a reader means:
+  // "matri" is inside "A Model That Corrects Itself" if you take the
+  // letters far enough apart. Once something has matched properly,
+  // anything scoring well under it is noise padding the list, so the
+  // best score sets the bar for the rest. An empty query has no bar,
+  // because every row scores zero and nothing is being asked for.
+  const bar = query ? Math.max(...scored.map((item) => item.score)) * 0.6 : Number.NEGATIVE_INFINITY;
   for (const kind of kinds) {
-    const ofKind = scored.filter((item) => item.row.kind === kind);
+    const ofKind = scored.filter((item) => item.row.kind === kind && item.score >= bar);
     // A stable sort keeps registration/index order among equal scores,
     // which is what makes an empty query show the workspace in its own
     // order rather than an arbitrary one.

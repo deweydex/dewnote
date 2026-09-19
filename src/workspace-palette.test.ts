@@ -25,7 +25,9 @@ const WORKSPACE: Row[] = [
 
 describe("rankRows", () => {
   test("sections keep their fixed order whatever the query", () => {
-    const { rows } = rankRows(WORKSPACE, "a");
+    // An empty query is the case where every kind is present at once,
+    // which is what makes it the one that proves the order.
+    const { rows } = rankRows(WORKSPACE, "");
     const kinds = [...new Set(rows.map((item) => item.kind))];
     expect(kinds).toEqual(["tutorial", "series", "command"]);
   });
@@ -37,9 +39,15 @@ describe("rankRows", () => {
     // appearance settings.
     const { rows, best } = rankRows(WORKSPACE, "appear");
     expect(rows[best]!.label).toBe("Appearance…");
-    // The eye still finds a tutorial where a tutorial always is.
-    expect(rows[0]!.kind).toBe("tutorial");
-    expect(rows[0]!.label).toBe("A Pipeline Every Reader Can Follow");
+  });
+
+  test("a section that only matched by coincidence is left out of its own turn", () => {
+    // "appear" is a subsequence of that tutorial's title, and the
+    // Tutorials section is drawn first — but a scattered match well
+    // below the best one is noise, so the section simply does not
+    // appear for this query rather than leading with a wrong answer.
+    const { rows } = rankRows(WORKSPACE, "appear");
+    expect(rows.map((item) => item.kind)).toEqual(["command"]);
   });
 
   test("a keyword nobody can see still wins the highlight", () => {
@@ -112,5 +120,59 @@ describe("headingsOf", () => {
 
   test("a `#` inside a fence is a comment, not a heading", () => {
     expect(headingsOf("# Title\n\n```python exec\nid: a\n# not a heading\n```\n\n## Real\n")).toEqual(["Real"]);
+  });
+});
+
+describe("the relevance bar", () => {
+  const CORPUS: Row[] = [
+    row("tutorial", "What a Matrix Does to a Picture"),
+    row("tutorial", "A Model That Corrects Itself"),
+    row("tutorial", "Making Sense of Data — Practice"),
+    row("tutorial", "A Grid of Numbers"),
+    row("tutorial", "Multiplying Grids"),
+  ];
+
+  test("once something matches properly, the scattered near-misses are dropped", () => {
+    // Every one of these contains m-a-t-r-i if you take the letters far
+    // enough apart. Only the one a reader means should be offered.
+    expect(rankRows(CORPUS, "matri").rows.map((item) => item.label)).toEqual([
+      "What a Matrix Does to a Picture",
+    ]);
+  });
+
+  test("a word sitting inside a title still counts as a proper match", () => {
+    // Greedy scanning takes the g in "Multiplying" and scatters the
+    // rest; scoring the whole query as one run finds the real word.
+    expect(rankRows(CORPUS, "grid").rows.map((item) => item.label)).toEqual([
+      "A Grid of Numbers",
+      "Multiplying Grids",
+    ]);
+  });
+
+  test("an empty query has no bar, because nothing is being asked for", () => {
+    expect(rankRows(CORPUS, "").rows).toHaveLength(CORPUS.length);
+  });
+});
+
+describe("keywords against labels", () => {
+  const CORPUS: Row[] = [
+    row("tutorial", "What a Matrix Does to a Picture", ["tutorials/what-a-matrix-does-to-a-picture/what-a-matrix-does-to-a-picture.md"]),
+    row("series", "Matrices", ["Computational Methods", "computational-methods"]),
+    row("series", "Programming Foundations", ["Programming and Maths, Integrated", "mit-pdp-maths-prog-integration"]),
+    row("series", "Capstone Project", ["Programming and Maths, Integrated", "mit-pdp-maths-prog-integration"]),
+  ];
+
+  test("a slug does not drag in every row that shares it", () => {
+    // Every hyphen in a slug reads as a word start, so before the
+    // discount "matri" pulled in every series of that module.
+    expect(rankRows(CORPUS, "matri").rows.map((item) => item.label)).toEqual([
+      "What a Matrix Does to a Picture",
+      "Matrices",
+    ]);
+  });
+
+  test("a keyword still finds a row nothing visible would have found", () => {
+    const { rows } = rankRows(CORPUS, "computational");
+    expect(rows.map((item) => item.label)).toEqual(["Matrices"]);
   });
 });

@@ -6,6 +6,7 @@ in whichever dialect a target site expects (dewlab, dewstack, or none), so
 nothing the editor writes is private to the editor. It runs as a single
 HTML file in a browser, and as a Mac application built from the same code.
 
+`docs/USING_DEWNOTE.md` is the guide for the person writing tutorials.
 `planning/PLAN.md` is the design and the order of work; `planning/DIALECTS.md`
 is the inventory of what the files it must open and save look like;
 `DECISIONS.md` records what was decided and why, in the same spirit as

@@ -1885,3 +1885,32 @@ a list untrustworthy. They get their own section and their own note now.
 Nothing else changed: they are ordinary markdown, and they open, edit and
 save back byte for byte through the same path a tutorial does.
 *Cost to change: low. One path test.*
+
+**54 — A hidden keyword is worth less than a visible label, and a weak
+match is worth nothing.** Found by photographing the palette against the
+real dewlab rather than a fixture. Typing "matri" returned eight
+tutorials, none of them the one called "What a Matrix Does to a Picture",
+and every series in one module. Three faults, all in the ranking:
+
+*Greedy scanning misses the alignment a reader means.* "grid" against
+"Multiplying Grids" takes the `g` in "Multiplying" and scatters the
+rest, scoring it below "A Grid of Numbers" although the word is right
+there. `fuzzyScore` now also scores the whole query as one contiguous
+run and takes the better of the two — one `indexOf`, rather than the
+backtracking a real fuzzy algorithm would need.
+
+*Subsequence matching says yes to far more than anyone means.* "matri"
+is inside "A Model That Corrects Itself" if you take the letters far
+enough apart. Once something has matched properly, anything well below
+it is padding, so the best score sets a bar at 60% and the rest are
+dropped. An empty query has no bar, since nothing is being asked for.
+
+*A slug is a subsequence goldmine.* Every hyphen in
+`mit-pdp-maths-prog-integration` reads as a word start, worth 6, so
+matching a series on its module id pulled in every series of that module
+ahead of the tutorial whose own title said "Matrix". Keyword matches —
+paths, ids, synonyms — are now worth 0.7 of a label match: enough to
+find a row nothing visible would have found ("ipynb" still finds "Export
+a Jupyter notebook"), not enough to outrank a row whose own title says
+it.
+*Cost to change: low. Three numbers, each with its own test.*

@@ -81,20 +81,44 @@ export function fuzzyScore(query: string, text: string): number | null {
   if (!query) return 0;
   const needle = query.toLowerCase();
   const haystack = text.toLowerCase();
+
+  /** What one matched character is worth where it landed. */
+  const worth = (found: number, previous: number): number => {
+    if (found === 0) return 12;
+    if (found === previous + 1) return 8;
+    if (!/[a-z0-9]/.test(haystack[found - 1] ?? "")) return 6;
+    return 1;
+  };
+
+  // The scan is greedy — it takes the leftmost letter that fits — and a
+  // greedy scan can miss the alignment a reader means. "grid" against
+  // "Multiplying Grids" takes the g in "Multiplying" and then has to
+  // scatter the rest, scoring it below "A Grid of Numbers" even though
+  // the word is right there. So the whole query as a contiguous run is
+  // scored separately, on the same scale, and the better of the two
+  // wins. Backtracking properly would cost a real algorithm; this costs
+  // one `indexOf` and fixes the case that actually comes up.
+  let best: number | null = null;
+  const whole = haystack.indexOf(needle);
+  if (whole !== -1) best = worth(whole, -2) + 8 * (needle.length - 1);
+
   let score = 0;
   let at = 0;
   let previous = -2;
   for (const character of needle) {
     const found = haystack.indexOf(character, at);
-    if (found === -1) return null;
-    if (found === 0) score += 12;
-    else if (found === previous + 1) score += 8;
-    else if (!/[a-z0-9]/.test(haystack[found - 1] ?? "")) score += 6;
-    else score += 1;
+    if (found === -1) {
+      if (best === null) return null;
+      score = Number.NEGATIVE_INFINITY;
+      break;
+    }
+    score += worth(found, previous);
     previous = found;
     at = found + 1;
   }
+  if (best === null || score > best) best = score;
+
   // A short text that matched is a closer match than a long one that
   // happened to contain the same letters somewhere.
-  return score - Math.min(haystack.length, 60) / 20;
+  return best - Math.min(haystack.length, 60) / 20;
 }
