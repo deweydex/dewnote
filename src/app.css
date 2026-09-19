@@ -388,6 +388,19 @@ body {
   font-family: var(--dl-font-family);
 }
 
+/* A refusal is not a notification. It reads as a held state, sits above
+   the confirmation's own quiet styling, and carries its own dismissal so
+   it can outlive the few seconds a confirmation gets. */
+.dn-workflow-toast.is-problem {
+  border-color: var(--dl-orange);
+  border-left-width: 4px;
+}
+
+.dn-workflow-toast.is-problem > span:first-child {
+  color: var(--dl-heading);
+  font-weight: 600;
+}
+
 .dn-workflow-toast-dismiss {
   min-width: 2.25rem !important;
   padding-inline: 0 !important;

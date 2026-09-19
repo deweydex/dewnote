@@ -47,6 +47,7 @@ import { isModuleFile, parseModuleFile, parseModuleFiles, parseModuleIndex, type
 import { setActiveStore } from "./active-store.ts";
 import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 import { prepareRelease } from "./release.ts";
+import { messageOf, type SaveProblem } from "./save-problem.ts";
 
 export interface RepoPanelHost {
   getSource(): string;
@@ -63,6 +64,12 @@ export interface RepoPanelHost {
   /** The initial repository chooser was dismissed before a session was
    * selected, so the source-choice screen can become interactive again. */
   onChooserClose?(): void;
+  /** The working branch, or the base it forks from, changed after the
+   * session opened. Without this the shell keeps displaying whichever
+   * branch happened to be in the field at connect time while pushes go
+   * somewhere else — the one piece of workspace identity an author has
+   * to be able to trust. */
+  onContextChange?(context: RepoSessionContext): void;
   /** A repository file was opened into the editor. */
   onDocumentOpen?(path: string): void;
   /** The current repository document was persisted successfully. */
@@ -70,6 +77,11 @@ export interface RepoPanelHost {
   /** Any commit made through the repository store, including module and
    * asset writes that do not involve the open editor document. */
   onBranchChange?(path: string): void;
+  /** A save this store refused, on its way to whatever the author is
+   * looking at instead. The panel still writes every one of these into
+   * its own status line; this is the same sentence, handed out, so a
+   * shell that keeps the panel closed does not swallow it. */
+  onProblem?(problem: SaveProblem): void;
   /** A raw descriptor should open in the whole-document source editor. */
   onOpenSource?(): void;
   onOrganizeModules?(): void;
@@ -83,6 +95,10 @@ export interface RepoSessionContext {
 
 export interface RepoPanel {
   pushCurrent(): Promise<boolean>;
+  /** Brings the panel forward with a particular section in view — the
+   * shell's route to a choice only this panel can offer, currently a
+   * push conflict's keep-mine/take-theirs pair. */
+  reveal(section?: "conflict"): void;
   pushNewVersion(): Promise<boolean>;
   canPushNewVersion(): boolean;
   openPullRequest(): Promise<string | null>;
@@ -244,11 +260,29 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   const ownerInput = textInput("owner", settings.owner);
   const repoInput = textInput("repo", settings.repo);
   const baseInput = textInput("main", settings.base);
+  const branchInput = textInput("dewnote-edits", settings.branch);
   const ownerRepoRow = document.createElement("div");
   ownerRepoRow.className = "dn-repo-owner-row";
   ownerRepoRow.append(ownerInput, repoInput);
   repoSection.appendChild(field("Owner / repo", ownerRepoRow));
   repoSection.appendChild(field("Base branch", baseInput));
+
+  // The working branch is the single most consequential thing about a
+  // repository session — it is where every Save lands and what a pull
+  // request is opened from — and it used to be visible only inside the
+  // push section, which stays hidden until a document is open. So an
+  // author connected a repository, saw `main → dewnote-edits` appear in
+  // the header, and had been given no chance to disagree. The field
+  // itself still lives with the push controls, where it belongs once
+  // work is under way; this is the same field, shown at the one moment
+  // the decision is being made.
+  const branchField = field("Working branch", branchInput);
+  repoSection.appendChild(branchField);
+
+  const branchHint = document.createElement("p");
+  branchHint.className = "dn-repo-hint";
+  branchHint.textContent = "Saves commit here, never to the base branch. Reuse a branch to keep adding to the same pull request, or name a new one to start a separate change.";
+  repoSection.appendChild(branchHint);
 
   const loadButton = document.createElement("button");
   loadButton.type = "button";
@@ -345,7 +379,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     }
     const ref = baseInput.value.trim() || "main";
     opened = { repo, file: { path }, ref };
-    host.onSessionOpen?.({ label: `${repo.owner}/${repo.repo}`, base: ref, branch: branchInput.value.trim() || "dewnote-edits" });
+    host.onSessionOpen?.({ ...contextValue(), label: `${repo.owner}/${repo.repo}`, base: ref });
     host.onDocumentOpen?.(path);
     hideConflict();
     renderPush();
@@ -733,7 +767,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       const indexResult = await refreshIndex(repo, ref, token, markdownFiles, moduleResult.modules);
       viewTabs.hidden = false;
       selectRepoView("modules");
-      host.onSessionOpen?.({ label: `${repo.owner}/${repo.repo}`, base: ref, branch: branchInput.value.trim() || "dewnote-edits" });
+      host.onSessionOpen?.({ ...contextValue(), label: `${repo.owner}/${repo.repo}`, base: ref });
       const warnings = [
         ...moduleResult.failures,
         ...moduleResult.invalid.map((path) => `${path}: invalid module YAML`),
@@ -778,8 +812,6 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   // ------------------------------------------------------------- push
   const pushSection = document.createElement("section");
   pushSection.className = "dn-repo-section";
-  const branchInput = textInput("dewnote-edits", settings.branch);
-  pushSection.appendChild(field("Working branch", branchInput));
 
   const pushButton = document.createElement("button");
   pushButton.type = "button";
@@ -858,12 +890,30 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   conflictSection.append(keepMineButton, takeTheirsButton);
   panel.appendChild(conflictSection);
 
+  function contextValue(): RepoSessionContext {
+    const repo = currentRepo();
+    return {
+      label: repo.owner && repo.repo ? `${repo.owner}/${repo.repo}` : "GitHub repository",
+      base: baseInput.value.trim() || "main",
+      branch: branchInput.value.trim() || "dewnote-edits",
+    };
+  }
+
+  /** Every refusal this store can give, said once and in two places: the
+   * panel's own status line, for a reader who has the panel open, and
+   * the host, for the shell that keeps it closed. */
+  function refuse(message: string, conflict = false): false {
+    pushStatus.textContent = message;
+    host.onProblem?.({ message, conflict });
+    return false;
+  }
+
   function showConflict(next: Conflict) {
     conflict = next;
     minePre.textContent = next.mine;
     theirsPre.textContent = next.theirsContent;
     conflictSection.hidden = false;
-    pushStatus.textContent = "Conflict — choose a version below.";
+    refuse(`${next.branch} already has a different version of this file. Choose which one to keep.`, true);
   }
   function hideConflict() {
     conflict = null;
@@ -874,7 +924,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     if (!opened || !conflict) return;
     const token = currentToken();
     if (!token) {
-      pushStatus.textContent = "Enter a token first.";
+      refuse("Enter a GitHub token first.");
       return;
     }
     const { mine, theirsSha, branch } = conflict;
@@ -888,7 +938,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       markBranchChanged(opened.file.path);
       host.onDocumentSaved?.();
     } catch (err) {
-      pushStatus.textContent = err instanceof Error ? err.message : String(err);
+      refuse(messageOf(err));
     } finally {
       keepMineButton.disabled = false;
     }
@@ -914,7 +964,17 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     pushButton.textContent = opened.file.sha ? `Push to ${branch}` : `Push new file to ${branch}`;
     releaseButton.hidden = !opened.file.sha || !opened.originalContent || !/^(?:.*\/)?tutorials\/([^/]+)\/\1\.md$/.test(opened.file.path);
   }
-  branchInput.addEventListener("input", renderPush);
+  /** The header's `base → branch` line is workspace identity, so it
+   * follows the fields rather than freezing at whatever they said when
+   * the session opened. */
+  function announceContext(): void {
+    host.onContextChange?.(contextValue());
+  }
+  branchInput.addEventListener("input", () => {
+    renderPush();
+    announceContext();
+  });
+  baseInput.addEventListener("input", announceContext);
 
   function markBranchChanged(path = opened?.file.path ?? "Repository changes"): void {
     prButton.hidden = false;
@@ -925,10 +985,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   async function pushCurrent(): Promise<boolean> {
     if (!opened) return false;
     const token = currentToken();
-    if (!token) {
-      pushStatus.textContent = "Enter a token first.";
-      return false;
-    }
+    if (!token) return refuse("Enter a GitHub token first.");
     const branch = branchInput.value.trim() || "dewnote-edits";
     const base = baseInput.value.trim() || "main";
     saveRepoSettings({ owner: opened.repo.owner, repo: opened.repo.repo, base, branch });
@@ -952,16 +1009,16 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
           const theirs = await getFileContent(opened.repo, opened.file.path, branch, token);
           showConflict({ mine, theirsContent: theirs.content, theirsSha: theirs.sha, branch });
         } catch (fetchErr) {
-          pushStatus.textContent = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+          refuse(messageOf(fetchErr));
         }
       } else if (err instanceof GithubApiError && err.status === 422 && isNewFile) {
         // No sha was ever fetched for this path, so there is no "theirs"
         // to show the way an edit's own 409 conflict has — a plain
         // message and a different path or a real open is the fix here,
         // not a diff view built for a case with nothing to diff against.
-        pushStatus.textContent = `A file already exists at ${opened.file.path} on ${branch} — pick a different path, or open that file from the list above to edit it instead.`;
+        refuse(`A file already exists at ${opened.file.path} on ${branch} — pick a different path, or open that file from the list above to edit it instead.`);
       } else {
-        pushStatus.textContent = err instanceof Error ? err.message : String(err);
+        refuse(messageOf(err));
       }
       return false;
     } finally {
@@ -973,19 +1030,13 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   async function pushNewVersion(): Promise<boolean> {
     if (!opened?.file.sha || opened.originalContent === undefined) return false;
     const token = currentToken();
-    if (!token) {
-      pushStatus.textContent = "Enter a token first.";
-      return false;
-    }
+    if (!token) return refuse("Enter a GitHub token first.");
     const mine = releaseSourceOnPointerDown ?? host.getSource();
     releaseSourceOnPointerDown = null;
     const entry = fileIndex.find((item) => item.path === opened!.file.path);
     const family = fileIndex.filter((item) => item.id && item.id === entry?.id).map((item) => item.version);
     const prepared = prepareRelease(opened.file.path, opened.originalContent, mine, family);
-    if ("error" in prepared) {
-      pushStatus.textContent = prepared.error;
-      return false;
-    }
+    if ("error" in prepared) return refuse(prepared.error);
     const branch = branchInput.value.trim() || "dewnote-edits";
     const base = baseInput.value.trim() || "main";
     releaseButton.disabled = true;
@@ -1040,9 +1091,9 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       return true;
     } catch (err) {
       if (err instanceof GithubApiError && err.status === 409) {
-        pushStatus.textContent = "The live file changed on the working branch. Reload it before creating a new version.";
+        refuse("The live file changed on the working branch. Reload it before creating a new version.");
       } else {
-        pushStatus.textContent = err instanceof Error ? err.message : String(err);
+        refuse(messageOf(err));
       }
       return false;
     } finally {
@@ -1055,7 +1106,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   async function openCurrentPullRequest(): Promise<string | null> {
     const token = currentToken();
     if (!token) {
-      pushStatus.textContent = "Enter a token first.";
+      refuse("Enter a GitHub token first.");
       return null;
     }
     const branch = branchInput.value.trim() || "dewnote-edits";
@@ -1064,7 +1115,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     try {
       const repo = currentRepo();
       if (!repo.owner || !repo.repo) {
-        pushStatus.textContent = "Enter an owner and repo.";
+        refuse("Enter a repository owner and name.");
         return null;
       }
       const title = opened ? `Edit ${opened.file.path} from dewnote` : "Update modules from dewnote";
@@ -1073,7 +1124,7 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
       window.open(pr.html_url, "_blank", "noopener");
       return pr.html_url;
     } catch (err) {
-      pushStatus.textContent = err instanceof Error ? err.message : String(err);
+      refuse(messageOf(err));
       return null;
     } finally {
       prButton.disabled = false;
@@ -1098,17 +1149,17 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
     showChooser() {
       if (panel.hidden) toggle.click();
     },
+    reveal(section) {
+      if (panel.hidden) toggle.click();
+      if (section === "conflict" && !conflictSection.hidden) {
+        conflictSection.scrollIntoView({ block: "nearest" });
+        keepMineButton.focus();
+      }
+    },
     hide() {
       if (!panel.hidden) closeButton.click();
     },
-    getContext() {
-      const repo = currentRepo();
-      return {
-        label: repo.owner && repo.repo ? `${repo.owner}/${repo.repo}` : "GitHub repository",
-        base: baseInput.value.trim() || "main",
-        branch: branchInput.value.trim() || "dewnote-edits",
-      };
-    },
+    getContext: contextValue,
     destroy() {
       toggle.remove();
       panel.remove();

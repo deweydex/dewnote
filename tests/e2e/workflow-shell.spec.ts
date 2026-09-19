@@ -40,9 +40,17 @@ async function json(route: Route, body: unknown): Promise<void> {
   await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
 }
 
-async function stubGithub(page: Page): Promise<void> {
+async function stubGithub(page: Page, options: { failPush?: boolean } = {}): Promise<void> {
   await page.route("https://api.github.com/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (/\/git\/ref\/heads\//.test(path)) return json(route, { object: { sha: "branch-sha" } });
+    if (method === "PUT" && /\/contents\//.test(path)) {
+      if (!options.failPush) return json(route, { content: { sha: "pushed-sha" } });
+      // GitHub's own answer when the blob sha no longer matches: someone
+      // else changed this file on the branch since it was opened.
+      return route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ message: "does not match" }) });
+    }
     if (/\/git\/trees\//.test(path)) {
       return json(route, { tree: [
         { path: "tutorials/a-rule/a-rule.md", type: "blob", sha: "document-sha" },
@@ -77,17 +85,37 @@ test("a local choice asks for a real document before showing its breadcrumb", as
   await expect(page.locator(".dn-source-gate")).toBeHidden();
   await expect(page.locator(".dn-workflow-header")).toBeVisible();
   await expect(page.locator(".dn-workflow-identity strong")).toHaveText("Teaching notes");
+  // Opening a workspace is not opening a document. Until one of its
+  // tutorials is on screen the header invites a choice rather than
+  // naming a place nothing is at.
   await expect(page.locator(".dn-workflow-file-name")).toHaveText("No document selected");
   await expect(page.locator(".dn-workflow-location")).toHaveText("Choose a document");
   await expect(page.locator(".dn-workspace-nav")).toBeVisible();
   await expect(page.locator(".dn-workspace-nav-module")).toHaveValue("foundations");
   await expect(page.locator(".dn-workspace-nav-series")).toHaveValue("First steps");
-
+  // Nothing is preselected, so Open document has nothing to do until a
+  // real choice is made — a `<select>` resting on its first option is
+  // the browser's choice, not the author's.
+  await expect(page.locator(".dn-workspace-nav-page")).toHaveValue("");
   await page.locator(".dn-workspace-nav-open").click();
+  await expect(page.locator(".dn-workspace-nav")).toBeVisible();
+
+  await page.locator(".dn-workspace-nav-page").selectOption({ label: "A Rule" });
   await expect(page.locator(".dn-workspace-nav")).toBeHidden();
   await expect(page.locator(".dn-workflow-file-name")).toHaveText("tutorials/a-rule/a-rule.md");
   await expect(page.locator(".dn-workflow-location")).toContainText("Foundations › First steps › A Rule");
   await expect(page.locator(".dn-page h1")).toHaveText("A Rule");
+});
+
+test("the first tutorial in a series can be opened from the chooser", async ({ page }) => {
+  // A `<select>` pre-selects its first option, so before the placeholder
+  // existed the one tutorial the chooser already pointed at was the one
+  // tutorial no `change` event could ever open.
+  await page.getByRole("button", { name: /Open a local folder/ }).click();
+  await page.locator(".dn-workspace-nav-page").selectOption({ label: "A Rule" });
+  await expect(page.locator(".dn-workspace-nav")).toBeHidden();
+  await expect(page.locator(".dn-workflow-location")).toContainText("A Rule");
+  await expect(page.locator(".dn-page")).toContainText("A Rule");
 });
 
 test("workspace and save choices are mutually exclusive and dismiss with Escape", async ({ page }) => {
@@ -129,12 +157,59 @@ test("GitHub connection discovers modules, then yields to the document workflow"
   await expect(repository).toBeHidden();
   await expect(page.locator(".dn-workflow-identity strong")).toHaveText("deweydex/dewlab");
   await expect(page.locator(".dn-workflow-file-name")).toHaveText("No document selected");
+  // The working branch is chosen before connecting, not discovered
+  // afterwards in a panel this shell keeps closed.
+  await expect(page.locator(".dn-workflow-identity span")).toHaveText("main → dewnote-edits");
   await expect(page.locator(".dn-workspace-nav")).toBeVisible();
   await expect(page.locator(".dn-workspace-nav-module")).toHaveValue("foundations");
-  await expect(page.locator(".dn-workspace-nav-page option")).toHaveCount(1);
-  await page.locator(".dn-workspace-nav-open").click();
+  // One real tutorial, plus the placeholder that keeps the chooser from
+  // resting on a page nobody picked.
+  await expect(page.locator(".dn-workspace-nav-page option")).toHaveCount(2);
+  await page.locator(".dn-workspace-nav-page").selectOption({ label: "A Rule" });
   await expect(page.locator(".dn-workflow-file-name")).toHaveText("tutorials/a-rule/a-rule.md");
   await expect(page.locator(".dn-workflow-location")).toContainText("Foundations › First steps › A Rule");
+});
+
+test("a refused push is said out loud rather than left in a closed panel", async ({ page }) => {
+  // The repository panel writes every refusal into its own status line,
+  // and the progressive shell closes that panel while a document is
+  // open. Without a route out, Save could fail in total silence: the
+  // push never happened, nothing said so, and the only trace was a
+  // dirty marker that stayed lit.
+  await stubGithub(page, { failPush: true });
+  await page.getByRole("button", { name: /Connect a GitHub repository/ }).click();
+  const repository = page.locator(".dn-repo-panel");
+  await repository.locator('input[type="password"]').fill("test-token");
+  const ownerRepo = repository.locator(".dn-repo-owner-row input");
+  await ownerRepo.nth(0).fill("deweydex");
+  await ownerRepo.nth(1).fill("dewlab");
+  await repository.locator(".dn-repo-load").click();
+  await expect(repository).toBeHidden();
+
+  await page.locator(".dn-workspace-nav-page").selectOption({ label: "A Rule" });
+  await expect(page.locator(".dn-page")).toContainText("A Rule");
+
+  // Edit first: the case worth guarding is a refusal with real work
+  // behind it, where saying nothing loses the edit.
+  await page.locator(".dn-block-render").first().click();
+  await page.keyboard.type("Edited. ");
+  await page.locator(".dn-page").click({ position: { x: 4, y: 320 } });
+  await expect(page.locator(".dn-workflow-save-state")).toHaveText("Unsaved changes");
+
+  await page.locator(".dn-workflow-save").click();
+  const toast = page.locator(".dn-workflow-toast");
+  await expect(toast).toBeVisible();
+  await expect(toast).toHaveClass(/is-problem/);
+  await expect(toast).toContainText("dewnote-edits");
+  // The push did not happen, so the document is still unsaved and the
+  // header must keep saying so rather than settling to "Saved".
+  await expect(page.locator(".dn-workflow-save-state")).toHaveText("Unsaved changes");
+
+  // A conflict is the one refusal with a choice behind it, and that
+  // choice only exists inside the store's own panel.
+  await toast.getByRole("button", { name: "Show me" }).click();
+  await expect(repository).toBeVisible();
+  await expect(page.locator(".dn-repo-conflict")).toBeVisible();
 });
 
 test("closing repository setup returns to the source choice", async ({ page }) => {

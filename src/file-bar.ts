@@ -294,7 +294,7 @@ export function mountFileBar(host: FileBarHost): FileBar {
   });
   const exportHtml = () => {
     const content = host.getSource();
-    const html = buildStandaloneHtmlPage(content, collectPageCss());
+    const html = buildStandaloneHtmlPage(content, collectPageCss(content));
     const baseName = (opened?.name ?? suggestedFilename(content)).replace(/\.md$/i, "");
     downloadAsFile(`${baseName}.html`, html, "text/html");
   };

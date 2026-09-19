@@ -1715,3 +1715,88 @@ page's own runtime is still exactly what dewlab ships.
 *Cost to change: low. Two table entries and two small template
 functions; the preview is one new branch in the same `renderBlockPreview`
 family every other fence kind already goes through.*
+
+**47 — A store reports a refused save; it does not only write one down.**
+Found by driving the built app against a mocked GitHub that answers a
+push with 409. The repository panel has always written every refusal —
+missing token, conflicting sha, taken path — into its own status line,
+which was the whole interface for as long as the panel was the
+interface. The progressive shell (#68, #69) keeps that panel closed once a
+session is under way, so the refusal was landing on a surface nobody could see:
+the author edited, pressed Save, the push did not happen, the previous
+success toast was still on screen saying it had, and the conflict panel
+holding both versions was revealed inside an element with
+`display: none`. The only trace was the dirty marker staying lit, which
+is indistinguishable from not having pressed Save at all — and the next
+thing anyone does after saving is close the tab. `save-problem.ts` is the
+channel: one sentence, already written for a reader, plus a
+`conflict` flag for the one refusal that has a choice behind it rather
+than just a cause. The panel still says the same thing for anyone who
+has it open; the shell shows it in the slot a confirmation uses, with the
+opposite lifetime — a confirmation leaves after five seconds, a refusal
+holds until it is dismissed or another save succeeds — and a conflict's
+banner carries a control that opens the panel where the two versions
+are. The alternative — the
+shell paraphrasing the conflict and offering keep/take itself — was
+rejected because there would then be two places that believe they own
+the resolution.
+*Cost to change: low. One optional host callback and one banner; a
+second store gaining a refusal of its own implements the same callback.*
+
+**48 — An export carries the document, not the editor.** Measured rather
+than assumed: a 13 KB tutorial exported as a standalone page came to
+1.54 MB, of which 1.44 MB was twenty `@font-face` rules carrying
+KaTeX's webfonts as base64 — shipped whether or not the document had a
+formula anywhere in it — and most of the remainder described a
+repository panel, a command palette, a settings dialog and a CodeMirror
+editor that an exported page has none of. `collectPageCss` copied every
+active rule because that was the cheapest correct thing when it was
+written, and "a page to send to someone" (plan §5.8) is the one artefact
+here whose whole job is to travel. Fonts now travel only with maths, and
+a style rule survives only when one of its selectors matches something
+in the rendered document — tested against the real rendered thing, with
+pseudo-elements and interaction states stripped first, rather than
+guessed from selector text. Document-wide selectors (`:root`, `html`,
+`body`, `*`) are kept unconditionally, since that is where the theme's
+custom properties live, and anything unrecognised is kept, because an
+export is better slightly too large than subtly wrong. A maths-free
+tutorial now exports at 21 KB. One with maths is still 1.44 MB, all of
+it fonts; subsetting KaTeX to the glyphs a document uses is the next
+step and is not attempted here.
+Alongside it, the same export gained the handful of rules the live
+editor never needed: a fence on screen is a CodeMirror instance inside
+`.dn-block-source`, an exported one is a plain `<pre><code>` that
+nothing in `app.css` had ever described, so every exported code block
+came out unindented and running off the right edge on any long line.
+*Cost to change: low, and reversible — deleting the filter restores the
+previous behaviour exactly.*
+
+**49 — The location chooser preselects nothing.** A `<select>` selects
+its first option whether or not that option is true of anything, and the
+chooser is three of them. That cost two things at once: opening a folder
+or a repository put a breadcrumb in the header describing a page nobody
+had opened, and the page select rested on the first tutorial in the
+series so that choosing it fired no `change` event, making it the one
+page that route could not open. #69 closed the first half from the
+reporting end — no location until a real `currentPath` exists — and gave
+the second a second route in with an "Open document" button. This
+closes the cause: a placeholder option, so nothing is shown as chosen
+until someone chooses it, and Open document has nothing to do until then.
+A `<select>` resting on its first option is the browser's choice, not
+the author's, and an interface that asks for an explicit document choice
+should not preselect one on the author's behalf.
+*Cost to change: low. One option.*
+
+**50 — The working branch is chosen before connecting, not discovered
+afterwards.** It lived in the push section, which stays hidden until a
+document is open, so an author connected a repository, watched
+`main → dewnote-edits` appear in the header as passive workspace
+identity, and had been given no moment at which to disagree with either
+name. It is where every Save lands and what a pull request is opened
+from. The field is now shown with the owner, repo and base branch, with
+one sentence saying what a working branch is for, and the header follows
+the field rather than freezing at whatever it held when the session
+opened — a header naming one branch while pushes go to another is worse
+than no header at all. The field is still the same single input the
+push controls use; nothing is duplicated.
+*Cost to change: low. One `appendChild` and one callback.*
