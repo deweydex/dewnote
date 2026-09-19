@@ -212,6 +212,7 @@ if (!legacyShell) {
     chooseGithub: () => repoPanel?.showChooser(),
     saveCurrent: () => fileBar.saveCurrent(),
     saveNewVersion: () => repoPanel?.pushNewVersion() ?? Promise.resolve(false),
+    canSaveNewVersion: () => repoPanel?.canPushNewVersion() ?? false,
     openPullRequest: () => repoPanel?.openPullRequest() ?? Promise.resolve(null),
     toggleLocation: () => workspaceNav.toggle(),
     closeLocation: () => workspaceNav.close(),
@@ -227,7 +228,12 @@ if (!legacyShell) {
     importNotebook: () => fileBar.importNotebook(),
     exportNotebook: () => fileBar.exportNotebook(),
     exportHtml: () => fileBar.exportHtml(),
-    resetWorkspace: () => window.location.reload(),
+    resetWorkspace: () => {
+      // The shell has already asked whether dirty work may be discarded.
+      // Clear the unload guard so the same decision is not asked twice.
+      fileBar.markSaved();
+      window.location.reload();
+    },
   });
   if (latestFileState) workflow.setFileState(latestFileState);
 }

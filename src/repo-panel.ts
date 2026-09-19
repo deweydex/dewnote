@@ -84,6 +84,7 @@ export interface RepoSessionContext {
 export interface RepoPanel {
   pushCurrent(): Promise<boolean>;
   pushNewVersion(): Promise<boolean>;
+  canPushNewVersion(): boolean;
   openPullRequest(): Promise<string | null>;
   showChooser(): void;
   hide(): void;
@@ -1090,6 +1091,9 @@ export function mountRepoPanel(host: RepoPanelHost): RepoPanel {
   return {
     pushCurrent,
     pushNewVersion,
+    canPushNewVersion() {
+      return Boolean(opened?.file.sha && opened.originalContent !== undefined && /^(?:.*\/)?tutorials\/([^/]+)\/\1\.md$/.test(opened.file.path));
+    },
     openPullRequest: openCurrentPullRequest,
     showChooser() {
       if (panel.hidden) toggle.click();

@@ -9,6 +9,7 @@ export interface WorkflowShellHost {
   chooseGithub(): void;
   saveCurrent(): Promise<boolean>;
   saveNewVersion(): Promise<boolean>;
+  canSaveNewVersion(): boolean;
   openPullRequest(): Promise<string | null>;
   toggleLocation(): void;
   closeLocation(): void;
@@ -197,7 +198,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
     const parts = [location.module, location.series, location.page].filter(Boolean);
     locationButton.textContent = parts.length ? parts.join(" › ") : location.available ? "Choose a document" : "Browse files";
     locationButton.setAttribute("aria-label", location.available ? `Current location: ${parts.join(", ")}. Choose another document.` : "Browse workspace files");
-    saveVersion.hidden = session !== "github";
+    saveVersion.hidden = session !== "github" || !host.canSaveNewVersion();
     modules.hidden = !location.available;
     reviewButton.hidden = session !== "github" || changedPaths.size === 0;
   }
@@ -293,6 +294,7 @@ export function mountWorkflowShell(host: WorkflowShellHost): WorkflowShell {
   });
 
   render();
+  localChoice.focus();
 
   return {
     setSession(kind, label, detail) {
