@@ -147,6 +147,34 @@ test("inactive inline Markdown stays folded instead of reflowing the paragraph",
   expect(Math.abs(nextAfter - nextBefore)).toBeLessThanOrEqual(0.5);
 });
 
+test("a caret in a link's words reveals its brackets, not its address", async ({ page }) => {
+  // Editing the words of a link does not require seeing where it points,
+  // and an address is long: revealing one for a caret in the label
+  // re-wrapped the paragraph and pushed everything below it down a line.
+  await mount(page, "Read the [next tutorial](https://example.com/a/very/long/url/that/would/reflow/the/paragraph) before continuing with this exercise about it.\n\nFollowing paragraph.\n");
+  const first = page.locator(".dn-block").first();
+  const second = page.locator(".dn-block").nth(1);
+  const beforeHeight = await first.evaluate((element) => element.getBoundingClientRect().height);
+  const nextBefore = await second.evaluate((element) => element.getBoundingClientRect().y);
+
+  await first.locator(".dn-block-render").click();
+  await page.getByText("next tutorial").last().click();
+
+  // The brackets say it is a link and give the address somewhere to be
+  // reached from; the address itself stays folded.
+  await expect(first.locator(".cm-content")).toContainText("[next tutorial]()");
+  await expect(first.locator(".cm-content")).not.toContainText("example.com");
+  expect(Math.abs((await first.evaluate((e) => e.getBoundingClientRect().height)) - beforeHeight)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs((await second.evaluate((e) => e.getBoundingClientRect().y)) - nextBefore)).toBeLessThanOrEqual(0.5);
+
+  // Walking into the address reveals it, so it stays editable.
+  for (let step = 0; step < 20; step += 1) {
+    await page.keyboard.press("ArrowRight");
+    if ((await first.locator(".cm-content").innerText()).includes("example.com")) break;
+  }
+  await expect(first.locator(".cm-content")).toContainText("example.com");
+});
+
 test("an answer summary opens the rendered fold; editing exposes its body, not its HTML wrapper", async ({ page }) => {
   const source = '<details class="dl-answer"><summary>answer</summary>\n\nThe **answer** is 4.\n\n</details>\n';
   await mount(page, source);

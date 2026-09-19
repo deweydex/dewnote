@@ -89,8 +89,18 @@ is at the top.
 
 ## 4. Writing
 
-Click any paragraph to edit its markdown. Click away to see it rendered
-again. The text does not move between the two states.
+Click any paragraph to edit it. Nothing moves: the text stays in exactly
+the same place, in the same typeface, at the same size. Bold stays bold,
+italic stays italic, links stay links, inline code keeps its box.
+
+Markdown punctuation stays hidden until your caret enters the thing it
+marks. Put the caret in a bold phrase and its `**` appear, around that
+phrase only. Move away and they go again.
+
+A link is the one exception worth knowing: the caret in its words shows
+`[the words]()`, and the address stays folded. Arrow right past the `(`
+to see and edit the address. This is so that clicking a link's words
+never re-wraps the paragraph.
 
 Between blocks, hover for a **+** to add a paragraph, a code cell, maths,
 a hint, an image or a link. In an empty paragraph, typing **/** offers the

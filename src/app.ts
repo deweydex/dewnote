@@ -130,7 +130,17 @@ function proseMarkdownDecorations(view: EditorView): DecorationSet {
   syntaxTree(view.state).iterate({
     enter(node) {
       const parent = node.node.parent;
-      const active = Boolean(parent && caret >= parent.from && caret <= parent.to);
+      // A URL answers to its own range, not to the whole link's. Putting
+      // the caret in a link's *label* used to reveal the address too,
+      // and an address is long: measured on a real tutorial,
+      // `(tutorial:grid-of-numbers)` appearing re-wrapped the paragraph
+      // onto a fourth line and pushed everything below it down 29px,
+      // for a caret nowhere near the part that changed. Editing the
+      // words of a link does not require seeing where it points. The
+      // brackets still reveal with the label, so the address is one
+      // arrow key away and visibly there to reach.
+      const scope = node.name === "URL" ? node.node : parent;
+      const active = Boolean(scope && caret >= scope.from && caret <= scope.to);
       if (!active && ["EmphasisMark", "LinkMark", "URL", "CodeMark"].includes(node.name)) {
         ranges.push(Decoration.replace({}).range(node.from, node.to));
         return;

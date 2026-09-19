@@ -1914,3 +1914,23 @@ find a row nothing visible would have found ("ipynb" still finds "Export
 a Jupyter notebook"), not enough to outrank a row whose own title says
 it.
 *Cost to change: low. Three numbers, each with its own test.*
+
+**55 — A URL answers to its own range, not to its link's.** The inline
+live preview (decision 2's own upgrade path, built in #69) folds
+Markdown punctuation away and reveals it only where the caret is, and
+`active` was computed from a node's parent — so a caret anywhere in a
+link revealed its address too. Measured on a real tutorial: putting the
+caret in the words of `[the next tutorial](tutorial:grid-of-numbers)`
+re-wrapped the paragraph onto a fourth line and pushed every block below
+it down 29 pixels, for a caret nowhere near the part that changed. Every
+other construct was already still: clicking into a paragraph moves
+nothing at all, and revealing a `**` pair costs two characters that fit
+on the line they were already on.
+
+Editing the words of a link does not require seeing where it points, so
+a `URL` node now answers to its own range. The brackets still reveal with
+the label — `[the next tutorial]()` — so the link is visibly a link and
+the address has somewhere to be reached from; one arrow key past the `(`
+reveals and edits it.
+*Cost to change: low. One line, and a test that measures the paragraph
+and the block below it.*
