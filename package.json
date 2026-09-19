@@ -5,7 +5,7 @@
   "description": "A minimal editor for notebooks written as markdown: prose, LaTeX maths, and code cells that run in the page.",
   "type": "module",
   "scripts": {
-    "test": "bun test src",
+    "test": "bun test ./src",
     "typecheck": "tsc --noEmit",
     "dev": "bun --hot ./index.html",
     "build": "bun build ./index.html --outdir dist --minify && bun scripts/inline-single-file.ts",
@@ -30,9 +30,13 @@
     "@codemirror/state": "^6.7.4",
     "@codemirror/view": "^6.43.11",
     "@lezer/highlight": "^1.2.3",
+    "@milkdown/crepe": "7.21.3",
+    "@milkdown/kit": "7.21.3",
     "js-yaml": "^5.4.1",
     "katex": "^0.18.7",
     "markdown-it": "^15.0.1",
-    "markdown-it-texmath": "^1.0.0"
+    "markdown-it-texmath": "^1.0.0",
+    "remark-frontmatter": "^5.0.0",
+    "unist-util-visit": "^5.1.0"
   }
 }

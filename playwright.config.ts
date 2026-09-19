@@ -14,7 +14,7 @@ import { existsSync } from "node:fs";
 // this package version. Everywhere else — a contributor's own machine, a
 // CI runner — has no such path, and should fall back to whatever
 // `playwright install` put where Playwright itself expects it.
-const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium";
 const executablePath = existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined;
 
 export default defineConfig({

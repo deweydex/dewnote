@@ -1,0 +1,11 @@
+{
+  "name": "milkdown-roundtrip-probe",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@milkdown/crepe": "7.21.3",
+    "@milkdown/kit": "7.21.3",
+    "playwright": "^1.63.0",
+    "remark-frontmatter": "^5.0.0"
+  }
+}

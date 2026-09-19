@@ -1,0 +1,76 @@
+/* Appearance is a set of custom properties, and Crepe is restyled in
+ * terms of them rather than in terms of its own. Everything a reader can
+ * change lives here; planning/REBUILD.md §2 has the reasoning. */
+
+:root {
+  --dn-measure: 34rem;
+  --dn-text-size: 18px;
+  --dn-line-height: 1.6;
+  --dn-body-font: Georgia, "Times New Roman", serif;
+  --dn-code-font: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --dn-code-size: 14px;
+  --dn-ink: #1c1c1e;
+  --dn-paper: #fdfdfb;
+  --dn-rule: #d8d6cf;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --dn-ink: #e8e6e1;
+    --dn-paper: #17181a;
+    --dn-rule: #34363a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --dn-ink: #e8e6e1;
+  --dn-paper: #17181a;
+  --dn-rule: #34363a;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--dn-paper);
+  color: var(--dn-ink);
+}
+
+body {
+  font-family: var(--dn-body-font);
+  font-size: var(--dn-text-size);
+  line-height: var(--dn-line-height);
+}
+
+.dn-page {
+  max-width: var(--dn-measure);
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+
+.milkdown {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+.milkdown .ProseMirror {
+  outline: none;
+}
+
+.milkdown code,
+.milkdown pre {
+  font-family: var(--dn-code-font);
+  font-size: var(--dn-code-size);
+}
+
+/* Front matter reads as a label on the document, not as content. */
+.milkdown [data-front-matter] {
+  font-family: var(--dn-code-font);
+  font-size: 0.8em;
+  color: color-mix(in srgb, var(--dn-ink) 55%, transparent);
+  border-left: 2px solid var(--dn-rule);
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  margin-bottom: 1.5rem;
+  white-space: pre-wrap;
+}
