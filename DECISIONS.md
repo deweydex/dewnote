@@ -1934,3 +1934,33 @@ the address has somewhere to be reached from; one arrow key past the `(`
 reveals and edits it.
 *Cost to change: low. One line, and a test that measures the paragraph
 and the block below it.*
+
+**56 — A heading is a size, not only a weight.** Raised as a question
+about the framework, and the question was right: `@codemirror/lang-markdown`
+tags each heading level separately (`tags.heading1` … `heading6`), so
+sizing them in the editor is the framework's own standard mechanism —
+one `fontSize` per level in the `HighlightStyle` that was already there.
+`EDITOR_HIGHLIGHT` set `color` and `fontWeight` on the generic
+`tags.heading` and no size, so typing `# ` turned a line navy and bold
+and left it body-sized: the one place the editing surface stopped
+looking like the page it was editing.
+
+The sizes are `2em`, `1.5em`, `1.17em`, `1em`, `0.83em`, `0.67em` — the
+browser's own defaults, which is what the rendered document already
+gets, in `em` so they follow the reader's text-size setting rather than
+pinning a number beside a control that changes it. Measured: a rendered
+`##` and the same heading focused are both 27px in the same box at the
+same coordinates, and typing `# ` takes the line from 29.2px to 58.3px
+as the space is typed.
+
+`HeaderMark` joins the marks that fold when the caret is elsewhere, and
+takes the space after it with it — hiding `#` alone would start the line
+with a space the rendered page does not have, and every word would sit
+one space to the right of where it belongs.
+
+`ListMark` and `QuoteMark` deliberately stay visible. Hiding either
+leaves nothing in its place, where the rendered page has a bullet and a
+rule; both need a replacement widget and a line decoration rather than a
+plain hide, which is a different piece of work rather than another name
+in the same array.
+*Cost to change: low. Six rules and one name.*

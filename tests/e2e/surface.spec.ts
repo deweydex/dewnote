@@ -147,6 +147,43 @@ test("inactive inline Markdown stays folded instead of reflowing the paragraph",
   expect(Math.abs(nextAfter - nextBefore)).toBeLessThanOrEqual(0.5);
 });
 
+test("a heading is a size in the editor, not only a weight, and it changes as you type", async ({ page }) => {
+  await mount(page, "## A Heading in the Middle\n\nFollowing paragraph that must not move.\n");
+  const heading = page.locator(".dn-block").first();
+  const next = page.locator(".dn-block").nth(1);
+
+  const painted = () => heading.evaluate((el) => {
+    const span = el.querySelector(".cm-line span") ?? el.querySelector("h2")!;
+    return getComputedStyle(span as Element).fontSize;
+  });
+  const beforeSize = await painted();
+  const beforeHeight = await heading.evaluate((el) => el.getBoundingClientRect().height);
+  const nextBefore = await next.evaluate((el) => el.getBoundingClientRect().y);
+
+  await heading.locator(".dn-block-render").click();
+
+  // The rendered heading and the editable one are the same size in the
+  // same place: the editor is dressed as the page it is editing.
+  expect(await painted()).toBe(beforeSize);
+  expect(Math.abs((await heading.evaluate((el) => el.getBoundingClientRect().height)) - beforeHeight)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs((await next.evaluate((el) => el.getBoundingClientRect().y)) - nextBefore)).toBeLessThanOrEqual(0.5);
+
+  // And typing the marker resizes the line as it is typed.
+  await mount(page, "Some text here.\n\nSecond paragraph.\n");
+  const first = page.locator(".dn-block").first();
+  await first.locator(".dn-block-render").click();
+  await page.keyboard.press("Home");
+  const lineHeight = () => first.evaluate((el) => el.querySelector(".cm-line")!.getBoundingClientRect().height);
+  const plain = await lineHeight();
+  await page.keyboard.type("# ");
+  expect(await lineHeight()).toBeGreaterThan(plain * 1.5);
+
+  // Clicking away folds the hashes and keeps the size.
+  await page.locator(".dn-block").nth(1).locator(".dn-block-render").click();
+  await expect(first).toHaveText("Some text here.");
+  await expect(first.locator("h1")).toHaveText("Some text here.");
+});
+
 test("a caret in a link's words reveals its brackets, not its address", async ({ page }) => {
   // Editing the words of a link does not require seeing where it points,
   // and an address is long: revealing one for a caret in the label

@@ -97,10 +97,17 @@ Markdown punctuation stays hidden until your caret enters the thing it
 marks. Put the caret in a bold phrase and its `**` appear, around that
 phrase only. Move away and they go again.
 
+Type `# ` at the start of a line and the line becomes a heading as you
+type it, at the size it will be on the page. `##` and `###` likewise.
+Click away and the hashes fold; the size stays.
+
 A link is the one exception worth knowing: the caret in its words shows
 `[the words]()`, and the address stays folded. Arrow right past the `(`
 to see and edit the address. This is so that clicking a link's words
 never re-wraps the paragraph.
+
+A list's `-` and a quotation's `>` do stay visible. Hiding them would
+leave nothing where the page has a bullet or a rule.
 
 Between blocks, hover for a **+** to add a paragraph, a code cell, maths,
 a hint, an image or a link. In an empty paragraph, typing **/** offers the
