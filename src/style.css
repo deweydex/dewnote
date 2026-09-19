@@ -74,3 +74,525 @@ body {
   margin-bottom: 1.5rem;
   white-space: pre-wrap;
 }
+/* The spine lives in the margin the page already had, so the page keeps
+   its own centring and its own measure — nothing here moves the column
+   the text runs in. `--dn-spine-width` is measured in spine.ts from the
+   real gutter, because `measure` and `margins` are reader settings and a
+   media query cannot read a custom property. */
+:root[data-spine="margin"] .dn-page {
+  padding-top: 3.4rem;
+}
+:root[data-spine="folded"] .dn-page {
+  padding-top: 1.4rem;
+}
+.dn-spine[hidden] {
+  display: none !important;
+}
+.dn-spine {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--dl-font-family);
+  color: var(--dl-fg);
+}
+:root[data-spine="margin"] .dn-spine {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--dn-spine-width, 290px);
+  padding: 3.4rem 1.6rem 1.6rem 2.6rem;
+}
+/* Folded: the same lines, in the same order, across the top. Not a
+   desktop column squeezed until nothing in it is legible. */
+:root[data-spine="folded"] .dn-spine {
+  top: 0;
+  right: 0;
+  left: 0;
+  width: auto;
+  padding: 0.7rem 1rem 0.6rem;
+  border-bottom: 1px solid var(--dl-rule);
+  background: color-mix(in srgb, var(--dl-bg) 96%, transparent);
+  backdrop-filter: blur(6px);
+}
+:root[data-spine="folded"] .dn-spine-rule,
+:root[data-spine="folded"] .dn-spine-outline {
+  display: none;
+}
+:root[data-spine="folded"] .dn-spine-foot {
+  margin-top: 0;
+}
+:root[data-spine="folded"] .dn-spine-hint {
+  display: none;
+}
+.dn-spine-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.dn-spine-file {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--dl-mono);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--dl-fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The dot is the whole dirty indicator. A word would be louder than the
+   filename it sits beside, and this never reflows the line. */
+.dn-spine-file.is-dirty::after {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-inline-start: 6px;
+  border-radius: 50%;
+  background: var(--dl-orange);
+  vertical-align: 0.1em;
+}
+.dn-spine-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: flex-start;
+  max-width: 100%;
+  min-height: 2.2rem;
+  padding: 2px 5px 3px;
+  margin-inline-start: -5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.dn-spine-name:hover,
+.dn-spine-name:focus-visible {
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+  outline: none;
+}
+/* Two lines rather than one truncated one: a module and a series
+   together run past 290px often enough that an ellipsis would be the
+   normal case rather than the exception. */
+.dn-spine-breadcrumb {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--dl-muted);
+}
+:root[data-spine="folded"] .dn-spine-breadcrumb {
+  -webkit-line-clamp: 1;
+}
+.dn-spine-breadcrumb.is-empty {
+  color: var(--dl-link);
+}
+.dn-spine-context {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--dl-mono);
+  font-size: 0.68rem;
+  color: var(--dl-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dn-spine-rule {
+  height: 1px;
+  margin: 1.5rem 0 1.2rem;
+  background: var(--dl-rule);
+}
+.dn-spine-problem[hidden] {
+  display: none;
+}
+/* A held state, not a notice: it keeps its rule until it is resolved. */
+.dn-spine-problem {
+  margin: 0 0 1.2rem -0.9rem;
+  padding: 0.1rem 0 0.1rem 0.8rem;
+  border-inline-start: 3px solid var(--dl-orange);
+}
+.dn-spine-problem p {
+  margin: 0 0 0.45rem;
+  font-size: 0.83rem;
+  line-height: 1.45;
+  color: var(--dl-fg);
+}
+.dn-spine-problem-action[hidden] {
+  display: none;
+}
+.dn-spine-problem-action {
+  min-height: 1.9rem;
+  padding: 0.2rem 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 0.83rem;
+  color: var(--dl-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.dn-spine-outline {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* The 5px matches the headings' own negative start margin: a scroll
+     container clips whatever sits outside its padding box, and without
+     this every heading lost its first letter. */
+  padding-inline-start: 5px;
+  margin-inline-start: -5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.dn-spine-heading {
+  display: block;
+  width: 100%;
+  min-height: 1.6rem;
+  padding: 3px 5px;
+  margin-inline-start: -5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--dl-muted);
+  text-align: start;
+  cursor: pointer;
+}
+.dn-spine-heading[data-level="1"] {
+  color: var(--dl-heading);
+}
+.dn-spine-heading:hover,
+.dn-spine-heading:focus-visible {
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+  color: var(--dl-fg);
+  outline: none;
+}
+.dn-spine-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
+  margin-top: auto;
+  padding-top: 1.2rem;
+}
+:root[data-spine="folded"] .dn-spine-foot {
+  padding-top: 0.35rem;
+}
+.dn-spine-state {
+  min-height: 1.9rem;
+  padding: 0.2rem 5px;
+  margin-inline-start: -5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--dl-muted);
+  text-align: start;
+  cursor: default;
+}
+.dn-spine-state.is-dirty {
+  color: var(--dl-link);
+  font-style: normal;
+  cursor: pointer;
+}
+.dn-spine-state.is-dirty:hover,
+.dn-spine-state.is-dirty:focus-visible {
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+  outline: none;
+}
+.dn-spine-hint {
+  font-family: var(--dl-mono);
+  font-size: 0.66rem;
+  color: var(--dl-muted);
+}
+/* ------------------------------------------------- the workspace palette */
+
+.dn-wp-overlay[hidden] {
+  display: none !important;
+}
+.dn-wp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  justify-content: center;
+  /* Content height, not window height: a palette showing four rows
+     should be four rows tall. */
+  align-items: flex-start;
+  padding: 6vh 1rem 1rem;
+  background: color-mix(in srgb, var(--dl-bg) 62%, transparent);
+  font-family: var(--dl-font-family);
+}
+.dn-wp-box {
+  display: flex;
+  flex-direction: column;
+  width: min(60rem, 100%);
+  max-height: 84vh;
+  overflow: hidden;
+  border: 1px solid var(--dn-control-border);
+  border-radius: 12px;
+  background: var(--dl-panel-bg);
+  box-shadow: 0 24px 70px var(--dl-shadow);
+}
+.dn-wp-field {
+  flex-shrink: 0;
+  padding: 1.1rem 1.4rem 0.95rem;
+  border-bottom: 1px solid var(--dl-rule);
+}
+.dn-wp-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  font-family: var(--dl-font-family);
+  font-size: 1.45rem;
+  color: var(--dl-fg);
+}
+.dn-wp-input:focus {
+  outline: none;
+}
+.dn-wp-input::placeholder {
+  color: var(--dl-muted);
+}
+.dn-wp-body {
+  display: flex;
+  min-height: 0;
+  flex-grow: 1;
+}
+.dn-wp-list {
+  flex-shrink: 0;
+  width: 55%;
+  padding: 0.6rem 0 0.9rem;
+  overflow-y: auto;
+  border-inline-end: 1px solid var(--dl-rule);
+}
+.dn-wp-section {
+  margin: 0.7rem 0 0.25rem;
+  padding: 0 1.4rem;
+  font-family: var(--dl-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--dl-muted);
+}
+.dn-wp-section:first-child {
+  margin-top: 0.1rem;
+}
+.dn-wp-row {
+  display: flex;
+  gap: 0.9rem;
+  align-items: baseline;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.42rem 1.4rem 0.42rem 1.25rem;
+  border: 0;
+  border-inline-start: 3px solid transparent;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.dn-wp-row.is-active {
+  border-inline-start-color: var(--dl-orange);
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+}
+.dn-wp-row-label {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  line-height: 1.35;
+  color: var(--dl-fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dn-wp-row.is-active .dn-wp-row-label {
+  color: var(--dl-heading);
+}
+.dn-wp-row-note {
+  flex-shrink: 1;
+  max-width: 48%;
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--dl-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dn-wp-preview {
+  flex-grow: 1;
+  min-width: 0;
+  padding: 1.2rem 1.4rem;
+  overflow-y: auto;
+}
+.dn-wp-preview-kicker {
+  margin: 0 0 0.3rem;
+  font-family: var(--dl-mono);
+  font-size: 0.68rem;
+  color: var(--dl-muted);
+  overflow-wrap: anywhere;
+}
+.dn-wp-preview-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.22rem;
+  font-weight: 700;
+  line-height: 1.22;
+  color: var(--dl-heading);
+}
+.dn-wp-preview-facts {
+  margin: 0 0 0.9rem;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--dl-muted);
+}
+.dn-wp-preview-body {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--dl-fg);
+}
+.dn-wp-preview-list {
+  margin: 0 0 1rem;
+  padding-top: 0.15rem;
+}
+.dn-wp-preview-item {
+  margin: 0 0 0.2rem;
+  font-size: 0.83rem;
+  line-height: 1.4;
+  color: var(--dl-muted);
+}
+.dn-wp-preview-keys {
+  margin: 0;
+  font-family: var(--dl-mono);
+  font-size: 0.68rem;
+  color: var(--dl-muted);
+}
+.dn-wp-empty[hidden] {
+  display: none;
+}
+.dn-wp-empty {
+  margin: 0;
+  padding: 1.2rem 1.4rem 1.5rem;
+  font-size: 0.95rem;
+  color: var(--dl-muted);
+}
+@media (max-width: 40rem) {
+  .dn-wp-overlay {
+    padding: 0;
+  }
+
+  .dn-wp-box {
+    width: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 0;
+  }
+
+  /* The pane that says what a row is has nowhere to go at this width,
+     and the list is what somebody came for. */
+  .dn-wp-preview {
+    display: none;
+  }
+
+  .dn-wp-list {
+    width: 100%;
+    border-inline-end: 0;
+  }
+}
+
+/* The source gate. Nothing else is on screen until it is answered, so it
+ * is centred rather than docked — there is no document for it to sit
+ * beside yet. */
+.dn-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: var(--dl-bg, var(--dn-paper));
+  color: var(--dl-fg, var(--dn-ink));
+  font-family: var(--dl-font-family, var(--dn-body-font));
+  padding: 1rem;
+}
+
+.dn-gate h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.dn-gate p {
+  margin: 0;
+  color: var(--dl-muted);
+}
+
+.dn-gate-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.dn-gate button {
+  font: inherit;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 6px;
+  background: var(--dl-panel-bg, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.dn-gate button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dn-gate-repo {
+  display: grid;
+  gap: 0.4rem;
+  min-width: min(22rem, 100%);
+}
+
+.dn-gate-repo label {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.dn-gate-repo input {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 4px;
+  background: var(--dl-bg);
+  color: inherit;
+}
+
+.dn-gate-problem:empty {
+  display: none;
+}
+
+.dn-gate-problem {
+  color: var(--dl-orange);
+  max-width: 28rem;
+  text-align: center;
+}

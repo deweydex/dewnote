@@ -278,13 +278,53 @@ could break on a major version.
 
 ## 5. Order of work
 
-1. This document, and the archive move. ← *here*
-2. `editor.ts` against the probe's proven configuration, with the
-   round-trip test running over the real corpus in CI.
-3. `store.ts` and `shell.ts` ported.
+1. ~~This document, and the archive move.~~
+2. ~~`editor.ts` against the probe's proven configuration, with the
+   round-trip test running over the real corpus in CI.~~
+3. ~~`store.ts` and `shell.ts` ported.~~ ← *here*
 4. `cells.ts` and Pyodide.
 5. The normalisation pass over dewlab, as its own reviewable PR.
 6. `docs/USING_DEWNOTE.md` rewritten where it now lies.
 
 Step 2 carries the round-trip corpus test. If that test cannot be kept
 green, this design is wrong and the archive comes back.
+
+---
+
+## 6. Where it came out
+
+Steps 1–3, measured rather than estimated.
+
+| | Before | After |
+|---|---|---|
+| TypeScript, not counting tests | 12,274 | **2,950** |
+| CSS | 4,287 | **598** |
+| Modules | 41 | 13 |
+
+The largest file is now `workspace-palette.ts` at 462 lines, and the
+second is `modules.ts` at 406 — neither of them editor code. The editor
+itself is 203 lines, of which about 80 are the two schema overrides and
+the maths normalisation, and about 60 are the comments saying why they
+are shaped the way they are.
+
+What is gone: the block model and its offsets, the per-block editor
+lifecycle, the three view maps, `suppressBlurCommit`, the two file
+browsers, the icon rail, the file bar, the workflow shell, and the
+render-when-blurred half of the editor. About 9,300 lines.
+
+What came across nearly unchanged: `github.ts`, `folder.ts` and
+`modules.ts` — protocol and parsing, which Milkdown does not touch — and
+the spine, the palette and the command registry, which are the interface
+and are independent of the editing engine.
+
+Four things merged rather than ported. `file-index.ts` and the pure half
+of `workspace-nav.ts` became `workspace.ts`, where the breadcrumb is a
+function of path, index and modules rather than the state of three
+dependent `<select>` elements. `frontmatter.ts` went from 133 lines to
+37, because writing a field back without disturbing the bytes around it
+is the editor's job now. `blocks.ts` became `markdown.ts`, 79 lines that
+answer "which parts of this text are prose" for the one caller that still
+needs it — the palette, previewing a file the editor is not holding.
+And `active-store.ts`, which existed so a third module could ask either
+browser to open a path, has nothing left to mediate: there is one store
+interface and one thing that calls it.
