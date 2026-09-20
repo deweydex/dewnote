@@ -21,6 +21,7 @@ import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
 import { newTutorial, prepareRelease } from "./authoring.ts";
+import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
 import { brokenLinks, type BrokenLink } from "./links.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
 import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
@@ -120,6 +121,66 @@ export function mountShell(page: HTMLElement): Shell {
     files.set(made.path, made.content);
     reindex();
     await openPath(made.path);
+  }
+
+  /** Which series lists the open tutorial, and putting it in one.
+   *
+   * A tutorial dewnote has just written is on no course at all, so it
+   * has no breadcrumb and appears in no series — which is where making
+   * one stops being useful. */
+  async function placeTutorial(): Promise<void> {
+    if (!store || !open) return;
+    const id = index.find((entry) => entry.path === open!.path)?.id;
+    if (!id) {
+      spine.setProblem({ message: "This file has no id, so no course can list it." });
+      return;
+    }
+
+    const already = placementsOf(id, modules);
+    const choices = modules.flatMap((module) =>
+      module.contents.map((series) => ({
+        value: `${module.id}\u0000${series.title}`,
+        label: `${module.title ?? module.id} › ${series.title}`,
+        note: series.tutorials.includes(id)
+          ? "already here — choosing it takes it out"
+          : `${series.tutorials.length} tutorial${series.tutorials.length === 1 ? "" : "s"}`,
+      })),
+    );
+
+    const picked = await asker.choose(
+      "Which series should list this tutorial?",
+      choices,
+      already.length === 0
+        ? "It is on no course yet, so it has no breadcrumb and appears in no series."
+        : `Now on ${already.map((where) => `${where.courseTitle} › ${where.seriesTitle}`).join(", ")}.`,
+    );
+    if (!picked) return;
+
+    const [courseId, seriesTitle] = picked.split("\u0000") as [string, string];
+    const module = modules.find((each) => each.id === courseId);
+    const series = module?.contents.find((each) => each.title === seriesTitle);
+    if (!module || !series) return;
+
+    const content = files.get(module.path);
+    if (content === undefined) return;
+
+    const changed = series.tutorials.includes(id)
+      ? removeFromSeries(content, series, id)
+      : addToSeries(content, series, id);
+    if (typeof changed !== "string") {
+      spine.setProblem({ message: changed.error });
+      return;
+    }
+
+    try {
+      await store.write(module.path, changed, `Place ${id} in ${series.title}`);
+    } catch (error) {
+      spine.setProblem({ message: messageOf(error) });
+      return;
+    }
+    files.set(module.path, changed);
+    reindex();
+    refreshSpine();
   }
 
   /** dewlab's two-file release: the bytes on the branch are frozen under
@@ -464,6 +525,15 @@ export function mountShell(page: HTMLElement): Shell {
           keywords: ["create", "add", "write", "start"],
           detail: "A draft, with its folder, its front matter and a cell.",
           run: () => void createTutorial(),
+        },
+        {
+          id: "place",
+          label: "Place this tutorial…",
+          section: "Workspace",
+          keywords: ["course", "series", "module", "move", "contents"],
+          detail: "Which series lists it. Choosing one it is already in takes it out.",
+          available: () => open !== null,
+          run: () => void placeTutorial(),
         },
         {
           id: "release",

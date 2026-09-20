@@ -41,5 +41,4 @@ document model is wrong.
 
 ## Not built yet
 
-The placement view for moving a tutorial between series, and the card,
-question and grouped site-pane fences.
+The card, question and grouped site-pane fences.

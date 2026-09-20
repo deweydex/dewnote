@@ -1031,3 +1031,43 @@ body {
 }
 
 .dn-ask-actions button:hover { border-color: var(--dl-orange); }
+
+.dn-ask-choices {
+  gap: 0.2rem;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.dn-ask-note {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+  color: var(--dl-muted);
+}
+
+.dn-ask-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  width: 100%;
+  font: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  padding: 0.4rem 0.55rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dn-ask-choice:hover,
+.dn-ask-choice:focus-visible {
+  background: color-mix(in srgb, var(--dl-orange) 12%, transparent);
+  outline: none;
+}
+
+.dn-ask-choice-note {
+  font-size: 0.78rem;
+  color: var(--dl-muted);
+}
