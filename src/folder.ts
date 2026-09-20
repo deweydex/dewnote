@@ -33,9 +33,9 @@ export async function chooseFolder(): Promise<FileSystemDirectoryHandle | null> 
         showDirectoryPicker(opts: { mode: string }): Promise<FileSystemDirectoryHandle>;
       }
     ).showDirectoryPicker({ mode: "readwrite" });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") return null;
-    throw err;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return null;
+    throw error;
   }
 }
 

@@ -50,17 +50,17 @@ function createWorker(): Worker {
   const blobUrl = URL.createObjectURL(new Blob([buildWorkerSource()], { type: "text/javascript" }));
   const w = new Worker(blobUrl);
   w.onmessage = (event: MessageEvent) => {
-    const msg = event.data;
-    if (msg.type === "status") {
-      onStatus?.(msg.text);
-    } else if (msg.type === "output") {
-      outputListeners.get(msg.cellId)?.({ kind: msg.kind, cssClass: msg.cssClass, text: msg.text, markup: msg.markup });
-    } else if (msg.type === "response") {
-      const pending = pendingRequests.get(msg.id);
+    const message = event.data;
+    if (message.type === "status") {
+      onStatus?.(message.text);
+    } else if (message.type === "output") {
+      outputListeners.get(message.cellId)?.({ kind: message.kind, cssClass: message.cssClass, text: message.text, markup: message.markup });
+    } else if (message.type === "response") {
+      const pending = pendingRequests.get(message.id);
       if (!pending) return;
-      pendingRequests.delete(msg.id);
-      if ("error" in msg) pending.reject(new Error(msg.error));
-      else pending.resolve(msg.result);
+      pendingRequests.delete(message.id);
+      if ("error" in message) pending.reject(new Error(message.error));
+      else pending.resolve(message.result);
     }
   };
   return w;

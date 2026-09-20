@@ -1,4 +1,4 @@
-// A side-effect CSS import (`import "./app.css"`) has no runtime value —
+// A side-effect CSS import (`import "./style.css"`) has no runtime value —
 // Bun's bundler resolves and inlines it, the same way it would a font or
 // an image. TypeScript 5.9 had nothing to say about this; TypeScript 7's
 // new module-resolution diagnostics do (TS2882, "Cannot find module or

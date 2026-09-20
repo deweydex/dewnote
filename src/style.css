@@ -694,10 +694,9 @@ body {
 }
 
 .dn-gate h1 {
+  --dn-brand-size: 3rem;
   margin: 0;
-  font-size: 1.6rem;
   font-weight: 400;
-  letter-spacing: 0.02em;
 }
 
 .dn-gate p {
@@ -726,6 +725,11 @@ body {
   opacity: 0.5;
   cursor: default;
 }
+
+/* `display` on a class beats the browser's own `[hidden]`, so hiding has
+   to be said again here. Without it the token and repository fields sit
+   open on the gate before anyone asks for them. */
+.dn-gate-repo[hidden] { display: none; }
 
 .dn-gate-repo {
   display: grid;

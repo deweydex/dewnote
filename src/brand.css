@@ -15,27 +15,34 @@
   }
 }
 
+/* `--dn-brand-size` is the one knob: the mark is square, and the row is
+   as tall as the mark. */
 .dn-brand {
+  --dn-brand-size: 2.25rem;
   position: static;
   display: flex;
   align-items: center;
   gap: 0.55rem;
   flex: 0 0 auto;
-  height: 2.25rem;
+  height: var(--dn-brand-size);
   pointer-events: none;
 }
 
 .dn-brand svg {
   display: block;
   flex: 0 0 auto;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: var(--dn-brand-size);
+  height: var(--dn-brand-size);
   filter: drop-shadow(0 2px 8px var(--dl-shadow));
 }
 
+/* No font-family: the name is set in whatever the reader chose in
+   Appearance, the same face the document is written in. A wordmark baked
+   into the SVG could not do that, which is why the downloadable logo
+   files carry their own text and this does not. */
 .dn-brand-name {
   color: var(--dl-fg);
-  font-size: 1.05rem;
+  font-size: calc(var(--dn-brand-size) * 0.47);
   font-weight: 700;
   letter-spacing: -0.025em;
   line-height: 1;
@@ -59,11 +66,6 @@
 
 @media (max-width: 34rem) {
   .dn-brand {
-    height: 2rem;
-  }
-
-  .dn-brand svg {
-    width: 2rem;
-    height: 2rem;
+    --dn-brand-size: 2rem;
   }
 }

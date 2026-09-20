@@ -209,7 +209,7 @@ describe("distinctValues", () => {
     expect(distinctValues(index, "module")).toEqual(["computational-methods", "data-wrangling"]);
   });
 
-  // decision 33: practice_for's own datalist — unlike dewstack's
+  // `practice_for`'s own datalist. Unlike dewstack's
   // module/series, an id already names one page on its own, so "distinct"
   // here just means "every real id this index has," not "every value more
   // than one file shares."

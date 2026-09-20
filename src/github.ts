@@ -372,15 +372,15 @@ export async function openPullRequest(
       base,
       draft: true,
     });
-  } catch (err) {
-    if (!(err instanceof GithubApiError) || err.status !== 422) throw err;
+  } catch (error) {
+    if (!(error instanceof GithubApiError) || error.status !== 422) throw error;
     const existing = await apiJson<PullRequest[]>(
       token,
       "GET",
       `/repos/${repo.owner}/${repo.repo}/pulls?head=${encodeURIComponent(`${repo.owner}:${head}`)}&state=open`,
     );
     const [pr] = existing;
-    if (!pr) throw err;
+    if (!pr) throw error;
     return pr;
   }
 }
