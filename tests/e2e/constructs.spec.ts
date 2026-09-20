@@ -105,3 +105,68 @@ test("an escaped dollar is a dollar, and stays one", async ({ page }) => {
   expect(out).toBe("It costs \\$5.\n");
   await expect(page.locator(".milkdown p")).toContainText("It costs $5.");
 });
+
+test("a running cell can be stopped by the button that started it", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  // Pyodide needs a network the sandbox does not have, so the run is
+  // held open rather than faked fast: what is under test is the button's
+  // own state machine, not the interpreter.
+  await page.evaluate(() => {
+    (globalThis as any).__dewnoteRunCell = "never";
+    // This suite drives the editor directly, so the gate is still up and
+    // would swallow the click.
+    document.querySelector(".dn-gate")?.remove();
+  });
+  await page.evaluate(() =>
+    (globalThis as any).__dewnote.open("```python exec\nid: a\nwhile True:\n    pass\n```\n"),
+  );
+
+  const run = page.locator(".dn-cell-run");
+  await expect(run).toHaveText("Run");
+  await run.click();
+
+  // It says it is running, and offers the way out.
+  await expect(run).toHaveText("Stop");
+  await expect(run).toHaveClass(/is-running/);
+
+  await run.click();
+  expect(await page.evaluate(() => (globalThis as any).__dewnoteStopped)).toBe(true);
+  await expect(run).toHaveText("Run again");
+  await expect(run).not.toHaveClass(/is-running/);
+});
+
+test("a cell actually runs, and its output appears under the code", async ({ page }) => {
+  // The test that was missing: the old one asserted the button existed,
+  // which it did while doing nothing at all.
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    (globalThis as any).__dewnoteRunCell = true;
+    document.querySelector(".dn-gate")?.remove();
+  });
+  await page.evaluate(() =>
+    (globalThis as any).__dewnote.open("```python exec\nid: a\nprint(1)\n```\n"),
+  );
+
+  await page.locator(".dn-cell-run").click();
+  await expect(page.locator(".dn-cell-output")).toBeVisible();
+  await expect(page.locator(".dn-cell-output")).toContainText("stub");
+  await expect(page.locator(".dn-cell-run")).toHaveText("Run again");
+});
+
+test("an output that predates an edit is kept, and marked as older", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    (globalThis as any).__dewnoteRunCell = true;
+    document.querySelector(".dn-gate")?.remove();
+  });
+  await page.evaluate(() =>
+    (globalThis as any).__dewnote.open("```python exec\nid: a\nprint(1)\n```\n"),
+  );
+  await page.locator(".dn-cell-run").click();
+  await expect(page.locator(".dn-cell-output")).toBeVisible();
+
+  // Edit the cell; the output belongs to the code as it was.
+  await page.locator(".milkdown .cm-content").click();
+  await page.keyboard.type("  ");
+  await expect(page.locator(".dn-cell-output.is-stale")).toBeVisible();
+});

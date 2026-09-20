@@ -224,6 +224,10 @@ like any other line:
 A fence with no `exec` is illustrative code. It has no Run button and
 never runs.
 
+While a cell is running, its button says **Stop** — press it and the
+interpreter is interrupted, keeping everything it already has in memory.
+⌘K has **Restart the interpreter** for when you want none of it.
+
 After you edit a cell, its last output stays on screen, faded, until you
 run it again — it belongs to the code you had a moment ago, not to the
 code on screen.

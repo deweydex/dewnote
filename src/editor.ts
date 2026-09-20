@@ -294,6 +294,10 @@ export interface EditorOptions {
    * button — which is the right state for an export or a test, not an
    * error to report. */
   runCell?(request: { id: string; code: string; sql: boolean }): Promise<CellOutput>;
+  /** Interrupt whatever is running. A cell that loops forever is not a
+   * rare mistake — it is the first thing a class writes — so the button
+   * that starts one has to be able to stop it. */
+  stopCell?(): void;
   /** Turns a `src` the document owns into something a browser can draw.
    * Null where nothing is at that path, which is ordinary for a document
    * being written. Absent means images stay as written. */
@@ -355,6 +359,23 @@ export async function mountEditor(
   }
 
   const results = new Map<string, RunRecord>();
+  /** One interpreter, so one cell runs at a time — and the button that
+   * started it is the one that stops it. Holds the running cell's id. */
+  let running: string | null = null;
+
+  /** What each cell's panel needs to redraw itself, kept by cell id.
+   *
+   * Crepe's preview panel is display-only: it renders whatever
+   * `renderPreview` hands back by assigning `innerHTML`, which
+   * serialises the element and re-parses it. Every listener on it is
+   * lost. So the Run button is markup that carries its own identity, and
+   * one delegated listener on the editor root does the work. */
+  interface CellHandle {
+    language: string;
+    content: string;
+    apply(value: string | HTMLElement | null): void;
+  }
+  const handles = new Map<string, CellHandle>();
 
   /** The panel under a runnable cell: a Run button, and whatever the
    * last run produced. Crepe's own preview toggle appears beside Copy
@@ -365,49 +386,67 @@ export async function mountEditor(
     content: string,
     apply: (value: string | HTMLElement | null) => void,
   ): HTMLElement {
-    const cell = parseCell(content);
-    const id = cell.id ?? "cell";
+    const id = parseCell(content).id ?? "cell";
+    handles.set(id, { language, content, apply });
+
     const panel = document.createElement("div");
     panel.className = "dn-cell";
 
     const run = document.createElement("button");
     run.type = "button";
     run.className = "dn-cell-run";
+    // The listener cannot survive; the identity can.
+    run.dataset["dnCell"] = id;
     panel.appendChild(run);
 
     const record = results.get(id);
-    const stale = record !== undefined && record.source !== content;
-    run.textContent = record ? "Run again" : "Run";
+    if (running === id) {
+      run.textContent = options.stopCell ? "Stop" : "Running…";
+      run.classList.add("is-running");
+    } else {
+      run.textContent = record ? "Run again" : "Run";
+    }
 
     if (record) {
       const output = outputPanel(record.output);
-      if (stale) {
+      if (record.source !== content) {
         output.classList.add("is-stale");
         output.title = "This ran before the code was edited.";
       }
       panel.appendChild(output);
     }
 
-    run.addEventListener("click", async () => {
-      run.disabled = true;
-      run.textContent = "Running…";
-      const sqlCell = cellLanguage(language) === "sql";
-      const output = await options.runCell!({
+    return panel;
+  }
+
+  async function runCellById(id: string): Promise<void> {
+    if (running === id) {
+      options.stopCell?.();
+      return;
+    }
+    if (running !== null) return;
+    const handle = handles.get(id);
+    if (!handle || !options.runCell) return;
+
+    running = id;
+    handle.apply(cellPanel(handle.language, handle.content, handle.apply));
+
+    const cell = parseCell(handle.content);
+    const sqlCell = cellLanguage(handle.language) === "sql";
+    const output = await options
+      .runCell({
         id,
         code: sqlCell ? wrapSqlCode(cell.code) : cell.code,
         sql: sqlCell,
-      }).catch((error: unknown) => ({
+      })
+      .catch((error: unknown) => ({
         ok: false,
         markup: `<pre>${String(error instanceof Error ? error.message : error)}</pre>`,
       }));
-      results.set(id, { source: content, output });
-      // Hand back a freshly built panel: the click happened on this one,
-      // and rebuilding is how the button's own label and the output stay
-      // in step with each other.
-      apply(cellPanel(language, content, apply));
-    });
 
-    return panel;
+    running = null;
+    results.set(id, { source: handle.content, output });
+    handle.apply(cellPanel(handle.language, handle.content, handle.apply));
   }
 
   const crepe = new Crepe({
@@ -515,6 +554,15 @@ export async function mountEditor(
     ? drawLocalImages(root, options.resolveImage)
     : () => {};
 
+  /** One listener for every cell, because a listener put on the button
+   * itself does not survive the preview panel's `innerHTML`. */
+  function onRootClick(event: MouseEvent): void {
+    const button = (event.target as HTMLElement | null)?.closest?.(".dn-cell-run");
+    const id = button instanceof HTMLElement ? button.dataset["dnCell"] : undefined;
+    if (id) void runCellById(id);
+  }
+  root.addEventListener("click", onRootClick);
+
   return {
     markdown: () => crepe.getMarkdown(),
     headings() {
@@ -530,6 +578,7 @@ export async function mountEditor(
       return found;
     },
     destroy: () => {
+      root.removeEventListener("click", onRootClick);
       stopDrawing();
       crepe.destroy();
     },

@@ -13,7 +13,7 @@ import { buildFileIndex, locationOf, type FileIndexEntry } from "./workspace.ts"
 import { parseModuleFiles, isModuleFile } from "./modules.ts";
 import type { Module } from "./modules.ts";
 import { messageOf, type SaveProblem } from "./save-problem.ts";
-import { runCell } from "./runtime/pyodide-engine.ts";
+import { canStop, requestStop, restartInterpreter, runCell } from "./runtime/pyodide-engine.ts";
 import type { CellOutput } from "./cells.ts";
 import { assetPathFor, freeAssetName, imageTypeOf } from "./images.ts";
 import type { Progress, Store, StoreFile } from "./store.ts";
@@ -249,6 +249,7 @@ export function mountShell(page: HTMLElement): Shell {
       runCell: runOneCell,
       resolveImage: (src) => resolveImage(path, src),
       saveImage: (file) => saveImage(path, file),
+      stopCell: () => requestStop(),
     });
     // `saved` is what the editor made of the file, not the file — a
     // document is normalised on the way in (editor.ts), and comparing
@@ -321,6 +322,7 @@ export function mountShell(page: HTMLElement): Shell {
       runCell: runOneCell,
       resolveImage: (src) => resolveImage(path, src),
       saveImage: (file) => saveImage(path, file),
+      stopCell: () => requestStop(),
     });
     open = { path, saved, document: document_ };
     refreshSpine();
@@ -517,6 +519,24 @@ export function mountShell(page: HTMLElement): Shell {
           keywords: ["settings", "theme", "dark", "font", "size", "width"],
           detail: "Theme, type, measure, spacing.",
           run: () => settings.open(),
+        },
+        {
+          id: "stop",
+          label: "Stop whatever is running",
+          section: "Document",
+          keywords: ["interrupt", "halt", "cancel", "loop", "hang"],
+          detail: "Interrupts the interpreter without losing what it has in memory.",
+          available: () => canStop(),
+          run: () => requestStop(),
+        },
+        {
+          id: "restart",
+          label: "Restart the interpreter",
+          section: "Document",
+          keywords: ["reset", "pyodide", "python", "clear", "fresh"],
+          detail: "Throws away every variable and starts again.",
+          available: () => canStop(),
+          run: () => restartInterpreter(),
         },
         {
           id: "new-tutorial",
