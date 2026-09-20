@@ -7,6 +7,7 @@ import { mountEditor, type Document } from "./editor.ts";
 import { canOpenFolder, openFolder, openRepo } from "./store.ts";
 import { loadToken, saveToken } from "./github.ts";
 import { messageOf } from "./save-problem.ts";
+import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
 
 // The one question dewnote opens on: where the files are. Everything
 // else waits behind it, because there is nothing useful to show until
@@ -25,6 +26,10 @@ function gate(): HTMLElement {
       <button type="button" data-choice="folder">Open a local folder</button>
       <button type="button" data-choice="repo">Connect a repository</button>
     </div>
+    <p class="dn-gate-aside">
+      Or <button type="button" data-choice="sample">try a sample document</button>
+      — nothing is saved anywhere.
+    </p>
     <form class="dn-gate-repo" hidden>
       <label>Token <input name="token" type="password" autocomplete="off" required></label>
       <label>Owner <input name="owner" required></label>
@@ -55,15 +60,49 @@ function start(): void {
   }
 
   const done = () => box.remove();
+
+  /** Reading a repository is hundreds of requests, so Connect sits there
+   * doing nothing visible for several seconds. Saying so is what stops
+   * somebody pressing it twice. */
+  function busy(control: HTMLButtonElement, label: string) {
+    const was = control.textContent;
+    control.disabled = true;
+    control.textContent = label;
+    problem.textContent = "";
+    box.classList.add("is-busy");
+    return {
+      /** Counts up as files arrive, so a long read looks like work
+       * rather than like a hang. */
+      progress(done: number, total: number) {
+        control.textContent = `${label} ${done} of ${total}`;
+      },
+      restore() {
+        control.disabled = false;
+        control.textContent = was;
+        box.classList.remove("is-busy");
+      },
+    };
+  }
+
   const failed = (error: unknown) => { problem.textContent = messageOf(error); };
 
   folderButton.addEventListener("click", async () => {
+    const state = busy(folderButton, "Reading");
     try {
       const store = await openFolder();
       if (!store) return;
-      await shell.useStore(store);
+      await shell.useStore(store, state.progress);
       done();
-    } catch (error) { failed(error); }
+    } catch (error) { failed(error); } finally { state.restore(); }
+  });
+
+  const sampleButton = box.querySelector<HTMLButtonElement>('[data-choice="sample"]')!;
+  sampleButton.addEventListener("click", async () => {
+    const state = busy(sampleButton, "Opening…");
+    try {
+      await shell.useStore(sampleStore());
+      done();
+    } catch (error) { failed(error); } finally { state.restore(); }
   });
 
   box.querySelector<HTMLButtonElement>('[data-choice="repo"]')!
@@ -74,8 +113,12 @@ function start(): void {
       token.focus();
     });
 
+  const connect = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (connect.disabled) return;
+    const state = busy(connect, "Reading");
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? "").trim();
     try {
@@ -86,9 +129,9 @@ function start(): void {
         branch: value("branch"),
         token: value("token"),
       });
-      await shell.useStore(store);
+      await shell.useStore(store, state.progress);
       done();
-    } catch (error) { failed(error); }
+    } catch (error) { failed(error); } finally { state.restore(); }
   });
 }
 
@@ -104,8 +147,16 @@ let held: Document | null = null;
     if (!page) return;
     held?.destroy();
     page.replaceChildren();
-    held = await mountEditor(page, { markdown });
+    held = await mountEditor(page, {
+      markdown,
+      // The round-trip suite drives this without an interpreter; the
+      // sample and the stores pass a real one.
+      ...(((globalThis as unknown as Record<string, unknown>).__dewnoteRunCell as boolean)
+        ? { runCell: async () => ({ ok: true, markup: "<pre>stub</pre>" }) }
+        : {}),
+    });
   },
+  sample: (): string => SAMPLE_TUTORIAL,
   markdown: (): string => held?.markdown() ?? "",
   headings: () => held?.headings() ?? [],
 

@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { fromBase64, listModuleFiles, listMarkdownFiles, putFileContent, toBase64 } from "./github.ts";
+import {
+  ensureBranch,
+  fromBase64,
+  listMarkdownFiles,
+  listModuleFiles,
+  putFileContent,
+  toBase64,
+} from "./github.ts";
 
 describe("toBase64/fromBase64", () => {
   test("round-trips plain ASCII", () => {
@@ -188,5 +195,57 @@ describe("putFileContent", () => {
       branch: "dewnote-edits",
       sha: "old-sha",
     });
+  });
+});
+
+describe("ensureBranch", () => {
+  const repo = { owner: "deweydex", repo: "dewlab" };
+
+  function withFetch(handler: (url: string, init: RequestInit) => Response) {
+    const original = globalThis.fetch;
+    globalThis.fetch = ((url: string, init: RequestInit) =>
+      Promise.resolve(handler(String(url), init))) as typeof fetch;
+    return () => { globalThis.fetch = original; };
+  }
+
+  test("a branch that already exists is the outcome, not an error", async () => {
+    // The 404-then-422 race: the ref lookup says the branch is not there,
+    // and the create says it is. Two tabs, or two presses of Connect.
+    const restore = withFetch((url, init) => {
+      if (init.method === "POST") {
+        return new Response(JSON.stringify({ message: "Reference already exists" }), { status: 422 });
+      }
+      if (url.includes("heads/alt")) return new Response("", { status: 404 });
+      return new Response(JSON.stringify({ object: { sha: "base-sha" } }), { status: 200 });
+    });
+    try {
+      await ensureBranch(repo, "alt", "main", "token");
+    } finally { restore(); }
+  });
+
+  test("a missing base branch is named in a sentence", async () => {
+    const restore = withFetch(() => new Response("", { status: 404 }));
+    try {
+      await ensureBranch(repo, "alt", "nope", "token");
+      throw new Error("should have thrown");
+    } catch (error) {
+      expect((error as Error).message).toBe('There is no branch called "nope" in this repository.');
+    } finally { restore(); }
+  });
+
+  test("an API failure reports GitHub's own sentence, not its envelope", async () => {
+    const restore = withFetch((url, init) => {
+      if (init.method === "POST") {
+        return new Response(JSON.stringify({ message: "Resource not accessible by personal access token" }), { status: 403 });
+      }
+      if (url.includes("heads/alt")) return new Response("", { status: 404 });
+      return new Response(JSON.stringify({ object: { sha: "base-sha" } }), { status: 200 });
+    });
+    try {
+      await ensureBranch(repo, "alt", "main", "token");
+      throw new Error("should have thrown");
+    } catch (error) {
+      expect((error as Error).message).toBe("Resource not accessible by personal access token");
+    } finally { restore(); }
   });
 });

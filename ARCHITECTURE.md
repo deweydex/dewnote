@@ -97,6 +97,13 @@ renders never changes.
 
 ## The cell
 
+**A code block mounts when it scrolls into view.** Until then it is a
+plain `<pre>` placeholder, so a document whose cells are below the fold
+reports zero CodeMirror instances and zero Run buttons. This is Crepe
+behaving as designed, and it is the single easiest thing to mistake for a
+broken editor — any test that asks about a cell has to scroll to it
+first.
+
 A fence is runnable when the word `exec` appears in its info string —
 dewlab's own convention, and the reason `editor.ts` keeps a `meta` attr
 at all. Crepe's preset reads mdast's `lang` and drops its `meta`, which

@@ -15,7 +15,7 @@ import type { Module } from "./modules.ts";
 import { messageOf, type SaveProblem } from "./save-problem.ts";
 import { runCell } from "./runtime/pyodide-engine.ts";
 import type { CellOutput } from "./cells.ts";
-import type { Store, StoreFile } from "./store.ts";
+import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 
 interface OpenDocument {
@@ -29,7 +29,7 @@ interface OpenDocument {
 export interface Shell {
   /** Mount a store's contents and offer the palette, which is the next
    * thing to do once a workspace exists. */
-  useStore(store: Store): Promise<void>;
+  useStore(store: Store, onProgress?: Progress): Promise<void>;
   destroy(): void;
 }
 
@@ -164,9 +164,9 @@ export function mountShell(page: HTMLElement): Shell {
   window.addEventListener("keydown", onKeyDown);
 
   return {
-    async useStore(next) {
+    async useStore(next, onProgress) {
       store = next;
-      const listed = await next.list();
+      const listed = await next.list(onProgress);
       files = new Map(listed.map((file) => [file.path, file.content]));
       reindex();
       spine.setWorkspace({

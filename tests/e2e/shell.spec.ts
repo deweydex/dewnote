@@ -179,3 +179,104 @@ test("a setting survives a reload, because it is the reader's and not the sessio
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
+
+test("the sample workspace opens from the gate, with everything in it", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+
+  // The palette opens on a new workspace; take the tutorial.
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(".milkdown h1")).toHaveText("Everything at Once");
+  await expect(page.locator(".dn-spine-breadcrumb")).toContainText("A Sample Course");
+
+  // One of everything, rendered rather than shown as markup.
+  await expect(page.locator(".milkdown .katex")).not.toHaveCount(0);
+  await expect(page.locator(".milkdown table")).not.toHaveCount(0);
+  await expect(page.locator(".milkdown img:not(.ProseMirror-separator)")).toHaveCount(1);
+  await expect(page.locator(".milkdown blockquote")).toHaveCount(1);
+  await expect(page.locator(".milkdown .milkdown-icon.label")).not.toHaveCount(0);
+
+  // Crepe mounts a code block when it scrolls into view, so the cells at
+  // the bottom of a long document are placeholders until they are
+  // reached. Scroll before asking about them.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(page.locator(".milkdown .cm-editor")).not.toHaveCount(0);
+  await expect(page.locator(".dn-cell-run")).toHaveCount(1);
+});
+
+test("an edit to the sample is kept, and goes nowhere", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Edited.");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+});
+
+test("Connect counts the files as they arrive, and ignores a second press", async ({ page }) => {
+  await page.goto(BUILT_APP);
+
+  // A stand-in GitHub: a tree of three files, each read slowly enough
+  // that the label can be observed counting.
+  await page.evaluate(() => {
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+    let reads = 0;
+    (globalThis as any).__reads = () => reads;
+    globalThis.fetch = (async (url: string) => {
+      const at = String(url);
+      if (at.includes("/git/ref/heads/")) return json({ object: { sha: "sha" } });
+      if (at.includes("/git/trees/")) {
+        return json({
+          truncated: false,
+          tree: ["one", "two", "three"].map((name) => ({
+            path: `pages/${name}.md`,
+            type: "blob",
+            sha: name,
+          })),
+        });
+      }
+      if (at.includes("/contents/")) {
+        reads += 1;
+        await new Promise((r) => setTimeout(r, 150));
+        return json({ sha: "blob", encoding: "base64", content: btoa("---\ntitle: A Page\n---\n\n# A Page\n") });
+      }
+      return json({}, 404);
+    }) as typeof fetch;
+  });
+
+  await page.locator('[data-choice="repo"]').click();
+  await page.fill('[name="token"]', "token");
+  await page.fill('[name="owner"]', "deweydex");
+  await page.fill('[name="repo"]', "dewlab");
+  await page.fill('[name="branch"]', "alt");
+
+  const connect = page.locator('.dn-gate-repo button[type="submit"]');
+  await connect.click();
+
+  // It says what it is doing rather than sitting silent, and stops
+  // taking presses while it does it.
+  await expect(connect).not.toHaveText("Connect");
+  await expect(connect).toBeDisabled();
+
+  // A second press while it works does nothing at all.
+  await connect.click({ force: true });
+  await expect(page.locator(".dn-wp-overlay")).toBeVisible({ timeout: 10_000 });
+  expect(await page.evaluate(() => (globalThis as any).__reads())).toBe(3);
+});
+
+test("the gate's buttons show they were pressed", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const sample = page.locator('[data-choice="sample"]');
+  // A focus ring is the part a keyboard reader depends on.
+  await sample.focus();
+  const outline = await sample.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).not.toBe("none");
+});

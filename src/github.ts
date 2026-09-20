@@ -104,12 +104,23 @@ async function api(token: string, method: string, path: string, body?: unknown):
   return fetch(`${API}${path}`, init);
 }
 
+/** GitHub answers with a JSON body carrying a `message`. That sentence is
+ * the useful part; the envelope around it is not something to put on
+ * screen. */
+async function messageFrom(response: Response): Promise<string> {
+  const body = await response.text().catch(() => "");
+  try {
+    const parsed = JSON.parse(body) as { message?: string };
+    if (parsed.message) return parsed.message;
+  } catch {
+    // Not JSON. Fall through to the status line.
+  }
+  return `${response.status} ${response.statusText}`.trim();
+}
+
 async function apiJson<T>(token: string, method: string, path: string, body?: unknown): Promise<T> {
   const response = await api(token, method, path, body);
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new GithubApiError(response.status, `${method} ${path} → ${response.status}: ${detail.slice(0, 300)}`);
-  }
+  if (!response.ok) throw new GithubApiError(response.status, await messageFrom(response));
   return response.json() as Promise<T>;
 }
 
@@ -234,7 +245,7 @@ export async function getFileBytes(repo: RepoRef, path: string, ref: string, tok
 async function branchSha(repo: RepoRef, branch: string, token: string): Promise<string | null> {
   const response = await api(token, "GET", `/repos/${repo.owner}/${repo.repo}/git/ref/heads/${encodeURIComponent(branch)}`);
   if (response.status === 404) return null;
-  if (!response.ok) throw new GithubApiError(response.status, `GET ref/heads/${branch} → ${response.status}`);
+  if (!response.ok) throw new GithubApiError(response.status, await messageFrom(response));
   const data = (await response.json()) as { object: { sha: string } };
   return data.object.sha;
 }
@@ -247,11 +258,19 @@ export async function ensureBranch(repo: RepoRef, branch: string, base: string, 
   const existing = await branchSha(repo, branch, token);
   if (existing) return;
   const baseSha = await branchSha(repo, base, token);
-  if (!baseSha) throw new GithubApiError(404, `Base branch "${base}" not found`);
-  await apiJson(token, "POST", `/repos/${repo.owner}/${repo.repo}/git/refs`, {
-    ref: `refs/heads/${branch}`,
-    sha: baseSha,
-  });
+  if (!baseSha) throw new GithubApiError(404, `There is no branch called "${base}" in this repository.`);
+  try {
+    await apiJson(token, "POST", `/repos/${repo.owner}/${repo.repo}/git/refs`, {
+      ref: `refs/heads/${branch}`,
+      sha: baseSha,
+    });
+  } catch (error) {
+    // "Reference already exists" — somebody else, another tab, or a
+    // second press of Connect got there first. The branch being there is
+    // the outcome this function wanted.
+    if (error instanceof GithubApiError && error.status === 422) return;
+    throw error;
+  }
 }
 
 export interface PutFileResult {

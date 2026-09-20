@@ -21,6 +21,10 @@ bun run typecheck
 bunx playwright test         # against the built file
 ```
 
+There is a sample workspace on the opening screen — one document holding
+every construct the editor knows, saved nowhere — for trying it without
+connecting anything.
+
 `tests/e2e/roundtrip.spec.ts` is the test this application stands on:
 every construct dewlab writes has to survive a pass through the editor,
 and the pass has to be idempotent. If it cannot be kept green, the
