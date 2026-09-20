@@ -849,11 +849,13 @@ body {
   border-radius: 4px;
   background: none;
   color: inherit;
-  cursor: pointer;
 }
 
-.dn-report-row:hover,
-.dn-report-row:focus-visible {
+/* A row is a button only when there is a file to open. */
+button.dn-report-row { cursor: pointer; }
+
+button.dn-report-row:hover,
+button.dn-report-row:focus-visible {
   background: color-mix(in srgb, var(--dl-orange) 12%, transparent);
   outline: none;
 }

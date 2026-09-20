@@ -198,20 +198,25 @@ lists what would break dewlab's build or confuse a reader:
 | A `tutorial:` link naming nothing | It ships as a broken address. |
 
 Each row is marked **blocking** — dewlab will not build it — or **worth
-fixing**. Click a row to put the cursor on the line. A document with
-nothing wrong says so.
-
-Check this document reads one file. **Check links** reads the whole
-workspace; the two overlap only on `tutorial:` links.
-
-## Checking links
-
-⌘K, then **Check links**. It reads every file in the workspace, not just
-the one you have open, and lists every `tutorial:` link that names a page
-nothing claims. Click a row to open the file it is written in.
+fixing**. A document with nothing wrong says so rather than showing an
+empty list.
 
 `tutorial:` is the only scheme the build resolves. A `module:` or
-`series:` link would ship as a literal broken address.
+`series:` link ships as a literal broken address, so the checker reads
+`tutorial:` links and leaves every other kind alone.
+
+## Checking every page
+
+⌘K, then **Check every page**. The same rules, over the whole workspace
+rather than the file you have open — which is what says whether the site
+is sound. A broken link is otherwise found on the day somebody opens the
+page it is written on.
+
+Each row names its file and line. Click one to open that file.
+
+A README or a note left beside a tutorial is not a page and is not
+checked. A file under `tutorials/` is a page whether or not it has front
+matter; the missing header is the fault worth reporting.
 
 ---
 

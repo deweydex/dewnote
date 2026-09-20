@@ -250,6 +250,13 @@ Milkdown parses — it reads the file as text, through `segments()` from
 what ProseMirror made of it. The shell owns the report; the checker owns
 the rules, and is tested without a browser.
 
+`checkWorkspace` is the same rules over every page, and it is the same
+function applied file by file rather than a second set of rules. One
+overlay renders both: a row that carries a path is a button and opens
+that file, a row without one is a `div`. The rules live in one place
+because a workspace check that could disagree with a document check is
+worse than either alone.
+
 **Appearance** is eleven settings, each a CSS custom property, drawn from
 one `ROWS` list. The page is described in dewlab's own tokens, so a
 slider moves the thing it names — describing it in a second set of names

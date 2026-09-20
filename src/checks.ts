@@ -14,6 +14,9 @@ import { isReleaseVersion } from "./authoring.ts";
 export interface Problem {
   /** What is wrong, written for the author. */
   message: string;
+  /** The file it is in. Absent when the checker was given one document
+   * and the caller already knows which. */
+  path?: string;
   /** 1-based, where the document can say. */
   line?: number;
   /** Whether the build would refuse this, or only a reader would notice. */
@@ -83,4 +86,28 @@ export function checkDocument(source: string, knownIds: ReadonlySet<string>): Pr
   }
 
   return problems.sort((a, b) => (a.line ?? 0) - (b.line ?? 0));
+}
+
+/** A page dewlab builds, as against a README or a note left beside one.
+ * A file under `tutorials/` is a page whether or not it has front
+ * matter — a missing header is exactly the fault worth reporting — and
+ * anywhere else, front matter is what marks a file as a page. */
+function isPage(path: string, content: string): boolean {
+  if (!path.endsWith(".md")) return false;
+  return /(^|\/)tutorials\//.test(path) || extractFrontMatter(content).present;
+}
+
+/** Every page in the workspace at once, which is what says whether the
+ * site is sound. Checking only the open document finds a fault on the
+ * day somebody opens the page it is written on, which is too late. */
+export function checkWorkspace(
+  files: readonly { path: string; content: string }[],
+  knownIds: ReadonlySet<string>,
+): Problem[] {
+  return files
+    .filter((file) => isPage(file.path, file.content))
+    .flatMap((file) =>
+      checkDocument(file.content, knownIds).map((problem) => ({ ...problem, path: file.path })),
+    )
+    .sort((a, b) => (a.path ?? "").localeCompare(b.path ?? "") || (a.line ?? 0) - (b.line ?? 0));
 }

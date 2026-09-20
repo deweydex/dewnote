@@ -352,35 +352,38 @@ test("a pasted image is written beside the document and named in the markdown", 
   ).toBe(true);
 });
 
-test("Check links reports a link that names nothing, and opens the file it is in", async ({ page }) => {
+test("Check every page reports a fault in a file nobody has open, and opens it", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.locator('[data-choice="sample"]').click();
-  await page.locator(".dn-wp-input").fill("check links");
+  await page.locator(".dn-wp-input").fill("check every page");
   await page.keyboard.press("Enter");
 
   const report = page.locator(".dn-report");
   await expect(report).toBeVisible();
-  await expect(report.locator(".dn-report-row")).toHaveCount(1);
-  await expect(report.locator(".dn-report-row")).toContainText("no-such-page");
-  // It says where, so the report can be read against the file.
-  await expect(report.locator(".dn-report-where")).toContainText("everything-at-once-practice.md");
+  const broken = report.locator(".dn-report-row", { hasText: "no-such-page" });
+  await expect(broken).toHaveCount(1);
+  // It says which file and which line, so the report reads against the
+  // workspace rather than against whatever happens to be open.
+  await expect(broken.locator(".dn-report-where")).toContainText("everything-at-once-practice.md");
 
   // And takes you there.
-  await report.locator(".dn-report-row").click();
+  await broken.click();
   await expect(report).toBeHidden();
   await expect(page.locator(".milkdown h1")).toContainText("Practice");
 });
 
-test("a workspace with nothing broken says so rather than showing an empty list", async ({ page }) => {
+test("a sound workspace says so rather than showing an empty list", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
     "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nNo links here.\n",
+    // A README is not a page, and is not scolded for having no header.
+    "README.md": "# dewlab\n",
   });
   await page.keyboard.press("Escape");
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("check links");
+  await page.locator(".dn-wp-input").fill("check every page");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Every link resolves.");
+  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in the workspace.");
 });
 
 test("a document saves as one HTML file, with its stylesheet and image inside it", async ({ page }) => {
@@ -725,5 +728,5 @@ test("a sound document says there is nothing to fix", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+k");
   await page.locator(".dn-wp-input").fill("check this document");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix.");
+  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
 });

@@ -22,8 +22,7 @@ import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
 import { newTutorial, prepareRelease } from "./authoring.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
-import { brokenLinks, type BrokenLink } from "./links.ts";
-import { checkDocument, type Problem } from "./checks.ts";
+import { checkDocument, checkWorkspace, type Problem } from "./checks.ts";
 import { distinctValues } from "./workspace.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
 import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
@@ -336,7 +335,7 @@ export function mountShell(page: HTMLElement): Shell {
   function checkThisDocument(): void {
     if (!open) return;
     const found = checkDocument(open.document.markdown(), new Set(distinctValues(index, "id")));
-    reportProblems(found);
+    reportProblems(found, "this document");
   }
 
   /** Every cell, in order, one at a time — one interpreter, and a
@@ -348,49 +347,12 @@ export function mountShell(page: HTMLElement): Shell {
     }
   }
 
-  function reportProblems(found: Problem[]): void {
-    const box = document.createElement("div");
-    box.className = "dn-report";
-    box.setAttribute("role", "dialog");
-    box.setAttribute("aria-label", "What is wrong with this document");
-
-    const heading = document.createElement("h2");
-    heading.textContent = found.length === 0
-      ? "Nothing to fix."
-      : `${found.length} thing${found.length === 1 ? "" : "s"} to fix`;
-    box.appendChild(heading);
-
-    for (const problem of found) {
-      const row = document.createElement("div");
-      row.className = `dn-report-row is-${problem.severity === "blocking" ? "blocking" : "minor"}`;
-      const what = document.createElement("span");
-      what.className = "dn-report-what";
-      what.textContent = problem.message;
-      row.appendChild(what);
-      if (problem.line !== undefined) {
-        const where = document.createElement("span");
-        where.className = "dn-report-where";
-        where.textContent = `line ${problem.line}`;
-        row.appendChild(where);
-      }
-      box.appendChild(row);
-    }
-
-    reportOverlay.replaceChildren(box);
-    reportOverlay.hidden = false;
-    box.focus();
-  }
-
-  /** Every `tutorial:` link in the workspace that names nothing. Shown
-   * in the overlay rather than reported per document: a broken link is
-   * found on the day somebody opens the page it is written on, which is
-   * too late. */
-  function showBrokenLinks(): void {
-    const found = brokenLinks(
-      [...files].map(([path, content]) => ({ path, content })),
-      index,
-    );
-    report(found);
+  /** Every page in the workspace, not only the one that is open — a
+   * fault is found on the day somebody opens the page it is written on,
+   * which is too late. */
+  function checkWholeWorkspace(): void {
+    const all = [...files].map(([path, content]) => ({ path, content }));
+    reportProblems(checkWorkspace(all, new Set(distinctValues(index, "id"))), "the workspace");
   }
 
   const reportOverlay = document.createElement("div");
@@ -401,45 +363,61 @@ export function mountShell(page: HTMLElement): Shell {
   });
   document.body.appendChild(reportOverlay);
 
-  function report(found: BrokenLink[]): void {
+  /** One overlay for both checks. A row names the file when the report
+   * spans more than one, and clicking it opens that file at the line. */
+  function reportProblems(found: Problem[], scope: "this document" | "the workspace"): void {
     const box = document.createElement("div");
     box.className = "dn-report";
     box.setAttribute("role", "dialog");
-    box.setAttribute("aria-label", "Broken links");
+    box.setAttribute("aria-label", `What is wrong with ${scope}`);
+
+    const blocking = found.filter((problem) => problem.severity === "blocking").length;
 
     const heading = document.createElement("h2");
     heading.textContent = found.length === 0
-      ? "Every link resolves."
-      : `${found.length} link${found.length === 1 ? "" : "s"} name nothing`;
+      ? `Nothing to fix in ${scope}.`
+      : `${found.length} thing${found.length === 1 ? "" : "s"} to fix`;
     box.appendChild(heading);
 
-    if (found.length > 0) {
+    if (blocking > 0) {
       const note = document.createElement("p");
-      note.textContent = "`tutorial:` is the only scheme the build resolves. Click a row to open the file.";
+      note.textContent = `${blocking} of them would stop the build.`;
       box.appendChild(note);
     }
 
-    for (const link of found) {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "dn-report-row";
-      const where = document.createElement("span");
-      where.className = "dn-report-where";
-      where.textContent = `${link.path}:${link.line}`;
+    for (const problem of found) {
+      const row = document.createElement(problem.path ? "button" : "div");
+      row.className = `dn-report-row is-${problem.severity === "blocking" ? "blocking" : "minor"}`;
+
       const what = document.createElement("span");
       what.className = "dn-report-what";
-      what.textContent = link.text ? `${link.text} → ${link.target}` : link.target;
-      row.append(what, where);
-      row.addEventListener("click", () => {
-        reportOverlay.hidden = true;
-        void openPath(link.path);
-      });
+      what.textContent = problem.message;
+      row.appendChild(what);
+
+      const at = [problem.path, problem.line === undefined ? null : `line ${problem.line}`]
+        .filter(Boolean)
+        .join(" · ");
+      if (at) {
+        const where = document.createElement("span");
+        where.className = "dn-report-where";
+        where.textContent = at;
+        row.appendChild(where);
+      }
+
+      if (row instanceof HTMLButtonElement) {
+        row.type = "button";
+        const path = problem.path!;
+        row.addEventListener("click", () => {
+          reportOverlay.hidden = true;
+          void openPath(path);
+        });
+      }
       box.appendChild(row);
     }
 
     reportOverlay.replaceChildren(box);
     reportOverlay.hidden = false;
-    box.querySelector<HTMLElement>("button")?.focus();
+    (box.querySelector<HTMLElement>("button") ?? box).focus();
   }
 
   /** The bytes behind a `src` the document owns, as a URL a browser can
@@ -673,12 +651,12 @@ export function mountShell(page: HTMLElement): Shell {
           run: () => void runEveryCell(),
         },
         {
-          id: "check-links",
-          label: "Check links",
+          id: "check-workspace",
+          label: "Check every page",
           section: "Workspace",
-          keywords: ["broken", "dead", "tutorial:", "slug"],
-          detail: "Every tutorial: link in the workspace that names nothing.",
-          run: () => showBrokenLinks(),
+          keywords: ["broken", "links", "ids", "front matter", "build"],
+          detail: "Every page in the workspace, not only the one that is open.",
+          run: () => checkWholeWorkspace(),
         },
         {
           id: "save",
