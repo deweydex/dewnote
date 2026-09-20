@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { idFromPath } from "./workspace.ts";
-import { checkDocument, checkWorkspace } from "./checks.ts";
+import { isImageName } from "./images.ts";
+import { checkDocument, checkWorkspace, imagesIn } from "./checks.ts";
 
-const KNOWN = new Set(["grid-of-numbers"]);
+const KNOWN = { ids: new Set(["grid-of-numbers"]) };
 const SOUND = [
   "---",
   "title: A Page",
@@ -252,14 +253,15 @@ describe("checkDocument: dewlab's other fences", () => {
 // has to be caught each time. Skips itself when the sibling repository
 // is not there, the same discipline modules.test.ts uses.
 const DEWLAB = "../dewlab";
+/** `staging/` holds an import mid-flight and `site/` is built. */
+const SKIPPED = new Set(["site", "staging", "node_modules", ".git"]);
 const CHECKED_OUT = existsSync(DEWLAB);
 
 function dewlabPages(): { path: string; content: string }[] {
   const found: { path: string; content: string }[] = [];
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
-      // `staging/` holds an import mid-flight, and `site/` is built.
-      if (name === "site" || name === "staging" || name === "node_modules" || name === ".git") continue;
+      if (SKIPPED.has(name)) continue;
       const at = join(dir, name);
       if (statSync(at).isDirectory()) walk(at);
       else if (name.endsWith(".md")) found.push({ path: relative(DEWLAB, at), content: readFileSync(at, "utf8") });
@@ -269,19 +271,134 @@ function dewlabPages(): { path: string; content: string }[] {
   return found;
 }
 
+/** Every image in the checkout, which is what the image rule needs to
+ * tell a renamed file from a sound one. */
+function dewlabImages(): Set<string> {
+  const found = new Set<string>();
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      if (SKIPPED.has(name)) continue;
+      const at = join(dir, name);
+      if (statSync(at).isDirectory()) walk(at);
+      else if (isImageName(name)) found.add(relative(DEWLAB, at));
+    }
+  };
+  walk(DEWLAB);
+  return found;
+}
+
+describe("imagesIn", () => {
+  test("finds a markdown image and an html one, with the line each is on", () => {
+    const source = [
+      "---", "title: A", "---", "",
+      "Prose.", "",
+      "![A diagram](diagram.svg)", "",
+      '<img src="photo.jpg" alt="A photo">', "",
+    ].join("\n");
+    expect(imagesIn(source)).toEqual([
+      { src: "diagram.svg", alt: "A diagram", line: 7 },
+      { src: "photo.jpg", alt: "", line: 9 },
+    ]);
+  });
+
+  test("leaves an image on the web alone — the document does not own it", () => {
+    expect(imagesIn("![x](https://example.com/a.png)\n")).toEqual([]);
+  });
+
+  test("a title after the path is not part of the path", () => {
+    expect(imagesIn('![x](a.png "A title")\n')[0]!.src).toBe("a.png");
+  });
+
+  test("an image inside a fence is teaching material, not a reference", () => {
+    const source = ["```html", '<img src="does-not-exist.jpg" alt="x">', "```", ""].join("\n");
+    expect(imagesIn(source)).toEqual([]);
+  });
+
+  test("an image inside a code span is a row in a reference table", () => {
+    expect(imagesIn('| `<img src="…">` | Shows an image. |\n')).toEqual([]);
+  });
+});
+
+describe("checkDocument: images", () => {
+  const AROUND = {
+    ids: new Set<string>(),
+    images: new Set(["tutorials/a/diagram.svg", "tutorials/assets/shared.png"]),
+    path: "tutorials/a/a.md",
+  };
+  const page = (...lines: string[]) => ["---", "title: A", "---", "", ...lines, ""].join("\n");
+
+  test("an image beside the document resolves", () => {
+    expect(checkDocument(page("![A diagram](diagram.svg)"), AROUND)).toEqual([]);
+  });
+
+  test("one a folder up resolves too — a shared asset is a real arrangement", () => {
+    expect(checkDocument(page("![x](../assets/shared.png)"), AROUND)).toEqual([]);
+  });
+
+  test("an image whose file is not there is named, with the words of its alt text", () => {
+    const found = checkDocument(page("![A greyhound](gone.png)"), AROUND);
+    expect(found.map((problem) => problem.message)).toEqual([
+      '`gone.png` is not a file here — the image reads "A greyhound".',
+    ]);
+  });
+
+  test("with no image list the rule is off, rather than failing every image", () => {
+    expect(checkDocument(page("![x](gone.png)"), { ids: new Set() })).toEqual([]);
+  });
+});
+
 describe(`the dewlab checkout: ${DEWLAB}${CHECKED_OUT ? "" : " (not checked out — skipped)"}`, () => {
   test.skipIf(!CHECKED_OUT)("every page the build accepts, the checker accepts too", () => {
     const pages = dewlabPages();
     expect(pages.length).toBeGreaterThan(100);
-    const known = new Set(pages.map((page) => idFromPath(page.path)));
-    expect(checkWorkspace(pages, known)).toEqual([]);
+    const around = {
+      ids: new Set(pages.map((page) => idFromPath(page.path))),
+      images: dewlabImages(),
+    };
+    expect(checkWorkspace(pages, around)).toEqual([]);
+  });
+
+  // dewlab has a tutorial about alt text whose fence deliberately holds
+  // `<img src="does-not-exist.jpg">`, and one about file size quoting
+  // `images/hero.jpg`. Both are teaching material inside a fence, and a
+  // rule that read fences would call each of them a fault.
+  test.skipIf(!CHECKED_OUT)("an image written inside a fence is not a reference", () => {
+    const pages = dewlabPages();
+    const alt = pages.find((page) => page.path.includes("images-and-alt-text"))!;
+    expect(alt.content).toContain("does-not-exist.jpg");
+    expect(imagesIn(alt.content).map((image) => image.src)).not.toContain("does-not-exist.jpg");
+  });
+
+  test.skipIf(!CHECKED_OUT)("an image whose file is not there is caught", () => {
+    const pages = dewlabPages();
+    const around = {
+      ids: new Set(pages.map((page) => idFromPath(page.path))),
+      images: dewlabImages(),
+    };
+    const withImage = pages.find(
+      (page) => page.path.startsWith("tutorials/") && imagesIn(page.content).length > 0,
+    );
+    // A page with a real image, so the rule is measured against one that
+    // resolves before it is measured against one that does not.
+    expect(withImage).toBeDefined();
+    const path = withImage!.path;
+    expect(checkDocument(withImage!.content, { ...around, path })).toEqual([]);
+
+    const renamed = withImage!.content.replace(
+      imagesIn(withImage!.content)[0]!.src,
+      "renamed-since.png",
+    );
+    expect(checkDocument(renamed, { ...around, path }).map((problem) => problem.message)).toEqual([
+      expect.stringContaining("`renamed-since.png` is not a file here"),
+    ]);
   });
 
   test.skipIf(!CHECKED_OUT)("a real question fence broken three ways is caught each time", () => {
     const tutorial = "tutorials/counting-carefully/counting-carefully.md";
-    const sound = dewlabPages().find((page) => page.path === tutorial)!.content;
-    const known = new Set(dewlabPages().map((page) => idFromPath(page.path)));
-    expect(checkDocument(sound, known)).toEqual([]);
+    const pages = dewlabPages();
+    const sound = pages.find((page) => page.path === tutorial)!.content;
+    const around = { ids: new Set(pages.map((page) => idFromPath(page.path))) };
+    expect(checkDocument(sound, around)).toEqual([]);
 
     const breaks: [string, string, RegExp][] = [
       ["correct: 2", "correct: 9", /names none of the 3 options/],
@@ -291,7 +408,7 @@ describe(`the dewlab checkout: ${DEWLAB}${CHECKED_OUT ? "" : " (not checked out 
     for (const [from, to, expected] of breaks) {
       const broken = sound.replace(from, to);
       expect(broken).not.toBe(sound);
-      expect(checkDocument(broken, known).map((problem) => problem.message).join(" | ")).toMatch(expected);
+      expect(checkDocument(broken, around).map((problem) => problem.message).join(" | ")).toMatch(expected);
     }
   });
 });

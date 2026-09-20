@@ -5,6 +5,8 @@
 // sniffing a browser, so a browser that gains the API works the day it
 // does.
 
+import { isImageName } from "./images.ts";
+
 export interface FolderFile {
   /** Path relative to the mounted folder's root, e.g. "content/a.md". */
   path: string;
@@ -73,6 +75,13 @@ export async function listMarkdownFiles(root: DirectoryLike): Promise<FolderFile
  * modules are shown in, and `isModuleFile` is what tells them apart. */
 export async function listModuleFiles(root: DirectoryLike): Promise<FolderFile[]> {
   return walk(root, (path) => /(^|\/)(?:courses|modules)\/[^/]+\.yaml$/.test(path));
+}
+
+/** Every image under `root`, by path. The editor never opens one, so
+ * `walk` has always passed them over — but knowing which exist is what
+ * tells an image whose file was renamed apart from one that is fine. */
+export async function listImageFiles(root: DirectoryLike): Promise<FolderFile[]> {
+  return walk(root, isImageName);
 }
 
 export async function readFile(handle: FileSystemFileHandle): Promise<string> {

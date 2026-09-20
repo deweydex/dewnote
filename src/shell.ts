@@ -79,6 +79,11 @@ export function mountShell(page: HTMLElement): Shell {
   let store: Store | null = null;
   let files = new Map<string, string>();
   let index: FileIndexEntry[] = [];
+  /** Every image in the workspace, read once when it opens. The editor
+   * never opens an image, so `list()` never sees one — and without this
+   * an image whose file was renamed looks exactly like one that is
+   * fine. Anything dewnote writes is added as it is written. */
+  let images = new Set<string>();
   let modules: Module[] = [];
   let open: OpenDocument | null = null;
 
@@ -378,8 +383,16 @@ export function mountShell(page: HTMLElement): Shell {
   /** What is wrong with the open document: a cell with no id, two cells
    * sharing one, a link to nothing, front matter the build needs. Every
    * one of them is a fault a reader or the build would hit. */
+  /** What the checker needs to know about everything that is not the
+   * document in front of it. */
+  function around(): { ids: Set<string>; images: Set<string> } {
+    return { ids: new Set(distinctValues(index, "id")), images };
+  }
+
   function problemsInOpenDocument(): Problem[] {
-    return open ? checkDocument(open.document.markdown(), new Set(distinctValues(index, "id"))) : [];
+    return open
+      ? checkDocument(open.document.markdown(), { ...around(), path: open.path })
+      : [];
   }
 
   function checkThisDocument(): void {
@@ -403,7 +416,7 @@ export function mountShell(page: HTMLElement): Shell {
    * one. */
   async function publish(open: () => Promise<string>): Promise<void> {
     const all = [...files].map(([path, content]) => ({ path, content }));
-    const blocking = checkWorkspace(all, new Set(distinctValues(index, "id")))
+    const blocking = checkWorkspace(all, around())
       .filter((problem) => problem.severity === "blocking");
 
     if (blocking.length > 0) {
@@ -429,7 +442,7 @@ export function mountShell(page: HTMLElement): Shell {
    * which is too late. */
   function checkWholeWorkspace(): void {
     const all = [...files].map(([path, content]) => ({ path, content }));
-    reportProblems(checkWorkspace(all, new Set(distinctValues(index, "id"))), "the workspace");
+    reportProblems(checkWorkspace(all, around()), "the workspace");
   }
 
   const reportOverlay = document.createElement("div");
@@ -536,8 +549,11 @@ export function mountShell(page: HTMLElement): Shell {
     const taken = await store.listFolder(folder);
     const name = freeAssetName(taken, file.name || "image.png");
     const bytes = new Uint8Array(await file.arrayBuffer());
-    await store.writeBytes(assetPathFor(documentPath, name), bytes);
-    drawn.set(assetPathFor(documentPath, name), URL.createObjectURL(new Blob([bytes as BlobPart], { type: file.type || imageTypeOf(name) })));
+    const at = assetPathFor(documentPath, name);
+    await store.writeBytes(at, bytes);
+    // So the checker does not call an image it has just written missing.
+    images.add(at);
+    drawn.set(at, URL.createObjectURL(new Blob([bytes as BlobPart], { type: file.type || imageTypeOf(name) })));
     return name;
   }
 
@@ -616,6 +632,7 @@ export function mountShell(page: HTMLElement): Shell {
       store = next;
       const listed = await next.list(onProgress);
       files = new Map(listed.map((file) => [file.path, file.content]));
+      images = new Set(await next.imagePaths().catch(() => []));
       reindex();
       spine.setWorkspace({
         label: next.kind === "folder" ? next.label : next.label.split(" · ")[0] ?? next.label,

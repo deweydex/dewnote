@@ -205,7 +205,11 @@ let held: Document | null = null;
    * a real `Store`: it satisfies the same interface the two real ones
    * do, so a test that passes here is testing the shell rather than a
    * simplified copy of it. */
-  async useStubStore(files: Record<string, string>, canPublish = false): Promise<void> {
+  async useStubStore(
+    files: Record<string, string>,
+    canPublish = false,
+    images: string[] = [],
+  ): Promise<void> {
     const held_ = new Map(Object.entries(files));
     const written: { path: string; text: string }[] = [];
     const hooks = globalThis as unknown as Record<string, unknown>;
@@ -227,6 +231,7 @@ let held: Document | null = null;
       read: async (path: string) => held_.get(path) ?? "",
       readBytes: async () => null,
       listFolder: async () => [],
+      imagePaths: async () => images,
       async write(path: string, text: string) {
         held_.set(path, text);
         written.push({ path, text });

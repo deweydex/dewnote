@@ -11,6 +11,8 @@
 // The token lives in localStorage, scoped to this app's origin, and is
 // never written to a file.
 
+import { isImageName } from "./images.ts";
+
 const API = "https://api.github.com";
 const TOKEN_KEY = "dewnote:github-token";
 const REPO_KEY = "dewnote:github-repo";
@@ -220,6 +222,14 @@ async function listMatchingFiles(repo: RepoRef, ref: string, token: string, matc
  * returning an incomplete list silently. */
 export async function listMarkdownFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
   return listMatchingFiles(repo, ref, token, (path) => path.endsWith(".md"));
+}
+
+/** Every image in a repository at `ref`. The editor never opens one, so
+ * neither of the lists above sees them — but knowing which exist is what
+ * tells an image whose file was renamed apart from one that is fine.
+ * One more tree fetch, on the same reasoning as the one above. */
+export async function listImageFiles(repo: RepoRef, ref: string, token: string): Promise<RepoFile[]> {
+  return listMatchingFiles(repo, ref, token, isImageName);
 }
 
 /** Every module file (dewlab's own `modules/*.yaml`, modules.ts) in a

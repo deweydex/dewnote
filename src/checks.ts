@@ -9,6 +9,7 @@ import { parseCell, isRunnable } from "./cells.ts";
 import { segments, fenceBody } from "./notebook.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 import { brokenLinksIn } from "./links.ts";
+import { assetPathFor, isLocalAsset } from "./images.ts";
 import {
   QUESTION_TYPES,
   cardIn,
@@ -44,7 +45,23 @@ function linesOf(text: string): number {
   return text.split("\n").length - 1;
 }
 
-export function checkDocument(source: string, knownIds: ReadonlySet<string>): Problem[] {
+/** What the checker has to know about the workspace around a document.
+ * An empty set and an absent one mean different things: no ids at all is
+ * a workspace with no pages, while no image list is "nobody asked", and
+ * a rule that cannot be answered is not reported. */
+export interface Around {
+  /** Every page id the site claims, for `tutorial:` links. */
+  ids: ReadonlySet<string>;
+  /** Every image path in the workspace. Absent turns the image rule
+   * off rather than failing every image. */
+  images?: ReadonlySet<string>;
+  /** The document's own path, which is what an image resolves against.
+   * Absent turns the image rule off for the same reason. */
+  path?: string;
+}
+
+export function checkDocument(source: string, around: Around): Problem[] {
+  const { ids: knownIds, images, path } = around;
   const problems: Problem[] = [];
   const { present, fields } = extractFrontMatter(source);
 
@@ -117,6 +134,19 @@ export function checkDocument(source: string, knownIds: ReadonlySet<string>): Pr
     line += linesOf(part.text);
   }
 
+  if (images && path !== undefined) {
+    for (const image of imagesIn(source)) {
+      const at = assetPathFor(path, image.src);
+      if (!images.has(at)) {
+        problems.push({
+          message: `\`${image.src}\` is not a file here${image.alt ? ` — the image reads "${image.alt}"` : ""}.`,
+          line: image.line,
+          severity: "blocking",
+        });
+      }
+    }
+  }
+
   for (const link of brokenLinksIn("", source, knownIds)) {
     problems.push({
       message: `\`tutorial:${link.target}\` names no page${link.text ? ` — the link reads "${link.text}"` : ""}.`,
@@ -147,12 +177,13 @@ function isPage(path: string, content: string): boolean {
  * day somebody opens the page it is written on, which is too late. */
 export function checkWorkspace(
   files: readonly { path: string; content: string }[],
-  knownIds: ReadonlySet<string>,
+  around: Omit<Around, "path">,
 ): Problem[] {
   return files
     .filter((file) => isPage(file.path, file.content))
     .flatMap((file) =>
-      checkDocument(file.content, knownIds).map((problem) => ({ ...problem, path: file.path })),
+      checkDocument(file.content, { ...around, path: file.path })
+        .map((problem) => ({ ...problem, path: file.path })),
     )
     .sort((a, b) => (a.path ?? "").localeCompare(b.path ?? "") || (a.line ?? 0) - (b.line ?? 0));
 }
@@ -211,4 +242,43 @@ function checkCard(card: Card, line: number, problems: Problem[]): void {
       severity: "blocking",
     });
   }
+}
+
+const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+const HTML_IMAGE = /<img\b[^>]*\bsrc="([^"]+)"/g;
+
+/** Inline code, blanked out, keeping the line's length so a position
+ * still means something. A reference table's `` `<img src="…">` `` is a
+ * row about HTML, not an image on the page. */
+const INLINE_CODE = /(`+)(?:(?!\1)[\s\S])*?\1/g;
+
+function withoutCode(line: string): string {
+  return line.replace(INLINE_CODE, (span) => " ".repeat(span.length));
+}
+
+/** Every image a reader would see, with the line it is on.
+ *
+ * Prose only, and code spans within it blanked. An `<img
+ * src="does-not-exist.jpg">` inside a fence is a tutorial teaching what
+ * a broken image looks like, and dewlab has one; a check that read
+ * fences or code spans would call it a fault. */
+export function imagesIn(source: string): { src: string; alt: string; line: number }[] {
+  const found: { src: string; alt: string; line: number }[] = [];
+  let line = 1;
+  for (const part of segments(source)) {
+    if (part.kind === "prose") {
+      const lines = part.text.split("\n");
+      for (let at = 0; at < lines.length; at += 1) {
+        const text = withoutCode(lines[at]!);
+        for (const match of text.matchAll(MARKDOWN_IMAGE)) {
+          if (isLocalAsset(match[2]!)) found.push({ src: match[2]!, alt: match[1] ?? "", line: line + at });
+        }
+        for (const match of text.matchAll(HTML_IMAGE)) {
+          if (isLocalAsset(match[1]!)) found.push({ src: match[1]!, alt: "", line: line + at });
+        }
+      }
+    }
+    line += linesOf(part.text);
+  }
+  return found;
 }

@@ -913,3 +913,86 @@ test("Preview opens the page in a tab, with its stylesheet and maths inside it",
     heading: "rgb(27, 42, 74)",
   });
 });
+
+test("an image whose file is not there is counted in the margin and named in the report", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    ([files, images]) =>
+      (globalThis as any).__dewnote.useStubStore(files, false, images),
+    [
+      {
+        "tutorials/a/a.md": [
+          "---", "title: A", "---", "",
+          "# A", "",
+          "![A diagram that is there](diagram.svg)", "",
+          "![One that is not](gone.png)", "",
+        ].join("\n"),
+      },
+      ["tutorials/a/diagram.svg"],
+    ] as const,
+  );
+  await page.locator(".dn-wp-input").fill("a.md");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(".dn-spine-health")).toHaveText("1 to fix");
+  await page.locator(".dn-spine-health").click();
+  const report = page.locator(".dn-report");
+  await expect(report).toContainText("`gone.png` is not a file here");
+  // The one that resolves is not mentioned.
+  await expect(report).not.toContainText("diagram.svg");
+});
+
+test("the editor's measure is the measure setting, and prose is the size it is set to", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown p").first()).toBeVisible();
+
+  const measured = () =>
+    page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement);
+      const paragraph = document.querySelector<HTMLElement>(".milkdown .ProseMirror p")!;
+      const item = document.querySelector<HTMLElement>(".milkdown .ProseMirror li")!;
+      const style = getComputedStyle(paragraph);
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+      return {
+        // The text column, against what the measure setting asks for.
+        width: Math.round(paragraph.getBoundingClientRect().width),
+        wanted: Math.round(parseFloat(root.getPropertyValue("--dl-line-width")) * rem),
+        size: style.fontSize,
+        // Crepe pins paragraphs at 16px and leaves list items alone, so
+        // these two disagreeing is the symptom worth naming.
+        itemSize: getComputedStyle(item).fontSize,
+      };
+    });
+
+  const shipped = await measured();
+  expect(shipped.width).toBe(shipped.wanted);
+  expect(shipped.size).toBe("18px");
+  expect(shipped.itemSize).toBe(shipped.size);
+
+  // And the settings move it.
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty("--dl-font-size", "24px");
+    document.documentElement.style.setProperty("--dl-line-width", "40rem");
+  });
+  const moved = await measured();
+  expect(moved.size).toBe("24px");
+  expect(moved.itemSize).toBe("24px");
+  expect(moved.width).toBe(moved.wanted);
+});
+
+test("the palette says its prompt once", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  const box = page.locator(".dn-wp-box");
+  await expect(box).toBeVisible();
+  // The label is for a screen reader; the placeholder is for the eye. It
+  // stays in the tree, named and associated, and takes up no space — a
+  // `display: none` label is a label no screen reader reads.
+  const label = box.locator("label");
+  await expect(label).toHaveAttribute("for", "dn-wp-input");
+  const size = await label.boundingBox();
+  expect(size).toMatchObject({ width: 1, height: 1 });
+});
