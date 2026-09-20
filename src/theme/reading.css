@@ -117,3 +117,43 @@ details.dl-hint > summary {
 details.dl-hint[open] > summary { margin-bottom: 0.7rem; }
 
 .katex-display { margin: 1.4rem 0; overflow-x: auto; overflow-y: hidden; }
+
+/* Footnotes. remark's GFM output carries its own class names, so these
+   rules answer that markup rather than inventing any: the notes collect
+   into a `<section class="footnotes">` at the end of the page, and the
+   `<h2 class="sr-only">Footnotes</h2>` heading that names the section for
+   a screen reader is meant to be heard, not seen. Without a rule for
+   `.sr-only` it reads as an ordinary heading, which is why this block
+   starts there. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.footnotes {
+  margin-top: 2.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--dl-rule);
+  font-size: 0.9em;
+  color: var(--dl-muted);
+}
+
+/* The reference is a number in the running text, so it stays out of the
+   line's own height — a bare `<sup>` stretches the line it sits on. */
+sup:has(> [data-footnote-ref]) { line-height: 0; }
+
+[data-footnote-ref] { text-decoration: none; padding-inline: 0.1em; }
+
+/* The arrow back to where the note was called from. Muted, because it is
+   a control rather than part of the note. */
+.data-footnote-backref {
+  text-decoration: none;
+  color: var(--dl-muted);
+}
