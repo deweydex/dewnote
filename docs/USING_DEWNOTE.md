@@ -395,12 +395,21 @@ both fit and the column folds to a row across the top.
 Saving commits. Publishing opens a pull request: ⌘K, then **Open a pull
 request**.
 
+Before the pull request opens, dewnote checks every page in the
+workspace. If anything would stop the build, it says how many and offers
+**Show me** — the same report **Check every page** opens. It is a
+warning, not a gate: **Open the pull request anyway** does what it says,
+because a reviewer is the point of one.
+
 Two things to know:
 
 - Each save is its own commit, named after the file.
 - A working branch whose pull request has already merged should not be
   reused. The dated default handles this on its own; a branch you named
   yourself does not.
+
+Saving is never checked. A draft you are half way through has to be
+possible to save.
 
 ---
 

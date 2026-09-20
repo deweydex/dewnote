@@ -818,3 +818,55 @@ test("the margin counts what is wrong, and the count opens the report", async ({
   await page.keyboard.type("id: first\n");
   await expect(health).toBeHidden();
 });
+
+test("opening a pull request says what would stop the build, and still lets you", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    (files) => (globalThis as any).__dewnote.useStubStore(files, true),
+    {
+      "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nSound.\n",
+      // A file nobody has open, with a cell that cannot save anybody's work.
+      "tutorials/b/b.md": "---\ntitle: B\n---\n\n# B\n\n```python exec\nprint(1)\n```\n",
+    },
+  );
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("pull request");
+  await page.keyboard.press("Enter");
+
+  const ask = page.locator(".dn-ask-overlay");
+  await expect(ask).toContainText("1 thing in this workspace would stop the build");
+  expect(await page.evaluate(() => (globalThis as any).__dewnotePublished)).toBe(false);
+
+  // Show me leads to the same report the command opens.
+  await ask.getByText("Show me").click();
+  await expect(page.locator(".dn-report")).toContainText("no `id:`");
+  await expect(page.locator(".dn-report-where")).toContainText("tutorials/b/b.md");
+  await page.keyboard.press("Escape");
+
+  // And it is a warning, not a gate: a reviewer is the point of a pull
+  // request, so unfinished work can still reach one.
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("pull request");
+  await page.keyboard.press("Enter");
+  await ask.getByText("Open the pull request anyway").click();
+  await expect
+    .poll(() => page.evaluate(() => (globalThis as any).__dewnotePublished))
+    .toBe(true);
+});
+
+test("a sound workspace opens a pull request with nothing in the way", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    (files) => (globalThis as any).__dewnote.useStubStore(files, true),
+    { "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nSound.\n" },
+  );
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("pull request");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-ask-overlay")).toBeHidden();
+  await expect
+    .poll(() => page.evaluate(() => (globalThis as any).__dewnotePublished))
+    .toBe(true);
+});

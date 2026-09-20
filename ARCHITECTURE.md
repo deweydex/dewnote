@@ -258,6 +258,12 @@ can name, a gap that closes, a card with somewhere to go. An id is one
 namespace across all of them, because a cell, a pane and a question are
 all keys into the same saved-work record.
 
+The check runs at three moments, in rising order of consequence: a
+count in the margin as you type, a command when you ask, and a warning
+before a pull request opens. Saving is never checked — a half-written
+draft has to be possible to save — and the pull request warning is a
+warning, since a reviewer is what one is for.
+
 The spine carries a running count of the open document's faults, at the
 foot beside the save line, and clicking it opens the report. It is
 debounced: a fault found a moment after you write it is as useful as one

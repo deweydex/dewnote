@@ -368,6 +368,34 @@ export function mountShell(page: HTMLElement): Shell {
     }
   }
 
+  /** A pull request is the moment the work leaves. Anything blocking in
+   * the workspace stops the build once it is merged, so it is said here
+   * — but not enforced: opening a pull request on work that is not
+   * finished is a reasonable thing to do, and a reviewer is the point of
+   * one. */
+  async function publish(open: () => Promise<string>): Promise<void> {
+    const all = [...files].map(([path, content]) => ({ path, content }));
+    const blocking = checkWorkspace(all, new Set(distinctValues(index, "id")))
+      .filter((problem) => problem.severity === "blocking");
+
+    if (blocking.length > 0) {
+      const going = await asker.choose(
+        `${blocking.length} thing${blocking.length === 1 ? "" : "s"} in this workspace would stop the build.`,
+        [
+          { value: "look", label: "Show me", note: "The same report Check every page opens." },
+          { value: "go", label: "Open the pull request anyway", note: "A reviewer is the point of one." },
+        ],
+        blocking[0]!.message,
+      );
+      if (going === null) return;
+      if (going === "look") {
+        checkWholeWorkspace();
+        return;
+      }
+    }
+    window.open(await open(), "_blank", "noopener");
+  }
+
   /** Every page in the workspace, not only the one that is open — a
    * fault is found on the day somebody opens the page it is written on,
    * which is too late. */
@@ -696,10 +724,7 @@ export function mountShell(page: HTMLElement): Shell {
               label: "Open a pull request…",
               section: "Publish" as const,
               keywords: ["pr", "github", "review"],
-              run: async () => {
-                const url = await next.publish!();
-                window.open(url, "_blank", "noopener");
-              },
+              run: () => void publish(next.publish!),
             }]
           : []),
       ]);

@@ -201,12 +201,22 @@ let held: Document | null = null;
    * a real `Store`: it satisfies the same interface the two real ones
    * do, so a test that passes here is testing the shell rather than a
    * simplified copy of it. */
-  async useStubStore(files: Record<string, string>): Promise<void> {
+  async useStubStore(files: Record<string, string>, canPublish = false): Promise<void> {
     const held_ = new Map(Object.entries(files));
     const written: { path: string; text: string }[] = [];
-    (globalThis as unknown as Record<string, unknown>).__dewnoteWrites = written;
+    const hooks = globalThis as unknown as Record<string, unknown>;
+    hooks["__dewnoteWrites"] = written;
+    hooks["__dewnotePublished"] = false;
     document.querySelector(".dn-gate")?.remove();
     await shell?.useStore({
+      ...(canPublish
+        ? {
+            publish: async () => {
+              hooks["__dewnotePublished"] = true;
+              return "about:blank";
+            },
+          }
+        : {}),
       kind: "folder",
       label: "stub",
       list: async () => [...held_].map(([path, content]) => ({ path, content })),
