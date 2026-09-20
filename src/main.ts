@@ -1,5 +1,4 @@
 import "@milkdown/crepe/theme/common/style.css";
-import "./theme/dewlab-tokens.css";
 import "./style.css";
 
 import { mountShell } from "./shell.ts";
@@ -8,6 +7,11 @@ import { canOpenFolder, openFolder, openRepo } from "./store.ts";
 import { loadLastRepo, loadToken, saveLastRepo, saveToken, suggestedBranch } from "./github.ts";
 import { messageOf } from "./save-problem.ts";
 import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
+import { applyTokens } from "./theme/tokens.ts";
+
+// dewlab's tokens, as a stylesheet. They arrive as text because the
+// exported page needs the same bytes to inline — see theme/tokens.ts.
+applyTokens();
 
 // The one question dewnote opens on: where the files are. Everything
 // else waits behind it, because there is nothing useful to show until

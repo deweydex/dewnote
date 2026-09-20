@@ -178,6 +178,28 @@ spans back as text, in the editor and in the export alike, so what is on
 screen is what the site will show. A save then writes `\$`, which dewlab
 renders as `$`.
 
+### The page a reader reads
+
+`export-html.ts` renders the markdown, not the editor's DOM: the DOM
+carries contenteditable attributes, Vue wrappers, and code blocks that
+have not mounted because they are below the fold. **Preview this page**
+and **Save as an HTML page** are the same function, one to a tab and one
+to a file.
+
+It inlines `theme/reading.css` and dewlab's tokens, not `style.css`.
+`style.css` describes the editor — the spine, the palette, Crepe's own
+chrome — and almost none of it applies to plain markdown markup.
+
+The tokens are read once, in `theme/tokens.ts`, and used twice: the
+editor needs them as a stylesheet and the export needs the same bytes as
+text. A file cannot be imported both ways, since the bundler picks one
+loader per specifier, so it is imported as text and made a stylesheet by
+hand. Getting that wrong is silent: every `var(--dl-*)` resolves to
+nothing and the page reads in the browser's default serif at full window
+width, with a `<style>` tag present the whole time. The e2e test
+therefore asserts computed font, size and heading colour rather than the
+tag.
+
 ## The store
 
 ```ts

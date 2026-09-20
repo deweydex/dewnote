@@ -870,3 +870,46 @@ test("a sound workspace opens a pull request with nothing in the way", async ({ 
     .poll(() => page.evaluate(() => (globalThis as any).__dewnotePublished))
     .toBe(true);
 });
+
+test("Preview opens the page in a tab, with its stylesheet and maths inside it", async ({ page, context }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "tutorials/a/a.md": [
+      "---", "title: A Page", "---", "",
+      "# A Page", "",
+      "Some prose, and $x^2$ in it.", "",
+    ].join("\n"),
+  });
+  await page.locator(".dn-wp-input").fill("a page");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("preview");
+  const opened = context.waitForEvent("page");
+  await page.keyboard.press("Enter");
+
+  const tab = await opened;
+  await tab.waitForLoadState();
+  await expect(tab.locator("h1")).toHaveText("A Page");
+  await expect(tab.locator(".katex").first()).toBeVisible();
+
+  // Dressed the way the site would dress it. Asserted on what the
+  // browser computed rather than on a <style> tag being present: an
+  // export that inlines a stylesheet whose every `var(--dl-*)` resolves
+  // to nothing has a <style> tag and reads as browser defaults.
+  expect(
+    await tab.evaluate(() => {
+      const body = getComputedStyle(document.body);
+      return {
+        font: body.fontFamily,
+        size: body.fontSize,
+        heading: getComputedStyle(document.querySelector("h1")!).color,
+      };
+    }),
+  ).toEqual({
+    font: 'Georgia, "Iowan Old Style", "Times New Roman", serif',
+    size: "18px",
+    // dewlab's navy.
+    heading: "rgb(27, 42, 74)",
+  });
+});

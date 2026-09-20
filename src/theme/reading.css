@@ -1,0 +1,119 @@
+/* The exported page, and the preview that is the same page in a tab.
+ *
+ * Not `style.css`. That stylesheet describes the editor — the spine, the
+ * palette, the overlays, Crepe's own chrome — and almost none of it
+ * applies to plain markdown markup. This is the reading half, written
+ * against the same dewlab tokens and following dewlab's own
+ * `tutorial-style.css`, so a page sent to somebody looks like the page
+ * they would have read on the site.
+ *
+ * The tokens themselves are inlined beside this, because a `var(--dl-*)`
+ * with nothing behind it is how an exported page ends up in the
+ * browser's default serif at full window width. */
+
+html,
+body {
+  margin: 0;
+  background: var(--dl-bg);
+  color: var(--dl-fg);
+}
+
+body {
+  font-family: var(--dl-font-family);
+  font-size: var(--dl-font-size);
+  line-height: var(--dl-line-height, 1.62);
+}
+
+.dn-page {
+  max-width: var(--dl-line-width);
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--dl-heading);
+  line-height: 1.25;
+  margin: 2.2rem 0 0.7rem;
+  font-weight: 600;
+}
+h1 { font-size: 1.9rem; margin-top: 0; }
+h2 { font-size: 1.4rem; }
+h3 { font-size: 1.12rem; }
+h4, h5, h6 { font-size: 1rem; }
+
+p, ul, ol, blockquote { margin: 0 0 1.15rem; }
+li { margin-bottom: 0.3rem; }
+
+a { color: var(--dl-link); text-underline-offset: 0.15em; }
+
+blockquote {
+  border-left: 3px solid var(--dl-orange);
+  padding-left: 1rem;
+  margin-left: 0;
+  color: var(--dl-muted);
+}
+
+hr { border: none; border-top: 1px solid var(--dl-rule); margin: 2.5rem 0; }
+
+/* Every fence, runnable or not. A cell's output is not in an exported
+   page — it lives in the tab that ran it — so a cell reads as its code,
+   which is what the reader needs to see. */
+pre {
+  background: var(--dl-cell-bg);
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+}
+pre code, p code, li code, td code {
+  font-family: var(--dl-mono);
+  font-size: 0.86em;
+}
+p code, li code, td code {
+  background: var(--dl-cell-bg);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 0 0 1.15rem;
+  font-size: 0.9em;
+}
+th, td {
+  border: 1px solid var(--dl-cell-border);
+  padding: 0.3rem 0.6rem;
+  text-align: start;
+}
+thead th {
+  background: var(--dl-cell-bg);
+  color: var(--dl-heading);
+  font-weight: 600;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* A task list writes its own bullet, so the marker would be a second
+   one. */
+li:has(> input[type="checkbox"]) { list-style: none; margin-inline-start: -1.2em; }
+li > input[type="checkbox"] { margin-inline-end: 0.4em; }
+
+/* A hint is a fold on the site too, and stays one here. */
+details.dl-hint {
+  margin: 0 0 1.15rem;
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 4px;
+  background: var(--dl-cell-bg);
+  padding: 0.5rem 0.85rem;
+}
+details.dl-hint > summary {
+  cursor: pointer;
+  color: var(--dl-muted);
+  font-size: 0.9em;
+}
+details.dl-hint[open] > summary { margin-bottom: 0.7rem; }
+
+.katex-display { margin: 1.4rem 0; overflow-x: auto; overflow-y: hidden; }

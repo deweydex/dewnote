@@ -26,7 +26,14 @@ import { checkDocument, checkWorkspace, type Problem } from "./checks.ts";
 import { distinctValues } from "./workspace.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
 import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
-import pageCss from "./style.css" with { type: "text" };
+// The reading half, not the editor's: an exported page is plain
+// markdown markup, and `style.css` describes the editor. The tokens go
+// with it, because a `var(--dl-*)` with nothing behind it is how an
+// exported page ends up in the browser's default serif.
+import { tokensCss } from "./theme/tokens.ts";
+import readingCss from "./theme/reading.css" with { type: "text" };
+
+const pageCss = `${tokensCss}\n${readingCss}`;
 import katexCss from "katex/dist/katex.min.css" with { type: "text" };
 
 interface OpenDocument {
@@ -293,6 +300,27 @@ export function mountShell(page: HTMLElement): Shell {
       resolveImage: (src) => asDataUri(open!.path, src),
     });
     download(`${slugOf(titleOf(source))}.html`, html, "text/html");
+  }
+
+  /** The same page, in a tab, without writing a file. What an author
+   * wants before publishing is to read the thing, not to keep a copy of
+   * it — and a blob URL in a new tab is a page, with its stylesheet,
+   * its typeset maths and its images already inside it.
+   *
+   * A cell's output is not in it. Output lives in the tab that ran the
+   * cell, which is this one. */
+  async function previewPage(): Promise<void> {
+    if (!open) return;
+    const html = await exportHtml(open.document.markdown(), {
+      css: pageCss,
+      katexCss,
+      resolveImage: (src) => asDataUri(open!.path, src),
+    });
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    window.open(url, "_blank", "noopener");
+    // Long enough for the tab to have loaded it; the tab keeps its own
+    // copy from there.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   /** The open document as an nbformat 4.5 notebook. Every cell keeps
@@ -647,6 +675,15 @@ export function mountShell(page: HTMLElement): Shell {
           // Only a tutorial's own live file has versions to count.
           available: () => open !== null && /^tutorials\/([^/]+)\/\1\.md$/.test(open.path),
           run: () => void releaseVersion(),
+        },
+        {
+          id: "preview",
+          label: "Preview this page",
+          section: "Document",
+          keywords: ["read", "look", "reader", "html", "how it looks"],
+          detail: "Opens it in a tab, the way a reader meets it.",
+          available: () => open !== null,
+          run: () => void previewPage(),
         },
         {
           id: "source",

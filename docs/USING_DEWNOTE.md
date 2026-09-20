@@ -213,15 +213,23 @@ An image already named in a file draws from the folder it sits in. One
 that cannot be found stays as written, so you can see which name is
 wrong.
 
+## Reading it as a reader does
+
+⌘K, then **Preview this page**. It opens in a tab, dressed the way the
+site dresses it: dewlab's face and colours, the same measure, maths
+already typeset, images inside the file. Nothing is written anywhere.
+
+A cell appears as its code, without its `id:` and `hint:` lines — those
+are how you address a cell, not part of what a reader reads. A cell's
+output is not in it: output lives in the tab that ran the cell, which is
+the one you were just in.
+
 ## Sending a document to somebody
 
-⌘K, then **Save as an HTML page**. You get one file: the document, its
-stylesheet, its maths already typeset, and every image inside the file
-rather than beside it. It needs nothing else to open.
-
-A cell appears as its code. A cell's output is not part of the document —
-it lives in the tab for as long as the tab is open — so there is nothing
-truthful to put in its place.
+⌘K, then **Save as an HTML page**. The same page the preview shows, as a
+file: the document, its stylesheet, its maths already typeset, and every
+image inside the file rather than beside it. It needs nothing else to
+open, and nothing on the internet.
 
 ## Jupyter
 
