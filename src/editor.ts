@@ -28,7 +28,7 @@ import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } fro
 import { uploadConfig } from "@milkdown/kit/plugin/upload";
 import { isImageName, isLocalAsset } from "./images.ts";
 import { unmathPlainDollars } from "./maths.ts";
-import { freeCellId, SNIPPETS } from "./slash-menu.ts";
+import { idMaker, SNIPPETS } from "./slash-menu.ts";
 import { insert } from "@milkdown/kit/utils";
 import { commandsCtx } from "@milkdown/kit/core";
 import { clearTextInCurrentBlockCommand } from "@milkdown/kit/preset/commonmark";
@@ -279,6 +279,10 @@ function drawLocalImages(
 }
 
 export interface Document {
+  /** Every runnable cell's id, in the order they appear. */
+  cellIds(): string[];
+  /** Run one, by id. Resolves when it has finished. */
+  runCell(id: string): Promise<void>;
   /** The save path. Re-serialises the whole document, so a file is
    * normalised the first time it is saved and byte-stable after that. */
   markdown(): string;
@@ -481,7 +485,7 @@ export async function mountEditor(
                 // Crepe's own items clear it before inserting; without
                 // this the document keeps a stray "/py".
                 ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
-                insert(snippet.markdown(freeCellId(cellIdsInDocument())))(ctx);
+                insert(snippet.markdown(idMaker(cellIdsInDocument())))(ctx);
               },
             });
           }
@@ -564,6 +568,8 @@ export async function mountEditor(
   root.addEventListener("click", onRootClick);
 
   return {
+    cellIds: () => cellIdsInDocument(),
+    runCell: (id) => runCellById(id),
     markdown: () => crepe.getMarkdown(),
     headings() {
       const found: Heading[] = [];

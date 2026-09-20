@@ -1,5 +1,4 @@
 import "@milkdown/crepe/theme/common/style.css";
-import "./theme/dewlab-tokens.css";
 import "./style.css";
 
 import { mountShell } from "./shell.ts";
@@ -8,6 +7,11 @@ import { canOpenFolder, openFolder, openRepo } from "./store.ts";
 import { loadLastRepo, loadToken, saveLastRepo, saveToken, suggestedBranch } from "./github.ts";
 import { messageOf } from "./save-problem.ts";
 import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
+import { applyTokens } from "./theme/tokens.ts";
+
+// dewlab's tokens, as a stylesheet. They arrive as text because the
+// exported page needs the same bytes to inline — see theme/tokens.ts.
+applyTokens();
 
 // The one question dewnote opens on: where the files are. Everything
 // else waits behind it, because there is nothing useful to show until
@@ -201,12 +205,22 @@ let held: Document | null = null;
    * a real `Store`: it satisfies the same interface the two real ones
    * do, so a test that passes here is testing the shell rather than a
    * simplified copy of it. */
-  async useStubStore(files: Record<string, string>): Promise<void> {
+  async useStubStore(files: Record<string, string>, canPublish = false): Promise<void> {
     const held_ = new Map(Object.entries(files));
     const written: { path: string; text: string }[] = [];
-    (globalThis as unknown as Record<string, unknown>).__dewnoteWrites = written;
+    const hooks = globalThis as unknown as Record<string, unknown>;
+    hooks["__dewnoteWrites"] = written;
+    hooks["__dewnotePublished"] = false;
     document.querySelector(".dn-gate")?.remove();
     await shell?.useStore({
+      ...(canPublish
+        ? {
+            publish: async () => {
+              hooks["__dewnotePublished"] = true;
+              return "about:blank";
+            },
+          }
+        : {}),
       kind: "folder",
       label: "stub",
       list: async () => [...held_].map(([path, content]) => ({ path, content })),

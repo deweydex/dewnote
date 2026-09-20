@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { exportHtml, renderBody, titleOf } from "./export-html.ts";
+import { exportHtml, renderBody, titleOf, withoutCellHeaders } from "./export-html.ts";
 
 describe("titleOf", () => {
   test("prefers the front matter's own title", () => {
@@ -90,5 +90,34 @@ describe("exportHtml", () => {
   test("names the page after the document", async () => {
     expect(await exportHtml("---\ntitle: A Page\n---\n\n# A Page\n", { css: "" }))
       .toContain("<title>A Page</title>");
+  });
+});
+
+describe("withoutCellHeaders", () => {
+  test("drops a cell's header lines, which the reader has no use for", () => {
+    const source = ["```python exec", "id: first-sum", "total = 2 + 2", "```", ""].join("\n");
+    expect(withoutCellHeaders(source)).toBe(["```python exec", "total = 2 + 2", "```", ""].join("\n"));
+  });
+
+  test("drops every header key, not only `id:`", () => {
+    const source = [
+      "```python exec", "id: a", "name: Adding up", "hint: errors:3", "expect: total == 4",
+      "print(1)", "```", "",
+    ].join("\n");
+    expect(withoutCellHeaders(source)).toBe(["```python exec", "print(1)", "```", ""].join("\n"));
+  });
+
+  test("leaves an illustrative fence alone — it has no header to drop", () => {
+    const source = ["```python", "id = 4", "```", ""].join("\n");
+    expect(withoutCellHeaders(source)).toBe(source);
+  });
+
+  test("leaves prose and front matter exactly as they were", () => {
+    const source = ["---", "title: A", "---", "", "Some prose with `id: x` in it.", ""].join("\n");
+    expect(withoutCellHeaders(source)).toBe(source);
+  });
+
+  test("a cell that is nothing but headers ends up an empty fence, not a broken one", () => {
+    expect(withoutCellHeaders("```python exec\nid: a\n```\n")).toBe("```python exec\n\n```\n");
   });
 });

@@ -6,10 +6,12 @@
 // code blocks that have not mounted yet because they are below the fold.
 // The markdown is the document, so the markdown is what is rendered.
 //
-// A cell exports as a labelled code block. A cell's *output* is not in
-// the document — it lives in the worker and the live DOM for as long as
-// the tab is open, and is never written back — so there is nothing
-// truthful to put in its place.
+// A cell exports as its code. Its `id:`, `hint:`, `expect:` and `name:`
+// lines are how an author addresses it and are no part of what a reader
+// reads, so they are dropped. Its *output* is not in the document
+// either — that lives in the worker and the live DOM for as long as the
+// tab is open, and is never written back — so there is nothing truthful
+// to put in its place.
 
 import { unified } from "unified";
 import remarkParse from "remark-parse";
@@ -22,6 +24,8 @@ import rehypeStringify from "rehype-stringify";
 import { extractFrontMatter } from "./frontmatter.ts";
 import { isLocalAsset } from "./images.ts";
 import { unmathPlainDollars } from "./maths.ts";
+import { segments, joinSegments, fenceBody } from "./notebook.ts";
+import { isRunnable, parseCell } from "./cells.ts";
 
 export interface ExportOptions {
   /** Inlined into the page, so the file stands on its own. */
@@ -50,6 +54,21 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** A runnable cell's header lines, removed. They are the author's
+ * address for the cell, not the reader's. */
+export function withoutCellHeaders(source: string): string {
+  return joinSegments(
+    segments(source).map((part) => {
+      const info = part.info ?? "";
+      if (part.kind !== "fence" || !isRunnable(info.trim().split(/\s+/)[0] ?? "", info)) return part;
+      const body = fenceBody(part.text);
+      const { code } = parseCell(body);
+      if (code === body) return part;
+      return { ...part, text: part.text.replace(body, code.replace(/^\n+/, "")) };
+    }),
+  );
+}
+
 /** Markdown to a document body. Front matter is dropped: a reader never
  * sees it on the site either. */
 export async function renderBody(source: string): Promise<string> {
@@ -62,7 +81,7 @@ export async function renderBody(source: string): Promise<string> {
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeKatex)
     .use(rehypeStringify, { allowDangerousHtml: true })
-    .process(source);
+    .process(withoutCellHeaders(source));
   return String(file);
 }
 

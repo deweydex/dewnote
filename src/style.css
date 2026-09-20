@@ -312,6 +312,38 @@ body {
   background: var(--dn-cell-bg, var(--dl-cell-bg));
   outline: none;
 }
+/* A running count of what is wrong, above the save line. Hidden when
+   there is nothing to say. */
+.dn-spine-health[hidden] { display: none; }
+.dn-spine-health {
+  display: block;
+  padding: 0.2rem 5px;
+  margin-inline-start: -5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--dl-muted);
+  text-align: start;
+  cursor: pointer;
+}
+.dn-spine-health::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-inline-end: 0.45rem;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+  background: var(--dl-muted);
+}
+.dn-spine-health.is-blocking::before { background: var(--dl-orange); }
+.dn-spine-health:hover,
+.dn-spine-health:focus-visible {
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+  outline: none;
+}
 .dn-spine-hint {
   font-family: var(--dl-mono);
   font-size: 0.66rem;
@@ -849,11 +881,13 @@ body {
   border-radius: 4px;
   background: none;
   color: inherit;
-  cursor: pointer;
 }
 
-.dn-report-row:hover,
-.dn-report-row:focus-visible {
+/* A row is a button only when there is a file to open. */
+button.dn-report-row { cursor: pointer; }
+
+button.dn-report-row:hover,
+button.dn-report-row:focus-visible {
   background: color-mix(in srgb, var(--dl-orange) 12%, transparent);
   outline: none;
 }
@@ -1098,3 +1132,21 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .dn-cell-run.is-running::before { animation: none; }
 }
+
+.dn-report-row.is-blocking .dn-report-what::before,
+.dn-report-row.is-minor .dn-report-what::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-inline-end: 0.45rem;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+}
+
+.dn-report-row.is-blocking .dn-report-what::before { background: var(--dl-orange); }
+.dn-report-row.is-minor .dn-report-what::before { background: var(--dl-muted); }
+
+/* A reported problem is a statement, not a button. */
+div.dn-report-row { cursor: default; }
+div.dn-report-row:hover { background: none; }

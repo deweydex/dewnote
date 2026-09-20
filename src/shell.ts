@@ -22,10 +22,18 @@ import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
 import { newTutorial, prepareRelease } from "./authoring.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
-import { brokenLinks, type BrokenLink } from "./links.ts";
+import { checkDocument, checkWorkspace, type Problem } from "./checks.ts";
+import { distinctValues } from "./workspace.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
 import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
-import pageCss from "./style.css" with { type: "text" };
+// The reading half, not the editor's: an exported page is plain
+// markdown markup, and `style.css` describes the editor. The tokens go
+// with it, because a `var(--dl-*)` with nothing behind it is how an
+// exported page ends up in the browser's default serif.
+import { tokensCss } from "./theme/tokens.ts";
+import readingCss from "./theme/reading.css" with { type: "text" };
+
+const pageCss = `${tokensCss}\n${readingCss}`;
 import katexCss from "katex/dist/katex.min.css" with { type: "text" };
 
 interface OpenDocument {
@@ -82,6 +90,7 @@ export function mountShell(page: HTMLElement): Shell {
     getHeadings: () => open?.document.headings() ?? [],
     openPalette: () => palette.open(),
     save: () => saveNow(),
+    showProblems: () => checkThisDocument(),
   });
 
   function refreshSpine(): void {
@@ -90,6 +99,23 @@ export function mountShell(page: HTMLElement): Shell {
     const where = locationOf(open.path, index, modules);
     spine.setLocation(where ?? { module: "", series: "", page: "" });
     spine.refreshOutline();
+    refreshHealth();
+  }
+
+  /** The count in the margin lags the typing on purpose. A fault found a
+   * moment after you write it is as useful as one found instantly, and
+   * serialising the whole document on every keystroke is not. */
+  let healthTimer: ReturnType<typeof setTimeout> | undefined;
+  function refreshHealth(): void {
+    clearTimeout(healthTimer);
+    healthTimer = setTimeout(() => {
+      if (!open) return spine.setHealth({ total: 0, blocking: 0 });
+      const found = problemsInOpenDocument();
+      spine.setHealth({
+        total: found.length,
+        blocking: found.filter((problem) => problem.severity === "blocking").length,
+      });
+    }, 400);
   }
 
   // ── the palette ────────────────────────────────────────────────────
@@ -276,6 +302,27 @@ export function mountShell(page: HTMLElement): Shell {
     download(`${slugOf(titleOf(source))}.html`, html, "text/html");
   }
 
+  /** The same page, in a tab, without writing a file. What an author
+   * wants before publishing is to read the thing, not to keep a copy of
+   * it — and a blob URL in a new tab is a page, with its stylesheet,
+   * its typeset maths and its images already inside it.
+   *
+   * A cell's output is not in it. Output lives in the tab that ran the
+   * cell, which is this one. */
+  async function previewPage(): Promise<void> {
+    if (!open) return;
+    const html = await exportHtml(open.document.markdown(), {
+      css: pageCss,
+      katexCss,
+      resolveImage: (src) => asDataUri(open!.path, src),
+    });
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    window.open(url, "_blank", "noopener");
+    // Long enough for the tab to have loaded it; the tab keeps its own
+    // copy from there.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
   /** The open document as an nbformat 4.5 notebook. Every cell keeps
    * its own exact text, so importing one back is the same bytes. */
   function saveAsNotebook(): void {
@@ -328,16 +375,61 @@ export function mountShell(page: HTMLElement): Shell {
     refreshSpine();
   }
 
-  /** Every `tutorial:` link in the workspace that names nothing. Shown
-   * in the overlay rather than reported per document: a broken link is
-   * found on the day somebody opens the page it is written on, which is
-   * too late. */
-  function showBrokenLinks(): void {
-    const found = brokenLinks(
-      [...files].map(([path, content]) => ({ path, content })),
-      index,
-    );
-    report(found);
+  /** What is wrong with the open document: a cell with no id, two cells
+   * sharing one, a link to nothing, front matter the build needs. Every
+   * one of them is a fault a reader or the build would hit. */
+  function problemsInOpenDocument(): Problem[] {
+    return open ? checkDocument(open.document.markdown(), new Set(distinctValues(index, "id"))) : [];
+  }
+
+  function checkThisDocument(): void {
+    if (!open) return;
+    reportProblems(problemsInOpenDocument(), "this document");
+  }
+
+  /** Every cell, in order, one at a time — one interpreter, and a
+   * tutorial's cells usually depend on the ones above them. */
+  async function runEveryCell(): Promise<void> {
+    if (!open) return;
+    for (const id of open.document.cellIds()) {
+      await open.document.runCell(id);
+    }
+  }
+
+  /** A pull request is the moment the work leaves. Anything blocking in
+   * the workspace stops the build once it is merged, so it is said here
+   * — but not enforced: opening a pull request on work that is not
+   * finished is a reasonable thing to do, and a reviewer is the point of
+   * one. */
+  async function publish(open: () => Promise<string>): Promise<void> {
+    const all = [...files].map(([path, content]) => ({ path, content }));
+    const blocking = checkWorkspace(all, new Set(distinctValues(index, "id")))
+      .filter((problem) => problem.severity === "blocking");
+
+    if (blocking.length > 0) {
+      const going = await asker.choose(
+        `${blocking.length} thing${blocking.length === 1 ? "" : "s"} in this workspace would stop the build.`,
+        [
+          { value: "look", label: "Show me", note: "The same report Check every page opens." },
+          { value: "go", label: "Open the pull request anyway", note: "A reviewer is the point of one." },
+        ],
+        blocking[0]!.message,
+      );
+      if (going === null) return;
+      if (going === "look") {
+        checkWholeWorkspace();
+        return;
+      }
+    }
+    window.open(await open(), "_blank", "noopener");
+  }
+
+  /** Every page in the workspace, not only the one that is open — a
+   * fault is found on the day somebody opens the page it is written on,
+   * which is too late. */
+  function checkWholeWorkspace(): void {
+    const all = [...files].map(([path, content]) => ({ path, content }));
+    reportProblems(checkWorkspace(all, new Set(distinctValues(index, "id"))), "the workspace");
   }
 
   const reportOverlay = document.createElement("div");
@@ -348,45 +440,64 @@ export function mountShell(page: HTMLElement): Shell {
   });
   document.body.appendChild(reportOverlay);
 
-  function report(found: BrokenLink[]): void {
+  /** One overlay for both checks. A row names the file when the report
+   * spans more than one, and clicking it opens that file at the line. */
+  function reportProblems(found: Problem[], scope: "this document" | "the workspace"): void {
     const box = document.createElement("div");
     box.className = "dn-report";
     box.setAttribute("role", "dialog");
-    box.setAttribute("aria-label", "Broken links");
+    box.setAttribute("aria-label", `What is wrong with ${scope}`);
+
+    const blocking = found.filter((problem) => problem.severity === "blocking").length;
 
     const heading = document.createElement("h2");
     heading.textContent = found.length === 0
-      ? "Every link resolves."
-      : `${found.length} link${found.length === 1 ? "" : "s"} name nothing`;
+      ? `Nothing to fix in ${scope}.`
+      : `${found.length} thing${found.length === 1 ? "" : "s"} to fix`;
     box.appendChild(heading);
 
-    if (found.length > 0) {
+    if (blocking > 0) {
       const note = document.createElement("p");
-      note.textContent = "`tutorial:` is the only scheme the build resolves. Click a row to open the file.";
+      note.textContent =
+        blocking === found.length
+          ? `${blocking === 1 ? "It" : "Every one of them"} would stop the build.`
+          : `${blocking} of them would stop the build.`;
       box.appendChild(note);
     }
 
-    for (const link of found) {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "dn-report-row";
-      const where = document.createElement("span");
-      where.className = "dn-report-where";
-      where.textContent = `${link.path}:${link.line}`;
+    for (const problem of found) {
+      const row = document.createElement(problem.path ? "button" : "div");
+      row.className = `dn-report-row is-${problem.severity === "blocking" ? "blocking" : "minor"}`;
+
       const what = document.createElement("span");
       what.className = "dn-report-what";
-      what.textContent = link.text ? `${link.text} → ${link.target}` : link.target;
-      row.append(what, where);
-      row.addEventListener("click", () => {
-        reportOverlay.hidden = true;
-        void openPath(link.path);
-      });
+      what.textContent = problem.message;
+      row.appendChild(what);
+
+      const at = [problem.path, problem.line === undefined ? null : `line ${problem.line}`]
+        .filter(Boolean)
+        .join(" · ");
+      if (at) {
+        const where = document.createElement("span");
+        where.className = "dn-report-where";
+        where.textContent = at;
+        row.appendChild(where);
+      }
+
+      if (row instanceof HTMLButtonElement) {
+        row.type = "button";
+        const path = problem.path!;
+        row.addEventListener("click", () => {
+          reportOverlay.hidden = true;
+          void openPath(path);
+        });
+      }
       box.appendChild(row);
     }
 
     reportOverlay.replaceChildren(box);
     reportOverlay.hidden = false;
-    box.querySelector<HTMLElement>("button")?.focus();
+    (box.querySelector<HTMLElement>("button") ?? box).focus();
   }
 
   /** The bytes behind a `src` the document owns, as a URL a browser can
@@ -566,6 +677,15 @@ export function mountShell(page: HTMLElement): Shell {
           run: () => void releaseVersion(),
         },
         {
+          id: "preview",
+          label: "Preview this page",
+          section: "Document",
+          keywords: ["read", "look", "reader", "html", "how it looks"],
+          detail: "Opens it in a tab, the way a reader meets it.",
+          available: () => open !== null,
+          run: () => void previewPage(),
+        },
+        {
           id: "source",
           label: "Show the whole file",
           section: "Document",
@@ -602,12 +722,30 @@ export function mountShell(page: HTMLElement): Shell {
           run: () => openNotebook(),
         },
         {
-          id: "check-links",
-          label: "Check links",
+          id: "check-document",
+          label: "Check this document",
+          section: "Document",
+          keywords: ["problems", "validate", "ids", "duplicate", "lint"],
+          detail: "Cells with no id, ids used twice, links to nothing.",
+          available: () => open !== null,
+          run: () => checkThisDocument(),
+        },
+        {
+          id: "run-all",
+          label: "Run every cell",
+          section: "Document",
+          keywords: ["execute", "all", "check", "top to bottom"],
+          detail: "In order, one at a time, the way a reader meets them.",
+          available: () => open !== null && open.document.cellIds().length > 0,
+          run: () => void runEveryCell(),
+        },
+        {
+          id: "check-workspace",
+          label: "Check every page",
           section: "Workspace",
-          keywords: ["broken", "dead", "tutorial:", "slug"],
-          detail: "Every tutorial: link in the workspace that names nothing.",
-          run: () => showBrokenLinks(),
+          keywords: ["broken", "links", "ids", "front matter", "build"],
+          detail: "Every page in the workspace, not only the one that is open.",
+          run: () => checkWholeWorkspace(),
         },
         {
           id: "save",
@@ -623,10 +761,7 @@ export function mountShell(page: HTMLElement): Shell {
               label: "Open a pull request…",
               section: "Publish" as const,
               keywords: ["pr", "github", "review"],
-              run: async () => {
-                const url = await next.publish!();
-                window.open(url, "_blank", "noopener");
-              },
+              run: () => void publish(next.publish!),
             }]
           : []),
       ]);

@@ -118,7 +118,7 @@ const HEADER_LINE = /^\s*(id|hint|expect|name)\s*:/;
 /** A fence's body with its dewlab header lines left in: a reader opening
  * the notebook should see what the cell says, and the header lines are
  * part of that. */
-function fenceBody(text: string): string {
+export function fenceBody(text: string): string {
   const lines = text.split("\n");
   return lines.slice(1, Math.max(1, lines.length - 2)).join("\n");
 }

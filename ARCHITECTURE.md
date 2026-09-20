@@ -178,6 +178,28 @@ spans back as text, in the editor and in the export alike, so what is on
 screen is what the site will show. A save then writes `\$`, which dewlab
 renders as `$`.
 
+### The page a reader reads
+
+`export-html.ts` renders the markdown, not the editor's DOM: the DOM
+carries contenteditable attributes, Vue wrappers, and code blocks that
+have not mounted because they are below the fold. **Preview this page**
+and **Save as an HTML page** are the same function, one to a tab and one
+to a file.
+
+It inlines `theme/reading.css` and dewlab's tokens, not `style.css`.
+`style.css` describes the editor — the spine, the palette, Crepe's own
+chrome — and almost none of it applies to plain markdown markup.
+
+The tokens are read once, in `theme/tokens.ts`, and used twice: the
+editor needs them as a stylesheet and the export needs the same bytes as
+text. A file cannot be imported both ways, since the bundler picks one
+loader per specifier, so it is imported as text and made a stylesheet by
+hand. Getting that wrong is silent: every `var(--dl-*)` resolves to
+nothing and the page reads in the browser's default serif at full window
+width, with a `<style>` tag present the whole time. The e2e test
+therefore asserts computed font, size and heading colour rather than the
+tag.
+
 ## The store
 
 ```ts
@@ -241,6 +263,52 @@ small fixture — they show up against 181 real tutorials:
   bar at 60%; an empty query has no bar.
 - **A slug is a subsequence goldmine.** Every hyphen reads as a word
   start, so a keyword match is worth 0.7 of a label match.
+
+**Checking** is one pure function, `checkDocument(source, knownIds)` in
+`checks.ts`: markdown in, a sorted list of `Problem` out, each one
+`blocking` or `worth fixing` with the line it is on. It parses nothing
+Milkdown parses — it reads the file as text, through `segments()` from
+`notebook.ts`, so it sees what dewlab's Python build will see rather than
+what ProseMirror made of it. The shell owns the report; the checker owns
+the rules, and is tested without a browser.
+
+`fences.ts` parses dewlab's fences that are not runnable code — a
+`question`, a `card`, an `html site`/`css site`/`js site` pane — and says
+nothing about whether they are right. The rules are in `checks.ts`, and
+they are dewlab's: a question type the build knows, options a `correct:`
+can name, a gap that closes, a card with somewhere to go. An id is one
+namespace across all of them, because a cell, a pane and a question are
+all keys into the same saved-work record.
+
+The check runs at three moments, in rising order of consequence: a
+count in the margin as you type, a command when you ask, and a warning
+before a pull request opens. Saving is never checked — a half-written
+draft has to be possible to save — and the pull request warning is a
+warning, since a reviewer is what one is for.
+
+The spine carries a running count of the open document's faults, at the
+foot beside the save line, and clicking it opens the report. It is
+debounced: a fault found a moment after you write it is as useful as one
+found instantly, and serialising the whole document on every keystroke
+is not.
+
+Two tests measure the rules against the real thing, and skip themselves
+when dewlab is not checked out beside this repository: every page the
+build accepts, the checker accepts too — any blocking report there would
+be a false positive — and a real question fence broken three ways is
+caught each time, because a checker that says nothing about a broken
+file is worth nothing either.
+
+The slash menu writes them, and a test runs the checker over what every
+snippet writes — a snippet that failed it would put a fault in the
+document the moment it was inserted.
+
+`checkWorkspace` is the same rules over every page, and it is the same
+function applied file by file rather than a second set of rules. One
+overlay renders both: a row that carries a path is a button and opens
+that file, a row without one is a `div`. The rules live in one place
+because a workspace check that could disagree with a document check is
+worse than either alone.
 
 **Appearance** is eleven settings, each a CSS custom property, drawn from
 one `ROWS` list. The page is described in dewlab's own tokens, so a

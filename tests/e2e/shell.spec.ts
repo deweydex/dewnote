@@ -352,35 +352,38 @@ test("a pasted image is written beside the document and named in the markdown", 
   ).toBe(true);
 });
 
-test("Check links reports a link that names nothing, and opens the file it is in", async ({ page }) => {
+test("Check every page reports a fault in a file nobody has open, and opens it", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.locator('[data-choice="sample"]').click();
-  await page.locator(".dn-wp-input").fill("check links");
+  await page.locator(".dn-wp-input").fill("check every page");
   await page.keyboard.press("Enter");
 
   const report = page.locator(".dn-report");
   await expect(report).toBeVisible();
-  await expect(report.locator(".dn-report-row")).toHaveCount(1);
-  await expect(report.locator(".dn-report-row")).toContainText("no-such-page");
-  // It says where, so the report can be read against the file.
-  await expect(report.locator(".dn-report-where")).toContainText("everything-at-once-practice.md");
+  const broken = report.locator(".dn-report-row", { hasText: "no-such-page" });
+  await expect(broken).toHaveCount(1);
+  // It says which file and which line, so the report reads against the
+  // workspace rather than against whatever happens to be open.
+  await expect(broken.locator(".dn-report-where")).toContainText("everything-at-once-practice.md");
 
   // And takes you there.
-  await report.locator(".dn-report-row").click();
+  await broken.click();
   await expect(report).toBeHidden();
   await expect(page.locator(".milkdown h1")).toContainText("Practice");
 });
 
-test("a workspace with nothing broken says so rather than showing an empty list", async ({ page }) => {
+test("a sound workspace says so rather than showing an empty list", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
     "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nNo links here.\n",
+    // A README is not a page, and is not scolded for having no header.
+    "README.md": "# dewlab\n",
   });
   await page.keyboard.press("Escape");
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("check links");
+  await page.locator(".dn-wp-input").fill("check every page");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Every link resolves.");
+  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in the workspace.");
 });
 
 test("a document saves as one HTML file, with its stylesheet and image inside it", async ({ page }) => {
@@ -685,4 +688,228 @@ test("choosing a series a tutorial is already in takes it out", async ({ page })
   const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1));
   expect(written.text).not.toContain("grid-of-numbers");
   expect(written.text).toContain("title: First Steps");
+});
+
+test("Check this document names a cell with no id and an id used twice", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": [
+      "---", "title: One", "---", "",
+      "# One", "",
+      "```python exec", "print(1)", "```", "",
+      "```python exec", "id: twice", "print(2)", "```", "",
+      "```python exec", "id: twice", "print(3)", "```", "",
+      "[x](tutorial:nowhere)", "",
+    ].join("\n"),
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("check this document");
+  await page.keyboard.press("Enter");
+
+  const report = page.locator(".dn-report");
+  await expect(report).toBeVisible();
+  await expect(report).toContainText("no `id:`");
+  await expect(report).toContainText("share the id `twice`");
+  await expect(report).toContainText("tutorial:nowhere");
+  // Every one of these is a fault the build or a reader would hit.
+  await expect(report.locator(".dn-report-row.is-blocking")).toHaveCount(3);
+});
+
+test("a sound document says there is nothing to fix", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\n```python exec\nid: first\nprint(1)\n```\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("check this document");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
+});
+
+test("the slash menu writes a question the build would accept", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\nWords.\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/multiple");
+  // Clicked rather than entered: Enter takes whichever item the menu has
+  // highlighted, and this test is about what one named item writes.
+  await page.locator(".milkdown-slash-menu li", { hasText: "Multiple choice" }).first().click();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1).text as string);
+  expect(written).toContain("```question");
+  expect(written).toContain("type: multiple-choice");
+  expect(written).toContain("correct: 1");
+  expect(written).not.toContain("/multiple");
+
+  // And what it wrote is sound by the checker's own rules — the same
+  // ones the build enforces.
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("check this document");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
+});
+
+test("the slash menu writes three site panes under one name, each with its own id", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\nWords.\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/web");
+  await page.locator(".milkdown-slash-menu li", { hasText: "Web page" }).first().click();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1).text as string);
+  for (const fence of ["```html site", "```css site", "```js site"]) {
+    expect(written).toContain(fence);
+  }
+  // One `site:` groups them into one editor; three ids keep their saved
+  // work apart.
+  const sites = [...written.matchAll(/^site: (.+)$/gm)].map((match) => match[1]);
+  expect(new Set(sites).size).toBe(1);
+  expect(new Set([...written.matchAll(/^id: (.+)$/gm)].map((match) => match[1])).size).toBe(3);
+});
+
+test("the margin counts what is wrong, and the count opens the report", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": [
+      "---", "title: One", "---", "",
+      "# One", "",
+      "```python exec", "print(1)", "```", "",
+    ].join("\n"),
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  // A cell with no id, found without anybody asking for it.
+  const health = page.locator(".dn-spine-health");
+  await expect(health).toHaveText("1 to fix");
+  await expect(health).toHaveClass(/is-blocking/);
+
+  await health.click();
+  await expect(page.locator(".dn-report")).toBeVisible();
+  await expect(page.locator(".dn-report")).toContainText("no `id:`");
+  await page.keyboard.press("Escape");
+
+  // And it follows the document: give the cell an id and the line goes.
+  await page.locator(".milkdown .cm-content").first().click();
+  await page.keyboard.press("ControlOrMeta+Home");
+  await page.keyboard.type("id: first\n");
+  await expect(health).toBeHidden();
+});
+
+test("opening a pull request says what would stop the build, and still lets you", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    (files) => (globalThis as any).__dewnote.useStubStore(files, true),
+    {
+      "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nSound.\n",
+      // A file nobody has open, with a cell that cannot save anybody's work.
+      "tutorials/b/b.md": "---\ntitle: B\n---\n\n# B\n\n```python exec\nprint(1)\n```\n",
+    },
+  );
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("pull request");
+  await page.keyboard.press("Enter");
+
+  const ask = page.locator(".dn-ask-overlay");
+  await expect(ask).toContainText("1 thing in this workspace would stop the build");
+  expect(await page.evaluate(() => (globalThis as any).__dewnotePublished)).toBe(false);
+
+  // Show me leads to the same report the command opens.
+  await ask.getByText("Show me").click();
+  await expect(page.locator(".dn-report")).toContainText("no `id:`");
+  await expect(page.locator(".dn-report-where")).toContainText("tutorials/b/b.md");
+  await page.keyboard.press("Escape");
+
+  // And it is a warning, not a gate: a reviewer is the point of a pull
+  // request, so unfinished work can still reach one.
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("pull request");
+  await page.keyboard.press("Enter");
+  await ask.getByText("Open the pull request anyway").click();
+  await expect
+    .poll(() => page.evaluate(() => (globalThis as any).__dewnotePublished))
+    .toBe(true);
+});
+
+test("a sound workspace opens a pull request with nothing in the way", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    (files) => (globalThis as any).__dewnote.useStubStore(files, true),
+    { "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nSound.\n" },
+  );
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("pull request");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-ask-overlay")).toBeHidden();
+  await expect
+    .poll(() => page.evaluate(() => (globalThis as any).__dewnotePublished))
+    .toBe(true);
+});
+
+test("Preview opens the page in a tab, with its stylesheet and maths inside it", async ({ page, context }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "tutorials/a/a.md": [
+      "---", "title: A Page", "---", "",
+      "# A Page", "",
+      "Some prose, and $x^2$ in it.", "",
+    ].join("\n"),
+  });
+  await page.locator(".dn-wp-input").fill("a page");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("preview");
+  const opened = context.waitForEvent("page");
+  await page.keyboard.press("Enter");
+
+  const tab = await opened;
+  await tab.waitForLoadState();
+  await expect(tab.locator("h1")).toHaveText("A Page");
+  await expect(tab.locator(".katex").first()).toBeVisible();
+
+  // Dressed the way the site would dress it. Asserted on what the
+  // browser computed rather than on a <style> tag being present: an
+  // export that inlines a stylesheet whose every `var(--dl-*)` resolves
+  // to nothing has a <style> tag and reads as browser defaults.
+  expect(
+    await tab.evaluate(() => {
+      const body = getComputedStyle(document.body);
+      return {
+        font: body.fontFamily,
+        size: body.fontSize,
+        heading: getComputedStyle(document.querySelector("h1")!).color,
+      };
+    }),
+  ).toEqual({
+    font: 'Georgia, "Iowan Old Style", "Times New Roman", serif',
+    size: "18px",
+    // dewlab's navy.
+    heading: "rgb(27, 42, 74)",
+  });
 });

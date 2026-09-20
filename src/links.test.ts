@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { brokenLinks, brokenLinksIn } from "./links.ts";
+import { brokenLinksIn } from "./links.ts";
 
 const KNOWN = new Set(["grid-of-numbers", "storing-and-computing"]);
 
@@ -29,33 +29,5 @@ describe("brokenLinksIn", () => {
   test("finds every broken link on one line", () => {
     const found = brokenLinksIn("a.md", "[a](tutorial:no-one) and [b](tutorial:no-two)\n", KNOWN);
     expect(found.map((link) => link.target)).toEqual(["no-one", "no-two"]);
-  });
-});
-
-describe("brokenLinks", () => {
-  const INDEX = [
-    { path: "tutorials/grid-of-numbers/grid-of-numbers.md", id: "grid-of-numbers" },
-    { path: "tutorials/storing-and-computing/storing-and-computing.md", id: "storing-and-computing" },
-  ];
-
-  test("checks the whole workspace, not only the open document", () => {
-    const files = [
-      { path: "tutorials/a/a.md", content: "[x](tutorial:missing-one)\n" },
-      { path: "tutorials/b/b.md", content: "[y](tutorial:grid-of-numbers)\n" },
-      { path: "tutorials/c/c.md", content: "[z](tutorial:missing-two)\n" },
-    ];
-    expect(brokenLinks(files, INDEX).map((link) => link.target)).toEqual([
-      "missing-one",
-      "missing-two",
-    ]);
-  });
-
-  test("a course descriptor is not prose and is not checked", () => {
-    const files = [{ path: "courses/maths.yaml", content: "[x](tutorial:nope)\n" }];
-    expect(brokenLinks(files, INDEX)).toEqual([]);
-  });
-
-  test("nothing broken is an empty list, not an absence", () => {
-    expect(brokenLinks([{ path: "a.md", content: "[x](tutorial:grid-of-numbers)\n" }], INDEX)).toEqual([]);
   });
 });

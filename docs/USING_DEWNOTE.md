@@ -109,7 +109,55 @@ Under **Tutorial** in that menu are the blocks a tutorial is made of:
 |---|---|
 | Python cell | A `python exec` fence with an `id:` nobody is using |
 | SQL cell | The same in dewlab's other language |
+| Multiple choice | A `question` fence with two options and a `correct:` line |
+| Fill in the blank | A `question` fence with a `{gap}` in it |
+| Web page | Three `site` panes — HTML, CSS and JavaScript — under one name |
 | Hint | The `<details class="dl-hint">` fold the build looks for |
+
+Every one of them writes something the build accepts, ids included.
+
+## Questions
+
+A `question` fence is an exercise the page marks. Two kinds:
+
+````
+```question
+id: which-one
+type: multiple-choice
+correct: 2
+
+Which counts this correctly?
+
+- A permutation.
+- A combination.
+```
+````
+
+The prose above the first bullet is the question; each bullet is an
+option. `correct:` counts from 1, in the order the options are written.
+
+````
+```question
+id: name-it
+type: fill-in-the-blank
+
+A list you can change is called a {list|tuple|set}.
+```
+````
+
+Each `{…}` is a gap. A gap with `|` in it is a dropdown, one without is a
+typing box, and either way the first item is the expected answer.
+
+A question's `id:` shares one namespace with every cell and site pane on
+the page — they are all keys into the same saved-work record, so no two
+can be named the same.
+
+## Web pages
+
+Three fences — `html site`, `css site`, `js site` — with the same
+`site:` name become one live editor with a tab each. dewnote writes them
+as three code blocks, which is what the file holds; the build is what
+joins them.
 
 ## Starting a tutorial
 
@@ -165,15 +213,23 @@ An image already named in a file draws from the folder it sits in. One
 that cannot be found stays as written, so you can see which name is
 wrong.
 
+## Reading it as a reader does
+
+⌘K, then **Preview this page**. It opens in a tab, dressed the way the
+site dresses it: dewlab's face and colours, the same measure, maths
+already typeset, images inside the file. Nothing is written anywhere.
+
+A cell appears as its code, without its `id:` and `hint:` lines — those
+are how you address a cell, not part of what a reader reads. A cell's
+output is not in it: output lives in the tab that ran the cell, which is
+the one you were just in.
+
 ## Sending a document to somebody
 
-⌘K, then **Save as an HTML page**. You get one file: the document, its
-stylesheet, its maths already typeset, and every image inside the file
-rather than beside it. It needs nothing else to open.
-
-A cell appears as its code. A cell's output is not part of the document —
-it lives in the tab for as long as the tab is open — so there is nothing
-truthful to put in its place.
+⌘K, then **Save as an HTML page**. The same page the preview shows, as a
+file: the document, its stylesheet, its maths already typeset, and every
+image inside the file rather than beside it. It needs nothing else to
+open, and nothing on the internet.
 
 ## Jupyter
 
@@ -184,14 +240,50 @@ file back, byte for byte.
 
 An import replaces what is on screen. Nothing is written until you save.
 
-## Checking links
+## Checking a document
 
-⌘K, then **Check links**. It reads every file in the workspace, not just
-the one you have open, and lists every `tutorial:` link that names a page
-nothing claims. Click a row to open the file it is written in.
+⌘K, then **Check this document**. It reads the file you have open and
+lists what would break dewlab's build or confuse a reader:
+
+| Problem | Why it matters |
+|---|---|
+| No front matter, or no `title:` | The build has no name for the page. |
+| A `version:` that is not a date and a counter | A release has nothing to count from. |
+| A cell, pane or question with no `id:` | A student's work has no key to save under. |
+| Two of them sharing an `id:` | One block's saved work overwrites the other's. |
+| A `tutorial:` link naming nothing | It ships as a broken address. |
+| A question with no `type:`, or one the build does not know | Nothing marks it. |
+| A multiple-choice question with fewer than two options, or a `correct:` naming none of them | Nothing marks it. |
+| A fill-in-the-blank question with no `{…}` gap, or a gap that never closes | There is nothing to fill in. |
+| A site pane with no `site:` | It is what groups the panes into one editor. |
+| A card with no `url:`, or whose text does not open with a heading | The tile goes nowhere, or has no title. |
+
+Each row is marked **blocking** — dewlab will not build it — or **worth
+fixing**. A document with nothing wrong says so rather than showing an
+empty list.
+
+You do not have to remember to run it. The margin carries a running
+count — **3 to fix**, with an orange dot when any of them would stop the
+build — and clicking it opens the same report. The count follows what
+you type, a moment behind. A document with nothing wrong shows no
+count.
 
 `tutorial:` is the only scheme the build resolves. A `module:` or
-`series:` link would ship as a literal broken address.
+`series:` link ships as a literal broken address, so the checker reads
+`tutorial:` links and leaves every other kind alone.
+
+## Checking every page
+
+⌘K, then **Check every page**. The same rules, over the whole workspace
+rather than the file you have open — which is what says whether the site
+is sound. A broken link is otherwise found on the day somebody opens the
+page it is written on.
+
+Each row names its file and line. Click one to open that file.
+
+A README or a note left beside a tutorial is not a page and is not
+checked. A file under `tutorials/` is a page whether or not it has front
+matter; the missing header is the fault worth reporting.
 
 ---
 
@@ -234,6 +326,12 @@ code on screen.
 
 Once a cell has run, **Hide** puts the code away and leaves the output,
 which is how a finished cell reads.
+
+⌘K, **Run every cell**, runs them from the top down, one after another,
+and stops at the first that fails. They run in order because a tutorial's
+cells usually depend on the ones above them, and they share one
+interpreter. It is the quickest way to find out whether the tutorial
+still works after an edit.
 
 ---
 
@@ -305,12 +403,21 @@ both fit and the column folds to a row across the top.
 Saving commits. Publishing opens a pull request: ⌘K, then **Open a pull
 request**.
 
+Before the pull request opens, dewnote checks every page in the
+workspace. If anything would stop the build, it says how many and offers
+**Show me** — the same report **Check every page** opens. It is a
+warning, not a gate: **Open the pull request anyway** does what it says,
+because a reviewer is the point of one.
+
 Two things to know:
 
 - Each save is its own commit, named after the file.
 - A working branch whose pull request has already merged should not be
   reused. The dated default handles this on its own; a branch you named
   yourself does not.
+
+Saving is never checked. A draft you are half way through has to be
+possible to save.
 
 ---
 
