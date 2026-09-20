@@ -1,12 +1,8 @@
 // Where documents come from and go back to.
 //
-// Two stores, one interface. `archive/src/` answered this in four files
-// and 2,148 lines: `folder-store.ts` and `github.ts` held the protocol,
-// and `folder-panel.ts` and `repo-panel.ts` held a file browser each —
-// two browsers, two search boxes, two "open this" paths, and
-// `active-store.ts` in the middle so a third module could ask either of
-// them to open a path. The palette is the browser now, so what is left
-// is the protocol and a way to name it.
+// Two stores, one interface: a local folder and a GitHub repository.
+// Neither has a file browser of its own, because the palette is the
+// browser — what is left is the protocol and a way to name it.
 //
 // A store never touches the DOM and never decides what to show. It reads
 // bytes, writes bytes, and says plainly when a write did not happen.

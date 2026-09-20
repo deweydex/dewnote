@@ -1,24 +1,23 @@
-// The main-thread half of running a cell — a trimmed adaptation of
-// dewlab's assets/pyodide-engine.js. Kept: boot, run-cell, the
-// SharedArrayBuffer interrupt convention (byte 0 = 2, Pyodide's own
-// SIGINT signal) with a terminate-and-restart fallback for a page
-// without cross-origin isolation (plan §5.4's own documented baseline,
-// see requestStop), and the request/response envelope. Dropped: the entire
-// main-thread fallback for when a Worker can't be constructed (dewlab
-// needs it for a file:// tutorial page; dewnote's browser and GitHub
-// Pages targets are both served over http(s), so this is a real,
-// documented gap for the single-file-opened-from-disk mode — see
-// DECISIONS.md), filesystem mounting, autocomplete, and every message
-// type that exists only for those.
+// The main-thread half of running a cell, adapted from dewlab's own
+// assets/pyodide-engine.js.
+//
+// Boot, run-cell, the request/response envelope, and the
+// SharedArrayBuffer interrupt convention — byte 0 = 2, Pyodide's own
+// SIGINT signal — with a terminate-and-restart fallback for a page
+// without cross-origin isolation.
+//
+// There is no main-thread fallback for a browser that cannot construct a
+// Worker: dewnote is served over http(s), so a Worker is always
+// available. A build opened straight from disk over `file://` is the one
+// case this does not cover.
 
 import { buildWorkerSource, DEFAULT_PACKAGES } from "./worker-source.ts";
 
 const DEFAULT_PYODIDE_BASE = "https://cdn.jsdelivr.net/pyodide/v0.28.3/full/";
 let pyodideBaseOverride: string | null = null;
 
-/** A settings-panel override for where Pyodide loads from (plan §5.9's
- * own "loaded from jsDelivr by default with a self-host setting", never
- * built until now). Only takes effect on the *next* `ensureBooted()` — a
+/** A settings-panel override for where Pyodide loads from — jsDelivr by
+ * default, self-hosted if the reader says so. Only takes effect on the *next* `ensureBooted()` — a
  * worker already running keeps using whatever base it booted with, which
  * is exactly why the settings panel pairs this with `restartInterpreter`
  * rather than trying to hot-swap a running interpreter's own source. */

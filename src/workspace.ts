@@ -1,31 +1,17 @@
-// Plan §5.10's own index: "opening a folder, or a GitHub repository,
-// builds a small in-memory index: one pass over every markdown file's
-// front matter... refreshed on save." This is that pass, kept as a pure
-// function over already-read file content so it can be exercised without
-// a browser or a real GitHub token — folder-panel.ts and repo-panel.ts
-// are the two places that actually read the files and call this.
+// The workspace index: what every file is, and where it sits.
 //
-// Only string-valued fields are kept — a `year: 2026` or a `covers: {}`
-// isn't something a picker offers as a name, and treating a non-string
-// value as one here would just be a different way of silently
-// mis-indexing a file, the kind of thing §5.10 built this to prevent in
-// the first place.
+// One pass over every markdown file's front matter, built when a
+// workspace opens and refreshed on save. Pure, over content somebody
+// else read, so it runs without a browser or a token.
 //
-// ## The id comes from the path, and the modules from modules/
+// Only string-valued fields are kept: a `year: 2026` is not a name a
+// picker can offer.
 //
-// dewlab moved placement out of front matter: a page's id is `id_of()`
-// in its own build.py — "from where its file is and nothing else" —
-// and which module lists that id lives in `modules/*.yaml` (modules.ts).
-// So `id` here is derived, never read from a field, and `modules` is a
-// join rather than a property of the file.
-//
-// `module`/`series` stay. dewlab's files no longer carry them, so they
-// simply stop appearing on dewlab entries — but dewstack is a separate
-// dialect on its own schedule and still places a tutorial from its front
-// matter, and its own form still offers both as pickers over this index.
-// (dewlab's own spec for this change said to drop them; that holds for
-// dewlab and would break dewstack, so they're kept and left to empty out
-// on their own.)
+// A page's id comes from its path — dewlab's `id_of()`, "from where its
+// file is and nothing else" — so `id` is derived, never read from a
+// field, and `modules` is a join against the course descriptors.
+// `module`/`series` stay because dewstack places a tutorial from its
+// front matter.
 
 import type { Module } from "./modules.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
@@ -72,17 +58,15 @@ export interface FileIndexEntry {
 const VERSION_FILE_RE = /^v\d{4}\.\d{2}\.\d{2}\.\d+$/;
 
 /**
- * A page's id from its path alone, following `build.py`'s own `id_of()`:
- * a tutorial is `tutorials/<id>/<id>.md` so the id is the file's stem;
- * a practice page is `<id>-practice.md` in the same folder and gets its
- * own id; a frozen release is `v<version>.md` and takes the *folder's*
- * name, since it is a version of that folder's tutorial rather than a
- * page of its own.
+ * A page's id from its path alone, following dewlab's `id_of()`:
  *
- * Derived rather than read, for the reason dewlab gives: the id is the
- * address of the page and the key a reader's saved work lives under, so
- * a field that could disagree with the folder would be a way to break
- * both.
+ * - a tutorial is `tutorials/<id>/<id>.md` — the id is the file's stem;
+ * - a practice page is `<id>-practice.md` and gets its own id;
+ * - a frozen release is `v<version>.md` and takes the *folder's* name.
+ *
+ * Derived, never read from a field: the id is the page's address and the
+ * key a reader's saved work lives under, so a field that could disagree
+ * with the folder would break both.
  */
 export function idFromPath(path: string): string {
   const segments = path.split("/");
@@ -199,24 +183,14 @@ function isNewer(a: FileIndexEntry, b: FileIndexEntry): boolean {
   return false;
 }
 
-/** Among every entry sharing `id`, the one `build.py`'s own
- * `versions_of()` would mark `is_default` — the newest `live` version,
- * or (with no live version at all) the newest version regardless of
- * status. Every version still gets its own entry in the index itself
- * (an author working on a draft, or browsing an archived one, needs to
- * find it by path); this only decides which *one* answers "what does
- * this id mean" for a lookup that has to pick exactly one — today,
- * series-panel.ts's own title lookup. Returns `undefined` for an id
- * nothing in `index` claims.
+/** Among every entry sharing `id`, the one dewlab's `versions_of()`
+ * marks `is_default`: the newest `live` version, or the newest of any
+ * status when there is no live one. `undefined` for an unknown id.
  *
- * Still needed after the move to site-wide ids, though dewlab's own spec
- * for this change expected it to go ("ids are unique"). Ids are unique
- * per *page*; a page can still be several *files*. A frozen release
+ * An id is unique per *page*, not per *file* — a frozen release
  * `tutorials/first-steps/v2026.08.23.1.md` carries the same id as the
- * live `tutorials/first-steps/first-steps.md` beside it — there are real
- * ones in dewlab's tree today — and picking whichever happened to be
- * indexed first would show a frozen release's title where the live one
- * belongs. */
+ * live file beside it. Picking whichever was indexed first would show a
+ * frozen release's title where the live one belongs. */
 export function defaultEntryFor(index: FileIndexEntry[], id: string): FileIndexEntry | undefined {
   let best: FileIndexEntry | undefined;
   for (const entry of index) {
@@ -245,11 +219,7 @@ export function distinctValues(index: FileIndexEntry[], field: "module" | "serie
 // ─────────────────────────────────────────────────────────────────────
 // Where the open document sits: module › series › page.
 //
-// `archive/src/workspace-nav.ts` answered this too, in about eighty
-// lines, because the answer was entangled with three dependent `<select>`
-// elements and the state of whichever one you had touched last. The
-// palette replaced those controls, so what is left is the question
-// itself, and the question is a pure function.
+// A pure function of path, index and course descriptors.
 
 import type { ModuleSeries } from "./modules.ts";
 

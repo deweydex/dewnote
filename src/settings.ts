@@ -1,21 +1,10 @@
-// The reading/editing texture settings, and the running-Python settings
-// beside them — decision 7's "every one of those values is a user
-// setting" (family, size, measure, cell tint, theme), plus a couple of
-// dewnote-specific additions (a separate code font size, and where
-// Pyodide loads from). Modelled directly on dewstack's own
-// assets/settings.js: one small object in localStorage, applied to
-// <html> as CSS custom properties before first paint, a default value
-// removing its attribute/property rather than setting it so the
-// stylesheet's own default stays authoritative.
+// What the reader chose: type, measure, spacing, theme, and where
+// Pyodide loads from.
 //
-// Deliberately not built here: named aesthetic presets ("manuscript",
-// "chalkboard") — planning/mockups/dewnote-sketch.html sketches three,
-// but that sketch is exploratory, not a ratified decision the way
-// decision 7 is, and choosing new palettes is real art direction, not
-// engineering. Theme (light/dark/system) is the one preset dewlab's own
-// tokens already fully define (`theme/dewlab-tokens.css`'s own
-// `[data-theme="dark"]` block) and is built below; anything beyond that
-// is left for a deliberate follow-up, not invented here.
+// One small object in localStorage, applied to `<html>` as CSS custom
+// properties before first paint. A value at its default removes its
+// property rather than setting it, so the stylesheet's own default stays
+// the one authority on what the default is.
 
 export type Theme = "system" | "light" | "dark";
 export type BodyFont = "serif" | "sans" | "mono";
@@ -50,10 +39,7 @@ export interface Settings {
    * falls back to whatever the system picks, which looks like a bug. */
   codeFont: CodeFont;
   /** Empty string means the built-in default (jsDelivr) — see
-   * pyodide-engine.ts's own PYODIDE_BASE. A real gap this doesn't cover
-   * yet: nothing currently reads this setting, since pyodide-engine.ts's
-   * base URL is a module-level constant, not parameterised — see
-   * DECISIONS.md. */
+   * pyodide-engine.ts's own PYODIDE_BASE. */
   pyodideBase: string;
 }
 
@@ -215,7 +201,7 @@ function mapDefault(value: string, defaultValue: string): string | null {
 
 /** Writes every setting to `<html>`, called before the document mounts
  * so there is never a flash of default texture before the reader's own
- * choice applies (dewstack's own "FAQ's way", decision 7). */
+ * choice applies. */
 export function applySettings(settings: Settings): void {
   const root = document.documentElement;
   for (const [key, value] of Object.entries(settingsToRootProperties(settings))) {

@@ -1,15 +1,15 @@
-/* Vendored, not written here: this is dewlab's own palette and typography
- * tokens (assets/tutorial-style.css, the ":root" / "[data-theme=dark]" /
- * "prefers-color-scheme" blocks only — none of that file's page-layout
- * rules, which belong to a tutorial page, not to dewnote's own chrome).
- * Taken from deweydex/dewlab at commit 26aad06 (2026-09-06). DECISIONS.md 7:
- * "imported not copied" is the intent; refreshing this file by hand when
- * dewlab's tokens change is the honest version of that until there is a
- * build step that pulls it automatically.
+/* Vendored, not written here: dewlab's own palette and typography tokens
+ * (its assets/tutorial-style.css, the `:root` / `[data-theme=dark]` /
+ * `prefers-color-scheme` blocks only — none of that file's page-layout
+ * rules, which belong to a tutorial page rather than to this editor).
+ * Taken from deweydex/dewlab at 26aad06.
  *
- * dewnote's own chrome (src/app.css) is layered on top of these variables
- * and adds nothing dewlab doesn't already have a variable for, so a
- * document previewed here is dressed the way the site would dress it.
+ * Refreshing this by hand when dewlab's tokens change is the current
+ * arrangement; a build step that pulls it would be better.
+ *
+ * dewnote's own chrome is layered on these variables and adds nothing
+ * dewlab has a variable for, so a document here is dressed the way the
+ * site would dress it.
  */
 
 :root {

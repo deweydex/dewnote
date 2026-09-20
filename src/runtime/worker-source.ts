@@ -1,27 +1,16 @@
-// Builds the Pyodide worker's source as a string, the same way dewstack's
-// site-editor.js builds its iframe RELAY script: code for a different
-// execution context, embedded as text rather than imported as a module,
-// because it has to end up runnable from a Blob URL inside dewnote's
-// single-file build — there is no separate worker.js file on disk to
-// point a real `new Worker(url)` at once everything is one HTML file.
-// Bun's bundler doesn't follow a `new Worker(new URL(...))` reference the
-// way Vite's does (checked directly against a browser-target build,
-// which left the reference unresolved rather than producing a second
-// chunk), so a hand-authored string is the plain fix, not a workaround.
+// The Pyodide worker's source, as a string.
 //
-// This is a trimmed adaptation of dewlab's assets/pyodide-worker.js —
-// boot, run a cell, and support Stop — not a port of its filesystem
-// mounting or autocomplete message types, none of which dewnote's cells
-// need yet. See DECISIONS.md for the fuller comparison. SQL cells
-// (run-sql/reset-sql) are dewstack's own convention, not dewlab's;
-// dewnote_sql_tools.py is a trimmed adaptation of dewstack's own
-// sql_tools.py, sharing this same one Pyodide interpreter rather than a
-// second one, the same way dewstack's SQL and exec cells do.
+// It has to run from a Blob URL: the build is one HTML file, so there is
+// no worker.js on disk to point `new Worker(url)` at, and Bun's bundler
+// does not follow a `new Worker(new URL(...))` reference the way Vite's
+// does.
 //
-// Because this is a plain string, not a module TypeScript can check, keep
-// it as small and literal as reasonably possible — anything that can live
-// in real, type-checked TypeScript instead (the main-thread side, in
-// pyodide-engine.ts) should.
+// Adapted from dewlab's assets/pyodide-worker.js — boot, run a cell,
+// support Stop. SQL cells share this one interpreter.
+//
+// TypeScript cannot check a string, so keep this small and literal.
+// Anything that can live in real TypeScript belongs in
+// pyodide-engine.ts.
 
 import pythonToolsSource from "./dewnote_tools.py" with { type: "text" };
 import sqlToolsSource from "./dewnote_sql_tools.py" with { type: "text" };

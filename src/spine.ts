@@ -1,40 +1,19 @@
 // The spine: the left margin doing a book's job.
 //
-// It replaces the workflow header, and the reasoning is the one in
-// planning/UI_REVIEW.md §5. The chrome above the document answered three
-// questions — where am I, what state is this document in, how do I get
-// somewhere else — and answered the first two with a toolbar: a bordered
-// breadcrumb pill that read as a search field, a filename, and a solid
-// orange Save that was the loudest thing on a screen whose whole
-// aesthetic is restraint. The first two questions need a caption, not a
-// toolbar. The third is what one key is for (workspace-palette.ts).
+// A document answers three questions about itself — where am I, what
+// state is this in, how do I get somewhere else. The first two want a
+// caption, not a toolbar. The third is what one key is for
+// (workspace-palette.ts).
 //
-// So this is a caption, set in the document's own Georgia at caption
-// size, in the margin the page already had and was not using: at
-// 1440px with dewlab's 34rem measure there is about 450px of empty
-// gutter on each side. One side now carries the running head and the
-// thumb index a book would have. The other stays empty on purpose.
-//
-// ## Why the layout is measured rather than declared
-//
-// How much room the margin has depends on the window AND on two reader
-// settings — `measure` and `margins` (settings.ts) — which reach the
-// page as CSS custom properties. A media query cannot read a custom
-// property, so a CSS-only rule for "is there room for a spine" would
-// have to hard-code a measure this app lets people change. Instead a
-// `ResizeObserver` on the page element reports the real gutter, which
-// moves both when the window resizes and when a setting changes, and
-// `<html>` gets `data-spine="margin"` or `"folded"` from it. Folded is
-// the phone treatment: the same lines across the top, in reading order,
-// rather than a desktop column squeezed until nothing in it is legible.
-
+// So this is a caption, set in the document's own face at caption size,
+// in the margin the page already had and was not using: at 1440px with a
+// 34rem measure there is about 450px of empty gutter each side. One side
+// carries it; the other stays empty.
 
 export interface SpineHost {
   /** The open document's own headings. They come from the editor's tree
-   * rather than from a second parse of the text: `archive/src/` had four
-   * separate `#{1,6}` regexes, three of them with their own answer to
-   * "is this `#` inside a fence". There is one answer now, and the
-   * editor already holds it. */
+   * rather than from a second parse of the text. There is one answer to
+   * "is this `#` inside a fence", and the editor already holds it. */
   getHeadings(): { level: number; text: string }[];
   /** ⌘K's own surface. The filename and the breadcrumb both open it:
    * "where am I" and "take me elsewhere" are one gesture. */

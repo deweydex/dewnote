@@ -1,13 +1,9 @@
 // What holds the document: the spine in the margin, the palette on ⌘K,
 // the command registry both read, and save.
 //
-// `archive/src/` spread this over `workflow-shell.ts`, `file-bar.ts`,
-// `icon-rail.ts`, `active-store.ts`, `outline-panel.ts`,
-// `folder-panel.ts` and `repo-panel.ts` — two file browsers, a rail of
-// hidden buttons the palette reached by CSS selector, and a shared
-// layout module that existed only because eight panels each picked their
-// own `top: Nrem`. There is one overlay and one margin now, so most of
-// that has nothing left to do.
+// One overlay and one margin. Everything that appears over the document
+// — the palette, the settings — goes through the overlay; everything
+// that says where you are goes in the margin.
 
 import { mountEditor, type Document } from "./editor.ts";
 import { mountSpine, type Spine } from "./spine.ts";

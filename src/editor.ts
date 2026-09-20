@@ -1,20 +1,19 @@
 // The editor, and the only module that knows Milkdown exists.
 //
 // Two schema overrides carry everything dewlab writes that Crepe's own
-// preset would lose. Both were found by measurement rather than by
-// reading — planning/REBUILD.md §1 records the probe and the two
-// mechanisms that are not obvious from the API:
+// preset would lose. Both are mechanisms the API does not advertise, and
+// both were found by measuring rather than by reading:
 //
 //   1. A schema is replaced by re-registering it under the same id, not
 //      by updating its ctx slice. `ctx.update(codeBlockSchema.key, …)`
-//      inside `editor.config()` updates a value that `$node`'s runner has
-//      already read, so it does nothing at all — silently.
+//      inside `editor.config()` updates a value that `$node`'s runner
+//      has already read, so it does nothing at all — silently.
 //
 //   2. Crepe models a `$$` maths block as a code fence whose language is
 //      `LaTeX`, converted in and out by its own `codeBlockSchema`
 //      extension. Re-registering that schema drops Crepe's extension, so
-//      ours has to carry the same branch or every block of maths in the
-//      corpus turns into a fence. Measured: 18 files.
+//      ours has to carry the same branch or every block of maths turns
+//      into a fence. Measured: 18 files in the dewlab corpus.
 
 import { Crepe } from "@milkdown/crepe";
 import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
@@ -61,8 +60,7 @@ export const codeBlockWithMeta = codeBlockSchema.extendSchema((prev) => (ctx) =>
 });
 
 /** Front matter, held as the one string it is. Nothing parses the YAML on
- * the way through, so key order and quoting survive by construction —
- * which is what `archive/src/frontmatter.ts` spent 133 lines protecting. */
+ * the way through, so key order and quoting survive by construction. */
 export const frontMatterSchema = $nodeSchema("front_matter", () => ({
   content: "text*",
   group: "block",
@@ -89,28 +87,20 @@ export const frontMatterSchema = $nodeSchema("front_matter", () => ({
 
 export const frontMatterRemark = $remark("frontMatter", () => remarkFrontmatter, ["yaml"]);
 
-/** Put every display-maths block into the one form Milkdown handles
- * correctly — `$$` alone on its own line at each end — before Milkdown
- * reads it.
+/** Rewrite every display-maths block into the one form Milkdown handles
+ * correctly: `$$` alone on its own line at each end.
  *
- * Two measured faults make this necessary, and neither is cosmetic.
+ * Milkdown gets the other two wrong.
  *
- * A block whose delimiters share a line with its content is destroyed:
- * given `$$a = 1\nb = 2$$`, Crepe returns `$$$\nb = 2$$\n$$$` — the
- * first line gone, the rest malformed. dewlab has one file written that
- * way, so its current authoring editor already loses that content.
+ * - Delimiters sharing a line with content are **destroyed**:
+ *   `$$a = 1\nb = 2$$` comes back as `$$$\nb = 2$$\n$$$`.
+ * - A block on one line is read as *inline* maths and comes back as
+ *   `$x = 1$`, at a different size. 18 of 184 dewlab files use it.
  *
- * A block written on one line, `$$x = 1$$`, is read as *inline* maths and
- * written back as `$x = 1$`, which renders at a different size. 18 of the
- * 184 files in the dewlab corpus use that form, and two of them put a
- * pair on consecutive lines, where they share one paragraph.
+ * dewlab's `DISPLAY_MATH_RE` accepts all three, so this changes how a
+ * file is written and never what it renders.
  *
- * `build.py`'s `DISPLAY_MATH_RE` is `\$\$(?P<tex>.+?)\$\$` with
- * `DOTALL` and a `.strip()`, so all three forms build the same page: this
- * changes how a file is written, never what it renders.
- *
- * Only a span that owns its lines is touched, and never one inside a
- * fence, where `$$` is code. */
+ * Only a span that owns its lines is touched, never one inside a fence. */
 export function canonicaliseDisplayMath(markdown: string): string {
   const fences: [number, number][] = [];
   let open: number | null = null;
@@ -178,7 +168,8 @@ export interface Heading {
 }
 
 export interface Document {
-  /** The save path. Re-serialises the whole document — see REBUILD.md §4. */
+  /** The save path. Re-serialises the whole document, so a file is
+   * normalised the first time it is saved and byte-stable after that. */
   markdown(): string;
   headings(): Heading[];
   destroy(): void;

@@ -1,11 +1,8 @@
 // Every reading setting, drawn from one list.
 //
-// `archive/src/settings-panel.ts` was 298 lines: each control built by
-// hand, each with its own label, its own listener and its own way of
-// reading its value back. They were all doing the same thing, because
-// every setting is a CSS custom property and every control is a range, a
-// choice or a switch. So the panel is a loop now, and adding a setting
-// is one entry in `ROWS`.
+// Every setting is a CSS custom property, and every control is a range,
+// a choice or a switch. So the panel is a loop over `ROWS`, and adding a
+// setting is one entry in it.
 
 import {
   DEFAULT_SETTINGS,

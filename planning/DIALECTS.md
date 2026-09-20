@@ -1,15 +1,9 @@
-# The dialects dewnote must open and save
+# The dialects dewnote opens and saves
 
-An inventory, taken 2026-09-06 from `build.py` in each site and from the
-tutorials themselves, and updated 2026-09-12 against dewlab's own commits
-since (§1's `sql exec`, `hint` fence, and `html/css/js site` fence
-entries, and dewstack's changed status in §2 — see
-`deweydex/dewlab@planning/DEWSTACK_MERGE.md`, written there 2026-09-10).
-Each dialect becomes one module in the editor that declares its front
-matter, its block kinds, what the add-block menu offers, and which
-runtime a cell needs. This file is the reference those modules are
-written from and checked against; when a build script changes, this file
-changes first.
+What the files look like, read from `build.py` in each site and from the
+tutorials themselves. Each dialect declares its front matter, its block
+kinds, and which runtime a cell needs. This is the reference the editor
+is written against; when a build script changes, this file changes first.
 
 Everything is CommonMark underneath. A dialect is the set of additions.
 
@@ -99,7 +93,7 @@ The `id:` line is required and is a contract: saved student work is keyed
 on it, so renaming one throws that work away. The editor must warn before
 a rename and never generate ids that could collide. Header lines, in the
 order dewlab's own `HEADER_RE` accepts them: `id:` (required), `hint:`,
-`expect:`, `name:` (all optional) — `cell.ts` must recognise and preserve
+`expect:`, `name:` (all optional) — the cell reader must recognise and preserve
 all four verbatim, not just `id`/`hint`; a real dewlab tutorial using
 `expect:` or `name:` currently has that line swallowed into the cell's
 own *code* by dewnote's header parser, which then fails to run (§8 has
@@ -170,7 +164,7 @@ compiles to `<details class="dl-hint dl-hint-staged" data-cell="..."
 data-after="..." hidden>` — a third fold shape, alongside `dl-hint` and
 `dl-answer`, that dewnote's block splitter already passes through safely
 as an opaque fence (its round-trip guarantee never depended on knowing
-what a fence's info string means), but that `render-block.ts` currently
+what a fence's info string means), but that the editor currently
 shows as a plain, unstyled code block rather than a fold, since nothing
 reads the fence's `hint` info word yet (§8 has the plan).
 
@@ -291,14 +285,11 @@ We work through matrices, simulation, algorithms and debugging, in Python.
 `url:` (required by dewlab's own build; parsed as `null` here rather than
 thrown on, an editor reading a fence mid-edit), `status:`, `meta:`, and
 `wide:` (`true`/`yes`) are all optional header lines, then a markdown
-heading and an optional paragraph. This is the markup a home-page module
-tile used to be hand-written six times over (`.dl-module-card`); adjacent
+heading and an optional paragraph. This is the markup for a home-page module
+tile (`.dl-module-card`); adjacent
 cards share one `.dl-module-grid` wrapper automatically on dewlab's own
 build, a purely cosmetic grouping this editor's own preview doesn't
-reproduce — each card previews on its own (`cell.ts`'s `parseCardFence`,
-`render-block.ts`'s `renderCardFencePreview`, wired into `app.ts` the same
-way a staged hint's preview is, decision 15 unchanged: the fence itself
-stays a live editor, never a render/edit toggle).
+reproduce — each card previews on its own.
 
 **Not a cell.** dewlab's own `Cell`/`CELL_TYPES`/`render_cell()` already
 reserve that word for something that runs, with a real saved-progress
@@ -329,37 +320,23 @@ class="dl-attribution">`/`<ul class="dl-feature-list">` section or list
 wrapper is the third — dewlab's own `convert_page_wrapper_bodies()`
 re-converts the markdown inside one a second time, since Python-Markdown
 treats a raw HTML block as opaque through to its closing tag. dewnote's
-own block splitter (`blocks.ts`) has no equivalent special case for these
+own block splitter (the document model) has no equivalent special case for these
 wrappers today: a `<div class="dl-audience">` spanning several
 blank-line-separated paragraphs splits into several ordinary prose
 blocks, one of which is just the bare opening tag on its own line and
-another just the closing tag — round-trips byte for byte (blocks.ts's
+another just the closing tag — round-trips byte for byte (the round-trip suite's
 own guarantee doesn't depend on understanding what wraps a block), but
 reads as several odd, meaningless one-line "paragraphs" in the editor
 rather than one cohesive section. Documented as a known gap rather than
 worked around, since giving these wrappers their own block kind is real
 design work of its own, not a one-line fix.
 
-## 2. dewstack — being retired into dewlab, 2026-09-10 onward
+## 2. dewstack
 
-`deweydex/dewlab@planning/DEWSTACK_MERGE.md` (written 2026-09-10) records
-Josh's decision to fold dewstack's two live tracks — `data` and `web` —
-into dewlab itself as `database-methods` and `web-authoring`, rebuilt
-against dewlab's own conventions rather than imported, and to retire
-dewstack as a hosted site once both have run in front of a class. As of
-2026-09-12 both tracks are staged, ported, and merged to dewlab's `main`
-(`planning/DEWSTACK_MERGE.md` §9's own ledger) — not yet linked from
-dewlab's homepage, but no longer "coming soon" as engineering. This
-section stays as the record of dewstack's *own* grammar — still real for
-as long as dewstack itself is live, and the shape dewnote's dialect
-converter (§5) needs to read *from* for exactly this migration — but it
-is no longer a second dialect dewnote should treat as an equally live
-authoring target the way §1 is. Where dewstack and dewlab now both have
-an answer to the same problem (SQL cells, site cells), dewlab's own
-spelling in §1 is the one to write new tutorials in, in dewnote or
-anywhere else — dewstack's spelling below is legacy dewstack could not
-avoid once it existed, and it was never adopted by dewlab in the first
-place, for reasons §1 gives at each entry.
+dewstack's own grammar, which dewnote reads so a dewstack tutorial can be
+opened and converted (§5). dewlab's spelling in §1 is what to write new
+tutorials in; where both answer the same problem — SQL cells, site cells
+— §1 is the one that counts.
 
 **File layout.** `tutorials/<module>/<slug>/<slug>.md`, optional
 `<slug>.glossary.yaml`. Same `order.yaml` convention as dewlab.

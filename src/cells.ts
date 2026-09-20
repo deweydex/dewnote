@@ -1,16 +1,10 @@
-// A runnable cell: what its body says, and what running it produces.
+// A runnable cell: what its body says.
 //
-// dewlab's own convention (DIALECTS.md §1): a fence is runnable when the
-// word `exec` appears in its info string, and its body opens with `id:`,
-// `hint:`, `expect:` and `name:` lines before the code. `editor.ts`'s
-// `meta` attr is what keeps that info string alive through a save, so
-// this reads it rather than guessing from the language alone.
+// dewlab's convention (DIALECTS.md §1) — a fence is runnable when `exec`
+// appears in its info string, and its body opens with `id:`, `hint:`,
+// `expect:` and `name:` lines before the code.
 //
-// `archive/src/cell.ts` was 520 lines because it also had to *edit* a
-// fence's header without disturbing the bytes around it — the header
-// form had buttons, and each one rewrote one line in place. The buttons
-// are gone: a header line is a line you type, which is what the file
-// format always was. What is left is the read.
+// There is no form for the header. A header line is a line you type.
 
 /** The word "exec" anywhere in the info string, alongside the language.
  * A fence without it is illustrative code, never executed. */
@@ -40,9 +34,9 @@ const HEADER_RE = /^\s*(id|hint|expect|name)\s*:\s*(.*)$/;
  *
  * `name:` is the one key that collides with real code: a type-annotated
  * first line, `name: str = "Ada"`, has the same shape as the header.
- * dewlab settled this in its own `ca6e16e`, and the rule is ported
- * verbatim — `=` never appears in a real name, which is a short label,
- * so its presence means this was never the header. `expect:` keeps
+ * dewlab settles this the same way: `=` never appears in a real name,
+ * which is a short label, so its presence means this was never the
+ * header. `expect:` keeps
  * matching with `=` in it, since a real expectation uses one
  * (`expect: total == 6`). */
 function headerLineCount(lines: string[]): number {

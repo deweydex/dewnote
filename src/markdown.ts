@@ -1,12 +1,9 @@
 // Reading a document dewnote has not opened.
 //
 // The palette previews files the editor is not holding — it has their
-// text and nothing else — so it needs to find a heading and a first
-// sentence in plain markdown. `archive/src/blocks.ts` did that with a
-// full document model, 193 lines maintaining byte offsets so the editor
-// could splice an edit back in. The editor no longer works that way, and
-// a preview never needed offsets: what is left is "which parts of this
-// text are prose", which is a fence scanner.
+// text and nothing else — so it needs a heading and a first sentence out
+// of plain markdown. The only question that needs answering is which
+// parts of the text are prose, and that is a fence scanner.
 
 const FENCE_RE = /^(?:```|~~~)/;
 const FRONT_MATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;

@@ -1,53 +1,10 @@
-// Where a tutorial sits in a module, read from Dewlab's descriptor
-// directory. Current Dewlab keeps these in `courses/` for repository
-// compatibility; older checkouts used `modules/`. Both describe modules
-// in the UI and both are accepted here.
-// series.ts used to read, after dewlab moved placement out of a
-// tutorial's front matter entirely (its DECISIONS_LOG 7.17x, and the
-// spec it wrote for this editor in `refactor/EDITOR.md` §2, recoverable
-// at `git show b7c5a6d:refactor/EDITOR.md` since that folder was deleted
-// when the refactor finished).
+// Where a tutorial sits in a module, read from dewlab's descriptor
+// directory. `courses/` is current; `modules/` is accepted too, since
+// older checkouts use it.
 //
-// The shape, read against real module files rather than a summary of
-// them: `modules/index.yaml` is `{order: [module-id, ...]}`; each
-// `modules/<id>.yaml` is `{title, code, status, card, description,
-// contents: [{title, tutorials: [tutorial-id, ...]}, ...]}`. A tutorial
-// id is site-wide now — `tutorials/<id>/<id>.md` — so an id names one
-// page from any module, and a module file is the only place that says
-// which pages it holds and in what order.
-//
-// ## Why this records line ranges
-//
-// frontmatter.ts sets the house pattern for editing YAML here: read it
-// with js-yaml for structure, never re-dump it, and write by replacing
-// the exact text of the one thing that changed, so everything untouched
-// stays byte-identical (DECISIONS.md 1 — the file is the document). A
-// module file needs that discipline more than front matter does, not
-// less: `card:` is a folded scalar whose continuation lines are indented
-// prose, and `description:` is a single-quoted scalar carrying blank
-// lines inside it. Both are student-facing text on dewlab's own front
-// page. Re-serialising the file to reorder one list would refold and
-// requote them on every drag.
-//
-// So each series records `tutorialsRange`, the half-open line range its
-// `- id` items occupy, and the `indent` those items carry. Reordering,
-// adding to and removing from a series are then one operation — splice
-// different lines into the same range — rather than three features, and
-// every other byte of the file is left alone.
-//
-// ## When a range is null
-//
-// The scan understands one shape: a block list of `- id` items under a
-// `tutorials:` key. That is what dewlab's own migration writes and what
-// a person editing the file by hand would write. A flow list
-// (`tutorials: [a, b]`) still *parses* — js-yaml handles it, so the
-// panel can show it — but gets `tutorialsRange: null`, because this
-// module does not know how to rewrite one without reformatting it. A
-// null range is the caller's signal to show the series read-only rather
-// than to guess. The same goes for any file where the scan's own reading
-// of the ids disagrees with what js-yaml parsed: rather than trust a
-// line range that might not hold what this thinks it holds, it writes
-// nowhere.
+// The shape: `courses/index.yaml` is `{order: [course-id, ...]}`, and
+// each `courses/<id>.yaml` is `{title, code, status, card, description,
+// contents: [{title, tutorials: [tutorial-id, ...]}, ...]}`.
 
 import { load as parseYaml } from "js-yaml";
 
@@ -81,16 +38,13 @@ export interface Module {
   /** Mixed practice pages are module-level rather than members of one
    * series. Paired practice pages are discovered through `practice_for`. */
   mixed?: string[];
-  /** Half-open `[start, end)` line range of the entries under this
-   * module's own `contents:` key — where a new series is appended. Null
-   * when the scan couldn't be sure of it, the same refusal
-   * `tutorialsRange` makes.
+  /** Half-open `[start, end)` line range of the entries under
+   * `contents:` — where a new series is appended. Null when the scan
+   * could not be sure.
    *
-   * Recorded separately from the per-series ranges because it has a
-   * different edge: a module file can carry more top-level keys after
-   * `contents:` (`mixed:`, in two of dewlab's six), so the block ends in
-   * the middle of the file and the scan has to find where rather than
-   * run to the end. */
+   * Separate from the per-series ranges because `contents:` can be
+   * followed by another top-level key (`mixed:`), so it ends mid-file
+   * rather than running to the end. */
   contentsRange: { start: number; end: number } | null;
   /** The exact leading whitespace a `- title:` entry carries — `""` in
    * every real module file, where the dash sits at column 0 while the
@@ -242,16 +196,13 @@ const TUTORIALS_KEY_RE = /^(\s*)tutorials\s*:\s*(.*)$/;
 const LIST_ITEM_RE = /^(\s*)-\s+(.*?)\s*$/;
 
 /**
- * Every `tutorials:` block list in the file, in the order they appear,
- * as line ranges over `content`'s own lines.
+ * Every `tutorials:` block list in the file, in order, as line ranges.
  *
- * Deliberately a line scan rather than anything cleverer: the one thing
- * a writer needs is which lines to replace, and a scan that can only
- * recognise the shape it knows how to rewrite is safer than a parser
- * that returns a position for a shape it would mangle. A `tutorials:`
- * key with anything after the colon is a flow list or a scalar, and is
- * skipped — `parseModuleFile` then finds no block for that series and
- * hands back a null range.
+ * A line scan, not a parser: a writer needs to know which lines to
+ * replace, and a scan that only recognises the shape it can rewrite is
+ * safer than a parser that returns a position for a shape it would
+ * mangle. A `tutorials:` key with anything after the colon is a flow
+ * list or a scalar, and is skipped.
  */
 function scanTutorialBlocks(content: string): ScannedBlock[] {
   const lines = content.split("\n");
@@ -302,25 +253,19 @@ const CONTENTS_KEY_RE = /^(\s*)contents\s*:\s*(.*)$/;
 const ENTRY_RE = /^(\s*)-( +)(\S.*?)\s*$/;
 
 /**
- * Where the `contents:` block's own entries sit, so a series can be
- * appended after the last one.
+ * Where the `contents:` block's entries sit, so a series can be appended
+ * after the last one.
  *
- * The hard part is the *end*. A per-series `tutorials:` list ends at the
- * first line that isn't one of its items, which is easy; `contents:` runs
- * until the file stops describing it, and two of dewlab's six module
- * files carry a `mixed:` key afterwards, so it genuinely ends in the
- * middle. The rule here: an entry starts with `<indent>- `, and every
- * line after it that is blank or indented further belongs to it. The
- * first line that is neither ends the block.
+ * The end is the hard part: `contents:` can be followed by a `mixed:`
+ * key, so it ends mid-file. The rule — an entry starts with
+ * `<indent>- `, and every line after it that is blank or indented
+ * further belongs to it; the first line that is neither ends the block.
  *
- * `innerIndent` is what one level in is worth — the gap between a
- * `- title:` line and the `tutorials:` key beneath it. Read rather than
- * assumed, so a module file written with four spaces round-trips as one
- * written with two does.
+ * `innerIndent` is read rather than assumed, so a file written with four
+ * spaces round-trips like one written with two.
  *
- * Returns null for anything it isn't sure of, the same refusal
- * `scanTutorialBlocks` makes, and for the same reason: a range this
- * module isn't certain about is how a splice lands in somebody's prose.
+ * Returns null when unsure. A range this is wrong about is how a splice
+ * lands in somebody's prose.
  */
 function scanContentsBlock(content: string): ScannedContents | null {
   const lines = content.split("\n");

@@ -1,36 +1,23 @@
-// One place a command exists, and one place it is named.
+// One place a command exists, and one place it is named. Two names for
+// one action is how an interface stops being learnable.
 //
-// Before this there were two: the workflow shell's own menu and
-// `command-palette.ts`, each holding its own list, each reaching the
-// same hidden rail buttons by CSS selector, and each calling them
-// something different — what the menu called "Open a Markdown or YAML
-// file…" the palette called "Import Markdown file…", and what the menu
-// called "Arrange modules and series" the palette called "Modules". Two
-// vocabularies for one set of actions is how an interface stops being
-// learnable: there is no name to remember, because there are two.
-//
-// So a command is registered once, by whoever owns the operation, and
-// whatever wants to offer it reads this. The registry holds no DOM and
-// no opinion about presentation — the palette draws these as rows, and
-// anything else that wants them later gets the same list.
+// No DOM, no opinion about presentation. The palette draws these as
+// rows.
 
 export type CommandSection = "Document" | "Workspace" | "Appearance" | "Publish";
 
 export interface Command {
   /** Stable across renames, so a keybinding or a test can name one. */
   id: string;
-  /** What a reader sees, everywhere. An ellipsis means "this opens
-   * something that asks a question", the same convention a menu uses. */
+  /** An ellipsis means it opens something that asks a question. */
   label: string;
   section: CommandSection;
-  /** Extra words to match on that the label does not contain — the old
-   * palette's real use, kept: somebody looking for "ipynb" should find
+  /** Words to match that the label does not contain — "ipynb" finds
    * "Export a Jupyter notebook". Never shown. */
   keywords?: string[];
-  /** One line under the label. Say what happens, not what it is. */
+  /** One line under the label: what happens, not what it is. */
   detail?: string;
-  /** False hides it entirely rather than showing it disabled: a command
-   * that cannot run is noise in a list people scan. */
+  /** False hides it rather than disabling it. */
   available?(): boolean;
   run(): void | Promise<void>;
 }
@@ -64,18 +51,13 @@ export function clearCommands(): void {
 }
 
 /**
- * Whether `query` matches `text`, and how well. Subsequence matching —
- * the letters in order, gaps allowed — so "expjup" finds "Export a
- * Jupyter notebook" and "wamat" finds "What a Matrix Does to a
- * Picture". A higher score is a better match; `null` is no match.
+ * How well `query` matches `text`. Subsequence matching — letters in
+ * order, gaps allowed — so "wamat" finds "What a Matrix Does to a
+ * Picture". Higher is better; `null` is no match.
  *
- * The scoring is deliberately simple and explainable rather than clever:
- * a match at the start of the text beats one in the middle, a match at
- * the start of a word beats one inside a word, and a run of adjacent
- * letters beats the same letters scattered. That is enough to put the
- * thing somebody meant at the top, and it is the whole of the ranking —
- * there is no tie-break on recency or frequency, because a list that
- * reorders itself under you is a list you cannot learn.
+ * Start of the text beats the middle, start of a word beats inside one,
+ * adjacent letters beat scattered ones. No tie-break on recency or
+ * frequency: a list that reorders itself under you cannot be learned.
  */
 export function fuzzyScore(query: string, text: string): number | null {
   if (!query) return 0;

@@ -1,11 +1,9 @@
 // Reading a document's leading `---` block, and nothing else.
 //
-// `archive/src/frontmatter.ts` was 133 lines, because it also had to
-// write a field back without disturbing the bytes around it — key order,
-// quoting, dewlab's quoted ISO-8601 timestamps. None of that is needed
-// now: the front matter is a node in the document (editor.ts), held as
-// the one opaque string it is, and a save re-serialises that string
-// unchanged. What is left is the read the index does.
+// Nothing here writes. The front matter is a node in the document
+// (editor.ts), held as the one opaque string it is, so key order and
+// quoting survive a save without anyone protecting them. This is the
+// read the index does.
 
 import { load as parseYaml } from "js-yaml";
 

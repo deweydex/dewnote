@@ -1,16 +1,9 @@
-// The rest of step 4 (plan §5.5, §6): mounting a real local folder —
-// `~/dewlab/tutorials/`, say — rather than one file at a time. This is
-// the File System Access API's directory picker, which decision 5 is
-// explicit about: Chrome and Edge only, never Safari, on any Apple
-// platform — `supportsDirectoryPicker` feature-detects it directly
-// rather than sniffing a browser, the same way `store.ts`'s single-file
-// path already does for `showOpenFilePicker`.
+// A local folder, through the File System Access API.
 //
-// A file opened from a mounted folder is, structurally, exactly the
-// single-file case store.ts and file-bar.ts already built and tested in
-// #18 — a name, some content, and a real writable `FileSystemFileHandle`.
-// Nothing here duplicates Save or the dirty indicator; `folder-panel.ts`
-// hands an opened folder file to the existing file bar instead.
+// Chrome and Edge only — Safari has no directory picker on any Apple
+// platform. `supportsDirectoryPicker` feature-detects rather than
+// sniffing a browser, so a browser that gains the API works the day it
+// does.
 
 export interface FolderFile {
   /** Path relative to the mounted folder's root, e.g. "content/a.md". */
@@ -44,14 +37,9 @@ export async function chooseFolder(): Promise<FileSystemDirectoryHandle | null> 
   }
 }
 
-/** Walks `root` recursively, collecting every file whose path satisfies
- * `matches` — `listMarkdownFiles` and `listOrderFiles` are both thin
- * wrappers over this with their own suffix check, so the walk itself
- * exists once. Takes a `DirectoryLike` rather than the real
- * `FileSystemDirectoryHandle` type specifically so this is unit-testable
- * against a fake — the same "verify the walk, not the browser API"
- * split `github.ts`'s own truncation fallback uses against a mocked
- * `fetch`. */
+/** Walk `root` recursively, collecting every file whose path satisfies
+ * `matches`. Takes a `DirectoryLike` rather than the real handle type so
+ * the walk can be tested against a fake. */
 async function walk(root: DirectoryLike, matches: (path: string) => boolean): Promise<FolderFile[]> {
   const results: FolderFile[] = [];
   async function step(dir: DirectoryLike, prefix: string): Promise<void> {
@@ -148,28 +136,15 @@ export async function writeFile(handle: FileSystemFileHandle, content: string): 
   await writable.close();
 }
 
-/** Creates a new file at `relativePath` under `root`, creating any
- * missing intermediate directories along the way (`getDirectoryHandle`'s
- * own `{ create: true }`) — the write half of what `walk` above does for
- * reading. Real `FileSystemDirectoryHandle`, not `DirectoryLike`: the
- * read-only walk only ever needed `entries()`, but creating a file for
- * real needs the browser's own directory- and file-handle methods, which
- * a hand-built fake can still provide (cast `as unknown as
- * FileSystemDirectoryHandle` in a test, the same cast this file's own
- * tests already use for `FileSystemHandle`) without this needing a
- * second, parallel minimal interface.
+/** Create a file at `relativePath` under `root`, making any missing
+ * directories on the way.
  *
- * Fails rather than silently overwriting if a file already exists at
- * that exact path — a caller creating something new getting back
- * someone else's file instead, unannounced, is exactly the silent data
- * loss this project's rules elsewhere refuse to risk (folder-panel.ts's
- * own SQL-cell-restore banner, dewnote's push-conflict UI).
+ * Fails rather than overwriting if something is already there: a caller
+ * creating something new and silently getting someone else's file is the
+ * data loss this codebase refuses everywhere else.
  *
- * `content` may be raw bytes as well as text: `write()` takes either,
- * and an image copied in beside a tutorial is the one caller that needs
- * the byte form. Nothing else about the call differs, which is why this
- * widened rather than gaining a second function — unlike the GitHub
- * side, where text and bytes reach the API differently. */
+ * `content` may be bytes as well as text — an image copied in beside a
+ * tutorial is the caller that needs that. */
 export async function createFile(root: FileSystemDirectoryHandle, relativePath: string, content: string | Uint8Array<ArrayBuffer>): Promise<FolderFile> {
   const segments = relativePath.split("/").filter(Boolean);
   const fileName = segments.pop();
