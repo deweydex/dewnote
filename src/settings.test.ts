@@ -25,7 +25,6 @@ describe("parseSettings", () => {
       cellTint: false,
       codeFontSize: 13,
       codeFont: "humanist",
-      railDisplay: "labels",
       pyodideBase: "https://example.com/pyodide/",
     };
     expect(parseSettings(saved)).toEqual(saved as never);
@@ -51,7 +50,6 @@ describe("parseSettings", () => {
     expect(result.lineHeight).toBe(DEFAULT_SETTINGS.lineHeight);
     expect(result.paragraphSpacing).toBe(DEFAULT_SETTINGS.paragraphSpacing);
     expect(result.codeFont).toBe(DEFAULT_SETTINGS.codeFont);
-    expect(result.railDisplay).toBe(DEFAULT_SETTINGS.railDisplay);
   });
 
   test("line height is clamped to something still readable", () => {
@@ -103,11 +101,6 @@ describe("settingsToRootProperties", () => {
   test("theme maps to data-theme, not a CSS custom property", () => {
     expect(settingsToRootProperties({ ...DEFAULT_SETTINGS, theme: "dark" })["data-theme"]).toBe("dark");
     expect(settingsToRootProperties({ ...DEFAULT_SETTINGS, theme: "system" })["data-theme"]).toBeNull();
-  });
-
-  test("sidebar presentation maps to a root data attribute", () => {
-    expect(settingsToRootProperties({ ...DEFAULT_SETTINGS, railDisplay: "labels" })["data-rail-display"]).toBe("labels");
-    expect(settingsToRootProperties(DEFAULT_SETTINGS)["data-rail-display"]).toBeNull();
   });
 
   test("cellTint false produces an explicit \"0\", not a removed property", () => {

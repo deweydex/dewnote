@@ -1,12 +1,15 @@
-// The GitHub store (plan §5.5's third store, decision 5.7's token —
-// step 5, previously untouched). A thin `fetch` client against the REST
-// API, in FAQ's own shape (plain fetch, SHA-conflict semantics) rather
-// than an SDK: read a repository's markdown tree, fetch one file's
-// content and SHA, and write it back as a commit on a working branch
-// (never straight to the base branch), with a draft pull request as the
-// way to hand the change back. The token lives in localStorage, scoped
-// to this app's origin, and is never written to a file — decision 5.7's
-// own rule, carried over from FAQ and dewlab.
+// A GitHub repository, over the REST API.
+//
+// Plain `fetch` rather than an SDK, because the two things that matter
+// here are both protocol details an SDK would hide: the blob SHA that
+// makes a write optimistic-concurrency checked, and the 409 that comes
+// back when it fails. Reads a repository's markdown tree, fetches one
+// file's content and SHA, writes it back as a commit on a working
+// branch — never the base branch — and hands the change back as a draft
+// pull request.
+//
+// The token lives in localStorage, scoped to this app's origin, and is
+// never written to a file.
 
 const API = "https://api.github.com";
 const TOKEN_KEY = "dewnote:github-token";
@@ -201,7 +204,7 @@ export async function getFileContent(
 }
 
 /** Every file name directly inside `path` at `ref` — GitHub's own
- * directory listing, used to pick an asset name that isn't already
+ * directory listing, for picking an asset name that isn't already
  * taken. Distinct from `listMarkdownFiles`/`listModuleFiles`, which walk
  * the whole tree and filter to what this editor opens; a picture beside
  * a tutorial is in neither of those. */
@@ -237,9 +240,8 @@ async function branchSha(repo: RepoRef, branch: string, token: string): Promise<
 }
 
 /** Creates `branch` from `base`'s current tip if it doesn't already
- * exist. Never writes to `base` directly — decision 5.7 and the plan's
- * step 5 both put a working branch, not the default branch, as the save
- * target; a draft pull request is the honest way to hand the result
+ * exist. Never writes to `base` directly: the save target is always a
+ * working branch, and a draft pull request is the way to hand the result
  * back, not a silent push to `main`. */
 export async function ensureBranch(repo: RepoRef, branch: string, base: string, token: string): Promise<void> {
   const existing = await branchSha(repo, branch, token);
@@ -257,19 +259,14 @@ export interface PutFileResult {
 }
 
 /**
- * Writes `content` to `path` on `branch`. With `sha` given, this matches
- * it against the blob already there — GitHub's own optimistic-concurrency
- * check, which is what turns "someone else (or a second dewnote tab)
- * changed this file since it was opened" into a clear 409 rather than a
- * silent overwrite. This function does not catch that error; the caller
- * reports it, since recovering from it (FAQ's "show both, never pick") is
- * real UI work repo-panel.ts does for an edit to an already-open file.
+ * Write `content` to `path` on `branch`.
  *
- * With `sha` omitted, this is instead a brand-new file: GitHub creates
- * the blob at `path` if nothing is there yet, or answers 422 ("sha"
- * wasn't supplied) if something already is — repo-panel.ts's own "start
- * a new file" flow reports that 422 distinctly, since there is no
- * existing edit's "mine" to compare it against the way a real 409 has.
+ * With `sha`, GitHub matches it against the blob already there — the
+ * optimistic-concurrency check that turns "changed under you" into a 409
+ * instead of a silent overwrite. Not caught here; the caller reports it.
+ *
+ * Without `sha`, this is a new file: GitHub creates it, or answers 422
+ * if something is already there.
  */
 export async function putFileContent(
   repo: RepoRef,

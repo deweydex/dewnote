@@ -1,298 +1,177 @@
-// The settings panel — decision 7's "every one of those values is a user
-// setting" made into an actual UI, closed until asked (plan §3's third
-// rule already names "front matter forms" and rails as things that
-// "appear on hover, on focus, or on one keystroke, and go away again";
-// a settings panel is exactly that same kind of thing). One toggle
-// button, always visible but quiet; the panel itself is a real dialog,
-// not a hover reveal, since a reader adjusting several settings in a row
-// needs it to stay open between changes.
+// Every reading setting, drawn from one list.
 //
-// Mounted once, independently of any particular document — settings are
-// a page-wide, not a per-document, concept, so this has nothing to do
-// with mountDocument's own lifecycle in app.ts.
+// Every setting is a CSS custom property, and every control is a range,
+// a choice or a switch. So the panel is a loop over `ROWS`, and adding a
+// setting is one entry in it.
 
 import {
-  applySettings,
   DEFAULT_SETTINGS,
+  applySettings,
   loadSettings,
   saveSettings,
   type Settings,
 } from "./settings.ts";
-import { restartInterpreter, setPyodideBase } from "./runtime/pyodide-engine.ts";
-import { dockPanel, iconRail, labelToggle } from "./icon-rail.ts";
 
-function row(labelText: string, control: HTMLElement): HTMLLabelElement {
-  const label = document.createElement("label");
-  label.className = "dn-settings-row";
-  const span = document.createElement("span");
-  span.textContent = labelText;
-  label.append(span, control);
-  return label;
-}
+type Row =
+  | { key: keyof Settings; label: string; kind: "range"; min: number; max: number; step: number; unit?: string }
+  | { key: keyof Settings; label: string; kind: "choice"; options: { value: string; label: string }[] }
+  | { key: keyof Settings; label: string; kind: "switch" }
+  | { key: keyof Settings; label: string; kind: "text"; placeholder: string };
 
-function select<T extends string>(options: { value: T; label: string }[], current: T): HTMLSelectElement {
-  const el = document.createElement("select");
-  for (const { value, label } of options) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    option.selected = value === current;
-    el.appendChild(option);
-  }
-  return el;
-}
-
-function range(min: number, max: number, step: number, current: number): HTMLInputElement {
-  const el = document.createElement("input");
-  el.type = "range";
-  el.min = String(min);
-  el.max = String(max);
-  el.step = String(step);
-  el.value = String(current);
-  return el;
-}
+const ROWS: Row[] = [
+  { key: "theme", label: "Theme", kind: "choice", options: [
+    { value: "system", label: "Match system" },
+    { value: "light", label: "Light" },
+    { value: "dark", label: "Dark" },
+  ] },
+  { key: "bodyFont", label: "Body font", kind: "choice", options: [
+    { value: "serif", label: "Serif" },
+    { value: "sans", label: "Sans" },
+    { value: "mono", label: "Mono" },
+  ] },
+  { key: "textSize", label: "Text size", kind: "range", min: 14, max: 24, step: 1, unit: "px" },
+  { key: "measure", label: "Line width", kind: "range", min: 24, max: 48, step: 1, unit: "rem" },
+  { key: "lineHeight", label: "Line height", kind: "range", min: 1.2, max: 2.2, step: 0.02 },
+  { key: "paragraphSpacing", label: "Paragraph spacing", kind: "choice", options: [
+    { value: "tight", label: "Tight" },
+    { value: "normal", label: "Normal" },
+    { value: "loose", label: "Loose" },
+  ] },
+  { key: "margins", label: "Margins", kind: "choice", options: [
+    { value: "comfortable", label: "Comfortable" },
+    { value: "compact", label: "Compact" },
+  ] },
+  { key: "cellTint", label: "Tinted cells", kind: "switch" },
+  { key: "codeFontSize", label: "Code size", kind: "range", min: 11, max: 20, step: 1, unit: "px" },
+  { key: "codeFont", label: "Code font", kind: "choice", options: [
+    { value: "mono", label: "System mono" },
+    { value: "humanist", label: "Humanist" },
+    { value: "slab", label: "Slab" },
+  ] },
+  { key: "pyodideBase", label: "Pyodide source", kind: "text", placeholder: "the default" },
+];
 
 export interface SettingsPanel {
+  open(): void;
+  close(): void;
   destroy(): void;
 }
 
-/** Builds the toggle button and panel, applies whatever was saved before
- * this call (mirroring the `applySettings(loadSettings())` call main.ts
- * makes before first paint — that one avoids the flash; this one keeps
- * the panel's own controls in sync with it), and wires every control to
- * update, apply, and save on change. The toggle joins the shared icon
- * rail; the panel itself is appended to `document.body` directly rather
- * than `#dn-page`, since a document's own remount (main.ts's
- * `__dewnote.mount`) has no reason to tear this down too. */
 export function mountSettingsPanel(): SettingsPanel {
   let settings = loadSettings();
+  applySettings(settings);
 
-  function commit(next: Settings) {
-    settings = next;
+  const overlay = document.createElement("div");
+  overlay.className = "dn-settings-overlay";
+  overlay.hidden = true;
+
+  const box = document.createElement("div");
+  box.className = "dn-settings";
+  box.setAttribute("role", "dialog");
+  box.setAttribute("aria-label", "Appearance");
+  overlay.appendChild(box);
+
+  /** Applied and stored on every input, so a reader dragging a slider
+   * sees the page move under them rather than after them. */
+  function change<K extends keyof Settings>(key: K, value: Settings[K]): void {
+    settings = { ...settings, [key]: value };
     applySettings(settings);
     saveSettings(settings);
   }
 
-  const toggle = document.createElement("button");
-  toggle.type = "button";
-  toggle.className = "dn-settings-toggle";
-  toggle.setAttribute("aria-label", "Settings");
-  toggle.setAttribute("aria-expanded", "false");
-  toggle.title = "Settings";
-  toggle.textContent = "⚙";
+  function control(row: Row): HTMLElement {
+    const line = document.createElement("label");
+    line.className = "dn-settings-row";
+    const name = document.createElement("span");
+    name.textContent = row.label;
+    line.appendChild(name);
 
-  const panel = document.createElement("div");
-  panel.className = "dn-settings-panel";
-  panel.setAttribute("role", "dialog");
-  panel.setAttribute("aria-modal", "false");
-  panel.setAttribute("aria-label", "Settings");
-  panel.hidden = true;
-  toggle.setAttribute("aria-controls", (panel.id = "dn-settings-panel"));
+    if (row.kind === "range") {
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = String(row.min);
+      input.max = String(row.max);
+      input.step = String(row.step);
+      input.value = String(settings[row.key]);
+      const readout = document.createElement("output");
+      const show = () => { readout.textContent = `${input.value}${row.unit ?? ""}`; };
+      show();
+      input.addEventListener("input", () => {
+        change(row.key, Number(input.value) as never);
+        show();
+      });
+      line.append(input, readout);
+    } else if (row.kind === "choice") {
+      const select = document.createElement("select");
+      for (const option of row.options) {
+        const element = document.createElement("option");
+        element.value = option.value;
+        element.textContent = option.label;
+        element.selected = settings[row.key] === option.value;
+        select.appendChild(element);
+      }
+      select.addEventListener("change", () => change(row.key, select.value as never));
+      line.appendChild(select);
+    } else if (row.kind === "switch") {
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = Boolean(settings[row.key]);
+      input.addEventListener("change", () => change(row.key, input.checked as never));
+      line.appendChild(input);
+    } else {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = row.placeholder;
+      input.value = String(settings[row.key] ?? "");
+      input.addEventListener("change", () => change(row.key, input.value.trim() as never));
+      line.appendChild(input);
+    }
+    return line;
+  }
 
-  toggle.addEventListener("click", () => {
-    panel.hidden = !panel.hidden;
-    toggle.setAttribute("aria-expanded", String(!panel.hidden));
+  function render(): void {
+    box.replaceChildren();
+    const heading = document.createElement("h2");
+    heading.textContent = "Appearance";
+    box.appendChild(heading);
+    for (const row of ROWS) box.appendChild(control(row));
+
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "dn-settings-reset";
+    reset.textContent = "Reset to defaults";
+    reset.addEventListener("click", () => {
+      settings = { ...DEFAULT_SETTINGS };
+      applySettings(settings);
+      saveSettings(settings);
+      render();
+    });
+    box.appendChild(reset);
+  }
+
+  function close(): void { overlay.hidden = true; }
+
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) close();
   });
 
-  const header = document.createElement("div");
-  header.className = "dn-settings-header";
-  const heading = document.createElement("h2");
-  heading.textContent = "Settings";
-  const closeButton = document.createElement("button");
-  closeButton.type = "button";
-  closeButton.className = "dn-settings-close";
-  closeButton.setAttribute("aria-label", "Close settings");
-  closeButton.textContent = "×";
-  closeButton.addEventListener("click", () => {
-    panel.hidden = true;
-    toggle.setAttribute("aria-expanded", "false");
-  });
-  header.append(heading, closeButton);
-  panel.appendChild(header);
+  function onKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Escape" && !overlay.hidden) close();
+  }
+  window.addEventListener("keydown", onKeyDown);
 
-  // ---------------------------------------------------------- appearance
-  const appearance = document.createElement("section");
-  appearance.className = "dn-settings-section";
-  const appearanceHeading = document.createElement("h3");
-  appearanceHeading.textContent = "Appearance";
-  appearance.appendChild(appearanceHeading);
-
-  const themeSelect = select(
-    [
-      { value: "system", label: "Match system" },
-      { value: "light", label: "Light" },
-      { value: "dark", label: "Dark" },
-    ] as const,
-    settings.theme,
-  );
-  themeSelect.addEventListener("change", () => commit({ ...settings, theme: themeSelect.value as Settings["theme"] }));
-  appearance.appendChild(row("Theme", themeSelect));
-
-  const railDisplaySelect = select(
-    [
-      { value: "icons-and-labels", label: "Icons and labels" },
-      { value: "icons", label: "Icons only" },
-      { value: "labels", label: "Labels only" },
-    ] as const,
-    settings.railDisplay,
-  );
-  railDisplaySelect.addEventListener("change", () =>
-    commit({ ...settings, railDisplay: railDisplaySelect.value as Settings["railDisplay"] }),
-  );
-  // The sidebar this governs belongs to the legacy shell. Offering a
-  // control for chrome that is not on screen is worse than offering
-  // none — the row stays for `?legacy`, and goes everywhere else.
-  const railDisplayRow = row("Sidebar buttons", railDisplaySelect);
-  railDisplayRow.hidden = !new URLSearchParams(window.location.search).has("legacy");
-  appearance.appendChild(railDisplayRow);
-
-  const fontSelect = select(
-    [
-      { value: "serif", label: "Serif (dewlab's own)" },
-      { value: "sans", label: "Sans-serif" },
-      { value: "mono", label: "Monospace" },
-    ] as const,
-    settings.bodyFont,
-  );
-  fontSelect.addEventListener("change", () =>
-    commit({ ...settings, bodyFont: fontSelect.value as Settings["bodyFont"] }),
-  );
-  appearance.appendChild(row("Body font", fontSelect));
-
-  const textSizeInput = range(14, 24, 1, settings.textSize);
-  textSizeInput.addEventListener("input", () => commit({ ...settings, textSize: Number(textSizeInput.value) }));
-  appearance.appendChild(row("Text size", textSizeInput));
-
-  const measureInput = range(24, 48, 1, settings.measure);
-  measureInput.addEventListener("input", () => commit({ ...settings, measure: Number(measureInput.value) }));
-  appearance.appendChild(row("Line width", measureInput));
-
-  const lineHeightInput = range(1.2, 2.2, 0.05, settings.lineHeight);
-  lineHeightInput.addEventListener("input", () =>
-    commit({ ...settings, lineHeight: Number(lineHeightInput.value) }),
-  );
-  appearance.appendChild(row("Line height", lineHeightInput));
-
-  const paragraphSpacingSelect = select(
-    [
-      { value: "tight", label: "Tight" },
-      { value: "normal", label: "Normal" },
-      { value: "loose", label: "Loose" },
-    ] as const,
-    settings.paragraphSpacing,
-  );
-  paragraphSpacingSelect.addEventListener("change", () =>
-    commit({ ...settings, paragraphSpacing: paragraphSpacingSelect.value as Settings["paragraphSpacing"] }),
-  );
-  appearance.appendChild(row("Paragraph spacing", paragraphSpacingSelect));
-
-  const marginsSelect = select(
-    [
-      { value: "comfortable", label: "Comfortable" },
-      { value: "compact", label: "Compact" },
-    ] as const,
-    settings.margins,
-  );
-  marginsSelect.addEventListener("change", () =>
-    commit({ ...settings, margins: marginsSelect.value as Settings["margins"] }),
-  );
-  appearance.appendChild(row("Margins", marginsSelect));
-
-  const cellTintInput = document.createElement("input");
-  cellTintInput.type = "checkbox";
-  cellTintInput.checked = settings.cellTint;
-  cellTintInput.addEventListener("change", () => commit({ ...settings, cellTint: cellTintInput.checked }));
-  appearance.appendChild(row("Tinted cells", cellTintInput));
-
-  panel.appendChild(appearance);
-
-  // -------------------------------------------------------- code editor
-  const codeSection = document.createElement("section");
-  codeSection.className = "dn-settings-section";
-  const codeHeading = document.createElement("h3");
-  codeHeading.textContent = "Code editor";
-  codeSection.appendChild(codeHeading);
-
-  const codeFontSizeInput = range(11, 20, 1, settings.codeFontSize);
-  codeFontSizeInput.addEventListener("input", () =>
-    commit({ ...settings, codeFontSize: Number(codeFontSizeInput.value) }),
-  );
-  codeSection.appendChild(row("Code font size", codeFontSizeInput));
-
-  const codeFontSelect = select(
-    [
-      { value: "mono", label: "System monospace" },
-      { value: "humanist", label: "Humanist (JetBrains, Fira)" },
-      { value: "slab", label: "Slab (IBM Plex, Source Code)" },
-    ] as const,
-    settings.codeFont,
-  );
-  codeFontSelect.addEventListener("change", () =>
-    commit({ ...settings, codeFont: codeFontSelect.value as Settings["codeFont"] }),
-  );
-  codeFontSelect.title = "Each falls back to the system monospace where the named families aren't installed.";
-  codeSection.appendChild(row("Code font", codeFontSelect));
-
-  panel.appendChild(codeSection);
-
-  // ------------------------------------------------------ running python
-  const pythonSection = document.createElement("section");
-  pythonSection.className = "dn-settings-section";
-  const pythonHeading = document.createElement("h3");
-  pythonHeading.textContent = "Running Python";
-  pythonSection.appendChild(pythonHeading);
-
-  const pyodideBaseInput = document.createElement("input");
-  pyodideBaseInput.type = "text";
-  pyodideBaseInput.placeholder = "Default (jsDelivr)";
-  pyodideBaseInput.value = settings.pyodideBase;
-  pyodideBaseInput.addEventListener("change", () => {
-    setPyodideBase(pyodideBaseInput.value);
-    commit({ ...settings, pyodideBase: pyodideBaseInput.value });
-  });
-  pythonSection.appendChild(row("Pyodide source URL", pyodideBaseInput));
-
-  const restartButton = document.createElement("button");
-  restartButton.type = "button";
-  restartButton.className = "dn-settings-restart";
-  restartButton.textContent = "Restart Python interpreter";
-  restartButton.title = "Ends the running interpreter — the next cell run starts fresh, with an empty namespace.";
-  restartButton.addEventListener("click", () => restartInterpreter());
-  pythonSection.appendChild(restartButton);
-
-  panel.appendChild(pythonSection);
-
-  // ------------------------------------------------------------- reset
-  const resetButton = document.createElement("button");
-  resetButton.type = "button";
-  resetButton.className = "dn-settings-reset";
-  resetButton.textContent = "Reset to defaults";
-  resetButton.addEventListener("click", () => {
-    commit({ ...DEFAULT_SETTINGS });
-    themeSelect.value = DEFAULT_SETTINGS.theme;
-    railDisplaySelect.value = DEFAULT_SETTINGS.railDisplay;
-    fontSelect.value = DEFAULT_SETTINGS.bodyFont;
-    textSizeInput.value = String(DEFAULT_SETTINGS.textSize);
-    measureInput.value = String(DEFAULT_SETTINGS.measure);
-    marginsSelect.value = DEFAULT_SETTINGS.margins;
-    cellTintInput.checked = DEFAULT_SETTINGS.cellTint;
-    codeFontSizeInput.value = String(DEFAULT_SETTINGS.codeFontSize);
-    pyodideBaseInput.value = DEFAULT_SETTINGS.pyodideBase;
-    setPyodideBase(DEFAULT_SETTINGS.pyodideBase);
-  });
-  panel.appendChild(resetButton);
-
-  labelToggle(toggle, "Settings");
-  iconRail().appendChild(toggle);
-  document.body.appendChild(panel);
-  dockPanel(toggle, panel);
-  applySettings(settings);
-  setPyodideBase(settings.pyodideBase);
+  document.body.appendChild(overlay);
 
   return {
+    open() {
+      render();
+      overlay.hidden = false;
+      box.querySelector<HTMLElement>("select, input")?.focus();
+    },
+    close,
     destroy() {
-      toggle.remove();
-      panel.remove();
+      window.removeEventListener("keydown", onKeyDown);
+      overlay.remove();
     },
   };
 }

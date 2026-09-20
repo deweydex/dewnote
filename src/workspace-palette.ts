@@ -1,35 +1,24 @@
-// One key, and it reaches the workspace rather than the rails.
+// One key, and it reaches the workspace. dewlab has 122 tutorials across
+// seven courses: three letters and Enter beats any menu.
 //
-// The palette this replaces (`command-palette.ts`) held a dozen fixed
-// rows, each of which found a hidden rail button by CSS selector and
-// clicked it. It could do nothing a menu could not, and it left out the
-// one thing a palette is better at than any other interface: finding a
-// document by name. dewlab has 122 tutorials across seven modules. A
-// `<select>` of thirty titles is a scrolling native menu; three letters
-// and Enter is not.
+// Four sections, in the order they are most often wanted:
 //
-// So this indexes three things, in the order somebody reaching for it
-// most often wants them:
+//   Tutorials — the file index by title, resolved through
+//               `defaultEntryFor` so a slug with three versions offers
+//               the one dewlab's build would serve.
+//   Pages     — dewlab's own `pages/` files.
+//   Series    — every series in every course, opening at its first
+//               tutorial.
+//   Do        — commands.ts's registry.
 //
-//   Tutorials — every entry in the file index, by title, with its
-//               series and position, resolved through `defaultEntryFor`
-//               so a slug with three versions on disk offers the one
-//               dewlab's own build would serve.
-//   Series    — every series in every module descriptor, opening at its
-//               first tutorial.
-//   Do        — commands.ts's registry, which is where the workspace
-//               menu's contents live now.
-//
-// The right-hand half says what the highlighted row actually is before
-// Enter commits to it: a tutorial's path, status, version, first
-// paragraph and its own headings. That pane is the reason this can
-// replace a file list rather than sit beside one — a list of paths tells
-// you where a file is, and this tells you what it says.
+// The right-hand half says what the highlighted row is before Enter
+// commits to it: path, status, version, opening sentence, headings. A
+// list of paths says where a file is; this says what it says.
 
-import { defaultEntryFor, type FileIndexEntry } from "./file-index.ts";
+import { defaultEntryFor, type FileIndexEntry } from "./workspace.ts";
 import { availableCommands, fuzzyScore, type Command } from "./commands.ts";
-import { parseDocument } from "./blocks.ts";
 import type { Module } from "./modules.ts";
+import { headingsOf, openingOf, plainInline } from "./markdown.ts";
 
 export interface PaletteHost {
   getIndex(): FileIndexEntry[];
@@ -88,10 +77,9 @@ const SECTION_OF: Record<RowKind, string> = {
 /** How many rows of each kind survive a query. A palette that lists
  * ninety tutorials is a file list with a text box on top — so the two
  * unbounded sets are capped. Commands are not: there are a dozen, this
- * is the only place they exist now that the workspace menu is gone, and
- * a reader who opens the palette with nothing typed is looking to find
- * out what there is. Capping those would hide the list from the one
- * gesture meant to reveal it. */
+ * is the only place they exist, and a reader who opens the palette with
+ * nothing typed is looking to find out what there is. Capping them would
+ * hide the list from the one gesture meant to reveal it. */
 const LIMIT: Record<RowKind, number> = { tutorial: 8, page: 4, series: 6, command: Number.POSITIVE_INFINITY };
 
 /** How much a match on a hidden keyword — a path, an id, a synonym — is
@@ -120,67 +108,15 @@ function noteFor(entry: FileIndexEntry, modules: readonly Module[]): string {
   return entry.series ?? entry.module ?? "";
 }
 
-/** Inline markdown, read as the words it stands for. The preview is
- * prose a person skims, so `**bold**` should read as bold did, not as
- * four asterisks. Deliberately only the inline marks a tutorial's first
- * paragraph actually carries — a second markdown renderer here would be
- * the drift plan §2 warns about, for a pane nobody edits. */
-function plainInline(text: string): string {
-  return text
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/(\*\*|__)(.+?)\1/g, "$2")
-    .replace(/(\*|_)(.+?)\1/g, "$2")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/** The first real sentence, for the preview pane. Front matter and
- * headings are skipped, and so is a dewlab tutorial's own bold subtitle
- * line — it names the module, which the pane says on its own line
- * already, and it is never the sentence that tells a reader what the
- * page is about. */
-export function openingOf(source: string): string {
-  for (const block of parseDocument(source).blocks) {
-    if (block.kind !== "prose") continue;
-    const text = block.text.trim();
-    if (!text || text.startsWith("#")) continue;
-    if (/^(\*\*|__).+(\*\*|__)$/.test(text) && !text.includes("\n")) continue;
-    return plainInline(text).slice(0, 320);
-  }
-  return "";
-}
-
-export function headingsOf(source: string): string[] {
-  const headings: string[] = [];
-  for (const block of parseDocument(source).blocks) {
-    if (block.kind !== "prose") continue;
-    for (const line of block.text.split("\n")) {
-      const match = /^#{2,6}\s+(.+?)\s*$/.exec(line);
-      if (match) headings.push(plainInline(match[1]!));
-    }
-  }
-  return headings;
-}
-
 /**
- * The rows a query leaves, best first within each kind, kinds in their
- * own fixed order — plus which of them Enter should take.
+ * The rows a query leaves, best first within each kind, kinds in fixed
+ * order — plus which row Enter takes.
  *
- * Those are two different questions and answering them with one number
- * was a real bug rather than a subtlety: sections are for the eye, which
- * wants a tutorial to be where a tutorial always is, and the highlight
- * is for the hand, which wants the thing you typed. Typing "appear"
- * with the two merged put the cursor on the first *tutorial* whose
- * letters happened to contain a-p-p-e-a-r — "One Parent, Many
- * Children" — and Enter opened it instead of the appearance settings.
- * So the list keeps its fixed section order and `best` is the index of
- * the highest-scoring row anywhere in it.
- *
- * Pure, and exported, because "the thing you meant is the thing Enter
- * takes" is the palette's whole value and deserves a test rather than a
- * look.
+ * Two questions, two numbers. Sections are for the eye, which wants a
+ * tutorial where a tutorial always is; `best` is for the hand, which
+ * wants what you typed. Merged, typing "appear" lands on the first
+ * tutorial whose letters contain a-p-p-e-a-r instead of on the
+ * appearance settings.
  */
 export function rankRows(rows: readonly Row[], query: string): { rows: Row[]; best: number } {
   const scored: { row: Row; score: number }[] = [];
@@ -443,7 +379,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
     const row = rows[at];
     if (!row) return;
     // Close first for a command: several of them open a surface of their
-    // own, and two overlays fighting over focus is the bug the old shell
+    // own, and two overlays fighting over focus is the bug this
     // had. A navigation closes only once it has happened.
     if (row.kind === "command") {
       close();

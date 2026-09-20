@@ -1,37 +1,20 @@
 // The spine: the left margin doing a book's job.
 //
-// It replaces the workflow header, and the reasoning is the one in
-// planning/UI_REVIEW.md §5. The chrome above the document answered three
-// questions — where am I, what state is this document in, how do I get
-// somewhere else — and answered the first two with a toolbar: a bordered
-// breadcrumb pill that read as a search field, a filename, and a solid
-// orange Save that was the loudest thing on a screen whose whole
-// aesthetic is restraint. The first two questions need a caption, not a
-// toolbar. The third is what one key is for (workspace-palette.ts).
+// A document answers three questions about itself — where am I, what
+// state is this in, how do I get somewhere else. The first two want a
+// caption, not a toolbar. The third is what one key is for
+// (workspace-palette.ts).
 //
-// So this is a caption, set in the document's own Georgia at caption
-// size, in the margin the page already had and was not using: at
-// 1440px with dewlab's 34rem measure there is about 450px of empty
-// gutter on each side. One side now carries the running head and the
-// thumb index a book would have. The other stays empty on purpose.
-//
-// ## Why the layout is measured rather than declared
-//
-// How much room the margin has depends on the window AND on two reader
-// settings — `measure` and `margins` (settings.ts) — which reach the
-// page as CSS custom properties. A media query cannot read a custom
-// property, so a CSS-only rule for "is there room for a spine" would
-// have to hard-code a measure this app lets people change. Instead a
-// `ResizeObserver` on the page element reports the real gutter, which
-// moves both when the window resizes and when a setting changes, and
-// `<html>` gets `data-spine="margin"` or `"folded"` from it. Folded is
-// the phone treatment: the same lines across the top, in reading order,
-// rather than a desktop column squeezed until nothing in it is legible.
-
-import { parseDocument } from "./blocks.ts";
+// So this is a caption, set in the document's own face at caption size,
+// in the margin the page already had and was not using: at 1440px with a
+// 34rem measure there is about 450px of empty gutter each side. One side
+// carries it; the other stays empty.
 
 export interface SpineHost {
-  getSource(): string;
+  /** The open document's own headings. They come from the editor's tree
+   * rather than from a second parse of the text. There is one answer to
+   * "is this `#` inside a fence", and the editor already holds it. */
+  getHeadings(): { level: number; text: string }[];
   /** ⌘K's own surface. The filename and the breadcrumb both open it:
    * "where am I" and "take me elsewhere" are one gesture. */
   openPalette(): void;
@@ -73,27 +56,12 @@ export interface Spine {
   destroy(): void;
 }
 
-const HEADING_RE = /^(#{1,6})\s+(.+?)\s*$/;
-
 interface Heading {
   level: number;
   text: string;
-  blockIndex: number;
-}
-
-/** Prose only, the same rule outline-panel.ts has always used: a `#` in
- * a fence is a comment or a shell prompt, and no other block kind in any
- * dialect DIALECTS.md describes carries a heading. */
-function headingsFrom(source: string): Heading[] {
-  const headings: Heading[] = [];
-  parseDocument(source).blocks.forEach((block, blockIndex) => {
-    if (block.kind !== "prose") return;
-    for (const line of block.text.split("\n")) {
-      const match = HEADING_RE.exec(line);
-      if (match) headings.push({ level: match[1]!.length, text: match[2]!, blockIndex });
-    }
-  });
-  return headings;
+  /** Which heading this is, counted from the top — the handle the spine
+   * hands back when one is clicked. */
+  ordinal: number;
 }
 
 /** The narrowest margin worth putting a spine in. Below it the column
@@ -193,9 +161,11 @@ export function mountSpine(host: SpineHost): Spine {
       item.style.paddingInlineStart = `${(heading.level - top) * 14}px`;
       item.textContent = heading.text;
       item.addEventListener("click", () => {
-        document
-          .querySelector(`.dn-block[data-index="${heading.blockIndex}"]`)
-          ?.scrollIntoView({ block: "start", behavior: "smooth" });
+        // The nth heading element in the editor, counted the same way
+        // the outline counted them. Milkdown renders a heading as a
+        // plain `h1`–`h6`, so this needs no cooperation from it.
+        const rendered = document.querySelectorAll(".milkdown :is(h1,h2,h3,h4,h5,h6)");
+        rendered[heading.ordinal]?.scrollIntoView({ block: "start", behavior: "smooth" });
       });
       outline.appendChild(item);
     }
@@ -259,7 +229,7 @@ export function mountSpine(host: SpineHost): Spine {
     setLocation(next) { location = next; renderIdentity(); },
     setWorkspace(next) { workspace = next; renderIdentity(); },
     refreshOutline() {
-      headings = headingsFrom(host.getSource());
+      headings = host.getHeadings().map((heading, ordinal) => ({ ...heading, ordinal }));
       renderOutline();
     },
     setProblem(next) { problem = next; renderProblem(); },

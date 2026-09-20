@@ -1,28 +1,16 @@
-// The reading/editing texture settings, and the running-Python settings
-// beside them — decision 7's "every one of those values is a user
-// setting" (family, size, measure, cell tint, theme), plus a couple of
-// dewnote-specific additions (a separate code font size, and where
-// Pyodide loads from). Modelled directly on dewstack's own
-// assets/settings.js: one small object in localStorage, applied to
-// <html> as CSS custom properties before first paint, a default value
-// removing its attribute/property rather than setting it so the
-// stylesheet's own default stays authoritative.
+// What the reader chose: type, measure, spacing, theme, and where
+// Pyodide loads from.
 //
-// Deliberately not built here: named aesthetic presets ("manuscript",
-// "chalkboard") — planning/mockups/dewnote-sketch.html sketches three,
-// but that sketch is exploratory, not a ratified decision the way
-// decision 7 is, and choosing new palettes is real art direction, not
-// engineering. Theme (light/dark/system) is the one preset dewlab's own
-// tokens already fully define (`theme/dewlab-tokens.css`'s own
-// `[data-theme="dark"]` block) and is built below; anything beyond that
-// is left for a deliberate follow-up, not invented here.
+// One small object in localStorage, applied to `<html>` as CSS custom
+// properties before first paint. A value at its default removes its
+// property rather than setting it, so the stylesheet's own default stays
+// the one authority on what the default is.
 
 export type Theme = "system" | "light" | "dark";
 export type BodyFont = "serif" | "sans" | "mono";
 export type Margins = "comfortable" | "compact";
 export type ParagraphSpacing = "tight" | "normal" | "loose";
 export type CodeFont = "mono" | "humanist" | "slab";
-export type RailDisplay = "icons" | "icons-and-labels" | "labels";
 
 export interface Settings {
   theme: Theme;
@@ -50,14 +38,8 @@ export interface Settings {
    * rather than a free-text field: a font nobody has installed silently
    * falls back to whatever the system picks, which looks like a bug. */
   codeFont: CodeFont;
-  /** How the shared sidebar launchers are presented. Labels are the
-   * default: a glyph should never be the only clue to what a button does. */
-  railDisplay: RailDisplay;
   /** Empty string means the built-in default (jsDelivr) — see
-   * pyodide-engine.ts's own PYODIDE_BASE. A real gap this doesn't cover
-   * yet: nothing currently reads this setting, since pyodide-engine.ts's
-   * base URL is a module-level constant, not parameterised — see
-   * DECISIONS.md. */
+   * pyodide-engine.ts's own PYODIDE_BASE. */
   pyodideBase: string;
 }
 
@@ -72,7 +54,6 @@ export const DEFAULT_SETTINGS: Settings = {
   cellTint: true,
   codeFontSize: 15,
   codeFont: "mono",
-  railDisplay: "icons-and-labels",
   pyodideBase: "",
 };
 
@@ -106,8 +87,6 @@ export function parseSettings(raw: unknown): Settings {
     value.paragraphSpacing === "tight" || value.paragraphSpacing === "loose" ? value.paragraphSpacing : "normal";
   const codeFont: CodeFont =
     value.codeFont === "humanist" || value.codeFont === "slab" ? value.codeFont : "mono";
-  const railDisplay: RailDisplay =
-    value.railDisplay === "icons" || value.railDisplay === "labels" ? value.railDisplay : "icons-and-labels";
   const cellTint = typeof value.cellTint === "boolean" ? value.cellTint : DEFAULT_SETTINGS.cellTint;
   const pyodideBase = typeof value.pyodideBase === "string" ? value.pyodideBase : "";
 
@@ -139,7 +118,6 @@ export function parseSettings(raw: unknown): Settings {
     cellTint,
     codeFontSize,
     codeFont,
-    railDisplay,
     pyodideBase,
   };
 }
@@ -205,7 +183,6 @@ const MARGIN_PADDING: Record<Margins, string> = {
 export function settingsToRootProperties(settings: Settings): Record<string, string | null> {
   return {
     "data-theme": settings.theme === "system" ? null : settings.theme,
-    "data-rail-display": settings.railDisplay === DEFAULT_SETTINGS.railDisplay ? null : settings.railDisplay,
     "--dl-font-family": mapDefault(BODY_FONT_STACKS[settings.bodyFont], BODY_FONT_STACKS.serif),
     "--dl-font-size": mapDefault(`${settings.textSize}px`, `${DEFAULT_SETTINGS.textSize}px`),
     "--dl-line-width": mapDefault(`${settings.measure}rem`, `${DEFAULT_SETTINGS.measure}rem`),
@@ -224,7 +201,7 @@ function mapDefault(value: string, defaultValue: string): string | null {
 
 /** Writes every setting to `<html>`, called before the document mounts
  * so there is never a flash of default texture before the reader's own
- * choice applies (dewstack's own "FAQ's way", decision 7). */
+ * choice applies. */
 export function applySettings(settings: Settings): void {
   const root = document.documentElement;
   for (const [key, value] of Object.entries(settingsToRootProperties(settings))) {

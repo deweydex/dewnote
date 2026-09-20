@@ -1,7 +1,7 @@
 # Using dewnote
 
 For the person writing tutorials. For how dewnote is built, see
-`README.md`.
+`ARCHITECTURE.md`.
 
 ---
 
@@ -17,8 +17,7 @@ back to the file.
 and repo, a base branch and a working branch. Save commits to the working
 branch. It never writes to the base branch.
 
-Safari has no folder picker. Use the repository, or open one file at a
-time from the palette.
+Safari has no folder picker. Use a repository.
 
 ---
 
@@ -58,15 +57,12 @@ Type, and it narrows to what you mean. It searches four things at once:
 
 - **Tutorials** — every tutorial and practice page, by title.
 - **Pages** — dewlab's `pages/` files: About, Home, Features.
-- **Series** — every series in every module. Opens at its first tutorial.
-- **Do** — everything dewnote can do. Settings, exports, imports, link
-  checking, the whole-file source view, the module organiser.
+- **Series** — every series in every course. Opens at its first tutorial.
+- **Do** — everything dewnote can do.
 
 The right-hand half tells you what the highlighted row is before you
 commit: its path, its status and version, its first sentence, and its
 headings.
-
-Keys:
 
 | Key | What happens |
 |---|---|
@@ -77,8 +73,7 @@ Keys:
 | Esc | Close, change nothing. |
 
 You do not have to type letters that are next to each other. `wamat`
-finds *What a Matrix Does to a Picture*. `ipynb` finds *Export a Jupyter
-notebook*, even though the word is not in the title.
+finds *What a Matrix Does to a Picture*.
 
 The list is always in the same order — Tutorials, Pages, Series, Do — so
 a kind of thing is always in the same place. The **highlight** is on the
@@ -89,39 +84,54 @@ is at the top.
 
 ## 4. Writing
 
-Click any paragraph to edit it. Nothing moves: the text stays in exactly
-the same place, in the same typeface, at the same size. Bold stays bold,
-italic stays italic, links stay links, inline code keeps its box.
+The document is what you edit. A heading looks like a heading, bold looks
+bold, a link looks like a link. Type `# ` at the start of a line and the
+line becomes a heading as you type it.
 
-Markdown punctuation stays hidden until your caret enters the thing it
-marks. Put the caret in a bold phrase and its `**` appear, around that
-phrase only. Move away and they go again.
-
-Type `# ` at the start of a line and the line becomes a heading as you
-type it, at the size it will be on the page. `##` and `###` likewise.
-Click away and the hashes fold; the size stays.
-
-A link is the one exception worth knowing: the caret in its words shows
-`[the words]()`, and the address stays folded. Arrow right past the `(`
-to see and edit the address. This is so that clicking a link's words
-never re-wraps the paragraph.
-
-A list's `-` and a quotation's `>` do stay visible. Hiding them would
-leave nothing where the page has a bullet or a rule.
-
-Between blocks, hover for a **+** to add a paragraph, a code cell, maths,
-a hint, an image or a link. In an empty paragraph, typing **/** offers the
-same menu from the keyboard.
-
-A code cell has one line of controls: the language, its `id`, buttons to
-add `hint`, `expect` or `name`, and Run. Output appears under the cell.
-
-Press **⌘/** for the whole file in one editor — front matter, fence
-markers and all. Press it again to go back.
+Between blocks, hover for a **+** to add one. In an empty paragraph,
+typing **/** offers the same menu from the keyboard.
 
 ---
 
-## 5. Saving
+## 5. Cells
+
+A fence marked `exec` is a cell you can run:
+
+````
+```python exec
+id: first-sum
+print(2 + 2)
+```
+````
+
+Under it is a **Run** button. Press it, and the output appears below the
+code. Python is a real Python — Pyodide — running in this tab; the first
+run takes a few seconds while it loads, and every run after that is
+immediate.
+
+The lines at the top of a cell are part of the file, and you type them
+like any other line:
+
+| Line | What it does |
+|---|---|
+| `id:` | Names the cell. Required. It is the key a student's saved work lives under, so never change one that has been in front of a class. |
+| `hint:` | When to offer a hint — `errors:5`, say. |
+| `expect:` | What a correct answer satisfies. |
+| `name:` | A short label. |
+
+A fence with no `exec` is illustrative code. It has no Run button and
+never runs.
+
+After you edit a cell, its last output stays on screen, faded, until you
+run it again — it belongs to the code you had a moment ago, not to the
+code on screen.
+
+Once a cell has run, **Hide** puts the code away and leaves the output,
+which is how a finished cell reads.
+
+---
+
+## 6. Saving
 
 **⌘S saves.** So does clicking **Save this** in the margin.
 
@@ -129,20 +139,20 @@ markers and all. Press it again to go back.
 - GitHub: commits to the working branch.
 
 The margin says *Saved* when it is written, and **Save this** when it is
-not. Only your edits change; every other byte of the file is left exactly
-as it was.
+not.
 
-**If a save does not happen, the margin says so and stays saying so.** It
-will not clear itself. Two cases:
+**The first time dewnote saves a file, it tidies it.** Bullet markers
+become `-`, blank lines settle into one shape, a maths block is written
+on three lines. Nothing about what the page *shows* changes, and it
+happens once: every save after that writes exactly what you see.
 
-- *Someone changed this file on the branch.* Both versions are shown.
-  Choose one. Nothing is overwritten until you do.
-- *Anything else* — an expired token, a path already taken — is named in
-  the same place.
+**If a save does not happen, the margin says so and keeps saying so.** It
+will not clear itself. The message names what went wrong — a file changed
+on the branch under you, an expired token, a path already taken.
 
 ---
 
-## 6. Reading and editing dewlab
+## 7. Reading and editing dewlab
 
 dewnote opens every markdown file in a dewlab checkout or repository:
 
@@ -150,16 +160,14 @@ dewnote opens every markdown file in a dewlab checkout or repository:
 - `tutorials/<id>/<id>-practice.md` — its practice page.
 - `pages/about.md`, `pages/home.md`, `pages/features.md` — the site's
   own pages.
-- `courses/*.yaml` — module descriptors. Open one from **Browse
-  workspace files…** and edit it with ⌘/.
+- `courses/*.yaml` — course descriptors.
 
 A tutorial with several versions on disk resolves to the one dewlab's
-build would serve: the newest `live` version, or the newest version there
-is.
+build would serve: the newest `live` version, or the newest there is.
 
 ---
 
-## 7. Appearance
+## 8. Appearance
 
 Press ⌘K, type `appearance`, press ↵.
 
@@ -173,12 +181,12 @@ Press ⌘K, type `appearance`, press ↵.
 | Paragraph spacing | Tight, normal, loose |
 | Margins | Comfortable, compact |
 | Tinted cells | On, off |
-| Code font size | 11–20px |
+| Code size | 11–20px |
 | Code font | Three monospace stacks |
-| Pyodide source URL | Blank for the default |
+| Pyodide source | Blank for the default |
 
 Every change applies at once and is remembered in this browser. **Reset
-to defaults** is at the bottom of the panel.
+to defaults** is at the bottom.
 
 Line width and margins move the margin column with them. Widen the
 measure far enough and the column narrows; widen it past the point where
@@ -186,30 +194,24 @@ both fit and the column folds to a row across the top.
 
 ---
 
-## 8. Publishing to GitHub
+## 9. Publishing to GitHub
 
-Saving commits. Publishing opens a pull request.
+Saving commits. Publishing opens a pull request: ⌘K, then **Open a pull
+request**.
 
-After a save, dewnote offers **Review repository changes**. That screen
-lists what is on the working branch and opens a draft pull request from
-it.
-
-Known limits, so you are not surprised:
+Two things to know:
 
 - Each save is its own commit, named after the file.
-- The review screen lists what this window pushed. A push from another
-  tab, or a commit made on GitHub, will not be in the list.
 - The working branch is reused. If its pull request has already merged,
   name a new branch before you start.
 
 ---
 
-## 9. Every key
+## 10. Every key
 
 | Key | What it does |
 |---|---|
 | ⌘K / Ctrl+K | Palette |
 | ⌘S / Ctrl+S | Save |
-| ⌘/ / Ctrl+/ | Whole-file source |
 | / | Block menu, in an empty paragraph |
 | Esc | Close whatever is open |

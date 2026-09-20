@@ -4,7 +4,7 @@
 // built app, the same split outline-panel.ts and settings-panel.ts use.
 
 import { describe, expect, test } from "bun:test";
-import { headingsOf, openingOf, rankRows } from "./workspace-palette.ts";
+import { rankRows } from "./workspace-palette.ts";
 
 type Row = Parameters<typeof rankRows>[0][number];
 
@@ -68,58 +68,6 @@ describe("rankRows", () => {
   test("a title typed almost in full beats a coincidence in another title", () => {
     const { rows, best } = rankRows(WORKSPACE, "storing and comp");
     expect(rows[best]!.label).toBe("Storing and Computing");
-  });
-});
-
-describe("openingOf", () => {
-  const TUTORIAL = [
-    "---",
-    "title: Storing and Computing",
-    "---",
-    "",
-    "# Storing and Computing",
-    "",
-    "**Programming Design Principles / Maths for IT**",
-    "",
-    "Last time we learned to do arithmetic. But we had a *limitation*:",
-    "every result was gone once we had it.",
-    "",
-    "## Variables",
-    "",
-    "A variable is a name.",
-    "",
-  ].join("\n");
-
-  test("skips front matter, the title, and the bold module line", () => {
-    expect(openingOf(TUTORIAL)).toBe(
-      "Last time we learned to do arithmetic. But we had a limitation: every result was gone once we had it.",
-    );
-  });
-
-  test("reads inline markdown as the words it stands for", () => {
-    expect(openingOf("A [link](x.md) and `code` and **bold**.\n")).toBe("A link and code and bold.");
-  });
-
-  test("a document with nothing but headings has no opening, rather than a heading", () => {
-    expect(openingOf("# Only\n\n## Headings\n")).toBe("");
-  });
-
-  test("a long opening is cut rather than allowed to fill the pane", () => {
-    expect(openingOf(`${"word ".repeat(200)}\n`).length).toBe(320);
-  });
-});
-
-describe("headingsOf", () => {
-  test("lists the headings under the title, without their marks", () => {
-    expect(headingsOf("# Title\n\n## First **step**\n\n### Deeper\n\n#### Deepest\n")).toEqual([
-      "First step",
-      "Deeper",
-      "Deepest",
-    ]);
-  });
-
-  test("a `#` inside a fence is a comment, not a heading", () => {
-    expect(headingsOf("# Title\n\n```python exec\nid: a\n# not a heading\n```\n\n## Real\n")).toEqual(["Real"]);
   });
 });
 
