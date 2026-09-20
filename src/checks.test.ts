@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import { idFromPath } from "./workspace.ts";
 import { checkDocument, checkWorkspace } from "./checks.ts";
 
 const KNOWN = new Set(["grid-of-numbers"]);
@@ -239,5 +242,56 @@ describe("checkDocument: dewlab's other fences", () => {
 
   test("an illustrative fence is not a cell and is not checked", () => {
     expect(checkDocument(page("```python", "print(1)", "```"), KNOWN)).toEqual([]);
+  });
+});
+
+// The measurement that matters. dewlab's own build accepts every file in
+// the checkout, so any blocking report against one of them is a false
+// positive — and a checker that reports nothing on a broken file is
+// worth nothing either, so the same real file is broken three ways and
+// has to be caught each time. Skips itself when the sibling repository
+// is not there, the same discipline modules.test.ts uses.
+const DEWLAB = "../dewlab";
+const CHECKED_OUT = existsSync(DEWLAB);
+
+function dewlabPages(): { path: string; content: string }[] {
+  const found: { path: string; content: string }[] = [];
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      // `staging/` holds an import mid-flight, and `site/` is built.
+      if (name === "site" || name === "staging" || name === "node_modules" || name === ".git") continue;
+      const at = join(dir, name);
+      if (statSync(at).isDirectory()) walk(at);
+      else if (name.endsWith(".md")) found.push({ path: relative(DEWLAB, at), content: readFileSync(at, "utf8") });
+    }
+  };
+  walk(DEWLAB);
+  return found;
+}
+
+describe(`the dewlab checkout: ${DEWLAB}${CHECKED_OUT ? "" : " (not checked out — skipped)"}`, () => {
+  test.skipIf(!CHECKED_OUT)("every page the build accepts, the checker accepts too", () => {
+    const pages = dewlabPages();
+    expect(pages.length).toBeGreaterThan(100);
+    const known = new Set(pages.map((page) => idFromPath(page.path)));
+    expect(checkWorkspace(pages, known)).toEqual([]);
+  });
+
+  test.skipIf(!CHECKED_OUT)("a real question fence broken three ways is caught each time", () => {
+    const tutorial = "tutorials/counting-carefully/counting-carefully.md";
+    const sound = dewlabPages().find((page) => page.path === tutorial)!.content;
+    const known = new Set(dewlabPages().map((page) => idFromPath(page.path)));
+    expect(checkDocument(sound, known)).toEqual([]);
+
+    const breaks: [string, string, RegExp][] = [
+      ["correct: 2", "correct: 9", /names none of the 3 options/],
+      ["type: multiple-choice", "type: essay", /`type: essay`/],
+      ["id: permutation-or-combination\n", "", /question with no `id:`/],
+    ];
+    for (const [from, to, expected] of breaks) {
+      const broken = sound.replace(from, to);
+      expect(broken).not.toBe(sound);
+      expect(checkDocument(broken, known).map((problem) => problem.message).join(" | ")).toMatch(expected);
+    }
   });
 });

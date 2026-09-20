@@ -270,6 +270,13 @@ debounced: a fault found a moment after you write it is as useful as one
 found instantly, and serialising the whole document on every keystroke
 is not.
 
+Two tests measure the rules against the real thing, and skip themselves
+when dewlab is not checked out beside this repository: every page the
+build accepts, the checker accepts too — any blocking report there would
+be a false positive — and a real question fence broken three ways is
+caught each time, because a checker that says nothing about a broken
+file is worth nothing either.
+
 The slash menu writes them, and a test runs the checker over what every
 snippet writes — a snippet that failed it would put a fault in the
 document the moment it was inserted.
