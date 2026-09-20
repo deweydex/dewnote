@@ -111,6 +111,27 @@ Under **Tutorial** in that menu are the blocks a tutorial is made of:
 | SQL cell | The same in dewlab's other language |
 | Hint | The `<details class="dl-hint">` fold the build looks for |
 
+## Starting a tutorial
+
+⌘K, **New tutorial…**, and give it a title. dewnote writes
+`tutorials/<id>/<id>.md`, where the id comes from the title — that id is
+the page's address, so the title is worth getting right before you press
+Make it.
+
+It starts as a **draft**, so a half-written page is never served, and it
+opens with a heading and one cell ready to run. Change `status:` to
+`live` in ⌘/ when it is ready.
+
+## Publishing a new version
+
+⌘K, **Publish as a new version…**, on a live tutorial you have edited.
+
+dewlab keeps two files. The version that is published is frozen at
+`v<version>.md` exactly as it was, and the file you are editing keeps its
+own address and gets today's date plus a `supersedes:` line. A reader's
+link still works, and so does their saved work, because both are keyed to
+the address rather than to the version.
+
 ## The whole file
 
 **⌘/** shows the file as text — front matter, fence markers and all. It

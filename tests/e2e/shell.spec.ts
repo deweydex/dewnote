@@ -570,3 +570,63 @@ test("leaving the source view keeps the document as it was", async ({ page }) =>
 
   await expect(page.locator(".milkdown h1")).toHaveText("One");
 });
+
+test("a new tutorial is written, opened, and starts as a draft", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n",
+  });
+  await page.locator(".dn-wp-input").fill("new tutorial");
+  await page.keyboard.press("Enter");
+
+  const ask = page.locator(".dn-ask");
+  await expect(ask).toBeVisible();
+  await ask.locator("input").fill("Storing and Computing");
+  await ask.locator(".dn-ask-go").click();
+
+  // Written at dewlab's own address, and opened.
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
+  await expect(page.locator(".dn-spine-file")).toContainText(
+    "tutorials/storing-and-computing/storing-and-computing.md",
+  );
+
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1));
+  expect(written.path).toBe("tutorials/storing-and-computing/storing-and-computing.md");
+  // A draft: a half-written page should never be served.
+  expect(written.text).toContain("status: draft");
+  expect(written.text).toContain("```python exec");
+});
+
+test("a release freezes what is published and dates what is open", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "tutorials/grid/grid.md":
+      "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nOld words.\n",
+  });
+  await page.locator(".dn-wp-input").fill("grid");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" And new ones.");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("new version");
+  await page.keyboard.press("Enter");
+
+  const ask = page.locator(".dn-ask");
+  await expect(ask).toBeVisible();
+  await expect(ask).toContainText("v2026.08.01.1.md");
+  await ask.locator(".dn-ask-go").click();
+
+  const writes = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  const frozen = writes.find((w: { path: string }) => w.path === "tutorials/grid/v2026.08.01.1.md");
+  const live = writes.find((w: { path: string }) => w.path === "tutorials/grid/grid.md");
+
+  // The old bytes, exactly as they were.
+  expect(frozen.text).toContain("Old words.");
+  expect(frozen.text).not.toContain("And new ones.");
+  // The live file keeps its address and says what it supersedes.
+  expect(live.text).toContain("And new ones.");
+  expect(live.text).toContain("supersedes: 2026.08.01.1");
+});
