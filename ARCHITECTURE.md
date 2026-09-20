@@ -303,6 +303,19 @@ The slash menu writes them, and a test runs the checker over what every
 snippet writes — a snippet that failed it would put a fault in the
 document the moment it was inserted.
 
+`checkDocument(source, around)` takes one object rather than a growing
+list of arguments. `around.images` is every image path in the workspace,
+read once by `Store.imagePaths()` when the workspace opens — the editor
+never opens an image, so `list()` never sees one, and without it an
+image whose file was renamed looks exactly like one that is fine. An
+absent set turns the rule off rather than failing every image, which is
+what makes a caller that cannot answer the question safe.
+
+Only prose counts, with code spans blanked. dewlab teaches HTML, so a
+fence saying `<img src="does-not-exist.jpg">` and a reference table row
+reading `` `<img src="…">` `` are both real files in the checkout, and
+both were false positives before the corpus test caught them.
+
 `checkWorkspace` is the same rules over every page, and it is the same
 function applied file by file rather than a second set of rules. One
 overlay renders both: a row that carries a path is a button and opens

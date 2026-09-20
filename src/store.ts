@@ -58,6 +58,11 @@ export interface Store {
   /** The names directly inside `folder`, for choosing an asset name
    * that is not already somebody else's. */
   listFolder(folder: string): Promise<string[]>;
+  /** Every image in the workspace, by path. Read once when the
+   * workspace opens: the editor never opens an image, so neither
+   * `list()` nor the index sees one, and without this an image whose
+   * file was renamed is indistinguishable from one that is fine. */
+  imagePaths(): Promise<string[]>;
   /** An image written beside a document. */
   writeBytes(path: string, bytes: Uint8Array): Promise<void>;
   /** Throws a `SaveProblem` and nothing else. Every failure an author can
@@ -115,6 +120,11 @@ export async function openFolder(): Promise<Store | null> {
     readBytes: (path) => folder.readBytesAt(root, path),
 
     listFolder: (path) => folder.listNamesIn(root, path).catch(() => []),
+
+    async imagePaths() {
+      const found = await folder.listImageFiles(root).catch(() => []);
+      return found.map((file) => file.path);
+    },
 
     async writeBytes(path, bytes) {
       try {
@@ -188,6 +198,11 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
     },
 
     listFolder: (path) => github.listDirectory(repo, path, branch, token).catch(() => []),
+
+    async imagePaths() {
+      const found = await github.listImageFiles(repo, branch, token).catch(() => []);
+      return found.map((file) => file.path);
+    },
 
     async writeBytes(path, bytes) {
       try {

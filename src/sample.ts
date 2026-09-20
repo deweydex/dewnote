@@ -142,6 +142,7 @@ export function sampleStore(): Store {
         .filter((path) => path.startsWith(`${folder}/`))
         .map((path) => path.slice(folder.length + 1))
         .filter((name) => !name.includes("/")),
+    imagePaths: async () => [...bytes.keys()],
     write: async (path, text) => {
       held.set(path, text);
     },

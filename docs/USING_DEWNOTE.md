@@ -252,6 +252,7 @@ lists what would break dewlab's build or confuse a reader:
 | A cell, pane or question with no `id:` | A student's work has no key to save under. |
 | Two of them sharing an `id:` | One block's saved work overwrites the other's. |
 | A `tutorial:` link naming nothing | It ships as a broken address. |
+| An image whose file is not there | The reader gets a broken image. |
 | A question with no `type:`, or one the build does not know | Nothing marks it. |
 | A multiple-choice question with fewer than two options, or a `correct:` naming none of them | Nothing marks it. |
 | A fill-in-the-blank question with no `{…}` gap, or a gap that never closes | There is nothing to fill in. |
@@ -280,6 +281,11 @@ is sound. A broken link is otherwise found on the day somebody opens the
 page it is written on.
 
 Each row names its file and line. Click one to open that file.
+
+An image is looked for where the build would look for it — beside the
+document, or wherever a relative path leads. Only images in the prose
+count. An `<img src="…">` inside a fence, or inside `backticks`, is a
+tutorial teaching HTML, and dewlab has several.
 
 A README or a note left beside a tutorial is not a page and is not
 checked. A file under `tutorials/` is a page whether or not it has front

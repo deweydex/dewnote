@@ -64,6 +64,6 @@ describe("SNIPPETS", () => {
   // would put a fault in the document the moment it is inserted.
   test.each(SNIPPETS.map((item) => item.key))("what `%s` writes passes the checker", (key) => {
     const page = ["---", "title: A Page", "---", "", snippet(key), ""].join("\n");
-    expect(checkDocument(page, new Set())).toEqual([]);
+    expect(checkDocument(page, { ids: new Set() })).toEqual([]);
   });
 });

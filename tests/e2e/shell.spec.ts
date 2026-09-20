@@ -913,3 +913,31 @@ test("Preview opens the page in a tab, with its stylesheet and maths inside it",
     heading: "rgb(27, 42, 74)",
   });
 });
+
+test("an image whose file is not there is counted in the margin and named in the report", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    ([files, images]) =>
+      (globalThis as any).__dewnote.useStubStore(files, false, images),
+    [
+      {
+        "tutorials/a/a.md": [
+          "---", "title: A", "---", "",
+          "# A", "",
+          "![A diagram that is there](diagram.svg)", "",
+          "![One that is not](gone.png)", "",
+        ].join("\n"),
+      },
+      ["tutorials/a/diagram.svg"],
+    ] as const,
+  );
+  await page.locator(".dn-wp-input").fill("a.md");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(".dn-spine-health")).toHaveText("1 to fix");
+  await page.locator(".dn-spine-health").click();
+  const report = page.locator(".dn-report");
+  await expect(report).toContainText("`gone.png` is not a file here");
+  // The one that resolves is not mentioned.
+  await expect(report).not.toContainText("diagram.svg");
+});
