@@ -28,6 +28,11 @@ const IDENTICAL: Record<string, string> = {
   "illustrative fence": "```python\nprint(1)\n```\n",
   "hint fold": '<details class="dl-hint"><summary>stuck?</summary>\n\n1. Check.\n\n</details>\n',
   "front matter": "---\ntitle: A Page\nstatus: live\n---\n\n# A Page\n\nBody.\n",
+  // Crepe's GFM preset parses these into real nodes — a `<sup>` atom for
+  // the reference, a `<dl>` for each definition — so they survive an
+  // edit. dewlab does not write them yet; this says dewnote is ready if
+  // it starts to.
+  "footnote": "A claim[^1] and another[^b].\n\n[^1]: The first note.\n\n[^b]: The second.\n",
 };
 
 for (const [name, source] of Object.entries(IDENTICAL)) {

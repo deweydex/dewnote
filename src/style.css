@@ -137,6 +137,52 @@ body {
   background: color-mix(in srgb, var(--dl-cell-bg) calc(var(--dn-cell-tint) * 100%), transparent);
 }
 
+/* Footnotes. Crepe's GFM preset already parses, edits and writes them
+   back; it ships no colour or spacing for them, so this is the whole of
+   what dewnote adds. The reference is an atom node drawn as
+   `<sup data-type="footnote_reference">`, and each definition is its own
+   `<dl data-type="footnote_definition">` holding the label in a `<dt>`
+   and the note in a `<dd>`. */
+.milkdown [data-type="footnote_reference"] {
+  line-height: 0;
+  color: var(--dl-link);
+  font-size: 0.75em;
+  padding-inline: 0.15em;
+  cursor: default;
+}
+
+/* Each definition is one row: the label, then the note beside it. A
+   `<dl>` per note means they stack as separate blocks, so the rule above
+   each is what makes them read as one set rather than as loose asides. */
+.milkdown [data-type="footnote_definition"] {
+  display: grid;
+  grid-template-columns: minmax(1.6em, auto) 1fr;
+  gap: 0 0.7rem;
+  margin: 0;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--dl-rule);
+  font-size: 0.9em;
+  color: var(--dl-muted);
+}
+
+.milkdown [data-type="footnote_definition"] > dt {
+  color: var(--dl-link);
+  font-variant-numeric: tabular-nums;
+}
+
+.milkdown [data-type="footnote_definition"] > dd {
+  margin: 0;
+}
+
+/* Consecutive definitions are one set, so only the first carries the
+   rule that separates the set from the prose above it, and the gap
+   between them closes. */
+.milkdown [data-type="footnote_definition"] + [data-type="footnote_definition"] {
+  border-top: none;
+  padding-top: 0;
+  margin-block-start: 0.45rem;
+}
+
 /* Front matter reads as a label on the document, not as content. */
 .milkdown [data-front-matter] {
   font-family: var(--dl-mono);
