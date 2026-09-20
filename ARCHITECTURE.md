@@ -341,6 +341,25 @@ becomes `![1.00](x.svg)`. That is not configurable, and dewlab teaches
 alt text. The inline component has no schema of its own, so taking it
 alone costs nothing in the round trip.
 
+**Crepe's colour contract is answered in dewlab's tokens**, and that is
+the whole of the editor's theming. `theme/common/style.css` is Crepe's
+structure; its seventeen `--crepe-color-*` variables are meant to come
+from one of its themes, and dewnote loads none of them. So every one was
+undefined and every Crepe rule reading one was dropped — its slash menu,
+block handle, tooltips and code-block chrome had no colours at all, and
+the caret was invisible, because Crepe turns on ProseMirror's virtual
+cursor and draws it from `--crepe-color-outline`.
+
+Seventeen lines of mapping, to tokens that are themselves theme-aware,
+so dark mode is answered once rather than component by component.
+dewnote hand-styles none of Crepe's chrome: there is one `milkdown-*`
+selector in `style.css`, and it carries the cell-tint setting.
+
+Native controls are handled the same way — `color-scheme` and
+`accent-color` on `:root`, mirroring the token file's own theme
+selectors. That dresses every slider, checkbox, select, text field and
+scrollbar without styling a thumb or a track.
+
 **Appearance** is eleven settings, each a CSS custom property, drawn from
 one `ROWS` list. The page is described in dewlab's own tokens, so a
 slider moves the thing it names — describing it in a second set of names

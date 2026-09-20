@@ -957,3 +957,38 @@ test("the palette says its prompt once", async ({ page }) => {
   const size = await label.boundingBox();
   expect(size).toMatchObject({ width: 1, height: 1 });
 });
+
+test("the caret is drawn", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+  await page.locator(".milkdown p").first().click();
+
+  // Crepe turns on ProseMirror's virtual cursor, which hides the native
+  // caret and draws its own from `--crepe-color-outline`. With Crepe's
+  // colour contract unanswered that variable was empty, the border
+  // declaration invalid, and there was no cursor of either kind.
+  const cursor = page.locator(".prosemirror-virtual-cursor");
+  await expect(cursor).toBeVisible();
+  expect(
+    await cursor.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return style.borderLeftWidth !== "0px" && style.borderLeftColor !== "rgba(0, 0, 0, 0)";
+    }),
+  ).toBe(true);
+});
+
+test("Appearance opens from the corner as well as the palette", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  // Nothing to set until there is something to look at.
+  await expect(page.locator(".dn-gear")).toBeHidden();
+
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-gear")).toBeVisible();
+
+  await page.locator(".dn-gear").click();
+  await expect(page.locator(".dn-settings")).toBeVisible();
+});
