@@ -167,11 +167,11 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
   let previewToken = 0;
 
   const overlay = document.createElement("div");
-  overlay.className = "dn-wp-overlay";
+  overlay.className = "dn-overlay dn-wp-overlay";
   overlay.hidden = true;
 
   const box = document.createElement("div");
-  box.className = "dn-wp-box";
+  box.className = "dn-panel dn-wp-box";
   box.setAttribute("role", "dialog");
   box.setAttribute("aria-modal", "true");
   box.setAttribute("aria-label", "Find anything in this workspace");

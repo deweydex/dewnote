@@ -463,7 +463,7 @@ export function mountShell(page: HTMLElement): Shell {
   }
 
   const reportOverlay = document.createElement("div");
-  reportOverlay.className = "dn-report-overlay";
+  reportOverlay.className = "dn-overlay dn-report-overlay";
   reportOverlay.hidden = true;
   reportOverlay.addEventListener("click", (event) => {
     if (event.target === reportOverlay) reportOverlay.hidden = true;
@@ -474,7 +474,7 @@ export function mountShell(page: HTMLElement): Shell {
    * spans more than one, and clicking it opens that file at the line. */
   function reportProblems(found: Problem[], scope: "this document" | "the workspace"): void {
     const box = document.createElement("div");
-    box.className = "dn-report";
+    box.className = "dn-panel dn-report";
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-label", `What is wrong with ${scope}`);
 

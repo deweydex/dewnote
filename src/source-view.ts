@@ -20,11 +20,11 @@ export interface SourceView {
 
 export function mountSourceView(): SourceView {
   const overlay = document.createElement("div");
-  overlay.className = "dn-source-overlay";
+  overlay.className = "dn-overlay dn-source-overlay";
   overlay.hidden = true;
 
   const box = document.createElement("div");
-  box.className = "dn-source";
+  box.className = "dn-panel dn-source";
   box.setAttribute("role", "dialog");
   box.setAttribute("aria-label", "The whole file");
 

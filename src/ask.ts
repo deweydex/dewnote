@@ -22,7 +22,7 @@ export interface Ask {
 
 export function mountAsk(): Ask {
   const overlay = document.createElement("div");
-  overlay.className = "dn-ask-overlay";
+  overlay.className = "dn-overlay dn-ask-overlay";
   overlay.hidden = true;
   document.body.appendChild(overlay);
 
@@ -45,7 +45,7 @@ export function mountAsk(): Ask {
         settle = resolve;
 
         const form = document.createElement("form");
-        form.className = "dn-ask";
+        form.className = "dn-panel dn-ask";
         form.setAttribute("role", "dialog");
         form.setAttribute("aria-label", question);
 
@@ -99,7 +99,7 @@ export function mountAsk(): Ask {
         settle = resolve;
 
         const box = document.createElement("div");
-        box.className = "dn-ask dn-ask-choices";
+        box.className = "dn-panel dn-ask dn-ask-choices";
         box.setAttribute("role", "dialog");
         box.setAttribute("aria-label", question);
 

@@ -62,11 +62,11 @@ export function mountSettingsPanel(): SettingsPanel {
   applySettings(settings);
 
   const overlay = document.createElement("div");
-  overlay.className = "dn-settings-overlay";
+  overlay.className = "dn-overlay dn-settings-overlay";
   overlay.hidden = true;
 
   const box = document.createElement("div");
-  box.className = "dn-settings";
+  box.className = "dn-panel dn-settings";
   box.setAttribute("role", "dialog");
   box.setAttribute("aria-label", "Appearance");
   overlay.appendChild(box);
