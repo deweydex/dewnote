@@ -433,11 +433,18 @@ export async function mountEditor(
       // Rewrites an image's alt text to its aspect ratio, which the probe
       // caught turning `![](x.svg)` into `![1.00](x.svg)`.
       [Crepe.Feature.ImageBlock]: false,
-      [Crepe.Feature.Toolbar]: false,
+      [Crepe.Feature.Toolbar]: true,
       [Crepe.Feature.TopBar]: false,
       [Crepe.Feature.AI]: false,
     },
     featureConfigs: {
+      [Crepe.Feature.Placeholder]: {
+        // Crepe's own is "Please enter…", which is nobody's voice and
+        // teaches nothing. An empty block is the one place the editor
+        // can say how to reach everything a tutorial is made of.
+        text: "Type / for a cell, a question or a hint",
+        mode: "block",
+      },
       [Crepe.Feature.BlockEdit]: {
         /** dewlab's own blocks, added after Crepe's general-purpose
          * ones — the builder appends, and reordering would mean

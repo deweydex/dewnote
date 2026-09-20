@@ -1058,3 +1058,21 @@ test("an open panel keeps the document behind it out of reach", async ({ page })
   await page.keyboard.press("Escape");
   await expect(page.locator(".dn-settings")).toBeHidden();
 });
+
+test("an empty block says how to reach the rest", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown p").first()).toBeVisible();
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+
+  // Crepe's own is "Please enter…", which is nobody's voice and teaches
+  // nothing. An empty block is the one place the editor can say how to
+  // reach everything a tutorial is made of.
+  await expect(page.locator(".milkdown [data-placeholder]").first())
+    .toHaveAttribute("data-placeholder", "Type / for a cell, a question or a hint");
+});
