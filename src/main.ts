@@ -165,12 +165,29 @@ let held: Document | null = null;
     if (!page) return;
     held?.destroy();
     page.replaceChildren();
+    const hooks = globalThis as unknown as Record<string, unknown>;
+    // The round-trip suite drives the editor without an interpreter. A
+    // test that needs one sets `__dewnoteRunCell`: "never" holds a run
+    // open so the Stop path can be driven, since Pyodide itself needs a
+    // network the test sandbox does not have.
+    const mode = hooks["__dewnoteRunCell"] as string | boolean | undefined;
+    let release: (() => void) | null = null;
+    hooks["__dewnoteFinishRun"] = () => release?.();
     held = await mountEditor(page, {
       markdown,
-      // The round-trip suite drives this without an interpreter; the
-      // sample and the stores pass a real one.
-      ...(((globalThis as unknown as Record<string, unknown>).__dewnoteRunCell as boolean)
-        ? { runCell: async () => ({ ok: true, markup: "<pre>stub</pre>" }) }
+      ...(mode
+        ? {
+            runCell: () =>
+              mode === "never"
+                ? new Promise<{ ok: boolean; markup: string }>((resolve) => {
+                    release = () => resolve({ ok: true, markup: "<pre>done</pre>" });
+                  })
+                : Promise.resolve({ ok: true, markup: "<pre>stub</pre>" }),
+            stopCell: () => {
+              hooks["__dewnoteStopped"] = true;
+              release?.();
+            },
+          }
         : {}),
     });
   },

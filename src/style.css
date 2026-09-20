@@ -1071,3 +1071,30 @@ body {
   font-size: 0.78rem;
   color: var(--dl-muted);
 }
+
+/* A cell that is running says so, and the button that started it is the
+ * one that stops it. */
+.dn-cell-run.is-running {
+  border-color: var(--dl-orange);
+  color: var(--dl-orange);
+}
+
+.dn-cell-run.is-running::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-inline-end: 0.4rem;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dn-pulse 1s ease-in-out infinite;
+}
+
+@keyframes dn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dn-cell-run.is-running::before { animation: none; }
+}

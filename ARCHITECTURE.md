@@ -120,9 +120,22 @@ of our own, with two constraints that decide the shape:
   affordance, and Crepe's toggle then hides the *code*, which is the
   right gesture for a finished cell someone is reading.
 
+**Crepe's preview panel is display-only.** It renders whatever
+`renderPreview` hands back by assigning `innerHTML`, which serialises the
+element and re-parses it — so every event listener on it is lost. The Run
+button is therefore markup carrying its own `data-dn-cell`, and one
+delegated listener on the editor root does the work. A listener attached
+to the button renders perfectly and does nothing at all, which is the
+kind of fault a test asserting the button exists will happily miss.
+
 A result is keyed by the cell's `id:` and remembers which body produced
 it, so fixing a typo leaves the last output visible and marked as
 belonging to the older code.
+
+One cell runs at a time, and the button that started it becomes Stop.
+`requestStop()` writes Pyodide's own SIGINT into the shared interrupt
+buffer; where a page has no cross-origin isolation the worker is
+terminated and restarted instead.
 
 ---
 
