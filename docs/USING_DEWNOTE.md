@@ -14,8 +14,19 @@ reads every `.md` and every course descriptor in it. Save writes straight
 back to the file.
 
 **Connect a GitHub repository.** Any browser. You give a token, an owner
-and repo, a base branch and a working branch. Save commits to the working
-branch. It never writes to the base branch.
+and a repository. The two branch fields are filled in for you:
+
+- **Base branch** is what you are working from, usually `main`. dewnote
+  only ever reads it.
+- **Working branch** is where saves go. It is filled in as
+  `dewnote/<today's date>`, so a day's edits land on one branch and go
+  back as one pull request, and tomorrow starts a fresh one. Change it if
+  you would rather name it after what you are doing.
+
+They cannot be the same. A save never writes to the base branch, which is
+the point of having two.
+
+dewnote remembers the owner, repository and base branch for next time.
 
 Safari has no folder picker. Use a repository.
 
@@ -202,8 +213,9 @@ request**.
 Two things to know:
 
 - Each save is its own commit, named after the file.
-- The working branch is reused. If its pull request has already merged,
-  name a new branch before you start.
+- A working branch whose pull request has already merged should not be
+  reused. The dated default handles this on its own; a branch you named
+  yourself does not.
 
 ---
 

@@ -16,9 +16,10 @@
 //      into a fence. Measured: 18 files in the dewlab corpus.
 
 import { Crepe } from "@milkdown/crepe";
-import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { bulletListSchema, codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $remark } from "@milkdown/kit/utils";
-import { editorViewCtx } from "@milkdown/kit/core";
+import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import remarkFrontmatter from "remark-frontmatter";
 import { python } from "@codemirror/lang-python";
 import { sql } from "@codemirror/lang-sql";
@@ -58,6 +59,71 @@ export const codeBlockWithMeta = codeBlockSchema.extendSchema((prev) => (ctx) =>
     },
   };
 });
+
+/** mdast reads a list's `spread` as a boolean: false is a tight list,
+ * where an item's text is its own content, and true is a loose one,
+ * where each item is wrapped in a paragraph. dewlab's build renders the
+ * two differently, so the distinction is not cosmetic.
+ *
+ * The preset stores it on the node as a *string* and hands that string
+ * straight back to mdast, where `"false"` is truthy — so every tight
+ * bullet list comes back loose. Ordered lists escape it because their
+ * own schema writes `node.attrs.spread === 'true'`. This does the same.
+ *
+ * Only the list, never `list_item`: the GFM preset extends that one to
+ * carry a task item's `checked`, and re-registering it drops the
+ * checkbox from every `- [ ]` in the file. */
+const tightBulletLists = bulletListSchema.extendSchema((prev) => (ctx) => {
+  const base = prev(ctx);
+  return {
+    ...base,
+    toMarkdown: {
+      match: base.toMarkdown.match,
+      runner: (state, node) => {
+        state
+          .openNode("list", undefined, {
+            ordered: false,
+            spread: String(node.attrs.spread) === "true",
+          })
+          .next(node.content)
+          .closeNode();
+      },
+    },
+  };
+});
+
+/** An item holding a nested list has the same string-versus-boolean
+ * fault as the list itself. Built on the GFM preset's own extension
+ * rather than on the base, so a task item keeps its `checked`. */
+const tightListItems = extendListItemSchemaForTask.extendSchema((prev) => (ctx) => {
+  const base = prev(ctx);
+  return {
+    ...base,
+    toMarkdown: {
+      match: base.toMarkdown.match,
+      runner: (state, node) => {
+        if (node.attrs.checked != null) {
+          base.toMarkdown.runner(state, node);
+          return;
+        }
+        state.openNode("listItem", undefined, {
+          spread: String(node.attrs.spread) === "true",
+        });
+        state.next(node.content);
+        state.closeNode();
+      },
+    },
+  };
+});
+
+/** dewlab writes `-` for both; remark-stringify defaults to `*`. */
+function keepMarkers(ctx: { update: Function }): void {
+  ctx.update(remarkStringifyOptionsCtx, (options: any) => ({
+    ...options,
+    bullet: "-",
+    rule: "-",
+  }));
+}
 
 /** Front matter, held as the one string it is. Nothing parses the YAML on
  * the way through, so key order and quoting survive by construction. */
@@ -310,7 +376,12 @@ export async function mountEditor(
     },
   });
 
-  crepe.editor.use(codeBlockWithMeta).use(frontMatterRemark).use(frontMatterSchema);
+  crepe.editor
+    .config(keepMarkers)
+    .use(codeBlockWithMeta)
+    .use(frontMatterRemark)
+    .use(frontMatterSchema);
+  crepe.editor.use(tightBulletLists).use(tightListItems);
 
   let hydrated = false;
   if (options.onChange) {

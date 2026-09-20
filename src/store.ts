@@ -16,13 +16,41 @@ export interface StoreFile {
   content: string;
 }
 
+export type Progress = (done: number, total: number) => void;
+
+/** Read `items` `width` at a time. Serially, a repository of 190 files is
+ * 190 round trips one after another, which takes long enough that the
+ * interface looks broken; GitHub's rate limiter is the reason not to
+ * simply fire all of them at once. */
+async function inParallel<T, R>(
+  items: readonly T[],
+  width: number,
+  read: (item: T) => Promise<R>,
+  onProgress?: Progress,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  let done = 0;
+  const workers = Array.from({ length: Math.min(width, items.length) }, async () => {
+    for (let at = next++; at < items.length; at = next++) {
+      results[at] = await read(items[at]!);
+      done += 1;
+      onProgress?.(done, items.length);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export interface Store {
   readonly kind: "folder" | "repo";
   /** What the spine says: a folder's name, or `owner/repo · base → branch`. */
   readonly label: string;
   /** Every markdown file and module descriptor, read once when the
-   * workspace opens and refreshed on save. */
-  list(): Promise<StoreFile[]>;
+   * workspace opens and refreshed on save. `onProgress` is called as
+   * files arrive, because reading a repository is hundreds of requests
+   * and silence for that long is indistinguishable from a hang. */
+  list(onProgress?: Progress): Promise<StoreFile[]>;
   read(path: string): Promise<string>;
   /** An image the document names. `null` where nothing is at that path,
    * which is a normal outcome for a document being written. */
@@ -60,17 +88,17 @@ export async function openFolder(): Promise<Store | null> {
     kind: "folder",
     label: root.name,
 
-    async list() {
+    async list(onProgress) {
       const [markdown, descriptors] = await Promise.all([
         folder.listMarkdownFiles(root),
         folder.listModuleFiles(root),
       ]);
-      const files: StoreFile[] = [];
-      for (const file of [...markdown, ...descriptors]) {
-        handles.set(file.path, file.handle);
-        files.push({ path: file.path, content: await folder.readFile(file.handle) });
-      }
-      return files;
+      const found = [...markdown, ...descriptors];
+      for (const file of found) handles.set(file.path, file.handle);
+      return inParallel(found, 16, async (file) => ({
+        path: file.path,
+        content: await folder.readFile(file.handle),
+      }), onProgress);
     },
 
     async read(path) {
@@ -117,18 +145,16 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
     kind: "repo",
     label: `${repo.owner}/${repo.repo} · ${base} → ${branch}`,
 
-    async list() {
+    async list(onProgress) {
       const [markdown, descriptors] = await Promise.all([
         github.listMarkdownFiles(repo, branch, token),
         github.listModuleFiles(repo, branch, token),
       ]);
-      const files: StoreFile[] = [];
-      for (const file of [...markdown, ...descriptors]) {
+      return inParallel([...markdown, ...descriptors], 8, async (file) => {
         const { content, sha } = await github.getFileContent(repo, file.path, branch, token);
         shas.set(file.path, sha);
-        files.push({ path: file.path, content });
-      }
-      return files;
+        return { path: file.path, content };
+      }, onProgress);
     },
 
     async read(path) {

@@ -731,3 +731,65 @@ body {
   color: inherit;
   cursor: pointer;
 }
+
+.dn-gate-aside {
+  font-size: 0.9rem;
+}
+
+.dn-gate-aside button {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* A button has to look pressed. Without this the only feedback is the
+ * label changing, which on a slow connect is several seconds away. */
+.dn-gate button:hover:not(:disabled),
+.dn-settings button:hover:not(:disabled),
+.dn-cell-run:hover:not(:disabled) {
+  border-color: var(--dl-orange);
+}
+
+.dn-gate button:active:not(:disabled),
+.dn-settings button:active:not(:disabled),
+.dn-cell-run:active:not(:disabled) {
+  transform: translateY(1px);
+  background: color-mix(in srgb, var(--dl-orange) 14%, transparent);
+}
+
+.dn-gate button:focus-visible,
+.dn-settings button:focus-visible,
+.dn-cell-run:focus-visible,
+.dn-gate input:focus-visible,
+.dn-settings input:focus-visible,
+.dn-settings select:focus-visible {
+  outline: 2px solid var(--dl-orange);
+  outline-offset: 2px;
+}
+
+/* While a workspace is loading, the rest of the gate stops inviting
+ * presses that will be ignored. */
+.dn-gate.is-busy .dn-gate-choices button:disabled,
+.dn-gate.is-busy button[type="submit"]:disabled {
+  opacity: 1;
+  border-color: var(--dl-orange);
+  color: var(--dl-orange);
+}
+
+.dn-gate.is-busy .dn-gate-aside,
+.dn-gate.is-busy .dn-gate-repo label {
+  opacity: 0.45;
+}
+
+.dn-gate-note {
+  grid-column: 1 / -1;
+  margin: 0.1rem 0 0.3rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--dl-muted);
+}
