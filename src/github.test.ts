@@ -3,6 +3,7 @@ import {
   ensureBranch,
   fromBase64,
   listMarkdownFiles,
+  listRepositories,
   listModuleFiles,
   putFileContent,
   suggestedBranch,
@@ -259,5 +260,64 @@ describe("suggestedBranch", () => {
   test("is never the base branch anyone would type", () => {
     expect(suggestedBranch()).not.toBe("main");
     expect(suggestedBranch()).toMatch(/^dewnote\/\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("listRepositories", () => {
+  const originalFetch = globalThis.fetch;
+  let calls: string[] = [];
+
+  beforeEach(() => { calls = []; });
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  function serve(pages: unknown[][]): void {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      const page = Number(new URL(url, "https://x").searchParams.get("page") ?? "1");
+      return new Response(JSON.stringify(pages[page - 1] ?? []), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }) as typeof fetch;
+  }
+
+  const entry = (owner: string, name: string, branch: string, push = true) => ({
+    name,
+    owner: { login: owner },
+    default_branch: branch,
+    permissions: { push },
+  });
+
+  test("hands back the owner and the repository's own default branch, so neither is typed", async () => {
+    serve([[entry("deweydex", "dewlab", "main"), entry("deweydex", "dewnote", "trunk")]]);
+    expect(await listRepositories("tok")).toEqual([
+      { owner: "deweydex", repo: "dewlab", defaultBranch: "main" },
+      { owner: "deweydex", repo: "dewnote", defaultBranch: "trunk" },
+    ]);
+  });
+
+  test("leaves out what the token cannot commit to — dewnote is there to write", async () => {
+    serve([[entry("someone", "read-only", "main", false), entry("deweydex", "dewlab", "main")]]);
+    expect((await listRepositories("tok")).map((choice) => choice.repo)).toEqual(["dewlab"]);
+  });
+
+  test("sorts by last push, so one request answers the common case", async () => {
+    serve([[entry("deweydex", "dewlab", "main")]]);
+    await listRepositories("tok");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("sort=pushed");
+  });
+
+  test("keeps reading while a page comes back full, and stops at three", async () => {
+    const full = Array.from({ length: 100 }, (_, at) => entry("deweydex", `repo-${at}`, "main"));
+    serve([full, full, full, full]);
+    expect(await listRepositories("tok")).toHaveLength(300);
+    expect(calls).toHaveLength(3);
+  });
+
+  test("a repository with no default branch named still gets one", async () => {
+    serve([[{ name: "odd", owner: { login: "x" }, default_branch: "" }]]);
+    expect((await listRepositories("tok"))[0]!.defaultBranch).toBe("main");
   });
 });

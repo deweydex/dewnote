@@ -213,6 +213,59 @@ async function listMatchingFiles(repo: RepoRef, ref: string, token: string, matc
   return walkTree(repo, ref, token, matches);
 }
 
+export interface RepoChoice {
+  owner: string;
+  repo: string;
+  /** The repository's own default branch, which is what a working branch
+   * should be cut from. Assuming `main` is wrong for any repository that
+   * never renamed `master`, and for anyone who works off `develop`. */
+  defaultBranch: string;
+}
+
+interface RepoResponse {
+  name: string;
+  owner: { login: string };
+  default_branch: string;
+  permissions?: { push?: boolean };
+}
+
+/** Every repository this token can commit to, most recently pushed
+ * first.
+ *
+ * A token says who you are, not which repository you mean — a classic
+ * one reaches everything the account reaches, and a fine-grained one is
+ * scoped to a set chosen when it was made, which may be one or may be
+ * all. So the repository still has to be named; it just does not have to
+ * be typed.
+ *
+ * Repositories without push permission are left out: dewnote's whole
+ * purpose there is to commit, and offering one it cannot write to only
+ * moves the failure later.
+ *
+ * Three pages at most. The list is sorted by when each was last pushed
+ * to, so the one somebody wants is at the top, and an account with
+ * thousands of repositories should not make the opening screen wait. */
+export async function listRepositories(token: string): Promise<RepoChoice[]> {
+  const found: RepoChoice[] = [];
+  for (let page = 1; page <= 3; page += 1) {
+    const batch = await apiJson<RepoResponse[]>(
+      token,
+      "GET",
+      `/user/repos?per_page=100&sort=pushed&page=${page}`,
+    );
+    for (const entry of batch) {
+      if (entry.permissions && entry.permissions.push === false) continue;
+      found.push({
+        owner: entry.owner.login,
+        repo: entry.name,
+        defaultBranch: entry.default_branch || "main",
+      });
+    }
+    if (batch.length < 100) break;
+  }
+  return found;
+}
+
 /** Every markdown file in a repository at `ref`. The common case is one
  * recursive tree call — this is the search command's own index, built
  * fresh on every "Load repository" rather than cached, since the tree is

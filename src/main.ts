@@ -5,7 +5,15 @@ import "./brand.css";
 import { mountShell } from "./shell.ts";
 import { mountEditor, type Document } from "./editor.ts";
 import { canOpenFolder, openFolder, openRepo } from "./store.ts";
-import { loadLastRepo, loadToken, saveLastRepo, saveToken, suggestedBranch } from "./github.ts";
+import {
+  listRepositories,
+  loadLastRepo,
+  loadToken,
+  saveLastRepo,
+  saveToken,
+  suggestedBranch,
+  type RepoChoice,
+} from "./github.ts";
 import { messageOf } from "./save-problem.ts";
 import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
 import { applyTokens } from "./theme/tokens.ts";
@@ -51,13 +59,16 @@ function gate(): HTMLElement {
     </p>
     <form class="dn-gate-repo" hidden>
       <label>Token <input name="token" type="password" autocomplete="off" required></label>
-      <label>Owner <input name="owner" required></label>
-      <label>Repository <input name="repo" required></label>
-      <label>Base branch <input name="base" value="main" required></label>
+      <label>Repository
+        <select name="repo" required disabled>
+          <option value="">Enter a token first</option>
+        </select>
+      </label>
       <label>Working branch <input name="branch" required></label>
       <p class="dn-gate-note">
-        Saves commit to the working branch, never to the base. One branch
-        per day keeps a day's edits in one pull request.
+        Saves commit to the working branch, never to the repository's own
+        default branch. One branch per day keeps a day's edits in one
+        pull request.
       </p>
       <button type="submit">Connect</button>
     </form>
@@ -133,38 +144,88 @@ function start(): void {
       form.hidden = false;
       const field = (name: string) => form.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
       field("token").value = loadToken() ?? "";
-      const last = loadLastRepo();
-      if (last) {
-        field("owner").value = last.owner;
-        field("repo").value = last.repo;
-        field("base").value = last.base;
-      }
       field("branch").value = suggestedBranch();
-      (field("owner").value ? field("token") : field("owner")).focus();
+      // A remembered token fills the list without being asked twice.
+      if (field("token").value) findRepositories();
+      field("token").focus();
     });
 
   const connect = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
 
+  /** The repositories a token can reach, keyed by the value the select
+   * carries, so choosing one hands back its owner and default branch
+   * without anybody typing either. */
+  let reachable = new Map<string, RepoChoice>();
+  const repoSelect = form.querySelector<HTMLSelectElement>('[name="repo"]')!;
+  const tokenField = form.querySelector<HTMLInputElement>('[name="token"]')!;
+
+  function offerRepositories(choices: readonly RepoChoice[]): void {
+    reachable = new Map(choices.map((choice) => [`${choice.owner}/${choice.repo}`, choice]));
+    repoSelect.replaceChildren();
+    if (choices.length === 0) {
+      repoSelect.disabled = true;
+      repoSelect.append(new Option("This token can write to no repository", ""));
+      return;
+    }
+    for (const key of reachable.keys()) repoSelect.append(new Option(key, key));
+    repoSelect.disabled = false;
+    // Last time's repository if the token still reaches it; otherwise the
+    // one pushed to most recently, which is where a session usually
+    // carries on from.
+    const last = loadLastRepo();
+    const remembered = last ? `${last.owner}/${last.repo}` : "";
+    repoSelect.value = reachable.has(remembered) ? remembered : (repoSelect.options[0]?.value ?? "");
+  }
+
+  /** Reading the list is a request, so it waits until the token stops
+   * changing rather than firing on every keystroke. */
+  let lookup: ReturnType<typeof setTimeout> | undefined;
+  function findRepositories(): void {
+    clearTimeout(lookup);
+    const token = tokenField.value.trim();
+    if (!token) {
+      repoSelect.disabled = true;
+      repoSelect.replaceChildren(new Option("Enter a token first", ""));
+      return;
+    }
+    lookup = setTimeout(async () => {
+      repoSelect.disabled = true;
+      repoSelect.replaceChildren(new Option("Reading repositories…", ""));
+      try {
+        offerRepositories(await listRepositories(token));
+        problem.textContent = "";
+      } catch (error) {
+        repoSelect.replaceChildren(new Option("That token was refused", ""));
+        failed(error);
+      }
+    }, 400);
+  }
+  tokenField.addEventListener("input", findRepositories);
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (connect.disabled) return;
-    const state = busy(connect, "Reading");
-    const data = new FormData(form);
-    const value = (name: string) => String(data.get(name) ?? "").trim();
-    if (value("branch") === value("base")) {
-      problem.textContent =
-        "The working branch has to be different from the base branch — saves never write to the base.";
-      state.restore();
+    const chosen = reachable.get(repoSelect.value);
+    if (!chosen) {
+      problem.textContent = "Choose a repository first.";
       return;
     }
+    const token = tokenField.value.trim();
+    const branch = form.querySelector<HTMLInputElement>('[name="branch"]')!.value.trim();
+    if (branch === chosen.defaultBranch) {
+      problem.textContent =
+        `The working branch has to be something other than ${chosen.defaultBranch} — saves never write to a repository's default branch.`;
+      return;
+    }
+    const state = busy(connect, "Reading");
     try {
-      saveToken(value("token"));
-      saveLastRepo({ owner: value("owner"), repo: value("repo"), base: value("base") });
+      saveToken(token);
+      saveLastRepo({ owner: chosen.owner, repo: chosen.repo, base: chosen.defaultBranch });
       const store = await openRepo({
-        repo: { owner: value("owner"), repo: value("repo") },
-        base: value("base"),
-        branch: value("branch"),
-        token: value("token"),
+        repo: { owner: chosen.owner, repo: chosen.repo },
+        base: chosen.defaultBranch,
+        branch,
+        token,
       });
       await shell.useStore(store, state.progress);
       done();

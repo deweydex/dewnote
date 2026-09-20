@@ -19,9 +19,8 @@ export interface SourceView {
 }
 
 export function mountSourceView(): SourceView {
-  const overlay = document.createElement("div");
+  const overlay = document.createElement("dialog");
   overlay.className = "dn-overlay dn-source-overlay";
-  overlay.hidden = true;
 
   const box = document.createElement("div");
   box.className = "dn-panel dn-source";
@@ -56,7 +55,7 @@ export function mountSourceView(): SourceView {
   let apply: ((next: string) => void) | null = null;
 
   function close(): void {
-    overlay.hidden = true;
+    overlay.close();
     apply = null;
   }
 
@@ -93,12 +92,12 @@ export function mountSourceView(): SourceView {
   });
 
   return {
-    isOpen: () => !overlay.hidden,
+    isOpen: () => overlay.open,
 
     open(text, onApply) {
       apply = onApply;
       area.value = text;
-      overlay.hidden = false;
+      overlay.showModal();
       area.focus();
       area.setSelectionRange(0, 0);
     },

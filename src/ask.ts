@@ -21,15 +21,14 @@ export interface Ask {
 }
 
 export function mountAsk(): Ask {
-  const overlay = document.createElement("div");
+  const overlay = document.createElement("dialog");
   overlay.className = "dn-overlay dn-ask-overlay";
-  overlay.hidden = true;
   document.body.appendChild(overlay);
 
   let settle: ((value: string | null) => void) | null = null;
 
   function close(value: string | null): void {
-    overlay.hidden = true;
+    overlay.close();
     overlay.replaceChildren();
     settle?.(value);
     settle = null;
@@ -80,15 +79,9 @@ export function mountAsk(): Ask {
           const value = input.value.trim();
           if (value) close(value);
         });
-        form.addEventListener("keydown", (event) => {
-          if (event.key === "Escape") {
-            event.stopPropagation();
-            close(null);
-          }
-        });
 
         overlay.replaceChildren(form);
-        overlay.hidden = false;
+        overlay.showModal();
         input.focus();
         input.select();
       });
@@ -138,15 +131,9 @@ export function mountAsk(): Ask {
           box.appendChild(row);
         }
 
-        box.addEventListener("keydown", (event) => {
-          if (event.key === "Escape") {
-            event.stopPropagation();
-            close(null);
-          }
-        });
 
         overlay.replaceChildren(box);
-        overlay.hidden = false;
+        overlay.showModal();
         box.querySelector<HTMLElement>("button")?.focus();
       });
     },

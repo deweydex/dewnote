@@ -13,20 +13,23 @@ dewnote opens on one question: local folder, or GitHub repository.
 reads every `.md` and every course descriptor in it. Save writes straight
 back to the file.
 
-**Connect a GitHub repository.** Any browser. You give a token, an owner
-and a repository. The two branch fields are filled in for you:
+**Connect a GitHub repository.** Any browser. You give a token, and
+dewnote works out the rest.
 
-- **Base branch** is what you are working from, usually `main`. dewnote
-  only ever reads it.
-- **Working branch** is where saves go. It is filled in as
-  `dewnote/<today's date>`, so a day's edits land on one branch and go
-  back as one pull request, and tomorrow starts a fresh one. Change it if
-  you would rather name it after what you are doing.
+A token says who you are, not which repository you mean, so the
+repository is still chosen — but from a list of the ones that token can
+commit to, most recently pushed first. Its owner comes with it, and so
+does its own default branch, whatever that is called. One you cannot
+write to is not offered, since committing is what dewnote is there for.
 
-They cannot be the same. A save never writes to the base branch, which is
-the point of having two.
+**Working branch** is where saves go. It is filled in as
+`dewnote/<today's date>`, so a day's edits land on one branch and go back
+as one pull request, and tomorrow starts a fresh one. Change it if you
+would rather name it after what you are doing. It cannot be the
+repository's default branch: a save never writes there, which is the
+point of having two.
 
-dewnote remembers the owner, repository and base branch for next time.
+dewnote remembers the token and the repository for next time.
 
 Safari has no folder picker. Use a repository.
 
