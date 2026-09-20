@@ -323,16 +323,23 @@ that file, a row without one is a `div`. The rules live in one place
 because a workspace check that could disagree with a document check is
 worse than either alone.
 
-Two of Crepe's own defaults are overridden, and both were found by
-measuring the page rather than reading the stylesheet. It pads the
-editing surface 120px each side, which against a measured page takes
-240px out of the middle — a 34rem measure read as 40 characters, half
-what a reader would see. The gutter is kept, because Crepe's block
-handle lives in it, and added to the page's width instead, so the text
-between the gutters is exactly `--dl-line-width`. And it pins paragraphs
-at `16px/24px`, which beat the reader's own settings: a paragraph and a
-list item in the same document came out at different sizes, and the size
-slider moved one of them.
+Two of Crepe's own defaults are overridden, both with one line. It pads
+the editing surface 120px each side for its own full-width shell, which
+inside a measured page only eats the column — 544px of measure read as
+304px of text. The block handle is positioned relative to the block and
+sits outside the editor either way, so the padding goes. And it pins
+paragraphs at `16px/24px`, which beat the reader's own settings: a
+paragraph and a list item in the same document came out at different
+sizes, and the size slider moved one of them.
+
+**An image is drawn by Milkdown's own `imageInlineComponent`**, through
+its `proxyDomURL` hook: the written name goes in, the URL to draw comes
+back, and the node keeps the name. Crepe's whole `ImageBlock` feature
+stays off, because `imageBlockComponent`'s schema reads an image's alt
+text as a number and writes it back as an aspect ratio — `![A diagram](x.svg)`
+becomes `![1.00](x.svg)`. That is not configurable, and dewlab teaches
+alt text. The inline component has no schema of its own, so taking it
+alone costs nothing in the round trip.
 
 **Appearance** is eleven settings, each a CSS custom property, drawn from
 one `ROWS` list. The page is described in dewlab's own tokens, so a

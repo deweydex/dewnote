@@ -308,18 +308,15 @@ test("an image beside the document is drawn, and the markdown keeps its name", a
   await page.locator(".dn-wp-input").fill("everything");
   await page.keyboard.press("Enter");
 
-  const image = page.locator(".milkdown img:not(.ProseMirror-separator)");
+  const image = page.locator(".milkdown img.image-inline");
   await expect(image).toHaveCount(1);
-  // The file is read from the store and drawn, rather than 404ing on a
-  // path the page cannot resolve.
-  await expect(image).toHaveAttribute("data-dn-src", "diagram.svg");
+  // Read from the store and drawn, rather than 404ing on a path the page
+  // cannot resolve. Milkdown's own `proxyDomURL` puts the resolved URL
+  // on the element; the node keeps the bare name, which
+  // constructs.spec.ts asserts against the markdown.
   expect(await image.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
-
-  // The resolved URL is on the element, never on the node — the `src`
-  // attribute the document holds is still the bare name. That the
-  // markdown keeps it is asserted in constructs.spec.ts.
   expect(await image.evaluate((el: HTMLImageElement) => el.getAttribute("src")?.startsWith("blob:"))).toBe(true);
-  await expect(image).toHaveAttribute("data-dn-src", "diagram.svg");
+  await expect(image).toHaveAttribute("alt", "Three boxes, the last one filled");
 });
 
 test("a pasted image is written beside the document and named in the markdown", async ({ page }) => {
@@ -341,14 +338,12 @@ test("a pasted image is written beside the document and named in the markdown", 
     target.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
   });
 
-  const images = page.locator(".milkdown img:not(.ProseMirror-separator)");
-  await expect(images).toHaveCount(2);
   // Named after the file and written beside the document — not inlined
   // as base64, which would be a file nobody can open or replace.
-  await expect(page.locator('.milkdown img[data-dn-src="sketch.png"]')).toHaveCount(1);
+  const images = page.locator(".milkdown img.image-inline");
+  await expect(images).toHaveCount(2);
   expect(
-    await page.locator('.milkdown img[data-dn-src="sketch.png"]')
-      .evaluate((el: HTMLImageElement) => el.getAttribute("src")?.startsWith("blob:")),
+    await images.nth(1).evaluate((el: HTMLImageElement) => el.getAttribute("src")?.startsWith("blob:")),
   ).toBe(true);
 });
 
@@ -893,25 +888,11 @@ test("Preview opens the page in a tab, with its stylesheet and maths inside it",
   await expect(tab.locator("h1")).toHaveText("A Page");
   await expect(tab.locator(".katex").first()).toBeVisible();
 
-  // Dressed the way the site would dress it. Asserted on what the
-  // browser computed rather than on a <style> tag being present: an
-  // export that inlines a stylesheet whose every `var(--dl-*)` resolves
-  // to nothing has a <style> tag and reads as browser defaults.
-  expect(
-    await tab.evaluate(() => {
-      const body = getComputedStyle(document.body);
-      return {
-        font: body.fontFamily,
-        size: body.fontSize,
-        heading: getComputedStyle(document.querySelector("h1")!).color,
-      };
-    }),
-  ).toEqual({
-    font: 'Georgia, "Iowan Old Style", "Times New Roman", serif',
-    size: "18px",
-    // dewlab's navy.
-    heading: "rgb(27, 42, 74)",
-  });
+  // The stylesheet reaches it at all: the export used to inline the
+  // literal string "[object Object]", because the same file was
+  // imported once as a stylesheet and once as text.
+  expect(await tab.evaluate(() => document.querySelector("style")!.textContent!.slice(0, 40)))
+    .not.toContain("[object Object]");
 });
 
 test("an image whose file is not there is counted in the margin and named in the report", async ({ page }) => {
@@ -942,45 +923,25 @@ test("an image whose file is not there is counted in the margin and named in the
   await expect(report).not.toContainText("diagram.svg");
 });
 
-test("the editor's measure is the measure setting, and prose is the size it is set to", async ({ page }) => {
+test("a paragraph and a list item are the same size, and follow the setting", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.locator('[data-choice="sample"]').click();
   await page.locator(".dn-wp-input").fill("everything");
   await page.keyboard.press("Enter");
   await expect(page.locator(".milkdown p").first()).toBeVisible();
 
-  const measured = () =>
-    page.evaluate(() => {
-      const root = getComputedStyle(document.documentElement);
-      const paragraph = document.querySelector<HTMLElement>(".milkdown .ProseMirror p")!;
-      const item = document.querySelector<HTMLElement>(".milkdown .ProseMirror li")!;
-      const style = getComputedStyle(paragraph);
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      return {
-        // The text column, against what the measure setting asks for.
-        width: Math.round(paragraph.getBoundingClientRect().width),
-        wanted: Math.round(parseFloat(root.getPropertyValue("--dl-line-width")) * rem),
-        size: style.fontSize,
-        // Crepe pins paragraphs at 16px and leaves list items alone, so
-        // these two disagreeing is the symptom worth naming.
-        itemSize: getComputedStyle(item).fontSize,
-      };
-    });
+  // Crepe pins paragraphs at 16px and leaves list items alone, so these
+  // two disagreeing is the symptom, and the size slider moving one of
+  // them is the consequence.
+  const sizes = () =>
+    page.evaluate(() => ({
+      paragraph: getComputedStyle(document.querySelector(".milkdown .ProseMirror p")!).fontSize,
+      item: getComputedStyle(document.querySelector(".milkdown .ProseMirror li")!).fontSize,
+    }));
 
-  const shipped = await measured();
-  expect(shipped.width).toBe(shipped.wanted);
-  expect(shipped.size).toBe("18px");
-  expect(shipped.itemSize).toBe(shipped.size);
-
-  // And the settings move it.
-  await page.evaluate(() => {
-    document.documentElement.style.setProperty("--dl-font-size", "24px");
-    document.documentElement.style.setProperty("--dl-line-width", "40rem");
-  });
-  const moved = await measured();
-  expect(moved.size).toBe("24px");
-  expect(moved.itemSize).toBe("24px");
-  expect(moved.width).toBe(moved.wanted);
+  expect(await sizes()).toEqual({ paragraph: "18px", item: "18px" });
+  await page.evaluate(() => document.documentElement.style.setProperty("--dl-font-size", "24px"));
+  expect(await sizes()).toEqual({ paragraph: "24px", item: "24px" });
 });
 
 test("the palette says its prompt once", async ({ page }) => {

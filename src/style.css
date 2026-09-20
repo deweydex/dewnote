@@ -12,11 +12,6 @@
 
 :root {
   --dn-page-padding: 1rem;
-  /* Crepe pads the editing surface 120px each side, and its block
-     handle — the ⠿ you drag a block by — lives in that gutter. Kept,
-     rather than removed, and added to the page's width instead, so the
-     text between the gutters is exactly `--dl-line-width`. */
-  --dn-editor-gutter: 120px;
   --dn-block-gap: 1.1em;
   --dn-code-font-size: 15px;
   --dn-cell-tint: 1;
@@ -36,19 +31,18 @@ body {
 }
 
 .dn-page {
-  max-width: calc(var(--dl-line-width) + 2 * var(--dn-editor-gutter));
+  max-width: var(--dl-line-width);
   margin: 4rem auto;
   padding: 0 var(--dn-page-padding);
 }
 
-/* A phone has no room for a 120px gutter, and no hover to put a block
-   handle in it either. */
-@media (max-width: 720px) {
-  :root { --dn-editor-gutter: 16px; }
-}
-
+/* Crepe pads the editing surface 120px each side for its own
+   full-width shell. dewnote puts the editor inside a measured page, so
+   that gutter only eats the column — 544px of measure read as 304px of
+   text. The block handle is positioned relative to the block and sits
+   outside the editor either way, so nothing is lost by removing it. */
 .milkdown .ProseMirror {
-  padding-inline: var(--dn-editor-gutter);
+  padding-inline: 0;
 }
 
 /* Crepe sizes paragraphs itself, `16px/24px`, a fixed pair for an app
