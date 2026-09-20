@@ -15,20 +15,33 @@ export interface CellIdSource {
   usedIds(): string[];
 }
 
-/** The first `cell-N` nobody is using. */
-export function freeCellId(used: readonly string[]): string {
+/** The first `<stem>-N` nobody is using. */
+export function freeId(used: readonly string[], stem: string): string {
   const taken = new Set(used);
   for (let at = 1; ; at += 1) {
-    const candidate = `cell-${at}`;
+    const candidate = `${stem}-${at}`;
     if (!taken.has(candidate)) return candidate;
   }
+}
+
+/** Hands out free ids and remembers the ones it gave, so a snippet that
+ * writes three blocks at once does not name two of them the same. */
+export function idMaker(used: readonly string[]): (stem: string) => string {
+  const taken = [...used];
+  return (stem: string) => {
+    const id = freeId(taken, stem);
+    taken.push(id);
+    return id;
+  };
 }
 
 export interface SnippetItem {
   key: string;
   label: string;
   icon: string;
-  markdown(id: string): string;
+  /** `free("cell")` hands back an id nothing is using, and will not
+   * hand the same one back twice. */
+  markdown(free: (stem: string) => string): string;
 }
 
 /** A play button, for something that runs. */
@@ -38,19 +51,88 @@ const DATABASE_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><ellipse cx="12" cy="6" rx="7" ry="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
 const HINT_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2Zm-2 18h4v1a2 2 0 1 1-4 0v-1Z"/></svg>';
+/** A ticked box, for something a reader answers. */
+const QUESTION_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="3" width="18" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="m7.5 12 3 3 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+/** A browser window, for the live HTML/CSS/JS editor. */
+const SITE_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 9h18" stroke="currentColor" stroke-width="2"/><circle cx="6.5" cy="6.5" r=".9" fill="currentColor"/></svg>';
 
 export const SNIPPETS: SnippetItem[] = [
   {
     key: "python-cell",
     label: "Python cell",
     icon: RUN_ICON,
-    markdown: (id) => `\`\`\`python exec\nid: ${id}\n\n\`\`\``,
+    markdown: (free) => `\`\`\`python exec\nid: ${free("cell")}\n\n\`\`\``,
   },
   {
     key: "sql-cell",
     label: "SQL cell",
     icon: DATABASE_ICON,
-    markdown: (id) => `\`\`\`sql exec\nid: ${id}\n\n\`\`\``,
+    markdown: (free) => `\`\`\`sql exec\nid: ${free("cell")}\n\n\`\`\``,
+  },
+  {
+    key: "multiple-choice",
+    label: "Multiple choice",
+    icon: QUESTION_ICON,
+    // `correct:` counts from 1, in the order the options are written.
+    markdown: (free) =>
+      [
+        "```question",
+        `id: ${free("question")}`,
+        "type: multiple-choice",
+        "correct: 1",
+        "",
+        "What is the question?",
+        "",
+        "- The right answer.",
+        "- A wrong one.",
+        "```",
+      ].join("\n"),
+  },
+  {
+    key: "fill-in-the-blank",
+    label: "Fill in the blank",
+    icon: QUESTION_ICON,
+    // Each `{…}` is a gap. A gap with a `|` in it is a dropdown, and the
+    // first item is the expected answer either way.
+    markdown: (free) =>
+      [
+        "```question",
+        `id: ${free("question")}`,
+        "type: fill-in-the-blank",
+        "",
+        "A sentence with a {gap} in it.",
+        "```",
+      ].join("\n"),
+  },
+  {
+    key: "site",
+    label: "Web page",
+    icon: SITE_ICON,
+    // Three panes sharing one `site:` become one editor with a tab each.
+    markdown: (free) => {
+      const site = free("site");
+      return [
+        "```html site",
+        `id: ${free("pane")}`,
+        `site: ${site}`,
+        "<p>Hello.</p>",
+        "```",
+        "",
+        "```css site",
+        `id: ${free("pane")}`,
+        `site: ${site}`,
+        "p { color: rebeccapurple; }",
+        "```",
+        "",
+        "```js site",
+        `id: ${free("pane")}`,
+        `site: ${site}`,
+        "document.querySelector(\"p\").textContent = \"Hello from JavaScript.\";",
+        "```",
+      ].join("\n");
+    },
   },
   {
     key: "hint",

@@ -730,3 +730,62 @@ test("a sound document says there is nothing to fix", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
 });
+
+test("the slash menu writes a question the build would accept", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\nWords.\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/multiple");
+  // Clicked rather than entered: Enter takes whichever item the menu has
+  // highlighted, and this test is about what one named item writes.
+  await page.locator(".milkdown-slash-menu li", { hasText: "Multiple choice" }).first().click();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1).text as string);
+  expect(written).toContain("```question");
+  expect(written).toContain("type: multiple-choice");
+  expect(written).toContain("correct: 1");
+  expect(written).not.toContain("/multiple");
+
+  // And what it wrote is sound by the checker's own rules — the same
+  // ones the build enforces.
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("check this document");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
+});
+
+test("the slash menu writes three site panes under one name, each with its own id", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\nWords.\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/web");
+  await page.locator(".milkdown-slash-menu li", { hasText: "Web page" }).first().click();
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1).text as string);
+  for (const fence of ["```html site", "```css site", "```js site"]) {
+    expect(written).toContain(fence);
+  }
+  // One `site:` groups them into one editor; three ids keep their saved
+  // work apart.
+  const sites = [...written.matchAll(/^site: (.+)$/gm)].map((match) => match[1]);
+  expect(new Set(sites).size).toBe(1);
+  expect(new Set([...written.matchAll(/^id: (.+)$/gm)].map((match) => match[1])).size).toBe(3);
+});

@@ -41,4 +41,5 @@ document model is wrong.
 
 ## Not built yet
 
-The card, question and grouped site-pane fences.
+A site editor shows as three stacked code blocks rather than one pane
+with three tabs, which is what the file holds and what the build joins.

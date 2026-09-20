@@ -250,6 +250,18 @@ Milkdown parses — it reads the file as text, through `segments()` from
 what ProseMirror made of it. The shell owns the report; the checker owns
 the rules, and is tested without a browser.
 
+`fences.ts` parses dewlab's fences that are not runnable code — a
+`question`, a `card`, an `html site`/`css site`/`js site` pane — and says
+nothing about whether they are right. The rules are in `checks.ts`, and
+they are dewlab's: a question type the build knows, options a `correct:`
+can name, a gap that closes, a card with somewhere to go. An id is one
+namespace across all of them, because a cell, a pane and a question are
+all keys into the same saved-work record.
+
+The slash menu writes them, and a test runs the checker over what every
+snippet writes — a snippet that failed it would put a fault in the
+document the moment it was inserted.
+
 `checkWorkspace` is the same rules over every page, and it is the same
 function applied file by file rather than a second set of rules. One
 overlay renders both: a row that carries a path is a button and opens

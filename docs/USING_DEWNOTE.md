@@ -109,7 +109,55 @@ Under **Tutorial** in that menu are the blocks a tutorial is made of:
 |---|---|
 | Python cell | A `python exec` fence with an `id:` nobody is using |
 | SQL cell | The same in dewlab's other language |
+| Multiple choice | A `question` fence with two options and a `correct:` line |
+| Fill in the blank | A `question` fence with a `{gap}` in it |
+| Web page | Three `site` panes — HTML, CSS and JavaScript — under one name |
 | Hint | The `<details class="dl-hint">` fold the build looks for |
+
+Every one of them writes something the build accepts, ids included.
+
+## Questions
+
+A `question` fence is an exercise the page marks. Two kinds:
+
+````
+```question
+id: which-one
+type: multiple-choice
+correct: 2
+
+Which counts this correctly?
+
+- A permutation.
+- A combination.
+```
+````
+
+The prose above the first bullet is the question; each bullet is an
+option. `correct:` counts from 1, in the order the options are written.
+
+````
+```question
+id: name-it
+type: fill-in-the-blank
+
+A list you can change is called a {list|tuple|set}.
+```
+````
+
+Each `{…}` is a gap. A gap with `|` in it is a dropdown, one without is a
+typing box, and either way the first item is the expected answer.
+
+A question's `id:` shares one namespace with every cell and site pane on
+the page — they are all keys into the same saved-work record, so no two
+can be named the same.
+
+## Web pages
+
+Three fences — `html site`, `css site`, `js site` — with the same
+`site:` name become one live editor with a tab each. dewnote writes them
+as three code blocks, which is what the file holds; the build is what
+joins them.
 
 ## Starting a tutorial
 
@@ -193,9 +241,14 @@ lists what would break dewlab's build or confuse a reader:
 |---|---|
 | No front matter, or no `title:` | The build has no name for the page. |
 | A `version:` that is not a date and a counter | A release has nothing to count from. |
-| A runnable cell with no `id:` | A student's work has no key to save under. |
-| Two cells sharing an `id:` | One cell's saved work overwrites the other's. |
+| A cell, pane or question with no `id:` | A student's work has no key to save under. |
+| Two of them sharing an `id:` | One block's saved work overwrites the other's. |
 | A `tutorial:` link naming nothing | It ships as a broken address. |
+| A question with no `type:`, or one the build does not know | Nothing marks it. |
+| A multiple-choice question with fewer than two options, or a `correct:` naming none of them | Nothing marks it. |
+| A fill-in-the-blank question with no `{…}` gap, or a gap that never closes | There is nothing to fill in. |
+| A site pane with no `site:` | It is what groups the panes into one editor. |
+| A card with no `url:`, or whose text does not open with a heading | The tile goes nowhere, or has no title. |
 
 Each row is marked **blocking** — dewlab will not build it — or **worth
 fixing**. A document with nothing wrong says so rather than showing an

@@ -28,7 +28,7 @@ import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } fro
 import { uploadConfig } from "@milkdown/kit/plugin/upload";
 import { isImageName, isLocalAsset } from "./images.ts";
 import { unmathPlainDollars } from "./maths.ts";
-import { freeCellId, SNIPPETS } from "./slash-menu.ts";
+import { idMaker, SNIPPETS } from "./slash-menu.ts";
 import { insert } from "@milkdown/kit/utils";
 import { commandsCtx } from "@milkdown/kit/core";
 import { clearTextInCurrentBlockCommand } from "@milkdown/kit/preset/commonmark";
@@ -485,7 +485,7 @@ export async function mountEditor(
                 // Crepe's own items clear it before inserting; without
                 // this the document keeps a stray "/py".
                 ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
-                insert(snippet.markdown(freeCellId(cellIdsInDocument())))(ctx);
+                insert(snippet.markdown(idMaker(cellIdsInDocument())))(ctx);
               },
             });
           }
