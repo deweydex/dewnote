@@ -15,8 +15,10 @@ import type { Module } from "./modules.ts";
 import { messageOf, type SaveProblem } from "./save-problem.ts";
 import { runCell } from "./runtime/pyodide-engine.ts";
 import type { CellOutput } from "./cells.ts";
+import { assetPathFor, freeAssetName, imageTypeOf } from "./images.ts";
 import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
+import { brokenLinks, type BrokenLink } from "./links.ts";
 
 interface OpenDocument {
   path: string;
@@ -91,6 +93,8 @@ export function mountShell(page: HTMLElement): Shell {
       markdown: source,
       onChange: () => refreshSpine(),
       runCell: runOneCell,
+      resolveImage: (src) => resolveImage(path, src),
+      saveImage: (file) => saveImage(path, file),
     });
     // `saved` is what the editor made of the file, not the file — a
     // document is normalised on the way in (editor.ts), and comparing
@@ -100,6 +104,97 @@ export function mountShell(page: HTMLElement): Shell {
     spine.setProblem(null);
     refreshSpine();
     return true;
+  }
+
+  /** Every `tutorial:` link in the workspace that names nothing. Shown
+   * in the overlay rather than reported per document: a broken link is
+   * found on the day somebody opens the page it is written on, which is
+   * too late. */
+  function showBrokenLinks(): void {
+    const found = brokenLinks(
+      [...files].map(([path, content]) => ({ path, content })),
+      index,
+    );
+    report(found);
+  }
+
+  const reportOverlay = document.createElement("div");
+  reportOverlay.className = "dn-report-overlay";
+  reportOverlay.hidden = true;
+  reportOverlay.addEventListener("click", (event) => {
+    if (event.target === reportOverlay) reportOverlay.hidden = true;
+  });
+  document.body.appendChild(reportOverlay);
+
+  function report(found: BrokenLink[]): void {
+    const box = document.createElement("div");
+    box.className = "dn-report";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", "Broken links");
+
+    const heading = document.createElement("h2");
+    heading.textContent = found.length === 0
+      ? "Every link resolves."
+      : `${found.length} link${found.length === 1 ? "" : "s"} name nothing`;
+    box.appendChild(heading);
+
+    if (found.length > 0) {
+      const note = document.createElement("p");
+      note.textContent = "`tutorial:` is the only scheme the build resolves. Click a row to open the file.";
+      box.appendChild(note);
+    }
+
+    for (const link of found) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "dn-report-row";
+      const where = document.createElement("span");
+      where.className = "dn-report-where";
+      where.textContent = `${link.path}:${link.line}`;
+      const what = document.createElement("span");
+      what.className = "dn-report-what";
+      what.textContent = link.text ? `${link.text} → ${link.target}` : link.target;
+      row.append(what, where);
+      row.addEventListener("click", () => {
+        reportOverlay.hidden = true;
+        void openPath(link.path);
+      });
+      box.appendChild(row);
+    }
+
+    reportOverlay.replaceChildren(box);
+    reportOverlay.hidden = false;
+    box.querySelector<HTMLElement>("button")?.focus();
+  }
+
+  /** The bytes behind a `src` the document owns, as a URL a browser can
+   * draw. Cached for the life of the document, since the same diagram
+   * often appears more than once. */
+  const drawn = new Map<string, string>();
+
+  async function resolveImage(documentPath: string, src: string): Promise<string | null> {
+    if (!store) return null;
+    const at = assetPathFor(documentPath, src);
+    const already = drawn.get(at);
+    if (already) return already;
+    const bytes = await store.readBytes(at).catch(() => null);
+    if (!bytes) return null;
+    const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: imageTypeOf(at) }));
+    drawn.set(at, url);
+    return url;
+  }
+
+  /** A pasted image, written beside the document. The name is the file's
+   * own where that is free, so a folder stays readable. */
+  async function saveImage(documentPath: string, file: File): Promise<string> {
+    if (!store) throw new Error("no workspace is open");
+    const folder = documentPath.split("/").slice(0, -1).join("/");
+    const taken = await store.listFolder(folder);
+    const name = freeAssetName(taken, file.name || "image.png");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    await store.writeBytes(assetPathFor(documentPath, name), bytes);
+    drawn.set(assetPathFor(documentPath, name), URL.createObjectURL(new Blob([bytes as BlobPart], { type: file.type || imageTypeOf(name) })));
+    return name;
   }
 
   /** One cell, run in the worker. Streams arrive as they are produced
@@ -156,6 +251,10 @@ export function mountShell(page: HTMLElement): Shell {
 
   function onKeyDown(event: KeyboardEvent): void {
     const meta = event.metaKey || event.ctrlKey;
+    if (event.key === "Escape" && !reportOverlay.hidden) {
+      reportOverlay.hidden = true;
+      return;
+    }
     if (meta && event.key.toLowerCase() === "s") {
       event.preventDefault();
       void saveNow();
@@ -182,6 +281,14 @@ export function mountShell(page: HTMLElement): Shell {
           keywords: ["settings", "theme", "dark", "font", "size", "width"],
           detail: "Theme, type, measure, spacing.",
           run: () => settings.open(),
+        },
+        {
+          id: "check-links",
+          label: "Check links",
+          section: "Workspace",
+          keywords: ["broken", "dead", "tutorial:", "slug"],
+          detail: "Every tutorial: link in the workspace that names nothing.",
+          run: () => showBrokenLinks(),
         },
         {
           id: "save",
@@ -213,6 +320,7 @@ export function mountShell(page: HTMLElement): Shell {
       open?.document.destroy();
       palette.destroy();
       settings.destroy();
+      reportOverlay.remove();
       spine.destroy();
       clearCommands();
     },

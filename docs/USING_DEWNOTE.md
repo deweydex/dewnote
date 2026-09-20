@@ -102,6 +102,27 @@ line becomes a heading as you type it.
 Between blocks, hover for a **+** to add one. In an empty paragraph,
 typing **/** offers the same menu from the keyboard.
 
+## Images
+
+Paste or drop an image into the document. It is written beside the
+markdown file, named after the file you pasted, and the document gets
+`![](name.png)` — the same bare name the site's build resolves. If that
+name is already taken, the new one is numbered rather than overwriting
+what is there.
+
+An image already named in a file draws from the folder it sits in. One
+that cannot be found stays as written, so you can see which name is
+wrong.
+
+## Checking links
+
+⌘K, then **Check links**. It reads every file in the workspace, not just
+the one you have open, and lists every `tutorial:` link that names a page
+nothing claims. Click a row to open the file it is written in.
+
+`tutorial:` is the only scheme the build resolves. A `module:` or
+`series:` link would ship as a literal broken address.
+
 ---
 
 ## 5. Cells

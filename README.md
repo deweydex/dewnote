@@ -41,7 +41,6 @@ document model is wrong.
 
 ## Not built yet
 
-HTML and Jupyter export, link checking, the placement view for moving a
-tutorial between series, images resolved beside the document, freezing a
-release, the whole-file source view, and the hint, card, question and
-grouped site-pane fences.
+HTML and Jupyter export, the placement view for moving a tutorial
+between series, freezing a release, the whole-file source view, and the
+hint, card, question and grouped site-pane fences.

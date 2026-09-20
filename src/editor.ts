@@ -25,6 +25,8 @@ import { python } from "@codemirror/lang-python";
 import { sql } from "@codemirror/lang-sql";
 import { LanguageDescription } from "@codemirror/language";
 import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } from "./cells.ts";
+import { uploadConfig } from "@milkdown/kit/plugin/upload";
+import { isImageName, isLocalAsset } from "./images.ts";
 
 /** A fence's info string past its first word — `exec` in `python exec`,
  * `site` in `html site`, `cell=name persist` in `sql cell=name persist`.
@@ -233,6 +235,40 @@ export interface Heading {
   text: string;
 }
 
+/** Draw the images the document names.
+ *
+ * The resolved URL goes on the element, never on the node: the markdown
+ * keeps the bare name the build resolves. ProseMirror re-renders an
+ * `<img>` whenever its node is touched, which drops the resolved src, so
+ * this watches the editor rather than running once. */
+function drawLocalImages(
+  root: HTMLElement,
+  resolve: (src: string) => Promise<string | null>,
+): () => void {
+  const drawn = new Map<string, string | null>();
+
+  async function pass(): Promise<void> {
+    for (const image of root.querySelectorAll("img")) {
+      const written = image.getAttribute("data-dn-src") ?? image.getAttribute("src") ?? "";
+      if (!isLocalAsset(written)) continue;
+      if (image.getAttribute("data-dn-src") === written && image.src !== "") continue;
+      image.setAttribute("data-dn-src", written);
+      if (!drawn.has(written)) drawn.set(written, await resolve(written));
+      const found = drawn.get(written) ?? null;
+      if (found) image.src = found;
+      else image.setAttribute("data-dn-missing", "true");
+    }
+  }
+
+  void pass();
+  const watcher = new MutationObserver(() => void pass());
+  watcher.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] });
+  return () => {
+    watcher.disconnect();
+    for (const url of drawn.values()) if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+  };
+}
+
 export interface Document {
   /** The save path. Re-serialises the whole document, so a file is
    * normalised the first time it is saved and byte-stable after that. */
@@ -249,6 +285,14 @@ export interface EditorOptions {
    * button — which is the right state for an export or a test, not an
    * error to report. */
   runCell?(request: { id: string; code: string; sql: boolean }): Promise<CellOutput>;
+  /** Turns a `src` the document owns into something a browser can draw.
+   * Null where nothing is at that path, which is ordinary for a document
+   * being written. Absent means images stay as written. */
+  resolveImage?(src: string): Promise<string | null>;
+  /** Writes a pasted or dropped image beside the document and answers
+   * with the `src` to put in the markdown. Absent means pasting an image
+   * does nothing. */
+  saveImage?(file: File): Promise<string>;
 }
 
 /** What each cell's last run produced, keyed by the exact source that
@@ -376,6 +420,28 @@ export async function mountEditor(
     },
   });
 
+  if (options.saveImage) {
+    const saveImage = options.saveImage;
+    crepe.editor.config((ctx) => {
+      ctx.update(uploadConfig.key, (config) => ({
+        ...config,
+        // Written beside the document, not inlined: a base64 image in a
+        // tutorial is a file nobody can open, edit or replace.
+        uploader: async (files: FileList, schema: { nodes: Record<string, any> }) => {
+          const image = schema.nodes["image"];
+          if (!image) return [];
+          const made = [];
+          for (const file of Array.from(files)) {
+            if (!file.type.startsWith("image/") && !isImageName(file.name)) continue;
+            const src = await saveImage(file);
+            made.push(image.createAndFill({ src, alt: file.name.replace(/\.[^.]+$/, "") }));
+          }
+          return made.filter(Boolean);
+        },
+      }));
+    });
+  }
+
   crepe.editor
     .config(keepMarkers)
     .use(codeBlockWithMeta)
@@ -395,6 +461,10 @@ export async function mountEditor(
   await crepe.create();
   hydrated = true;
 
+  const stopDrawing = options.resolveImage
+    ? drawLocalImages(root, options.resolveImage)
+    : () => {};
+
   return {
     markdown: () => crepe.getMarkdown(),
     headings() {
@@ -409,6 +479,9 @@ export async function mountEditor(
       });
       return found;
     },
-    destroy: () => crepe.destroy(),
+    destroy: () => {
+      stopDrawing();
+      crepe.destroy();
+    },
   };
 }

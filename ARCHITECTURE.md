@@ -126,6 +126,20 @@ belonging to the older code.
 
 ---
 
+## Images
+
+An image lives beside the document that names it, and the markdown says
+only its bare name because that is what both builds resolve.
+
+The resolved URL goes on the `<img>` element, never on the node, so a
+save writes the name rather than a blob URL. ProseMirror re-renders an
+image whenever its node is touched, which drops that URL, so
+`drawLocalImages` watches the editor root rather than running once.
+
+A pasted image goes through `plugin-upload`'s uploader: written beside
+the document under a name that is free, and referenced by that name. Not
+inlined as base64 — that is a file nobody can open, edit or replace.
+
 ## The store
 
 ```ts
