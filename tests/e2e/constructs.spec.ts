@@ -15,6 +15,7 @@ const IDENTICAL: Record<string, string> = {
   "nested bullets": "- one\n  - nested\n- two\n",
   "ordered list": "1. one\n2. two\n",
   "task list": "- [ ] to do\n- [x] done\n",
+  "strikethrough": "The old way was ~~this~~, and the new way is that.\n",
   "inline maths": "The value $x^2 + 1$ here.\n",
   "display maths": "$$\n\\frac{a}{b} = c\n$$\n",
   "table": "| A | B |\n| - | - |\n| 1 | 2 |\n",
