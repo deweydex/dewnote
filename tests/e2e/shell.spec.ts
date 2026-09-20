@@ -630,3 +630,59 @@ test("a release freezes what is published and dates what is open", async ({ page
   expect(live.text).toContain("And new ones.");
   expect(live.text).toContain("supersedes: 2026.08.01.1");
 });
+
+test("a tutorial on no course can be placed in a series, and shows a breadcrumb after", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "courses/maths.yaml":
+      "id: maths\ntitle: Maths for IT\ncontents:\n  - title: First Steps\n    tutorials:\n      - grid-of-numbers\n",
+    "tutorials/grid-of-numbers/grid-of-numbers.md": "---\ntitle: Grid\n---\n\n# Grid\n",
+    "tutorials/brand-new/brand-new.md": "---\ntitle: Brand New\n---\n\n# Brand New\n",
+  });
+  await page.locator(".dn-wp-input").fill("brand new");
+  await page.keyboard.press("Enter");
+
+  // On no course: the spine has a filename but no course to name.
+  await expect(page.locator(".dn-spine-breadcrumb")).not.toContainText("Maths for IT");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("place this");
+  await page.keyboard.press("Enter");
+
+  const ask = page.locator(".dn-ask-choices");
+  await expect(ask).toBeVisible();
+  await expect(ask).toContainText("It is on no course yet");
+  await ask.locator(".dn-ask-choice", { hasText: "First Steps" }).click();
+
+  // The course file gained one line, and nothing else moved.
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1));
+  expect(written.path).toBe("courses/maths.yaml");
+  expect(written.text).toContain("      - grid-of-numbers\n      - brand-new\n");
+
+  // And the spine now knows where the tutorial sits.
+  await expect(page.locator(".dn-spine-breadcrumb")).toContainText("Maths for IT");
+  await expect(page.locator(".dn-spine-breadcrumb")).toContainText("First Steps");
+});
+
+test("choosing a series a tutorial is already in takes it out", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "courses/maths.yaml":
+      "id: maths\ntitle: Maths for IT\ncontents:\n  - title: First Steps\n    tutorials:\n      - grid-of-numbers\n",
+    "tutorials/grid-of-numbers/grid-of-numbers.md": "---\ntitle: Grid\n---\n\n# Grid\n",
+  });
+  await page.locator(".dn-wp-input").fill("grid");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("place this");
+  await page.keyboard.press("Enter");
+
+  const ask = page.locator(".dn-ask-choices");
+  await expect(ask).toContainText("already here");
+  await ask.locator(".dn-ask-choice", { hasText: "First Steps" }).click();
+
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1));
+  expect(written.text).not.toContain("grid-of-numbers");
+  expect(written.text).toContain("title: First Steps");
+});

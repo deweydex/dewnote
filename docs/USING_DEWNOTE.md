@@ -122,6 +122,18 @@ It starts as a **draft**, so a half-written page is never served, and it
 opens with a heading and one cell ready to run. Change `status:` to
 `live` in ⌘/ when it is ready.
 
+## Putting a tutorial on a course
+
+A tutorial dewnote has just written is on no course, so it has no
+breadcrumb and appears in no series. ⌘K, **Place this tutorial…**, and
+pick one.
+
+The list shows every series on every course, with how many tutorials each
+already has. A series the tutorial is already in says so — choosing that
+one takes it out again.
+
+Only the course file changes, and only by one line.
+
 ## Publishing a new version
 
 ⌘K, **Publish as a new version…**, on a live tutorial you have edited.
