@@ -992,3 +992,16 @@ test("Appearance opens from the corner as well as the palette", async ({ page })
   await page.locator(".dn-gear").click();
   await expect(page.locator(".dn-settings")).toBeVisible();
 });
+
+test("the gate asks where the files are before it asks for a token", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  // `display` on a class beats the browser's own `[hidden]`, so the
+  // attribute alone does not hide this — the form was sitting open with
+  // its token field on show.
+  const form = page.locator(".dn-gate-repo");
+  await expect(form).toBeHidden();
+
+  await page.locator('[data-choice="repo"]').click();
+  await expect(form).toBeVisible();
+  await expect(page.locator('.dn-gate-repo [name="branch"]')).not.toHaveValue("");
+});

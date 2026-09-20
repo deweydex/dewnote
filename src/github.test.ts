@@ -149,7 +149,7 @@ describe("putFileContent", () => {
     return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   }
 
-  // decision 32: a brand-new file has no sha to match against yet — the
+  // A brand-new file has no sha to match against yet — the
   // request body itself has to leave the field out entirely, not send it
   // as an explicit `null` or `undefined`, since GitHub's own "create"
   // vs. "update" branch keys off whether the JSON key is present at all.

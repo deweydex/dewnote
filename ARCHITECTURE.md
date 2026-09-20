@@ -360,6 +360,21 @@ Native controls are handled the same way — `color-scheme` and
 selectors. That dresses every slider, checkbox, select, text field and
 scrollbar without styling a thumb or a track.
 
+**Everything that appears over the document is one thing**: a panel on a
+dimmed page. The palette, the settings, the report, the source view and
+the one-question overlay share `.dn-overlay` and `.dn-panel`, and each
+sets only what makes it different — its stacking order, how far down it
+sits, how wide it is, how it lays out inside.
+
+Written five times, it had already drifted into three faults nobody saw:
+the palette's border named a variable that does not exist, so the
+shorthand was invalid and there was no border; the report and settings
+panels wrote `box-shadow: var(--dl-shadow)`, and `--dl-shadow` is a
+colour, so those had no shadow. A `var()` with nothing behind it does
+not fall back — the declaration is dropped, silently. `style.test.ts`
+guards that class: every `--dn-*` the stylesheet reads bare is one
+something defines, and a shadow token is used as a shadow.
+
 **Appearance** is eleven settings, each a CSS custom property, drawn from
 one `ROWS` list. The page is described in dewlab's own tokens, so a
 slider moves the thing it names — describing it in a second set of names

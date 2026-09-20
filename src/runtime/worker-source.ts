@@ -47,22 +47,22 @@ function fail(id, error) {
   post({ type: "response", id, error: String((error && error.message) || error) });
 }
 
-async function boot(msg) {
+async function boot(message) {
   post({ type: "status", text: "Loading Python…" });
-  const { loadPyodide } = await import(msg.pyodideBase + "pyodide.mjs");
-  pyodide = await loadPyodide({ indexURL: msg.pyodideBase });
+  const { loadPyodide } = await import(message.pyodideBase + "pyodide.mjs");
+  pyodide = await loadPyodide({ indexURL: message.pyodideBase });
 
-  if (msg.packages && msg.packages.length) {
+  if (message.packages && message.packages.length) {
     post({ type: "status", text: "Loading packages…" });
-    await pyodide.loadPackage(msg.packages);
+    await pyodide.loadPackage(message.packages);
   }
 
   pyodide.FS.writeFile("/home/pyodide/dewnote_tools.py", ${pythonSourceLiteral}, { encoding: "utf8" });
   tools = pyodide.pyimport("dewnote_tools");
 }
 
-async function runCell(msg) {
-  await pyodide.loadPackagesFromImports(msg.code, {
+async function runCell(message) {
+  await pyodide.loadPackagesFromImports(message.code, {
     messageCallback: (text) => post({ type: "status", text }),
   });
   if (!matplotlibConfigured && pyodide.loadedPackages && pyodide.loadedPackages["matplotlib"]) {
@@ -75,14 +75,14 @@ async function runCell(msg) {
   // is a plain heuristic standing in for it, same limitation dewstack's
   // own build-time "a py cell= on this page always gets sqlite3" rule
   // has, just applied per cell instead of per page.
-  if (msg.code.indexOf("read_sql(") !== -1 || msg.sql) {
+  if (message.code.indexOf("read_sql(") !== -1 || message.sql) {
     await ensureSqlTools();
     if (!pyodide.loadedPackages || !pyodide.loadedPackages["pandas"]) {
       post({ type: "status", text: "Loading pandas…" });
       await pyodide.loadPackage(["pandas"]);
     }
   }
-  // A sql exec cell (msg.sql, set by pyodide-engine.ts's own runCell
+  // A sql exec cell (message.sql, set by pyodide-engine.ts's own runCell
   // call — dewnote_sql_tools.run_sql_cell's own first argument, wrapped
   // into the cell's code by cell.ts's wrapSqlExecCode) needs the one
   // shared, page-wide "db" connection dewlab's own sql exec model uses
@@ -90,7 +90,7 @@ async function runCell(msg) {
   // cell already shares — seeded once, lazily, on whichever cell (SQL
   // or Python) actually needs it first, the same "pay for what's used"
   // discipline read_sql's own sqlite3 load already follows.
-  if (msg.sql && !sharedDbSeeded) {
+  if (message.sql && !sharedDbSeeded) {
     // This code lives inside the JavaScript source string returned by
     // buildWorkerSource. Keep the newline escaped in that generated
     // program; a literal newline inside its quoted string prevents the
@@ -100,8 +100,8 @@ async function runCell(msg) {
   }
   post({ type: "status", text: "" });
   const emit = (kind, cssClass, text, markup) =>
-    post({ type: "output", cellId: msg.cellId, kind, cssClass, text, markup });
-  const ok = await tools.run_cell(msg.cellId, emit, msg.code);
+    post({ type: "output", cellId: message.cellId, kind, cssClass, text, markup });
+  const ok = await tools.run_cell(message.cellId, emit, message.code);
   return { ok: !!ok };
 }
 
@@ -118,40 +118,40 @@ async function ensureSqlTools() {
   sqlTools = pyodide.pyimport("dewnote_sql_tools");
 }
 
-async function runSql(msg) {
+async function runSql(message) {
   await ensureSqlTools();
-  return { html: sqlTools.run_sql(msg.dbName, msg.sql) };
+  return { html: sqlTools.run_sql(message.dbName, message.sql) };
 }
 
-async function resetSql(msg) {
+async function resetSql(message) {
   await ensureSqlTools();
-  sqlTools.reset(msg.dbName);
+  sqlTools.reset(message.dbName);
   return true;
 }
 
 self.onmessage = async (event) => {
-  const msg = event.data;
-  if (msg.type === "set-interrupt-buffer") {
-    if (pyodide) pyodide.setInterruptBuffer(new Int32Array(msg.buffer));
+  const message = event.data;
+  if (message.type === "set-interrupt-buffer") {
+    if (pyodide) pyodide.setInterruptBuffer(new Int32Array(message.buffer));
     return;
   }
   try {
     let result;
-    if (msg.type === "boot") {
-      await boot(msg);
+    if (message.type === "boot") {
+      await boot(message);
       result = true;
-    } else if (msg.type === "run-cell") {
-      result = await runCell(msg);
-    } else if (msg.type === "run-sql") {
-      result = await runSql(msg);
-    } else if (msg.type === "reset-sql") {
-      result = await resetSql(msg);
+    } else if (message.type === "run-cell") {
+      result = await runCell(message);
+    } else if (message.type === "run-sql") {
+      result = await runSql(message);
+    } else if (message.type === "reset-sql") {
+      result = await resetSql(message);
     } else {
-      throw new Error("unknown message type: " + msg.type);
+      throw new Error("unknown message type: " + message.type);
     }
-    respond(msg.id, result);
-  } catch (err) {
-    fail(msg.id, err);
+    respond(message.id, result);
+  } catch (error) {
+    fail(message.id, error);
   }
 };
 `;
