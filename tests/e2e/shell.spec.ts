@@ -446,3 +446,127 @@ test("a document saves as a notebook whose cells keep their own text", async ({ 
   // importing it back lossless.
   for (const each of notebook.cells) expect(typeof each.metadata.dewnote.raw).toBe("string");
 });
+
+test("the slash menu offers dewlab's own blocks, and inserts one with a free id", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\nWords.\n\n```python exec\nid: cell-1\nprint(1)\n```\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/");
+
+  const menu = page.locator(".milkdown-slash-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu).toContainText("Python cell");
+  await expect(menu).toContainText("SQL cell");
+  await expect(menu).toContainText("Hint");
+
+  await page.keyboard.type("py");
+  await expect(menu).not.toContainText("Heading 1");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1).text as string);
+  // A new cell, with an id nobody is using — an id is the key somebody's
+  // saved work lives under.
+  expect(written).toContain("```python exec");
+  expect(written).toContain("id: cell-2");
+  expect(written).toContain("id: cell-1");
+  // And the `/py` the author typed is gone, not left in the prose.
+  expect(written).not.toContain("/py");
+});
+
+test("the slash menu writes a hint as the fold dewlab's build looks for", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\nWords.\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("/hint");
+  // The menu opens a tick after the slash; Enter before that inserts a
+  // newline and leaves "/hint" sitting in the prose.
+  const menu = page.locator(".milkdown-slash-menu");
+  await expect(menu).toBeVisible();
+  await expect(menu).toContainText("Hint");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1).text as string);
+  expect(written).toContain('<details class="dl-hint">');
+  expect(written).toContain("<summary>");
+});
+
+test("⌘/ shows the whole file, front matter and all", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\nstatus: live\n---\n\n# One\n\nWords.\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+/");
+  const source = page.locator(".dn-source");
+  await expect(source).toBeVisible();
+  // The one place front matter is visible, which is the point of it.
+  await expect(source.locator(".dn-source-text")).toHaveValue(/status: live/);
+  await expect(source.locator(".dn-source-text")).toHaveValue(/# One/);
+
+  await page.keyboard.press("Escape");
+  await expect(source).toBeHidden();
+});
+
+test("an edit in the source view reaches the document, and is not saved until you save", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\nWords.\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+/");
+  await page.locator(".dn-source-text").click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("---\ntitle: One\n---\n\n# Renamed\n\nQuite different.\n");
+  await page.locator(".dn-source-keep").click();
+
+  await expect(page.locator(".dn-source")).toBeHidden();
+  await expect(page.locator(".milkdown h1")).toHaveText("Renamed");
+
+  // Nothing written yet.
+  expect(await page.evaluate(() => (globalThis as any).__dewnoteWrites.length)).toBe(0);
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1).text as string);
+  expect(written).toContain("# Renamed");
+});
+
+test("leaving the source view keeps the document as it was", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\nWords.\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+/");
+  await page.locator(".dn-source-text").click();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type("# Thrown away\n");
+  await page.keyboard.press("Escape");
+
+  await expect(page.locator(".milkdown h1")).toHaveText("One");
+});

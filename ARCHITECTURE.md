@@ -140,6 +140,13 @@ A pasted image goes through `plugin-upload`'s uploader: written beside
 the document under a name that is free, and referenced by that name. Not
 inlined as base64 — that is a file nobody can open, edit or replace.
 
+**Never add a `@codemirror/*` package at the top level.** Crepe carries
+its own, and a second copy in the bundle breaks its `instanceof` checks:
+"Unrecognized extension value in extension set", and no code block
+mounts at all. Removing the dependency is not enough on its own — a
+stale `node_modules` keeps the copy, so `rm -rf node_modules && bun
+install`. This is why the source view is a textarea.
+
 ## Export
 
 `exportHtml` renders from the markdown, not from the editor's DOM. The
