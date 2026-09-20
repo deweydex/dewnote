@@ -27,6 +27,7 @@ import { LanguageDescription } from "@codemirror/language";
 import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } from "./cells.ts";
 import { uploadConfig } from "@milkdown/kit/plugin/upload";
 import { isImageName, isLocalAsset } from "./images.ts";
+import { unmathPlainDollars } from "./maths.ts";
 
 /** A fence's info string past its first word — `exec` in `python exec`,
  * `site` in `html site`, `cell=name persist` in `sql cell=name persist`.
@@ -154,6 +155,10 @@ export const frontMatterSchema = $nodeSchema("front_matter", () => ({
 }));
 
 export const frontMatterRemark = $remark("frontMatter", () => remarkFrontmatter, ["yaml"]);
+
+/** Runs after Crepe's own maths pass, so a `$…$` span it claimed but
+ * dewlab would read as prose is put back as the text it was written as. */
+export const plainDollars = $remark("dewnotePlainDollars", () => unmathPlainDollars);
 
 /** Rewrite every display-maths block into the one form Milkdown handles
  * correctly: `$$` alone on its own line at each end.
@@ -446,7 +451,8 @@ export async function mountEditor(
     .config(keepMarkers)
     .use(codeBlockWithMeta)
     .use(frontMatterRemark)
-    .use(frontMatterSchema);
+    .use(frontMatterSchema)
+    .use(plainDollars);
   crepe.editor.use(tightBulletLists).use(tightListItems);
 
   let hydrated = false;

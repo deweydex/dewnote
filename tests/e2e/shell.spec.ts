@@ -382,3 +382,37 @@ test("a workspace with nothing broken says so rather than showing an empty list"
   await page.keyboard.press("Enter");
   await expect(page.locator(".dn-report h2")).toHaveText("Every link resolves.");
 });
+
+test("a document saves as one HTML file, with its stylesheet and image inside it", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+
+  const download = page.waitForEvent("download");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("html page");
+  await page.keyboard.press("Enter");
+
+  const file = await download;
+  expect(file.suggestedFilename()).toBe("everything-at-once.html");
+
+  const stream = await file.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const html = Buffer.concat(chunks).toString("utf8");
+
+  // One file: nothing to fetch, nothing to lose.
+  expect(html).not.toContain("<link");
+  expect(html).toContain("<title>Everything at Once</title>");
+  expect(html).toContain("<style>");
+  // The image is inside it, not named beside it.
+  expect(html).toContain("src=\"data:image/svg+xml;base64,");
+  expect(html).not.toContain('src="diagram.svg"');
+  // Maths is typeset, and KaTeX's stylesheet came with it.
+  expect(html).toContain("katex");
+  // A cell is a labelled code block; its output is not in the document.
+  expect(html).toContain("print(total)");
+  // Front matter is not something a reader sees.
+  expect(html).not.toContain("status: live");
+});

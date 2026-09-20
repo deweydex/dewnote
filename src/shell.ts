@@ -19,6 +19,9 @@ import { assetPathFor, freeAssetName, imageTypeOf } from "./images.ts";
 import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { brokenLinks, type BrokenLink } from "./links.ts";
+import { exportHtml, titleOf } from "./export-html.ts";
+import pageCss from "./style.css" with { type: "text" };
+import katexCss from "katex/dist/katex.min.css" with { type: "text" };
 
 interface OpenDocument {
   path: string;
@@ -33,6 +36,21 @@ export interface Shell {
    * thing to do once a workspace exists. */
   useStore(store: Store, onProgress?: Progress): Promise<void>;
   destroy(): void;
+}
+
+/** A name a file system will take, from a document's own title. */
+function slugOf(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "document";
+}
+
+function download(name: string, text: string, type: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  link.click();
+  // Revoked on the next turn, once the click has been taken up.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 /** A stream's plain text on its way into a panel that holds HTML. The
@@ -104,6 +122,21 @@ export function mountShell(page: HTMLElement): Shell {
     spine.setProblem(null);
     refreshSpine();
     return true;
+  }
+
+  /** The open document as one HTML file: the stylesheet and, where the
+   * page renders maths, KaTeX's own, both inlined, and every image the
+   * document owns turned into a data URI. Something to send to somebody
+   * who does not have dewlab. */
+  async function saveAsHtml(): Promise<void> {
+    if (!open) return;
+    const source = open.document.markdown();
+    const html = await exportHtml(source, {
+      css: pageCss,
+      katexCss,
+      resolveImage: (src) => asDataUri(open!.path, src),
+    });
+    download(`${slugOf(titleOf(source))}.html`, html, "text/html");
   }
 
   /** Every `tutorial:` link in the workspace that names nothing. Shown
@@ -182,6 +215,17 @@ export function mountShell(page: HTMLElement): Shell {
     const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: imageTypeOf(at) }));
     drawn.set(at, url);
     return url;
+  }
+
+  /** The bytes behind a `src`, as a data URI — what an exported file
+   * needs, since a blob URL means nothing outside this tab. */
+  async function asDataUri(documentPath: string, src: string): Promise<string | null> {
+    if (!store) return null;
+    const bytes = await store.readBytes(assetPathFor(documentPath, src)).catch(() => null);
+    if (!bytes) return null;
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return `data:${imageTypeOf(src) || "application/octet-stream"};base64,${btoa(binary)}`;
   }
 
   /** A pasted image, written beside the document. The name is the file's
@@ -281,6 +325,15 @@ export function mountShell(page: HTMLElement): Shell {
           keywords: ["settings", "theme", "dark", "font", "size", "width"],
           detail: "Theme, type, measure, spacing.",
           run: () => settings.open(),
+        },
+        {
+          id: "export-html",
+          label: "Save as an HTML page",
+          section: "Publish",
+          keywords: ["export", "html", "send", "share", "download"],
+          detail: "One file: the document, its stylesheet and its images.",
+          available: () => open !== null,
+          run: () => void saveAsHtml(),
         },
         {
           id: "check-links",

@@ -83,3 +83,25 @@ test("a task list draws its own checkbox", async ({ page }) => {
   );
   await expect(page.locator(".milkdown .milkdown-icon.label")).toHaveCount(2);
 });
+
+test("a price is prose, not a formula", async ({ page }) => {
+  // remark-math reads any `$…$` as maths; dewlab's build refuses a span
+  // with whitespace against a delimiter, and a sentence about money is
+  // the common case.
+  await page.goto(BUILT_APP);
+  await page.evaluate(() =>
+    (globalThis as any).__dewnote.open("It costs $5 and $6 in total.\n"),
+  );
+  await expect(page.locator(".milkdown .katex")).toHaveCount(0);
+  await expect(page.locator(".milkdown p")).toContainText("It costs $5 and $6 in total.");
+});
+
+test("an escaped dollar is a dollar, and stays one", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const out = await page.evaluate(async () => {
+    await (globalThis as any).__dewnote.open("It costs \\$5.\n");
+    return (globalThis as any).__dewnote.markdown() as string;
+  });
+  expect(out).toBe("It costs \\$5.\n");
+  await expect(page.locator(".milkdown p")).toContainText("It costs $5.");
+});
