@@ -124,6 +124,15 @@ A cell appears as its code. A cell's output is not part of the document —
 it lives in the tab for as long as the tab is open — so there is nothing
 truthful to put in its place.
 
+## Jupyter
+
+⌘K, **Save as a Jupyter notebook**, writes an `.ipynb`. Prose becomes
+markdown cells, fences become code cells, and every cell quietly keeps
+the text it came from — so **Open a Jupyter notebook…** brings the same
+file back, byte for byte.
+
+An import replaces what is on screen. Nothing is written until you save.
+
 ## Checking links
 
 ⌘K, then **Check links**. It reads every file in the workspace, not just

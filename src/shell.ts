@@ -20,6 +20,7 @@ import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { brokenLinks, type BrokenLink } from "./links.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
+import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
 import pageCss from "./style.css" with { type: "text" };
 import katexCss from "katex/dist/katex.min.css" with { type: "text" };
 
@@ -137,6 +138,57 @@ export function mountShell(page: HTMLElement): Shell {
       resolveImage: (src) => asDataUri(open!.path, src),
     });
     download(`${slugOf(titleOf(source))}.html`, html, "text/html");
+  }
+
+  /** The open document as an nbformat 4.5 notebook. Every cell keeps
+   * its own exact text, so importing one back is the same bytes. */
+  function saveAsNotebook(): void {
+    if (!open) return;
+    const source = open.document.markdown();
+    download(
+      `${slugOf(titleOf(source))}.ipynb`,
+      `${JSON.stringify(toNotebook(source), null, 1)}\n`,
+      "application/x-ipynb+json",
+    );
+  }
+
+  /** A notebook, opened as the document. Replaces what is on screen
+   * rather than writing anything: saving is still ⌘S, and still the
+   * author's decision. */
+  function openNotebook(): void {
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = ".ipynb,application/json";
+    picker.addEventListener("change", async () => {
+      const file = picker.files?.[0];
+      if (!file || !open) return;
+      try {
+        const notebook = JSON.parse(await file.text()) as Notebook;
+        remount(fromNotebook(notebook));
+      } catch (error) {
+        spine.setProblem({ message: `That is not a notebook dewnote can read: ${messageOf(error)}` });
+      }
+    });
+    picker.click();
+  }
+
+  /** Replace the open document's text, keeping its path — an import
+   * lands in the file you have open, and is not saved until you say so. */
+  async function remount(markdown: string): Promise<void> {
+    if (!open) return;
+    const path = open.path;
+    const saved = open.saved;
+    open.document.destroy();
+    page.replaceChildren();
+    const document_ = await mountEditor(page, {
+      markdown,
+      onChange: () => refreshSpine(),
+      runCell: runOneCell,
+      resolveImage: (src) => resolveImage(path, src),
+      saveImage: (file) => saveImage(path, file),
+    });
+    open = { path, saved, document: document_ };
+    refreshSpine();
   }
 
   /** Every `tutorial:` link in the workspace that names nothing. Shown
@@ -334,6 +386,24 @@ export function mountShell(page: HTMLElement): Shell {
           detail: "One file: the document, its stylesheet and its images.",
           available: () => open !== null,
           run: () => void saveAsHtml(),
+        },
+        {
+          id: "export-ipynb",
+          label: "Save as a Jupyter notebook",
+          section: "Publish",
+          keywords: ["export", "ipynb", "jupyter", "notebook", "download"],
+          detail: "Every cell keeps its text, so importing it back is the same file.",
+          available: () => open !== null,
+          run: () => saveAsNotebook(),
+        },
+        {
+          id: "import-ipynb",
+          label: "Open a Jupyter notebook…",
+          section: "Document",
+          keywords: ["import", "ipynb", "jupyter", "notebook"],
+          detail: "Replaces what is on screen. Nothing is saved until you save it.",
+          available: () => open !== null,
+          run: () => openNotebook(),
         },
         {
           id: "check-links",

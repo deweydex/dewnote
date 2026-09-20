@@ -416,3 +416,33 @@ test("a document saves as one HTML file, with its stylesheet and image inside it
   // Front matter is not something a reader sees.
   expect(html).not.toContain("status: live");
 });
+
+test("a document saves as a notebook whose cells keep their own text", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+
+  const download = page.waitForEvent("download");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("save as a jupyter");
+  await page.keyboard.press("Enter");
+
+  const file = await download;
+  expect(file.suggestedFilename()).toBe("everything-at-once.ipynb");
+
+  const stream = await file.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const notebook = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+
+  expect(notebook.nbformat).toBe(4);
+  expect(notebook.nbformat_minor).toBe(5);
+  // The runnable cell is a code cell and keeps its own id.
+  const cell = notebook.cells.find((c: { id: string }) => c.id === "first-sum");
+  expect(cell.cell_type).toBe("code");
+  expect(cell.source).toContain("print(total)");
+  // And every cell carries the bytes it came from, which is what makes
+  // importing it back lossless.
+  for (const each of notebook.cells) expect(typeof each.metadata.dewnote.raw).toBe("string");
+});
