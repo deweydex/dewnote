@@ -8,3 +8,17 @@ declare module "*.py" {
   const source: string;
   export default source;
 }
+
+// The HTML export asks for a stylesheet by value rather than as a side
+// effect. `css-imports.d.ts` declares `*.css` with no exports, for
+// `import "./style.css"`; this one has to name the files that are read,
+// since the same specifier cannot be declared twice.
+declare module "./style.css" {
+  const source: string;
+  export default source;
+}
+
+declare module "katex/dist/katex.min.css" {
+  const source: string;
+  export default source;
+}

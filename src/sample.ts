@@ -6,18 +6,14 @@
 
 import type { Store, StoreFile } from "./store.ts";
 
-/** Inline, so the image in the sample actually draws. An image named by
- * a relative path needs the store to resolve it, which is a real gap. */
-const DIAGRAM =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 90" width="240" height="90">
+/** A real file beside the document, named the way a tutorial names one,
+ * so the sample exercises the path a tutorial actually takes. */
+const DIAGRAM_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 90" width="240" height="90">
       <rect x="6" y="20" width="60" height="50" rx="6" fill="none" stroke="#1b2a4a" stroke-width="2"/>
       <rect x="90" y="20" width="60" height="50" rx="6" fill="none" stroke="#1b2a4a" stroke-width="2"/>
       <rect x="174" y="20" width="60" height="50" rx="6" fill="#d4692a" opacity="0.2" stroke="#d4692a" stroke-width="2"/>
       <path d="M68 45h20M152 45h20" stroke="#1b2a4a" stroke-width="2"/>
-    </svg>`,
-  );
+    </svg>`;
 
 const TUTORIAL = `---
 title: Everything at Once
@@ -67,7 +63,7 @@ $$
 
 ## An image
 
-![Three boxes, the last one filled](${DIAGRAM})
+![Three boxes, the last one filled](diagram.svg)
 
 ## A cell you can run
 
@@ -103,6 +99,9 @@ practice_for: everything-at-once
 
 **1.** Change the numbers in the cell on the tutorial page and run it.
 
+**2.** This link goes nowhere — ⌘K, "Check links", to see it reported:
+[a page that does not exist](tutorial:no-such-page).
+
 \`\`\`python exec
 id: practice-sum
 # your turn
@@ -128,15 +127,26 @@ const FILES: Record<string, string> = {
 
 export function sampleStore(): Store {
   const held = new Map(Object.entries(FILES));
+  const bytes = new Map<string, Uint8Array>([
+    ["tutorials/everything-at-once/diagram.svg", new TextEncoder().encode(DIAGRAM_SVG)],
+  ]);
   return {
     kind: "folder",
     label: "sample",
     list: async (): Promise<StoreFile[]> =>
       [...held].map(([path, content]) => ({ path, content })),
     read: async (path) => held.get(path) ?? "",
-    readBytes: async () => null,
+    readBytes: async (path) => (bytes.get(path) as Uint8Array<ArrayBuffer>) ?? null,
+    listFolder: async (folder) =>
+      [...held.keys(), ...bytes.keys()]
+        .filter((path) => path.startsWith(`${folder}/`))
+        .map((path) => path.slice(folder.length + 1))
+        .filter((name) => !name.includes("/")),
     write: async (path, text) => {
       held.set(path, text);
+    },
+    writeBytes: async (path, value) => {
+      bytes.set(path, value);
     },
   };
 }

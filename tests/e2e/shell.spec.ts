@@ -301,3 +301,148 @@ test("a working branch equal to the base is refused, with the reason", async ({ 
   // And it is still usable rather than stuck mid-press.
   await expect(page.locator('.dn-gate-repo button[type="submit"]')).toBeEnabled();
 });
+
+test("an image beside the document is drawn, and the markdown keeps its name", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+
+  const image = page.locator(".milkdown img:not(.ProseMirror-separator)");
+  await expect(image).toHaveCount(1);
+  // The file is read from the store and drawn, rather than 404ing on a
+  // path the page cannot resolve.
+  await expect(image).toHaveAttribute("data-dn-src", "diagram.svg");
+  expect(await image.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
+
+  // The resolved URL is on the element, never on the node — the `src`
+  // attribute the document holds is still the bare name. That the
+  // markdown keeps it is asserted in constructs.spec.ts.
+  expect(await image.evaluate((el: HTMLImageElement) => el.getAttribute("src")?.startsWith("blob:"))).toBe(true);
+  await expect(image).toHaveAttribute("data-dn-src", "diagram.svg");
+});
+
+test("a pasted image is written beside the document and named in the markdown", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  // A one-pixel PNG, pasted the way a browser delivers one.
+  await page.evaluate(async () => {
+    const png = Uint8Array.from(atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    ), (c) => c.charCodeAt(0));
+    const file = new File([png], "sketch.png", { type: "image/png" });
+    const data = new DataTransfer();
+    data.items.add(file);
+    const target = document.querySelector(".milkdown .ProseMirror")!;
+    target.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  });
+
+  const images = page.locator(".milkdown img:not(.ProseMirror-separator)");
+  await expect(images).toHaveCount(2);
+  // Named after the file and written beside the document — not inlined
+  // as base64, which would be a file nobody can open or replace.
+  await expect(page.locator('.milkdown img[data-dn-src="sketch.png"]')).toHaveCount(1);
+  expect(
+    await page.locator('.milkdown img[data-dn-src="sketch.png"]')
+      .evaluate((el: HTMLImageElement) => el.getAttribute("src")?.startsWith("blob:")),
+  ).toBe(true);
+});
+
+test("Check links reports a link that names nothing, and opens the file it is in", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("check links");
+  await page.keyboard.press("Enter");
+
+  const report = page.locator(".dn-report");
+  await expect(report).toBeVisible();
+  await expect(report.locator(".dn-report-row")).toHaveCount(1);
+  await expect(report.locator(".dn-report-row")).toContainText("no-such-page");
+  // It says where, so the report can be read against the file.
+  await expect(report.locator(".dn-report-where")).toContainText("everything-at-once-practice.md");
+
+  // And takes you there.
+  await report.locator(".dn-report-row").click();
+  await expect(report).toBeHidden();
+  await expect(page.locator(".milkdown h1")).toContainText("Practice");
+});
+
+test("a workspace with nothing broken says so rather than showing an empty list", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nNo links here.\n",
+  });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("check links");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-report h2")).toHaveText("Every link resolves.");
+});
+
+test("a document saves as one HTML file, with its stylesheet and image inside it", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+
+  const download = page.waitForEvent("download");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("html page");
+  await page.keyboard.press("Enter");
+
+  const file = await download;
+  expect(file.suggestedFilename()).toBe("everything-at-once.html");
+
+  const stream = await file.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const html = Buffer.concat(chunks).toString("utf8");
+
+  // One file: nothing to fetch, nothing to lose.
+  expect(html).not.toContain("<link");
+  expect(html).toContain("<title>Everything at Once</title>");
+  expect(html).toContain("<style>");
+  // The image is inside it, not named beside it.
+  expect(html).toContain("src=\"data:image/svg+xml;base64,");
+  expect(html).not.toContain('src="diagram.svg"');
+  // Maths is typeset, and KaTeX's stylesheet came with it.
+  expect(html).toContain("katex");
+  // A cell is a labelled code block; its output is not in the document.
+  expect(html).toContain("print(total)");
+  // Front matter is not something a reader sees.
+  expect(html).not.toContain("status: live");
+});
+
+test("a document saves as a notebook whose cells keep their own text", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+
+  const download = page.waitForEvent("download");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("save as a jupyter");
+  await page.keyboard.press("Enter");
+
+  const file = await download;
+  expect(file.suggestedFilename()).toBe("everything-at-once.ipynb");
+
+  const stream = await file.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Buffer);
+  const notebook = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+
+  expect(notebook.nbformat).toBe(4);
+  expect(notebook.nbformat_minor).toBe(5);
+  // The runnable cell is a code cell and keeps its own id.
+  const cell = notebook.cells.find((c: { id: string }) => c.id === "first-sum");
+  expect(cell.cell_type).toBe("code");
+  expect(cell.source).toContain("print(total)");
+  // And every cell carries the bytes it came from, which is what makes
+  // importing it back lossless.
+  for (const each of notebook.cells) expect(typeof each.metadata.dewnote.raw).toBe("string");
+});

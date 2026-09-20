@@ -55,6 +55,11 @@ export interface Store {
   /** An image the document names. `null` where nothing is at that path,
    * which is a normal outcome for a document being written. */
   readBytes(path: string): Promise<Uint8Array<ArrayBuffer> | null>;
+  /** The names directly inside `folder`, for choosing an asset name
+   * that is not already somebody else's. */
+  listFolder(folder: string): Promise<string[]>;
+  /** An image written beside a document. */
+  writeBytes(path: string, bytes: Uint8Array): Promise<void>;
   /** Throws a `SaveProblem` and nothing else. Every failure an author can
    * do something about has a sentence written for them. */
   write(path: string, text: string, message: string): Promise<void>;
@@ -108,6 +113,17 @@ export async function openFolder(): Promise<Store | null> {
     },
 
     readBytes: (path) => folder.readBytesAt(root, path),
+
+    listFolder: (path) => folder.listNamesIn(root, path).catch(() => []),
+
+    async writeBytes(path, bytes) {
+      try {
+        const made = await folder.createFile(root, path, bytes as Uint8Array<ArrayBuffer>);
+        handles.set(path, made.handle);
+      } catch (error) {
+        asProblem(error);
+      }
+    },
 
     async write(path, text) {
       const handle = handles.get(path);
@@ -168,6 +184,19 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
         return await github.getFileBytes(repo, path, branch, token);
       } catch {
         return null;
+      }
+    },
+
+    listFolder: (path) => github.listDirectory(repo, path, branch, token).catch(() => []),
+
+    async writeBytes(path, bytes) {
+      try {
+        const result = await github.putFileContent(
+          repo, path, bytes, shas.get(path), branch, `Add ${path}`, token,
+        );
+        shas.set(path, result.sha);
+      } catch (error) {
+        asProblem(error);
       }
     },
 

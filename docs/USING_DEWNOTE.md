@@ -102,6 +102,46 @@ line becomes a heading as you type it.
 Between blocks, hover for a **+** to add one. In an empty paragraph,
 typing **/** offers the same menu from the keyboard.
 
+## Images
+
+Paste or drop an image into the document. It is written beside the
+markdown file, named after the file you pasted, and the document gets
+`![](name.png)` — the same bare name the site's build resolves. If that
+name is already taken, the new one is numbered rather than overwriting
+what is there.
+
+An image already named in a file draws from the folder it sits in. One
+that cannot be found stays as written, so you can see which name is
+wrong.
+
+## Sending a document to somebody
+
+⌘K, then **Save as an HTML page**. You get one file: the document, its
+stylesheet, its maths already typeset, and every image inside the file
+rather than beside it. It needs nothing else to open.
+
+A cell appears as its code. A cell's output is not part of the document —
+it lives in the tab for as long as the tab is open — so there is nothing
+truthful to put in its place.
+
+## Jupyter
+
+⌘K, **Save as a Jupyter notebook**, writes an `.ipynb`. Prose becomes
+markdown cells, fences become code cells, and every cell quietly keeps
+the text it came from — so **Open a Jupyter notebook…** brings the same
+file back, byte for byte.
+
+An import replaces what is on screen. Nothing is written until you save.
+
+## Checking links
+
+⌘K, then **Check links**. It reads every file in the workspace, not just
+the one you have open, and lists every `tutorial:` link that names a page
+nothing claims. Click a row to open the file it is written in.
+
+`tutorial:` is the only scheme the build resolves. A `module:` or
+`series:` link would ship as a literal broken address.
+
 ---
 
 ## 5. Cells

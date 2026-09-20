@@ -126,6 +126,38 @@ belonging to the older code.
 
 ---
 
+## Images
+
+An image lives beside the document that names it, and the markdown says
+only its bare name because that is what both builds resolve.
+
+The resolved URL goes on the `<img>` element, never on the node, so a
+save writes the name rather than a blob URL. ProseMirror re-renders an
+image whenever its node is touched, which drops that URL, so
+`drawLocalImages` watches the editor root rather than running once.
+
+A pasted image goes through `plugin-upload`'s uploader: written beside
+the document under a name that is free, and referenced by that name. Not
+inlined as base64 — that is a file nobody can open, edit or replace.
+
+## Export
+
+`exportHtml` renders from the markdown, not from the editor's DOM. The
+DOM carries contenteditable attributes, Vue wrappers, and code blocks
+that have not mounted because they are below the fold; the markdown is
+the document.
+
+KaTeX's stylesheet is inlined only when the rendered page contains
+KaTeX's own output — asked of the result rather than guessed from the
+source, because a sentence about costing $5 and $6 is not maths.
+
+Which is the other thing here: **remark-math claims any `$…$`**, and
+dewlab's build does not — its `INLINE_MATH_RE` refuses a span with
+whitespace against either delimiter. `unmathPlainDollars` puts those
+spans back as text, in the editor and in the export alike, so what is on
+screen is what the site will show. A save then writes `\$`, which dewlab
+renders as `$`.
+
 ## The store
 
 ```ts

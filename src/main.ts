@@ -195,10 +195,12 @@ let held: Document | null = null;
       list: async () => [...held_].map(([path, content]) => ({ path, content })),
       read: async (path: string) => held_.get(path) ?? "",
       readBytes: async () => null,
+      listFolder: async () => [],
       async write(path: string, text: string) {
         held_.set(path, text);
         written.push({ path, text });
       },
+      writeBytes: async () => {},
     });
   },
 };
