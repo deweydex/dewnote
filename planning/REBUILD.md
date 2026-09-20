@@ -281,10 +281,11 @@ could break on a major version.
 1. ~~This document, and the archive move.~~
 2. ~~`editor.ts` against the probe's proven configuration, with the
    round-trip test running over the real corpus in CI.~~
-3. ~~`store.ts` and `shell.ts` ported.~~ ← *here*
-4. `cells.ts` and Pyodide.
+3. ~~`store.ts` and `shell.ts` ported.~~
+4. ~~`cells.ts`, Pyodide and the appearance settings.~~ ← *here*
 5. The normalisation pass over dewlab, as its own reviewable PR.
 6. `docs/USING_DEWNOTE.md` rewritten where it now lies.
+7. What `archive/` still holds, listed in §7.
 
 Step 2 carries the round-trip corpus test. If that test cannot be kept
 green, this design is wrong and the archive comes back.
@@ -297,9 +298,9 @@ Steps 1–3, measured rather than estimated.
 
 | | Before | After |
 |---|---|---|
-| TypeScript, not counting tests | 12,274 | **2,950** |
-| CSS | 4,287 | **598** |
-| Modules | 41 | 13 |
+| TypeScript, not counting tests | 12,274 | **4,004** |
+| CSS | 4,287 | **793** |
+| Modules | 41 | 18 |
 
 The largest file is now `workspace-palette.ts` at 462 lines, and the
 second is `modules.ts` at 406 — neither of them editor code. The editor
@@ -328,3 +329,35 @@ needs it — the palette, previewing a file the editor is not holding.
 And `active-store.ts`, which existed so a third module could ask either
 browser to open a path, has nothing left to mediate: there is one store
 interface and one thing that calls it.
+
+
+---
+
+## 7. What `archive/` still holds
+
+The archive was 16,105 lines when it was made and is 6,415 now. What went
+was everything superseded outright: the block model and its offsets, the
+per-block editor lifecycle, both file browsers, the icon rail, the file
+bar, the workflow shell, the outline panel, the front-matter form, and
+the twenty e2e specs that drove surfaces which no longer exist.
+
+What is left is not a graveyard — it is the list of features not yet
+rebuilt, each with a working implementation to read:
+
+| Still in `archive/src/` | Lines | What it is |
+|---|---|---|
+| `series-panel.ts`, `module-writer.ts` | 997 | Moving a tutorial between series, and writing the module file back |
+| `cell.ts` | 520 | The hint, card, question and site-pane fences. Only the exec-cell half is ported |
+| `export-html.ts`, `jupyter.ts` | 351 | The two exports |
+| `link-check.ts`, `link-picker.ts` | 326 | Checking links against real slugs, and picking one |
+| `asset-name.ts`, `asset-preview.ts` | 209 | An image beside the document that names it |
+| `site-cell.ts` | 80 | Grouping `html site` panes that share a `site:` key |
+| `release.ts` | 63 | Freezing a version and starting a new one |
+| `dialect.ts` | 40 | dewlab or dewstack, decided from front matter |
+
+`archive/tests/e2e/` keeps the eleven specs for those features and no
+others. Each one is a description of behaviour that still has to exist;
+the rest described a shape that does not.
+
+A module leaves the archive when the thing it describes is rebuilt, not
+when it is read.

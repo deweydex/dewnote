@@ -4,22 +4,24 @@ The editor dewnote had before it was rebuilt on Milkdown — 12,274 lines of
 TypeScript across 41 modules, plus its tests. `planning/REBUILD.md` says
 why it was replaced and what came across.
 
-Nothing here is imported by the running app. It is kept for two reasons,
-and both are about reading rather than running.
+Nothing here is imported by the running app, and nothing here is kept
+for sentiment. Everything superseded outright has been deleted — the
+block model and its offsets, the per-block editor lifecycle, both file
+browsers, the icon rail, the file bar, the workflow shell, the outline
+panel, the front-matter form, and the twenty e2e specs that drove
+surfaces which no longer exist. That was 9,690 lines.
 
-**It is the specification for the parts still being ported.**
-`src/cell.ts` holds the parse of a dewlab exec cell's `id:`, `hint:`,
-`expect:` and `name:` header lines, matched to dewlab's own `HEADER_RE`.
-`src/github.ts` and `src/folder-store.ts` are the two stores.
-`src/spine.ts`, `src/workspace-palette.ts` and `src/commands.ts` are the
-interface that is being kept. Porting them means reading them, not
-guessing at them.
+What is left is the list of features not yet rebuilt, each with a working
+implementation to read: the placement view and the module writer, the
+hint/card/question/site fences, the two exports, link checking and
+picking, images beside a document, releases, and the dialect test.
+`planning/REBUILD.md` §7 is the table, with line counts.
 
-**It records what was learned the hard way.** Most modules open with a
-comment saying which plan step they answer and which measurement forced
-their shape — the palette's ranking, in particular, took three faults
-found only by running it against 181 real tutorials rather than a
-fixture. That is worth more than the code.
+`tests/e2e/` keeps the eleven specs for exactly those features. Each is a
+description of behaviour that still has to exist.
 
-It goes once the port is finished and the notes worth keeping have moved
-into `DECISIONS.md`.
+Most modules open with a comment saying which plan step they answer and
+which measurement forced their shape. That is often worth more than the
+code, and it is why these are read rather than guessed at.
+
+A module leaves here when the thing it describes is rebuilt.

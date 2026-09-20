@@ -1,50 +1,39 @@
-/* Appearance is a set of custom properties, and Crepe is restyled in
- * terms of them rather than in terms of its own. Everything a reader can
- * change lives here; planning/REBUILD.md §2 has the reasoning. */
+/* dewnote's own chrome, layered on dewlab's tokens.
+ *
+ * Every reading setting is one of those tokens (settings.ts writes them
+ * on `<html>`), so the page is described in terms of them and nothing
+ * else — a second set of names here is how a slider ends up moving
+ * nothing, which is exactly what happened the first time this was
+ * written: the panel wrote `--dl-line-width` and the page read
+ * `--dn-measure`.
+ *
+ * `--dn-*` is only for what dewlab has no token for: page padding, the
+ * code editor's own size, the gap between blocks. */
 
 :root {
-  --dn-measure: 34rem;
-  --dn-text-size: 18px;
-  --dn-line-height: 1.6;
-  --dn-body-font: Georgia, "Times New Roman", serif;
-  --dn-code-font: ui-monospace, SFMono-Regular, Menlo, monospace;
-  --dn-code-size: 14px;
-  --dn-ink: #1c1c1e;
-  --dn-paper: #fdfdfb;
-  --dn-rule: #d8d6cf;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --dn-ink: #e8e6e1;
-    --dn-paper: #17181a;
-    --dn-rule: #34363a;
-  }
-}
-
-:root[data-theme="dark"] {
-  --dn-ink: #e8e6e1;
-  --dn-paper: #17181a;
-  --dn-rule: #34363a;
+  --dn-page-padding: 1rem;
+  --dn-block-gap: 1.1em;
+  --dn-code-font-size: 15px;
+  --dn-cell-tint: 1;
 }
 
 html,
 body {
   margin: 0;
-  background: var(--dn-paper);
-  color: var(--dn-ink);
+  background: var(--dl-bg);
+  color: var(--dl-fg);
 }
 
 body {
-  font-family: var(--dn-body-font);
-  font-size: var(--dn-text-size);
-  line-height: var(--dn-line-height);
+  font-family: var(--dl-font-family);
+  font-size: var(--dl-font-size);
+  line-height: var(--dl-line-height, 1.62);
 }
 
 .dn-page {
-  max-width: var(--dn-measure);
+  max-width: var(--dl-line-width);
   margin: 4rem auto;
-  padding: 0 1rem;
+  padding: 0 var(--dn-page-padding);
 }
 
 .milkdown {
@@ -58,22 +47,33 @@ body {
   outline: none;
 }
 
+.milkdown .ProseMirror > * + * {
+  margin-block-start: var(--dn-block-gap);
+}
+
 .milkdown code,
-.milkdown pre {
-  font-family: var(--dn-code-font);
-  font-size: var(--dn-code-size);
+.milkdown pre,
+.milkdown .cm-editor {
+  font-family: var(--dl-mono);
+  font-size: var(--dn-code-font-size);
+}
+
+.milkdown .cm-editor,
+.milkdown milkdown-code-block {
+  background: color-mix(in srgb, var(--dl-cell-bg) calc(var(--dn-cell-tint) * 100%), transparent);
 }
 
 /* Front matter reads as a label on the document, not as content. */
 .milkdown [data-front-matter] {
-  font-family: var(--dn-code-font);
+  font-family: var(--dl-mono);
   font-size: 0.8em;
-  color: color-mix(in srgb, var(--dn-ink) 55%, transparent);
-  border-left: 2px solid var(--dn-rule);
+  color: var(--dl-muted);
+  border-left: 2px solid var(--dl-rule);
   padding: 0.25rem 0 0.25rem 0.75rem;
   margin-bottom: 1.5rem;
   white-space: pre-wrap;
 }
+
 /* The spine lives in the margin the page already had, so the page keeps
    its own centring and its own measure — nothing here moves the column
    the text runs in. `--dn-spine-width` is measured in spine.ts from the
@@ -595,4 +595,139 @@ body {
   color: var(--dl-orange);
   max-width: 28rem;
   text-align: center;
+}
+
+/* A runnable cell's own panel, under the code. Crepe's preview toggle
+ * appears beside Copy once this exists and hides the *code*, which is
+ * the right thing for a finished cell someone is reading. */
+.dn-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-family: var(--dl-font-family);
+}
+
+.dn-cell-run {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 999px;
+  background: var(--dl-panel-bg, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.dn-cell-run:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.dn-cell-output {
+  align-self: stretch;
+  font-family: var(--dl-mono);
+  font-size: 0.85rem;
+  white-space: normal;
+  overflow-x: auto;
+}
+
+.dn-cell-output pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+.dn-cell-output.is-error {
+  color: var(--dl-orange);
+}
+
+/* It ran, then the code changed. Still worth showing — a reader fixing a
+ * typo wants what it printed a moment ago — but never as a current
+ * result. */
+.dn-cell-output.is-stale {
+  opacity: 0.55;
+}
+
+/* Appearance. One row per setting, all the same shape, because every
+ * setting is a custom property and every control is a range, a choice or
+ * a switch. */
+.dn-settings-overlay[hidden] { display: none; }
+
+.dn-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 1rem;
+  background: color-mix(in srgb, var(--dl-bg) 70%, transparent);
+}
+
+.dn-settings {
+  width: min(28rem, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem 1.25rem;
+  background: var(--dl-panel-bg, var(--dl-bg));
+  color: var(--dl-fg);
+  border: 1px solid var(--dl-rule);
+  border-radius: 10px;
+  box-shadow: var(--dl-shadow, 0 12px 40px rgb(0 0 0 / 0.25));
+  font-family: var(--dl-font-family);
+}
+
+.dn-settings h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--dl-muted);
+}
+
+.dn-settings-row {
+  display: grid;
+  grid-template-columns: 9rem 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.dn-settings-row output {
+  font-family: var(--dl-mono);
+  font-size: 0.8rem;
+  color: var(--dl-muted);
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+.dn-settings-row input[type="range"] { width: 100%; }
+.dn-settings-row input[type="checkbox"] { justify-self: start; }
+
+.dn-settings-row select,
+.dn-settings-row input[type="text"] {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 4px;
+  background: var(--dl-bg);
+  color: inherit;
+  grid-column: 2 / -1;
+}
+
+.dn-settings-reset {
+  justify-self: start;
+  margin-top: 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }

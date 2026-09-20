@@ -119,3 +119,63 @@ test("dewlab's own site pages are documents like any other", async ({ page }) =>
   await page.keyboard.press("Enter");
   await expect(page.locator(".milkdown h1")).toHaveText("About");
 });
+
+test("a runnable cell offers Run; an illustrative fence does not", async ({ page }) => {
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+
+  // One `python exec` fence in the fixture, and no plain one.
+  await expect(page.locator(".dn-cell-run")).toHaveCount(1);
+  await expect(page.locator(".dn-cell-run")).toHaveText("Run");
+
+  // Pyodide itself is not reachable from this sandbox, so what is
+  // checked here is the affordance, not the interpreter —
+  // tests/e2e/pyodide.spec.ts is where a real run belongs.
+});
+
+test("an illustrative fence has no Run button", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/plain.md": "---\ntitle: Plain\n---\n\n# Plain\n\n```python\nprint(1)\n```\n",
+  });
+  await page.locator(".dn-wp-input").fill("plain");
+  await page.keyboard.press("Enter");
+  // Crepe renders a code block as a CodeMirror instance, not a `pre`.
+  await expect(page.locator(".milkdown .cm-editor")).toHaveCount(1);
+  await expect(page.locator(".dn-cell-run")).toHaveCount(0);
+});
+
+test("every appearance setting is reachable from the palette, and moving the measure moves the page", async ({ page }) => {
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("appearance");
+  await page.keyboard.press("Enter");
+
+  const panel = page.locator(".dn-settings");
+  await expect(panel).toBeVisible();
+  // Eleven settings, the same eleven the original had minus the sidebar
+  // control, which has no sidebar left to describe.
+  await expect(panel.locator(".dn-settings-row")).toHaveCount(11);
+
+  const before = await page.locator(".dn-page").evaluate((el) => el.getBoundingClientRect().width);
+  const measure = panel.locator(".dn-settings-row", { hasText: "Line width" }).locator("input");
+  await measure.fill("48");
+  await measure.dispatchEvent("input");
+  const after = await page.locator(".dn-page").evaluate((el) => el.getBoundingClientRect().width);
+  expect(after).toBeGreaterThan(before);
+
+  await panel.locator(".dn-settings-reset").click();
+  const reset = await page.locator(".dn-page").evaluate((el) => el.getBoundingClientRect().width);
+  expect(reset).toBe(before);
+});
+
+test("a setting survives a reload, because it is the reader's and not the session's", async ({ page }) => {
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("appearance");
+  await page.keyboard.press("Enter");
+  await page.locator(".dn-settings-row", { hasText: "Theme" }).locator("select").selectOption("dark");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});

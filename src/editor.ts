@@ -21,6 +21,10 @@ import { codeBlockSchema } from "@milkdown/kit/preset/commonmark";
 import { $nodeSchema, $remark } from "@milkdown/kit/utils";
 import { editorViewCtx } from "@milkdown/kit/core";
 import remarkFrontmatter from "remark-frontmatter";
+import { python } from "@codemirror/lang-python";
+import { sql } from "@codemirror/lang-sql";
+import { LanguageDescription } from "@codemirror/language";
+import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } from "./cells.ts";
 
 /** A fence's info string past its first word — `exec` in `python exec`,
  * `site` in `html site`, `cell=name persist` in `sql cell=name persist`.
@@ -136,6 +140,38 @@ export function canonicaliseDisplayMath(markdown: string): string {
   });
 }
 
+/** The info string past its first word, for the code block holding
+ * `content`.
+ *
+ * Crepe hands `renderPreview` a language and a body and nothing else,
+ * and `exec` lives in the `meta` attr — so this looks the block up in
+ * the document by its text. Two code blocks with byte-identical bodies
+ * would resolve to the same answer, which is correct anyway: they carry
+ * the same info string or they are not identical. */
+function metaOf(view: { state: { doc: { descendants(fn: (node: any) => boolean): void } } } | null, content: string): string {
+  if (!view) return "";
+  let found = "";
+  view.state.doc.descendants((node: any) => {
+    if (found) return false;
+    if (node.type.name === "code_block" && node.textContent === content) {
+      found = String(node.attrs.meta ?? "");
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
+/** A cell's own output, as an element rather than a string: the panel
+ * holds rendered HTML the Python side produced, and a string would be
+ * sanitised on the way through Crepe's own DOMPurify pass. */
+function outputPanel(output: CellOutput): HTMLElement {
+  const panel = document.createElement("div");
+  panel.className = output.ok ? "dn-cell-output" : "dn-cell-output is-error";
+  panel.innerHTML = output.markup;
+  return panel;
+}
+
 export interface Heading {
   level: number;
   text: string;
@@ -151,12 +187,105 @@ export interface Document {
 export interface EditorOptions {
   markdown: string;
   onChange?(markdown: string): void;
+  /** Runs one cell and answers with what it produced. Absent means no
+   * interpreter is available, and a cell then shows its code and no Run
+   * button — which is the right state for an export or a test, not an
+   * error to report. */
+  runCell?(request: { id: string; code: string; sql: boolean }): Promise<CellOutput>;
+}
+
+/** What each cell's last run produced, keyed by the exact source that
+ * produced it.
+ *
+ * This is not a cache for speed. Crepe calls `renderPreview` from a
+ * `watch` on the block's text, so it fires on **every keystroke** — for
+ * rendering a diagram that is fine, and for starting an interpreter it
+ * is not. Keying on the source means a run only ever happens when one
+ * was asked for, and an edit since the last run shows as stale rather
+ * than quietly re-running.
+ */
+interface RunRecord {
+  /** The exact body that produced this output, so an edit since the run
+   * shows as stale rather than as a fresh result for code that changed. */
+  source: string;
+  output: CellOutput;
 }
 
 export async function mountEditor(
   root: HTMLElement,
   options: EditorOptions,
 ): Promise<Document> {
+  /** The editor view, once Crepe has made one. `renderPreview` can fire
+   * before `create()` resolves, and answering "not runnable" then is
+   * right: nothing has been asked to run yet. */
+  const view = (): any => {
+    let found: any = null;
+    try {
+      crepe.editor.action((ctx) => { found = ctx.get(editorViewCtx); });
+    } catch { found = null; }
+    return found;
+  };
+
+  /** Keyed by the cell's own `id:`, which is the thing that persists
+   * across an edit — a reader who fixes a typo wants to still see what
+   * the cell printed a moment ago, marked as belonging to the older
+   * code. */
+  const results = new Map<string, RunRecord>();
+
+  /** The panel under a runnable cell: a Run button, and whatever the
+   * last run produced. Crepe's own preview toggle appears beside Copy
+   * once this exists, and hides the code rather than the output — so the
+   * panel is what makes a cell a cell. */
+  function cellPanel(
+    language: string,
+    content: string,
+    apply: (value: string | HTMLElement | null) => void,
+  ): HTMLElement {
+    const cell = parseCell(content);
+    const id = cell.id ?? "cell";
+    const panel = document.createElement("div");
+    panel.className = "dn-cell";
+
+    const run = document.createElement("button");
+    run.type = "button";
+    run.className = "dn-cell-run";
+    panel.appendChild(run);
+
+    const record = results.get(id);
+    const stale = record !== undefined && record.source !== content;
+    run.textContent = record ? "Run again" : "Run";
+
+    if (record) {
+      const output = outputPanel(record.output);
+      if (stale) {
+        output.classList.add("is-stale");
+        output.title = "This ran before the code was edited.";
+      }
+      panel.appendChild(output);
+    }
+
+    run.addEventListener("click", async () => {
+      run.disabled = true;
+      run.textContent = "Running…";
+      const sqlCell = cellLanguage(language) === "sql";
+      const output = await options.runCell!({
+        id,
+        code: sqlCell ? wrapSqlCode(cell.code) : cell.code,
+        sql: sqlCell,
+      }).catch((error: unknown) => ({
+        ok: false,
+        markup: `<pre>${String(error instanceof Error ? error.message : error)}</pre>`,
+      }));
+      results.set(id, { source: content, output });
+      // Hand back a freshly built panel: the click happened on this one,
+      // and rebuilding is how the button's own label and the output stay
+      // in step with each other.
+      apply(cellPanel(language, content, apply));
+    });
+
+    return panel;
+  }
+
   const crepe = new Crepe({
     root,
     defaultValue: canonicaliseDisplayMath(options.markdown),
@@ -167,6 +296,26 @@ export async function mountEditor(
       [Crepe.Feature.Toolbar]: false,
       [Crepe.Feature.TopBar]: false,
       [Crepe.Feature.AI]: false,
+    },
+    featureConfigs: {
+      [Crepe.Feature.CodeMirror]: {
+        languages: [
+          LanguageDescription.of({ name: "python", support: python() }),
+          LanguageDescription.of({ name: "sql", support: sql() }),
+        ],
+        previewToggleButton: (showingPreview: boolean) => (showingPreview ? "Hide" : "Run"),
+        previewLabel: "Output",
+        previewLoading: "Running…",
+        renderPreview: (language: string, content: string, apply: (value: string | HTMLElement | null) => void) => {
+          // Crepe calls this from a `watch` on the block's text, so it
+          // fires on every keystroke. It must therefore never start a
+          // run of its own: all it does is build the panel, and the
+          // panel's own button is what runs anything.
+          if (!options.runCell) return null;
+          if (!isRunnable(language, metaOf(view(), content))) return null;
+          return cellPanel(language, content, apply);
+        },
+      },
     },
   });
 

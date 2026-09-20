@@ -17,7 +17,10 @@ import { buildFileIndex, locationOf, type FileIndexEntry } from "./workspace.ts"
 import { parseModuleFiles, isModuleFile } from "./modules.ts";
 import type { Module } from "./modules.ts";
 import { messageOf, type SaveProblem } from "./save-problem.ts";
+import { runCell } from "./runtime/pyodide-engine.ts";
+import type { CellOutput } from "./cells.ts";
 import type { Store, StoreFile } from "./store.ts";
+import { mountSettingsPanel } from "./settings-panel.ts";
 
 interface OpenDocument {
   path: string;
@@ -32,6 +35,15 @@ export interface Shell {
    * thing to do once a workspace exists. */
   useStore(store: Store): Promise<void>;
   destroy(): void;
+}
+
+/** A stream's plain text on its way into a panel that holds HTML. The
+ * engine sends `markup` for anything it rendered itself; a bare `text`
+ * event is stdout, and stdout is not markup. */
+function escapeText(text: string): string {
+  const holder = document.createElement("pre");
+  holder.textContent = text;
+  return holder.outerHTML;
 }
 
 export function mountShell(page: HTMLElement): Shell {
@@ -61,6 +73,8 @@ export function mountShell(page: HTMLElement): Shell {
 
   // ── the palette ────────────────────────────────────────────────────
 
+  const settings = mountSettingsPanel();
+
   const palette: WorkspacePalette = mountWorkspacePalette({
     getIndex: () => index,
     getModules: () => modules,
@@ -80,6 +94,7 @@ export function mountShell(page: HTMLElement): Shell {
     const document_ = await mountEditor(page, {
       markdown: source,
       onChange: () => refreshSpine(),
+      runCell: runOneCell,
     });
     // `saved` is what the editor made of the file, not the file — a
     // document is normalised on the way in (editor.ts), and comparing
@@ -89,6 +104,24 @@ export function mountShell(page: HTMLElement): Shell {
     spine.setProblem(null);
     refreshSpine();
     return true;
+  }
+
+  /** One cell, run in the worker. Streams arrive as they are produced
+   * and are concatenated; the engine's own `run-cell` reply says whether
+   * it ended well. The interpreter boots on the first Run and stays up,
+   * which is why nothing here is started when a document opens. */
+  async function runOneCell(request: { id: string; code: string; sql: boolean }): Promise<CellOutput> {
+    let markup = "";
+    const result = await runCell(
+      request.id,
+      request.code,
+      (event) => {
+        if (event.kind === "clear") markup = "";
+        else markup += event.markup || escapeText(event.text);
+      },
+      { sql: request.sql },
+    );
+    return { ok: result.ok, markup };
   }
 
   async function saveNow(): Promise<boolean> {
@@ -147,6 +180,14 @@ export function mountShell(page: HTMLElement): Shell {
       spine.show();
       registerCommands([
         {
+          id: "appearance",
+          label: "Appearance…",
+          section: "Appearance",
+          keywords: ["settings", "theme", "dark", "font", "size", "width"],
+          detail: "Theme, type, measure, spacing.",
+          run: () => settings.open(),
+        },
+        {
           id: "save",
           label: "Save this document",
           section: "Document",
@@ -175,6 +216,7 @@ export function mountShell(page: HTMLElement): Shell {
       window.removeEventListener("keydown", onKeyDown);
       open?.document.destroy();
       palette.destroy();
+      settings.destroy();
       spine.destroy();
       clearCommands();
     },
