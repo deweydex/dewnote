@@ -1031,3 +1031,30 @@ test("the gate asks for a token and derives the rest", async ({ page }) => {
   // And it is still usable rather than stuck mid-press.
   await expect(page.locator('.dn-gate-repo button[type="submit"]')).toBeEnabled();
 });
+
+test("an open panel keeps the document behind it out of reach", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown p").first()).toBeVisible();
+
+  await page.locator(".dn-gear").click();
+  await expect(page.locator(".dn-settings")).toBeVisible();
+
+  // Every panel is a `<dialog>` opened with `showModal()`, so the page
+  // behind it is inert. Before that it was a div with a high z-index:
+  // Tab walked out of the panel into the editor, and a screen reader
+  // read straight through it.
+  expect(
+    await page.evaluate(() => {
+      const editor = document.querySelector<HTMLElement>(".milkdown .ProseMirror")!;
+      editor.focus();
+      return document.activeElement === editor;
+    }),
+  ).toBe(false);
+
+  // Escape is the dialog's own, with no key handler of ours behind it.
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".dn-settings")).toBeHidden();
+});

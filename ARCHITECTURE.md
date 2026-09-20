@@ -360,8 +360,16 @@ Native controls are handled the same way — `color-scheme` and
 selectors. That dresses every slider, checkbox, select, text field and
 scrollbar without styling a thumb or a track.
 
-**Everything that appears over the document is one thing**: a panel on a
-dimmed page. The palette, the settings, the report, the source view and
+**Everything that appears over the document is one `<dialog>`**, opened
+with `showModal()`. Escape, the focus trap, the background going inert
+and the backdrop are all the platform's. The first three used to be
+written by hand in each module — except the focus trap, which was never
+written at all: Tab walked out of an open panel into the editor behind
+it, and a screen reader read straight through it. Being in the top layer
+also means no `z-index`; the stack is the order things open in. Clicking
+away is the one thing a dialog does not give, so that handler stays.
+
+They are a panel on a dimmed page. The palette, the settings, the report, the source view and
 the one-question overlay share `.dn-overlay` and `.dn-panel`, and each
 sets only what makes it different — its stacking order, how far down it
 sits, how wide it is, how it lays out inside.

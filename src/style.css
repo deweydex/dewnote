@@ -463,24 +463,35 @@ body {
   outline: none;
 }
 
-/* Everything that appears over the document is one thing: a panel on a
-   dimmed page. Written once, because five copies is how the palette
-   lost its border and the report and settings panels lost their shadow
-   — `--dl-shadow` is a colour, so `box-shadow: var(--dl-shadow)` is
-   invalid and dropped, while `0 24px 70px var(--dl-shadow)` is not.
-   Each overlay sets only its stacking order and how far down the panel
-   sits; each panel, only its width and how it lays out inside. */
-.dn-overlay[hidden] { display: none; }
+/* Everything that appears over the document is one `<dialog>` on the
+   page's own top layer. `showModal()` brings Escape, a focus trap, the
+   background going inert and the backdrop — all of which this used to
+   do by hand, except the focus trap, which it never did at all: Tab
+   walked out of an open panel and into the editor behind it.
+   Top layer also means no z-index: the stack is the order things open
+   in. Each dialog sets only how far down its panel sits. */
 .dn-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: var(--dn-overlay-z, 95);
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: var(--dn-overlay-drop, 8vh) 1rem 1rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: var(--dl-font-family);
+  overflow: hidden;
+}
+
+.dn-overlay[open] {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: var(--dn-overlay-drop, 8vh) 1rem 1rem;
+}
+
+.dn-overlay::backdrop {
   background: color-mix(in srgb, var(--dl-bg) 70%, transparent);
-  font-family: var(--dl-font-family);
 }
 
 .dn-panel {
@@ -499,7 +510,6 @@ body {
 /* ------------------------------------------------- the workspace palette */
 
 .dn-wp-overlay {
-  --dn-overlay-z: 110;
   --dn-overlay-drop: 6vh;
 }
 .dn-wp-box {
@@ -821,7 +831,6 @@ body {
  * setting is a custom property and every control is a range, a choice or
  * a switch. */
 .dn-settings-overlay {
-  --dn-overlay-z: 90;
   --dn-overlay-drop: 6vh;
 }
 
@@ -947,7 +956,6 @@ body {
 
 /* A report: what did not check out, and where. */
 .dn-report-overlay {
-  --dn-overlay-z: 95;
 }
 
 .dn-report {
@@ -1002,7 +1010,6 @@ button.dn-report-row:focus-visible {
 
 /* The whole file, as text. */
 .dn-source-overlay {
-  --dn-overlay-z: 96;
   align-items: center;
   padding-block: 4vh;
 }
@@ -1073,7 +1080,6 @@ button.dn-report-row:focus-visible {
 
 /* One question. */
 .dn-ask-overlay {
-  --dn-overlay-z: 97;
   --dn-overlay-drop: 14vh;
 }
 

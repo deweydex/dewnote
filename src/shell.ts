@@ -462,11 +462,12 @@ export function mountShell(page: HTMLElement): Shell {
     reportProblems(checkWorkspace(all, around()), "the workspace");
   }
 
-  const reportOverlay = document.createElement("div");
+  const reportOverlay = document.createElement("dialog");
   reportOverlay.className = "dn-overlay dn-report-overlay";
-  reportOverlay.hidden = true;
+  // Escape, the focus trap and the background going inert are the
+  // dialog's own. Clicking away is the one thing it does not give.
   reportOverlay.addEventListener("click", (event) => {
-    if (event.target === reportOverlay) reportOverlay.hidden = true;
+    if (event.target === reportOverlay) reportOverlay.close();
   });
   document.body.appendChild(reportOverlay);
 
@@ -518,7 +519,7 @@ export function mountShell(page: HTMLElement): Shell {
         row.type = "button";
         const path = problem.path!;
         row.addEventListener("click", () => {
-          reportOverlay.hidden = true;
+          reportOverlay.close();
           void openPath(path);
         });
       }
@@ -526,7 +527,7 @@ export function mountShell(page: HTMLElement): Shell {
     }
 
     reportOverlay.replaceChildren(box);
-    reportOverlay.hidden = false;
+    reportOverlay.showModal();
     (box.querySelector<HTMLElement>("button") ?? box).focus();
   }
 
@@ -628,10 +629,6 @@ export function mountShell(page: HTMLElement): Shell {
 
   function onKeyDown(event: KeyboardEvent): void {
     const meta = event.metaKey || event.ctrlKey;
-    if (event.key === "Escape" && !reportOverlay.hidden) {
-      reportOverlay.hidden = true;
-      return;
-    }
     if (meta && event.key === "/") {
       event.preventDefault();
       showSource();

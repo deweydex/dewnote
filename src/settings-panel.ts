@@ -61,14 +61,12 @@ export function mountSettingsPanel(): SettingsPanel {
   let settings = loadSettings();
   applySettings(settings);
 
-  const overlay = document.createElement("div");
+  const overlay = document.createElement("dialog");
   overlay.className = "dn-overlay dn-settings-overlay";
-  overlay.hidden = true;
+  overlay.setAttribute("aria-label", "Appearance");
 
   const box = document.createElement("div");
   box.className = "dn-panel dn-settings";
-  box.setAttribute("role", "dialog");
-  box.setAttribute("aria-label", "Appearance");
   overlay.appendChild(box);
 
   /** Applied and stored on every input, so a reader dragging a slider
@@ -149,28 +147,24 @@ export function mountSettingsPanel(): SettingsPanel {
     box.appendChild(reset);
   }
 
-  function close(): void { overlay.hidden = true; }
+  function close(): void { overlay.close(); }
 
+  // Escape, the focus trap and the background going inert are the
+  // dialog's own. Clicking away is the one thing it does not give: a
+  // click on the backdrop reports the dialog itself as its target.
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) close();
   });
-
-  function onKeyDown(event: KeyboardEvent): void {
-    if (event.key === "Escape" && !overlay.hidden) close();
-  }
-  window.addEventListener("keydown", onKeyDown);
 
   document.body.appendChild(overlay);
 
   return {
     open() {
       render();
-      overlay.hidden = false;
-      box.querySelector<HTMLElement>("select, input")?.focus();
+      overlay.showModal();
     },
     close,
     destroy() {
-      window.removeEventListener("keydown", onKeyDown);
       overlay.remove();
     },
   };

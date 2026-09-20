@@ -166,9 +166,8 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
   let active = 0;
   let previewToken = 0;
 
-  const overlay = document.createElement("div");
+  const overlay = document.createElement("dialog");
   overlay.className = "dn-overlay dn-wp-overlay";
-  overlay.hidden = true;
 
   const box = document.createElement("div");
   box.className = "dn-panel dn-wp-box";
@@ -398,14 +397,14 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
   }
 
   function open(): void {
-    overlay.hidden = false;
+    overlay.showModal();
     input.value = "";
     refresh();
     input.focus();
   }
 
   function close(): void {
-    overlay.hidden = true;
+    overlay.close();
     previewToken += 1;
   }
 
@@ -425,7 +424,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
   function onKeydown(event: KeyboardEvent): void {
     if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
     event.preventDefault();
-    if (overlay.hidden) open();
+    if (!overlay.open) open();
     else close();
   }
   document.addEventListener("keydown", onKeydown);
@@ -433,7 +432,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
   return {
     open,
     close,
-    isOpen: () => !overlay.hidden,
+    isOpen: () => overlay.open,
     destroy() {
       document.removeEventListener("keydown", onKeydown);
       overlay.remove();
