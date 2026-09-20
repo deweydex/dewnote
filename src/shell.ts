@@ -126,6 +126,23 @@ export function mountShell(page: HTMLElement): Shell {
   // ── the palette ────────────────────────────────────────────────────
 
   const settings = mountSettingsPanel();
+
+  /** Appearance is in the palette, and this is the same panel in one
+   * press rather than two. Hidden until a workspace is open, because
+   * the gate is the only thing to look at before that. */
+  const gear = document.createElement("button");
+  gear.type = "button";
+  gear.className = "dn-gear";
+  gear.hidden = true;
+  gear.setAttribute("aria-label", "Appearance");
+  gear.innerHTML =
+    '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/>' +
+    '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" ' +
+    'd="M12 2.6v2.2M12 19.2v2.2M21.4 12h-2.2M4.8 12H2.6' +
+    'M18.6 5.4l-1.6 1.6M7 17l-1.6 1.6M18.6 18.6L17 17M7 7L5.4 5.4"/></svg>';
+  gear.addEventListener("click", () => settings.open());
+  document.body.appendChild(gear);
   const sourceView = mountSourceView();
   const asker = mountAsk();
 
@@ -639,6 +656,7 @@ export function mountShell(page: HTMLElement): Shell {
         detail: next.kind === "repo" ? (next.label.split(" · ")[1] ?? "") : "",
       });
       spine.show();
+      gear.hidden = false;
       registerCommands([
         {
           id: "appearance",
@@ -790,6 +808,7 @@ export function mountShell(page: HTMLElement): Shell {
       window.removeEventListener("keydown", onKeyDown);
       open?.document.destroy();
       palette.destroy();
+      gear.remove();
       settings.destroy();
       sourceView.destroy();
       asker.destroy();

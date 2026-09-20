@@ -379,6 +379,8 @@ build would serve: the newest `live` version, or the newest there is.
 
 ## 8. Appearance
 
+The circle in the top right opens it. So does ⌘K, **Appearance**.
+
 Press ⌘K, type `appearance`, press ↵.
 
 | Setting | Range |

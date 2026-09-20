@@ -26,6 +26,7 @@ import { sql } from "@codemirror/lang-sql";
 import { LanguageDescription } from "@codemirror/language";
 import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } from "./cells.ts";
 import { uploadConfig } from "@milkdown/kit/plugin/upload";
+import { imageInlineComponent, inlineImageConfig } from "@milkdown/kit/component/image-inline";
 import { isImageName, isLocalAsset } from "./images.ts";
 import { unmathPlainDollars } from "./maths.ts";
 import { idMaker, SNIPPETS } from "./slash-menu.ts";
@@ -250,34 +251,6 @@ export interface Heading {
  * keeps the bare name the build resolves. ProseMirror re-renders an
  * `<img>` whenever its node is touched, which drops the resolved src, so
  * this watches the editor rather than running once. */
-function drawLocalImages(
-  root: HTMLElement,
-  resolve: (src: string) => Promise<string | null>,
-): () => void {
-  const drawn = new Map<string, string | null>();
-
-  async function pass(): Promise<void> {
-    for (const image of root.querySelectorAll("img")) {
-      const written = image.getAttribute("data-dn-src") ?? image.getAttribute("src") ?? "";
-      if (!isLocalAsset(written)) continue;
-      if (image.getAttribute("data-dn-src") === written && image.src !== "") continue;
-      image.setAttribute("data-dn-src", written);
-      if (!drawn.has(written)) drawn.set(written, await resolve(written));
-      const found = drawn.get(written) ?? null;
-      if (found) image.src = found;
-      else image.setAttribute("data-dn-missing", "true");
-    }
-  }
-
-  void pass();
-  const watcher = new MutationObserver(() => void pass());
-  watcher.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["src"] });
-  return () => {
-    watcher.disconnect();
-    for (const url of drawn.values()) if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
-  };
-}
-
 export interface Document {
   /** Every runnable cell's id, in the order they appear. */
   cellIds(): string[];
@@ -534,6 +507,20 @@ export async function mountEditor(
     });
   }
 
+  if (options.resolveImage) {
+    const resolveImage = options.resolveImage;
+    crepe.editor.config((ctx) => {
+      ctx.update(inlineImageConfig.key, (config) => ({
+        ...config,
+        // The document keeps the bare name; only the element drawn from
+        // it gets a URL a browser can fetch.
+        proxyDomURL: async (src: string) =>
+          (isLocalAsset(src) ? await resolveImage(src) : null) ?? src,
+      }));
+    });
+  }
+  crepe.editor.use(imageInlineComponent);
+
   crepe.editor
     .config(keepMarkers)
     .use(codeBlockWithMeta)
@@ -554,9 +541,6 @@ export async function mountEditor(
   await crepe.create();
   hydrated = true;
 
-  const stopDrawing = options.resolveImage
-    ? drawLocalImages(root, options.resolveImage)
-    : () => {};
 
   /** One listener for every cell, because a listener put on the button
    * itself does not survive the preview panel's `innerHTML`. */
@@ -585,7 +569,6 @@ export async function mountEditor(
     },
     destroy: () => {
       root.removeEventListener("click", onRootClick);
-      stopDrawing();
       crepe.destroy();
     },
   };

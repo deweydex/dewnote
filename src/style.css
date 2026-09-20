@@ -12,14 +12,23 @@
 
 :root {
   --dn-page-padding: 1rem;
-  /* Crepe pads the editing surface 120px each side, and its block
-     handle — the ⠿ you drag a block by — lives in that gutter. Kept,
-     rather than removed, and added to the page's width instead, so the
-     text between the gutters is exactly `--dl-line-width`. */
-  --dn-editor-gutter: 120px;
   --dn-block-gap: 1.1em;
   --dn-code-font-size: 15px;
   --dn-cell-tint: 1;
+}
+
+/* Every native control — the sliders and checkbox in Appearance, the
+   selects, the scrollbars, the text fields — dressed by telling the
+   browser which scheme it is drawing and which accent to use, rather
+   than by restyling a thumb and a track. The selectors mirror
+   dewlab-tokens.css, so the theme setting moves this too. */
+:root {
+  color-scheme: light;
+  accent-color: var(--dl-link);
+}
+:root[data-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
 }
 
 html,
@@ -36,19 +45,18 @@ body {
 }
 
 .dn-page {
-  max-width: calc(var(--dl-line-width) + 2 * var(--dn-editor-gutter));
+  max-width: var(--dl-line-width);
   margin: 4rem auto;
   padding: 0 var(--dn-page-padding);
 }
 
-/* A phone has no room for a 120px gutter, and no hover to put a block
-   handle in it either. */
-@media (max-width: 720px) {
-  :root { --dn-editor-gutter: 16px; }
-}
-
+/* Crepe pads the editing surface 120px each side for its own
+   full-width shell. dewnote puts the editor inside a measured page, so
+   that gutter only eats the column — 544px of measure read as 304px of
+   text. The block handle is positioned relative to the block and sits
+   outside the editor either way, so nothing is lost by removing it. */
 .milkdown .ProseMirror {
-  padding-inline: var(--dn-editor-gutter);
+  padding-inline: 0;
 }
 
 /* Crepe sizes paragraphs itself, `16px/24px`, a fixed pair for an app
@@ -60,7 +68,49 @@ body {
   line-height: inherit;
 }
 
+/* Crepe's own colour contract, answered in dewlab's tokens.
+ *
+ * `theme/common/style.css` is Crepe's structure; its seventeen
+ * `--crepe-color-*` variables are meant to come from one of its themes
+ * (crepe, frame, nord…). dewnote loads none of them, because the page
+ * is described in dewlab's tokens — so every one of those variables was
+ * undefined, and every rule reading one was dropped.
+ *
+ * The caret was the visible cost. Crepe turns on ProseMirror's virtual
+ * cursor, which hides the native caret and draws its own with
+ * `--prosemirror-virtual-cursor-color: var(--crepe-color-outline)`. With
+ * the variable empty the border declaration is invalid, so there was no
+ * native caret and no drawn one either.
+ *
+ * Mapped to tokens that are themselves theme-aware, so dark mode is
+ * answered here too rather than patched rule by rule. */
 .milkdown {
+  --crepe-color-background: var(--dl-bg);
+  --crepe-color-on-background: var(--dl-fg);
+  --crepe-color-surface: var(--dl-panel-bg);
+  --crepe-color-surface-low: var(--dl-cell-bg);
+  --crepe-color-on-surface: var(--dl-fg);
+  --crepe-color-on-surface-variant: var(--dl-muted);
+  --crepe-color-outline: var(--dl-muted);
+  --crepe-color-primary: var(--dl-link);
+  --crepe-color-secondary: color-mix(in srgb, var(--dl-link) 18%, var(--dl-bg));
+  --crepe-color-on-secondary: var(--dl-fg);
+  /* A chip that has to read against the page, whichever way round it is. */
+  --crepe-color-inverse: var(--dl-fg);
+  --crepe-color-on-inverse: var(--dl-bg);
+  --crepe-color-inline-code: var(--dl-link);
+  --crepe-color-error: var(--dl-error-fg);
+  --crepe-color-hover: color-mix(in srgb, var(--dl-link) 10%, transparent);
+  --crepe-color-selected: color-mix(in srgb, var(--dl-link) 16%, transparent);
+  --crepe-color-inline-area: var(--dl-cell-bg);
+
+  --crepe-font-title: var(--dl-font-family);
+  --crepe-font-default: var(--dl-font-family);
+  --crepe-font-code: var(--dl-mono);
+
+  --crepe-shadow-1: 0 1px 3px 1px var(--dl-shadow);
+  --crepe-shadow-2: 0 2px 6px 2px var(--dl-shadow);
+
   font-family: inherit;
   font-size: inherit;
   line-height: inherit;
@@ -386,6 +436,31 @@ body {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* Appearance, one press from the corner. */
+.dn-gear[hidden] { display: none; }
+.dn-gear {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--dl-rule);
+  border-radius: 50%;
+  background: var(--dl-panel-bg);
+  color: var(--dl-muted);
+  cursor: pointer;
+}
+.dn-gear:hover,
+.dn-gear:focus-visible {
+  color: var(--dl-link);
+  border-color: var(--dl-link);
+  outline: none;
 }
 
 /* ------------------------------------------------- the workspace palette */
