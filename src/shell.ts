@@ -18,6 +18,7 @@ import type { CellOutput } from "./cells.ts";
 import { assetPathFor, freeAssetName, imageTypeOf } from "./images.ts";
 import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
+import { mountSourceView } from "./source-view.ts";
 import { brokenLinks, type BrokenLink } from "./links.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
 import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
@@ -91,6 +92,18 @@ export function mountShell(page: HTMLElement): Shell {
   // ── the palette ────────────────────────────────────────────────────
 
   const settings = mountSettingsPanel();
+  const sourceView = mountSourceView();
+
+  /** The file as text. Keeping it remounts the editor over the new
+   * bytes; nothing is written until ⌘S, as everywhere else. */
+  function showSource(): void {
+    if (!open) return;
+    if (sourceView.isOpen()) {
+      sourceView.close();
+      return;
+    }
+    sourceView.open(open.document.markdown(), (next) => void remount(next));
+  }
 
   const palette: WorkspacePalette = mountWorkspacePalette({
     getIndex: () => index,
@@ -351,6 +364,11 @@ export function mountShell(page: HTMLElement): Shell {
       reportOverlay.hidden = true;
       return;
     }
+    if (meta && event.key === "/") {
+      event.preventDefault();
+      showSource();
+      return;
+    }
     if (meta && event.key.toLowerCase() === "s") {
       event.preventDefault();
       void saveNow();
@@ -377,6 +395,15 @@ export function mountShell(page: HTMLElement): Shell {
           keywords: ["settings", "theme", "dark", "font", "size", "width"],
           detail: "Theme, type, measure, spacing.",
           run: () => settings.open(),
+        },
+        {
+          id: "source",
+          label: "Show the whole file",
+          section: "Document",
+          keywords: ["source", "markdown", "raw", "text", "front matter"],
+          detail: "⌘/ — front matter, fence markers and all.",
+          available: () => open !== null,
+          run: () => showSource(),
         },
         {
           id: "export-html",
@@ -443,6 +470,7 @@ export function mountShell(page: HTMLElement): Shell {
       open?.document.destroy();
       palette.destroy();
       settings.destroy();
+      sourceView.destroy();
       reportOverlay.remove();
       spine.destroy();
       clearCommands();

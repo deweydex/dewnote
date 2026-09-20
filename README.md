@@ -42,5 +42,4 @@ document model is wrong.
 ## Not built yet
 
 The placement view for moving a tutorial between series, freezing a
-release, the whole-file source view, and the hint, card, question and
-grouped site-pane fences.
+release, and the card, question and grouped site-pane fences.

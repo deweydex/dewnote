@@ -28,6 +28,10 @@ import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } fro
 import { uploadConfig } from "@milkdown/kit/plugin/upload";
 import { isImageName, isLocalAsset } from "./images.ts";
 import { unmathPlainDollars } from "./maths.ts";
+import { freeCellId, SNIPPETS } from "./slash-menu.ts";
+import { insert } from "@milkdown/kit/utils";
+import { commandsCtx } from "@milkdown/kit/core";
+import { clearTextInCurrentBlockCommand } from "@milkdown/kit/preset/commonmark";
 
 /** A fence's info string past its first word — `exec` in `python exec`,
  * `site` in `html site`, `cell=name persist` in `sql cell=name persist`.
@@ -336,6 +340,20 @@ export async function mountEditor(
    * across an edit — a reader who fixes a typo wants to still see what
    * the cell printed a moment ago, marked as belonging to the older
    * code. */
+  /** Every `id:` a runnable fence in this document already carries. */
+  function cellIdsInDocument(): string[] {
+    const found: string[] = [];
+    const editorView = view();
+    if (!editorView) return found;
+    editorView.state.doc.descendants((node: any) => {
+      if (node.type.name !== "code_block") return true;
+      const id = parseCell(node.textContent).id;
+      if (id) found.push(id);
+      return true;
+    });
+    return found;
+  }
+
   const results = new Map<string, RunRecord>();
 
   /** The panel under a runnable cell: a Run button, and whatever the
@@ -404,6 +422,32 @@ export async function mountEditor(
       [Crepe.Feature.AI]: false,
     },
     featureConfigs: {
+      [Crepe.Feature.BlockEdit]: {
+        /** dewlab's own blocks, added after Crepe's general-purpose
+         * ones — the builder appends, and reordering would mean
+         * rebuilding every default item by hand. Typing `/py` filters
+         * to them immediately, which is how they are reached. */
+        buildMenu: (builder: {
+          addGroup(key: string, label: string): {
+            addItem(key: string, item: { label: string; icon: string; onRun(ctx: unknown): void }): unknown;
+          };
+        }) => {
+          const group = builder.addGroup("dewlab", "Tutorial");
+          for (const snippet of SNIPPETS) {
+            group.addItem(snippet.key, {
+              label: snippet.label,
+              icon: snippet.icon,
+              onRun: (ctx: any) => {
+                // The `/query` the author typed is still in the block.
+                // Crepe's own items clear it before inserting; without
+                // this the document keeps a stray "/py".
+                ctx.get(commandsCtx).call(clearTextInCurrentBlockCommand.key);
+                insert(snippet.markdown(freeCellId(cellIdsInDocument())))(ctx);
+              },
+            });
+          }
+        },
+      },
       [Crepe.Feature.CodeMirror]: {
         languages: [
           LanguageDescription.of({ name: "python", support: python() }),

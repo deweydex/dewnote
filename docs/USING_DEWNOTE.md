@@ -100,7 +100,25 @@ bold, a link looks like a link. Type `# ` at the start of a line and the
 line becomes a heading as you type it.
 
 Between blocks, hover for a **+** to add one. In an empty paragraph,
-typing **/** offers the same menu from the keyboard.
+typing **/** offers the same menu from the keyboard, and filters as you
+type — `/py` reaches a Python cell in three keystrokes.
+
+Under **Tutorial** in that menu are the blocks a tutorial is made of:
+
+| Item | What it writes |
+|---|---|
+| Python cell | A `python exec` fence with an `id:` nobody is using |
+| SQL cell | The same in dewlab's other language |
+| Hint | The `<details class="dl-hint">` fold the build looks for |
+
+## The whole file
+
+**⌘/** shows the file as text — front matter, fence markers and all. It
+is the place to fix something the document cannot express, or to see
+exactly what a save will write.
+
+⌘↵ keeps what you changed; Esc leaves it. Either way nothing is written
+until you save.
 
 ## Images
 
@@ -265,5 +283,6 @@ Two things to know:
 |---|---|
 | ⌘K / Ctrl+K | Palette |
 | ⌘S / Ctrl+S | Save |
+| ⌘/ / Ctrl+/ | The whole file, as text |
 | / | Block menu, in an empty paragraph |
 | Esc | Close whatever is open |
