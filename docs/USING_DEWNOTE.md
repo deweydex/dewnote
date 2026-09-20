@@ -104,7 +104,11 @@ line becomes a heading as you type it.
 
 Between blocks, hover for a **+** to add one. In an empty paragraph,
 typing **/** offers the same menu from the keyboard, and filters as you
-type — `/py` reaches a Python cell in three keystrokes.
+type — `/py` reaches a Python cell in three keystrokes. An empty block
+says so, so you do not have to remember.
+
+Selecting text raises a small toolbar: bold, italic, inline code, inline
+maths, and a link.
 
 Under **Tutorial** in that menu are the blocks a tutorial is made of:
 
