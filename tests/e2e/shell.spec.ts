@@ -232,6 +232,11 @@ test("Connect counts the files as they arrive, and ignores a second press", asyn
     (globalThis as any).__reads = () => reads;
     globalThis.fetch = (async (url: string) => {
       const at = String(url);
+      if (at.includes("/user/repos")) {
+        return json([
+          { name: "dewlab", owner: { login: "deweydex" }, default_branch: "main", permissions: { push: true } },
+        ]);
+      }
       if (at.includes("/git/ref/heads/")) return json({ object: { sha: "sha" } });
       if (at.includes("/git/trees/")) {
         return json({
@@ -254,8 +259,7 @@ test("Connect counts the files as they arrive, and ignores a second press", asyn
 
   await page.locator('[data-choice="repo"]').click();
   await page.fill('[name="token"]', "token");
-  await page.fill('[name="owner"]', "deweydex");
-  await page.fill('[name="repo"]', "dewlab");
+  await expect(page.locator('[name="repo"]')).toBeEnabled();
   await page.fill('[name="branch"]', "alt");
 
   const connect = page.locator('.dn-gate-repo button[type="submit"]');
@@ -285,21 +289,6 @@ test("the repository form fills in a working branch rather than asking for one",
   await page.goto(BUILT_APP);
   await page.locator('[data-choice="repo"]').click();
   await expect(page.locator('[name="branch"]')).toHaveValue(/^dewnote\/\d{4}-\d{2}-\d{2}$/);
-  await expect(page.locator('[name="base"]')).toHaveValue("main");
-});
-
-test("a working branch equal to the base is refused, with the reason", async ({ page }) => {
-  await page.goto(BUILT_APP);
-  await page.locator('[data-choice="repo"]').click();
-  await page.fill('[name="token"]', "token");
-  await page.fill('[name="owner"]', "deweydex");
-  await page.fill('[name="repo"]', "dewlab");
-  await page.fill('[name="branch"]', "main");
-  await page.locator('.dn-gate-repo button[type="submit"]').click();
-
-  await expect(page.locator(".dn-gate-problem")).toContainText("different from the base branch");
-  // And it is still usable rather than stuck mid-press.
-  await expect(page.locator('.dn-gate-repo button[type="submit"]')).toBeEnabled();
 });
 
 test("an image beside the document is drawn, and the markdown keeps its name", async ({ page }) => {
@@ -1004,4 +993,41 @@ test("the gate asks where the files are before it asks for a token", async ({ pa
   await page.locator('[data-choice="repo"]').click();
   await expect(form).toBeVisible();
   await expect(page.locator('.dn-gate-repo [name="branch"]')).not.toHaveValue("");
+});
+
+test("the gate asks for a token and derives the rest", async ({ page }) => {
+  // A token says who you are, not which repository you mean — so the
+  // repository is still named, but from what the token reaches rather
+  // than by typing it, and its owner and default branch come with it.
+  await page.route("**/api.github.com/user/repos**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { name: "dewlab", owner: { login: "deweydex" }, default_branch: "trunk", permissions: { push: true } },
+        { name: "notes", owner: { login: "someone" }, default_branch: "main", permissions: { push: true } },
+        { name: "read-only", owner: { login: "x" }, default_branch: "main", permissions: { push: false } },
+      ]),
+    }),
+  );
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="repo"]').click();
+
+  const repo = page.locator('.dn-gate-repo [name="repo"]');
+  await expect(repo).toBeDisabled();
+  // Owner and base branch are not asked for at all any more.
+  await expect(page.locator('.dn-gate-repo [name="owner"]')).toHaveCount(0);
+  await expect(page.locator('.dn-gate-repo [name="base"]')).toHaveCount(0);
+
+  await page.locator('.dn-gate-repo [name="token"]').fill("ghp_pretend");
+  await expect(repo).toBeEnabled();
+  await expect(repo.locator("option")).toHaveText(["deweydex/dewlab", "someone/notes"]);
+
+  // Refusing to write to the repository's own default branch, which is
+  // read from the repository rather than assumed to be `main`.
+  await page.locator('.dn-gate-repo [name="branch"]').fill("trunk");
+  await page.locator('.dn-gate-repo button[type="submit"]').click();
+  await expect(page.locator(".dn-gate-problem")).toContainText("other than trunk");
+  // And it is still usable rather than stuck mid-press.
+  await expect(page.locator('.dn-gate-repo button[type="submit"]')).toBeEnabled();
 });
