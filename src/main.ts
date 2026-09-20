@@ -5,7 +5,7 @@ import "./style.css";
 import { mountShell } from "./shell.ts";
 import { mountEditor, type Document } from "./editor.ts";
 import { canOpenFolder, openFolder, openRepo } from "./store.ts";
-import { loadToken, saveToken } from "./github.ts";
+import { loadLastRepo, loadToken, saveLastRepo, saveToken, suggestedBranch } from "./github.ts";
 import { messageOf } from "./save-problem.ts";
 import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
 
@@ -36,6 +36,10 @@ function gate(): HTMLElement {
       <label>Repository <input name="repo" required></label>
       <label>Base branch <input name="base" value="main" required></label>
       <label>Working branch <input name="branch" required></label>
+      <p class="dn-gate-note">
+        Saves commit to the working branch, never to the base. One branch
+        per day keeps a day's edits in one pull request.
+      </p>
       <button type="submit">Connect</button>
     </form>
     <p class="dn-gate-problem" role="status"></p>
@@ -108,9 +112,16 @@ function start(): void {
   box.querySelector<HTMLButtonElement>('[data-choice="repo"]')!
     .addEventListener("click", () => {
       form.hidden = false;
-      const token = form.querySelector<HTMLInputElement>('[name="token"]')!;
-      token.value = loadToken() ?? "";
-      token.focus();
+      const field = (name: string) => form.querySelector<HTMLInputElement>(`[name="${name}"]`)!;
+      field("token").value = loadToken() ?? "";
+      const last = loadLastRepo();
+      if (last) {
+        field("owner").value = last.owner;
+        field("repo").value = last.repo;
+        field("base").value = last.base;
+      }
+      field("branch").value = suggestedBranch();
+      (field("owner").value ? field("token") : field("owner")).focus();
     });
 
   const connect = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
@@ -121,8 +132,15 @@ function start(): void {
     const state = busy(connect, "Reading");
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? "").trim();
+    if (value("branch") === value("base")) {
+      problem.textContent =
+        "The working branch has to be different from the base branch — saves never write to the base.";
+      state.restore();
+      return;
+    }
     try {
       saveToken(value("token"));
+      saveLastRepo({ owner: value("owner"), repo: value("repo"), base: value("base") });
       const store = await openRepo({
         repo: { owner: value("owner"), repo: value("repo") },
         base: value("base"),

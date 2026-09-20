@@ -5,6 +5,7 @@ import {
   listMarkdownFiles,
   listModuleFiles,
   putFileContent,
+  suggestedBranch,
   toBase64,
 } from "./github.ts";
 
@@ -247,5 +248,16 @@ describe("ensureBranch", () => {
     } catch (error) {
       expect((error as Error).message).toBe("Resource not accessible by personal access token");
     } finally { restore(); }
+  });
+});
+
+describe("suggestedBranch", () => {
+  test("is dated, so a day's edits share one branch and one pull request", () => {
+    expect(suggestedBranch(new Date("2026-09-20T23:15:00Z"))).toBe("dewnote/2026-09-20");
+  });
+
+  test("is never the base branch anyone would type", () => {
+    expect(suggestedBranch()).not.toBe("main");
+    expect(suggestedBranch()).toMatch(/^dewnote\/\d{4}-\d{2}-\d{2}$/);
   });
 });

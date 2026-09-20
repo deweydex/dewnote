@@ -785,3 +785,11 @@ body {
 .dn-gate.is-busy .dn-gate-repo label {
   opacity: 0.45;
 }
+
+.dn-gate-note {
+  grid-column: 1 / -1;
+  margin: 0.1rem 0 0.3rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--dl-muted);
+}

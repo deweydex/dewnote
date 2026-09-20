@@ -13,6 +13,7 @@
 
 const API = "https://api.github.com";
 const TOKEN_KEY = "dewnote:github-token";
+const REPO_KEY = "dewnote:github-repo";
 
 export interface RepoRef {
   owner: string;
@@ -51,6 +52,38 @@ export function saveToken(token: string): void {
     // past this page load, same tradeoff as everywhere else this app
     // touches localStorage.
   }
+}
+
+/** The owner, repo and base branch last connected to, so the second
+ * session does not retype them. Never the token's neighbour in anything
+ * that leaves this origin. */
+export interface LastRepo {
+  owner: string;
+  repo: string;
+  base: string;
+}
+
+export function loadLastRepo(): LastRepo | null {
+  try {
+    const raw = localStorage.getItem(REPO_KEY);
+    return raw ? (JSON.parse(raw) as LastRepo) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveLastRepo(value: LastRepo): void {
+  try {
+    localStorage.setItem(REPO_KEY, JSON.stringify(value));
+  } catch {
+    // Storage blocked. Retyping is the cost, and it is not worth failing over.
+  }
+}
+
+/** A working branch nobody has to invent: dated, so a day's edits share
+ * one branch and one pull request, and a new day starts a new one. */
+export function suggestedBranch(today = new Date()): string {
+  return `dewnote/${today.toISOString().slice(0, 10)}`;
 }
 
 export function forgetToken(): void {

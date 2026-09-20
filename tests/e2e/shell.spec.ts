@@ -280,3 +280,24 @@ test("the gate's buttons show they were pressed", async ({ page }) => {
   const outline = await sample.evaluate((el) => getComputedStyle(el).outlineStyle);
   expect(outline).not.toBe("none");
 });
+
+test("the repository form fills in a working branch rather than asking for one", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="repo"]').click();
+  await expect(page.locator('[name="branch"]')).toHaveValue(/^dewnote\/\d{4}-\d{2}-\d{2}$/);
+  await expect(page.locator('[name="base"]')).toHaveValue("main");
+});
+
+test("a working branch equal to the base is refused, with the reason", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.locator('[data-choice="repo"]').click();
+  await page.fill('[name="token"]', "token");
+  await page.fill('[name="owner"]', "deweydex");
+  await page.fill('[name="repo"]', "dewlab");
+  await page.fill('[name="branch"]', "main");
+  await page.locator('.dn-gate-repo button[type="submit"]').click();
+
+  await expect(page.locator(".dn-gate-problem")).toContainText("different from the base branch");
+  // And it is still usable rather than stuck mid-press.
+  await expect(page.locator('.dn-gate-repo button[type="submit"]')).toBeEnabled();
+});
