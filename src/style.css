@@ -950,3 +950,84 @@ body {
 .dn-source-actions button:hover {
   border-color: var(--dl-orange);
 }
+
+/* One question. */
+.dn-ask-overlay[hidden] { display: none; }
+
+.dn-ask-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 97;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 14vh 1rem;
+  background: color-mix(in srgb, var(--dl-bg) 72%, transparent);
+}
+
+.dn-ask {
+  width: min(30rem, 100%);
+  display: grid;
+  gap: 0.6rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+  background: var(--dl-panel-bg, var(--dl-bg));
+  border: 1px solid var(--dl-rule);
+  border-radius: 10px;
+  box-shadow: var(--dl-shadow, 0 12px 40px rgb(0 0 0 / 0.25));
+  font-family: var(--dl-font-family);
+}
+
+.dn-ask h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.dn-ask-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.dn-ask-field span:empty { display: none; }
+
+.dn-ask-field span {
+  font-size: 0.8rem;
+  color: var(--dl-muted);
+}
+
+.dn-ask-field input {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 5px;
+  background: var(--dl-bg);
+  color: inherit;
+}
+
+.dn-ask-field input:focus-visible {
+  outline: 2px solid var(--dl-orange);
+  outline-offset: 1px;
+}
+
+.dn-ask-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.dn-ask-actions button {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dn-ask-actions .dn-ask-go {
+  border-color: var(--dl-orange);
+  color: var(--dl-orange);
+}
+
+.dn-ask-actions button:hover { border-color: var(--dl-orange); }

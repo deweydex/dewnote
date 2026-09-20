@@ -19,6 +19,8 @@ import { assetPathFor, freeAssetName, imageTypeOf } from "./images.ts";
 import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountSourceView } from "./source-view.ts";
+import { mountAsk } from "./ask.ts";
+import { newTutorial, prepareRelease } from "./authoring.ts";
 import { brokenLinks, type BrokenLink } from "./links.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
 import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
@@ -93,6 +95,65 @@ export function mountShell(page: HTMLElement): Shell {
 
   const settings = mountSettingsPanel();
   const sourceView = mountSourceView();
+  const asker = mountAsk();
+
+  /** A new tutorial, written and opened. A draft, because a half-written
+   * page should never be served. */
+  async function createTutorial(): Promise<void> {
+    if (!store) return;
+    const title = await asker.ask("What is the tutorial called?", {
+      label: "Its title becomes the address, so it is worth getting right.",
+      confirm: "Make it",
+    });
+    if (!title) return;
+    const made = newTutorial(title);
+    if (files.has(made.path)) {
+      spine.setProblem({ message: `There is already a tutorial at ${made.path}.` });
+      return;
+    }
+    try {
+      await store.write(made.path, made.content, `Add ${made.path}`);
+    } catch (error) {
+      spine.setProblem({ message: messageOf(error) });
+      return;
+    }
+    files.set(made.path, made.content);
+    reindex();
+    await openPath(made.path);
+  }
+
+  /** dewlab's two-file release: the bytes on the branch are frozen under
+   * their own version, and what is open keeps the address readers have. */
+  async function releaseVersion(): Promise<void> {
+    if (!store || !open) return;
+    const published = files.get(open.path);
+    if (published === undefined) return;
+    const versions = index
+      .filter((entry) => entry.path.startsWith(open!.path.split("/").slice(0, -1).join("/")))
+      .map((entry) => entry.version);
+    const made = prepareRelease(open.path, published, open.document.markdown(), versions);
+    if ("error" in made) {
+      spine.setProblem({ message: made.error });
+      return;
+    }
+    const going = await asker.ask(`Publish this as ${made.nextVersion}?`, {
+      label: `${made.previousVersion} is kept at ${made.frozenPath}, so a reader's saved work still resolves.`,
+      value: made.nextVersion,
+      confirm: "Publish it",
+    });
+    if (!going) return;
+    try {
+      await store.write(made.frozenPath, made.frozenContent, `Freeze ${made.previousVersion}`);
+      await store.write(made.livePath, made.liveContent, `Release ${made.nextVersion}`);
+    } catch (error) {
+      spine.setProblem({ message: messageOf(error) });
+      return;
+    }
+    files.set(made.frozenPath, made.frozenContent);
+    files.set(made.livePath, made.liveContent);
+    reindex();
+    await openPath(made.livePath);
+  }
 
   /** The file as text. Keeping it remounts the editor over the new
    * bytes; nothing is written until ⌘S, as everywhere else. */
@@ -397,6 +458,24 @@ export function mountShell(page: HTMLElement): Shell {
           run: () => settings.open(),
         },
         {
+          id: "new-tutorial",
+          label: "New tutorial…",
+          section: "Workspace",
+          keywords: ["create", "add", "write", "start"],
+          detail: "A draft, with its folder, its front matter and a cell.",
+          run: () => void createTutorial(),
+        },
+        {
+          id: "release",
+          label: "Publish as a new version…",
+          section: "Publish",
+          keywords: ["release", "freeze", "version", "supersedes"],
+          detail: "Freezes what is published and dates what is open.",
+          // Only a tutorial's own live file has versions to count.
+          available: () => open !== null && /^tutorials\/([^/]+)\/\1\.md$/.test(open.path),
+          run: () => void releaseVersion(),
+        },
+        {
           id: "source",
           label: "Show the whole file",
           section: "Document",
@@ -471,6 +550,7 @@ export function mountShell(page: HTMLElement): Shell {
       palette.destroy();
       settings.destroy();
       sourceView.destroy();
+      asker.destroy();
       reportOverlay.remove();
       spine.destroy();
       clearCommands();
