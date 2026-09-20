@@ -258,6 +258,12 @@ can name, a gap that closes, a card with somewhere to go. An id is one
 namespace across all of them, because a cell, a pane and a question are
 all keys into the same saved-work record.
 
+The spine carries a running count of the open document's faults, at the
+foot beside the save line, and clicking it opens the report. It is
+debounced: a fault found a moment after you write it is as useful as one
+found instantly, and serialising the whole document on every keystroke
+is not.
+
 The slash menu writes them, and a test runs the checker over what every
 snippet writes — a snippet that failed it would put a fault in the
 document the moment it was inserted.

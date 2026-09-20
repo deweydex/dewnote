@@ -312,6 +312,38 @@ body {
   background: var(--dn-cell-bg, var(--dl-cell-bg));
   outline: none;
 }
+/* A running count of what is wrong, above the save line. Hidden when
+   there is nothing to say. */
+.dn-spine-health[hidden] { display: none; }
+.dn-spine-health {
+  display: block;
+  padding: 0.2rem 5px;
+  margin-inline-start: -5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--dl-muted);
+  text-align: start;
+  cursor: pointer;
+}
+.dn-spine-health::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-inline-end: 0.45rem;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+  background: var(--dl-muted);
+}
+.dn-spine-health.is-blocking::before { background: var(--dl-orange); }
+.dn-spine-health:hover,
+.dn-spine-health:focus-visible {
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+  outline: none;
+}
 .dn-spine-hint {
   font-family: var(--dl-mono);
   font-size: 0.66rem;

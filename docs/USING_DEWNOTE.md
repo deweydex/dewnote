@@ -254,6 +254,12 @@ Each row is marked **blocking** — dewlab will not build it — or **worth
 fixing**. A document with nothing wrong says so rather than showing an
 empty list.
 
+You do not have to remember to run it. The margin carries a running
+count — **3 to fix**, with an orange dot when any of them would stop the
+build — and clicking it opens the same report. The count follows what
+you type, a moment behind. A document with nothing wrong shows no
+count.
+
 `tutorial:` is the only scheme the build resolves. A `module:` or
 `series:` link ships as a literal broken address, so the checker reads
 `tutorial:` links and leaves every other kind alone.

@@ -83,6 +83,7 @@ export function mountShell(page: HTMLElement): Shell {
     getHeadings: () => open?.document.headings() ?? [],
     openPalette: () => palette.open(),
     save: () => saveNow(),
+    showProblems: () => checkThisDocument(),
   });
 
   function refreshSpine(): void {
@@ -91,6 +92,23 @@ export function mountShell(page: HTMLElement): Shell {
     const where = locationOf(open.path, index, modules);
     spine.setLocation(where ?? { module: "", series: "", page: "" });
     spine.refreshOutline();
+    refreshHealth();
+  }
+
+  /** The count in the margin lags the typing on purpose. A fault found a
+   * moment after you write it is as useful as one found instantly, and
+   * serialising the whole document on every keystroke is not. */
+  let healthTimer: ReturnType<typeof setTimeout> | undefined;
+  function refreshHealth(): void {
+    clearTimeout(healthTimer);
+    healthTimer = setTimeout(() => {
+      if (!open) return spine.setHealth({ total: 0, blocking: 0 });
+      const found = problemsInOpenDocument();
+      spine.setHealth({
+        total: found.length,
+        blocking: found.filter((problem) => problem.severity === "blocking").length,
+      });
+    }, 400);
   }
 
   // ── the palette ────────────────────────────────────────────────────
@@ -332,10 +350,13 @@ export function mountShell(page: HTMLElement): Shell {
   /** What is wrong with the open document: a cell with no id, two cells
    * sharing one, a link to nothing, front matter the build needs. Every
    * one of them is a fault a reader or the build would hit. */
+  function problemsInOpenDocument(): Problem[] {
+    return open ? checkDocument(open.document.markdown(), new Set(distinctValues(index, "id"))) : [];
+  }
+
   function checkThisDocument(): void {
     if (!open) return;
-    const found = checkDocument(open.document.markdown(), new Set(distinctValues(index, "id")));
-    reportProblems(found, "this document");
+    reportProblems(problemsInOpenDocument(), "this document");
   }
 
   /** Every cell, in order, one at a time — one interpreter, and a
@@ -381,7 +402,10 @@ export function mountShell(page: HTMLElement): Shell {
 
     if (blocking > 0) {
       const note = document.createElement("p");
-      note.textContent = `${blocking} of them would stop the build.`;
+      note.textContent =
+        blocking === found.length
+          ? `${blocking === 1 ? "It" : "Every one of them"} would stop the build.`
+          : `${blocking} of them would stop the build.`;
       box.appendChild(note);
     }
 

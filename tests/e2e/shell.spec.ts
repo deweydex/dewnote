@@ -789,3 +789,32 @@ test("the slash menu writes three site panes under one name, each with its own i
   expect(new Set(sites).size).toBe(1);
   expect(new Set([...written.matchAll(/^id: (.+)$/gm)].map((match) => match[1])).size).toBe(3);
 });
+
+test("the margin counts what is wrong, and the count opens the report", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": [
+      "---", "title: One", "---", "",
+      "# One", "",
+      "```python exec", "print(1)", "```", "",
+    ].join("\n"),
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  // A cell with no id, found without anybody asking for it.
+  const health = page.locator(".dn-spine-health");
+  await expect(health).toHaveText("1 to fix");
+  await expect(health).toHaveClass(/is-blocking/);
+
+  await health.click();
+  await expect(page.locator(".dn-report")).toBeVisible();
+  await expect(page.locator(".dn-report")).toContainText("no `id:`");
+  await page.keyboard.press("Escape");
+
+  // And it follows the document: give the cell an id and the line goes.
+  await page.locator(".milkdown .cm-content").first().click();
+  await page.keyboard.press("ControlOrMeta+Home");
+  await page.keyboard.type("id: first\n");
+  await expect(health).toBeHidden();
+});

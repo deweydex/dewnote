@@ -21,6 +21,8 @@ export interface SpineHost {
   /** Save, for a click on the state line. Returns false when it did not
    * happen, so the line can stop claiming it did. */
   save(): Promise<boolean>;
+  /** Opens the report behind the count of things to fix. */
+  showProblems(): void;
 }
 
 export interface SpineFile {
@@ -49,6 +51,10 @@ export interface Spine {
    * app already holds — so callers fire it on whatever they have rather
    * than trying to detect a heading change. */
   refreshOutline(): void;
+  /** How many faults the open document has, and whether any of them
+   * would stop the build. Zero hides the line: a document with nothing
+   * wrong should say nothing. */
+  setHealth(health: { total: number; blocking: number }): void;
   /** A held state that outlives a confirmation: a refused save, with
    * an optional way to reach whatever can resolve it. Null clears it. */
   setProblem(problem: { message: string; action?: { label: string; run(): void } } | null): void;
@@ -120,6 +126,16 @@ export function mountSpine(host: SpineHost): Spine {
   outline.className = "dn-spine-outline";
   outline.setAttribute("aria-label", "Headings in this document");
 
+  /** A running count of what is wrong, kept at the foot with the save
+   * line: both say what state the document is in, and a fault is worth
+   * finding while you are writing rather than at the moment you
+   * publish. */
+  const health = document.createElement("button");
+  health.type = "button";
+  health.className = "dn-spine-health";
+  health.hidden = true;
+  health.addEventListener("click", () => host.showProblems());
+
   const foot = document.createElement("div");
   foot.className = "dn-spine-foot";
   const state = document.createElement("button");
@@ -128,7 +144,7 @@ export function mountSpine(host: SpineHost): Spine {
   const hint = document.createElement("span");
   hint.className = "dn-spine-hint";
   hint.textContent = "⌘K  anywhere";
-  foot.append(state, hint);
+  foot.append(health, state, hint);
 
   spine.append(identity, rule, problemBox, outline, foot);
   document.body.appendChild(spine);
@@ -231,6 +247,17 @@ export function mountSpine(host: SpineHost): Spine {
     refreshOutline() {
       headings = host.getHeadings().map((heading, ordinal) => ({ ...heading, ordinal }));
       renderOutline();
+    },
+    setHealth({ total, blocking }) {
+      health.hidden = total === 0;
+      health.classList.toggle("is-blocking", blocking > 0);
+      health.textContent = `${total} to fix`;
+      health.setAttribute(
+        "aria-label",
+        blocking > 0
+          ? `${total} things to fix in this document, ${blocking} of which would stop the build. Show them.`
+          : `${total} things to fix in this document. Show them.`,
+      );
     },
     setProblem(next) { problem = next; renderProblem(); },
     show() {
