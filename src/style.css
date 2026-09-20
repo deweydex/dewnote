@@ -12,6 +12,11 @@
 
 :root {
   --dn-page-padding: 1rem;
+  /* Crepe pads the editing surface 120px each side, and its block
+     handle — the ⠿ you drag a block by — lives in that gutter. Kept,
+     rather than removed, and added to the page's width instead, so the
+     text between the gutters is exactly `--dl-line-width`. */
+  --dn-editor-gutter: 120px;
   --dn-block-gap: 1.1em;
   --dn-code-font-size: 15px;
   --dn-cell-tint: 1;
@@ -31,9 +36,28 @@ body {
 }
 
 .dn-page {
-  max-width: var(--dl-line-width);
+  max-width: calc(var(--dl-line-width) + 2 * var(--dn-editor-gutter));
   margin: 4rem auto;
   padding: 0 var(--dn-page-padding);
+}
+
+/* A phone has no room for a 120px gutter, and no hover to put a block
+   handle in it either. */
+@media (max-width: 720px) {
+  :root { --dn-editor-gutter: 16px; }
+}
+
+.milkdown .ProseMirror {
+  padding-inline: var(--dn-editor-gutter);
+}
+
+/* Crepe sizes paragraphs itself, `16px/24px`, a fixed pair for an app
+   editor. It wins over the reader's own font size and line height, so a
+   paragraph and a list item in the same document come out at different
+   sizes and the size slider moves one of them and not the other. */
+.milkdown .ProseMirror p {
+  font-size: inherit;
+  line-height: inherit;
 }
 
 .milkdown {
@@ -349,6 +373,21 @@ body {
   font-size: 0.66rem;
   color: var(--dl-muted);
 }
+/* For a screen reader, not for the eye: a label the input needs named
+   and the placeholder already says. Without this rule it renders, and
+   the palette shows its prompt twice. */
+.dn-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ------------------------------------------------- the workspace palette */
 
 .dn-wp-overlay[hidden] {
