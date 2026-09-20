@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 320" role="img" aria-labelledby="title desc">
+  <title id="title">Dewnote logo on navy</title>
+  <desc id="desc">An orange dew drop fountain pen nib and the word dewnote on a navy rounded rectangle.</desc>
+  <rect width="1024" height="320" rx="64" fill="#1b2a4a"/>
+  <g transform="translate(48 32) scale(.5)">
+    <path fill="#d4692a" d="M256 76c-67 68-111 132-111 210 0 65 41 111 88 132l23 31 23-31c47-21 88-67 88-132 0-78-44-142-111-210Z"/>
+    <circle cx="256" cy="256" r="22" fill="#1b2a4a"/>
+    <path d="M256 278v126" fill="none" stroke="#1b2a4a" stroke-width="18" stroke-linecap="round"/>
+  </g>
+  <text x="332" y="208" fill="#d4692a" font-family="ui-rounded, 'SF Pro Rounded', Inter, system-ui, sans-serif" font-size="142" font-weight="700" letter-spacing="-5">dewnote</text>
+</svg>
