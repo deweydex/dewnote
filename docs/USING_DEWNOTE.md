@@ -184,6 +184,26 @@ file back, byte for byte.
 
 An import replaces what is on screen. Nothing is written until you save.
 
+## Checking a document
+
+⌘K, then **Check this document**. It reads the file you have open and
+lists what would break dewlab's build or confuse a reader:
+
+| Problem | Why it matters |
+|---|---|
+| No front matter, or no `title:` | The build has no name for the page. |
+| A `version:` that is not a date and a counter | A release has nothing to count from. |
+| A runnable cell with no `id:` | A student's work has no key to save under. |
+| Two cells sharing an `id:` | One cell's saved work overwrites the other's. |
+| A `tutorial:` link naming nothing | It ships as a broken address. |
+
+Each row is marked **blocking** — dewlab will not build it — or **worth
+fixing**. Click a row to put the cursor on the line. A document with
+nothing wrong says so.
+
+Check this document reads one file. **Check links** reads the whole
+workspace; the two overlap only on `tutorial:` links.
+
 ## Checking links
 
 ⌘K, then **Check links**. It reads every file in the workspace, not just
@@ -234,6 +254,12 @@ code on screen.
 
 Once a cell has run, **Hide** puts the code away and leaves the output,
 which is how a finished cell reads.
+
+⌘K, **Run every cell**, runs them from the top down, one after another,
+and stops at the first that fails. They run in order because a tutorial's
+cells usually depend on the ones above them, and they share one
+interpreter. It is the quickest way to find out whether the tutorial
+still works after an edit.
 
 ---
 

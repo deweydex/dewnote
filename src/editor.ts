@@ -279,6 +279,10 @@ function drawLocalImages(
 }
 
 export interface Document {
+  /** Every runnable cell's id, in the order they appear. */
+  cellIds(): string[];
+  /** Run one, by id. Resolves when it has finished. */
+  runCell(id: string): Promise<void>;
   /** The save path. Re-serialises the whole document, so a file is
    * normalised the first time it is saved and byte-stable after that. */
   markdown(): string;
@@ -564,6 +568,8 @@ export async function mountEditor(
   root.addEventListener("click", onRootClick);
 
   return {
+    cellIds: () => cellIdsInDocument(),
+    runCell: (id) => runCellById(id),
     markdown: () => crepe.getMarkdown(),
     headings() {
       const found: Heading[] = [];

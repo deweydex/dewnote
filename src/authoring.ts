@@ -9,6 +9,11 @@ import { load as parseYaml } from "js-yaml";
 import { extractFrontMatter } from "./frontmatter.ts";
 
 const VERSION_RE = /^(\d{4})\.(\d{2})\.(\d{2})\.(\d+)$/;
+
+/** A released version is a date and a counter: `2026.03.04.1`. */
+export function isReleaseVersion(version: unknown): version is string {
+  return typeof version === "string" && VERSION_RE.test(version);
+}
 const FRONT_MATTER_RE = /^(---\r?\n)([\s\S]*?)(\r?\n---\r?\n?)/;
 
 /** A value YAML reads back as the string it is.

@@ -23,7 +23,7 @@ export interface BrokenLink {
 const LINK_RE = /\[([^\]]*)\]\(tutorial:([^)#\s]+)(?:#[^)]*)?\)/g;
 
 /** Every `tutorial:` link in `source` whose target is not in `known`. */
-export function brokenLinksIn(path: string, source: string, known: Set<string>): BrokenLink[] {
+export function brokenLinksIn(path: string, source: string, known: ReadonlySet<string>): BrokenLink[] {
   const broken: BrokenLink[] = [];
   const lines = source.split("\n");
   for (let at = 0; at < lines.length; at += 1) {

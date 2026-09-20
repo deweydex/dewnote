@@ -1098,3 +1098,21 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .dn-cell-run.is-running::before { animation: none; }
 }
+
+.dn-report-row.is-blocking .dn-report-what::before,
+.dn-report-row.is-minor .dn-report-what::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-inline-end: 0.45rem;
+  border-radius: 50%;
+  vertical-align: 0.05em;
+}
+
+.dn-report-row.is-blocking .dn-report-what::before { background: var(--dl-orange); }
+.dn-report-row.is-minor .dn-report-what::before { background: var(--dl-muted); }
+
+/* A reported problem is a statement, not a button. */
+div.dn-report-row { cursor: default; }
+div.dn-report-row:hover { background: none; }

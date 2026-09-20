@@ -23,6 +23,8 @@ import { mountAsk } from "./ask.ts";
 import { newTutorial, prepareRelease } from "./authoring.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
 import { brokenLinks, type BrokenLink } from "./links.ts";
+import { checkDocument, type Problem } from "./checks.ts";
+import { distinctValues } from "./workspace.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
 import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
 import pageCss from "./style.css" with { type: "text" };
@@ -328,6 +330,57 @@ export function mountShell(page: HTMLElement): Shell {
     refreshSpine();
   }
 
+  /** What is wrong with the open document: a cell with no id, two cells
+   * sharing one, a link to nothing, front matter the build needs. Every
+   * one of them is a fault a reader or the build would hit. */
+  function checkThisDocument(): void {
+    if (!open) return;
+    const found = checkDocument(open.document.markdown(), new Set(distinctValues(index, "id")));
+    reportProblems(found);
+  }
+
+  /** Every cell, in order, one at a time — one interpreter, and a
+   * tutorial's cells usually depend on the ones above them. */
+  async function runEveryCell(): Promise<void> {
+    if (!open) return;
+    for (const id of open.document.cellIds()) {
+      await open.document.runCell(id);
+    }
+  }
+
+  function reportProblems(found: Problem[]): void {
+    const box = document.createElement("div");
+    box.className = "dn-report";
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-label", "What is wrong with this document");
+
+    const heading = document.createElement("h2");
+    heading.textContent = found.length === 0
+      ? "Nothing to fix."
+      : `${found.length} thing${found.length === 1 ? "" : "s"} to fix`;
+    box.appendChild(heading);
+
+    for (const problem of found) {
+      const row = document.createElement("div");
+      row.className = `dn-report-row is-${problem.severity === "blocking" ? "blocking" : "minor"}`;
+      const what = document.createElement("span");
+      what.className = "dn-report-what";
+      what.textContent = problem.message;
+      row.appendChild(what);
+      if (problem.line !== undefined) {
+        const where = document.createElement("span");
+        where.className = "dn-report-where";
+        where.textContent = `line ${problem.line}`;
+        row.appendChild(where);
+      }
+      box.appendChild(row);
+    }
+
+    reportOverlay.replaceChildren(box);
+    reportOverlay.hidden = false;
+    box.focus();
+  }
+
   /** Every `tutorial:` link in the workspace that names nothing. Shown
    * in the overlay rather than reported per document: a broken link is
    * found on the day somebody opens the page it is written on, which is
@@ -600,6 +653,24 @@ export function mountShell(page: HTMLElement): Shell {
           detail: "Replaces what is on screen. Nothing is saved until you save it.",
           available: () => open !== null,
           run: () => openNotebook(),
+        },
+        {
+          id: "check-document",
+          label: "Check this document",
+          section: "Document",
+          keywords: ["problems", "validate", "ids", "duplicate", "lint"],
+          detail: "Cells with no id, ids used twice, links to nothing.",
+          available: () => open !== null,
+          run: () => checkThisDocument(),
+        },
+        {
+          id: "run-all",
+          label: "Run every cell",
+          section: "Document",
+          keywords: ["execute", "all", "check", "top to bottom"],
+          detail: "In order, one at a time, the way a reader meets them.",
+          available: () => open !== null && open.document.cellIds().length > 0,
+          run: () => void runEveryCell(),
         },
         {
           id: "check-links",

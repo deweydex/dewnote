@@ -242,6 +242,14 @@ small fixture — they show up against 181 real tutorials:
 - **A slug is a subsequence goldmine.** Every hyphen reads as a word
   start, so a keyword match is worth 0.7 of a label match.
 
+**Checking** is one pure function, `checkDocument(source, knownIds)` in
+`checks.ts`: markdown in, a sorted list of `Problem` out, each one
+`blocking` or `worth fixing` with the line it is on. It parses nothing
+Milkdown parses — it reads the file as text, through `segments()` from
+`notebook.ts`, so it sees what dewlab's Python build will see rather than
+what ProseMirror made of it. The shell owns the report; the checker owns
+the rules, and is tested without a browser.
+
 **Appearance** is eleven settings, each a CSS custom property, drawn from
 one `ROWS` list. The page is described in dewlab's own tokens, so a
 slider moves the thing it names — describing it in a second set of names

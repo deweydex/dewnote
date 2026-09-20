@@ -686,3 +686,44 @@ test("choosing a series a tutorial is already in takes it out", async ({ page })
   expect(written.text).not.toContain("grid-of-numbers");
   expect(written.text).toContain("title: First Steps");
 });
+
+test("Check this document names a cell with no id and an id used twice", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": [
+      "---", "title: One", "---", "",
+      "# One", "",
+      "```python exec", "print(1)", "```", "",
+      "```python exec", "id: twice", "print(2)", "```", "",
+      "```python exec", "id: twice", "print(3)", "```", "",
+      "[x](tutorial:nowhere)", "",
+    ].join("\n"),
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("check this document");
+  await page.keyboard.press("Enter");
+
+  const report = page.locator(".dn-report");
+  await expect(report).toBeVisible();
+  await expect(report).toContainText("no `id:`");
+  await expect(report).toContainText("share the id `twice`");
+  await expect(report).toContainText("tutorial:nowhere");
+  // Every one of these is a fault the build or a reader would hit.
+  await expect(report.locator(".dn-report-row.is-blocking")).toHaveCount(3);
+});
+
+test("a sound document says there is nothing to fix", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": "---\ntitle: One\n---\n\n# One\n\n```python exec\nid: first\nprint(1)\n```\n",
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("check this document");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix.");
+});
