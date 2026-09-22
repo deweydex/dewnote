@@ -32,10 +32,13 @@ describe("renderBody", () => {
     expect(html).not.toContain("$$");
   });
 
-  test("a cell is a labelled code block — its output is not in the document", async () => {
-    const html = await renderBody("```python exec\nid: a\nprint(1)\n```\n");
-    expect(html).toContain("<code");
+  test("a cell is its code, labelled with its language, without its header lines", async () => {
+    const html = await renderBody("```python exec\nid: a\nhint: errors:3\nprint(1)\n```\n");
     expect(html).toContain("print(1)");
+    expect(html).toContain("language-python");
+    // `id:` and `hint:` address the cell; a reader never reads them.
+    expect(html).not.toContain("id: a");
+    expect(html).not.toContain("errors:3");
   });
 
   test("keeps a raw-HTML fold, which is how a hint is written", async () => {

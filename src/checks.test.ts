@@ -154,3 +154,80 @@ describe("a fence at the very end of a file", () => {
     expect(checkDocument(source, { ids: new Set() })).toEqual([]);
   });
 });
+
+describe("each rule fires on what it is for", () => {
+  const path = "tutorials/t/t.md";
+  const front = '---\ntitle: T\nyear: "2026-2027"\nversion: 2026.09.22.1\n---\n\n# T\n\n';
+  const found = (body: string, ids: string[] = []) =>
+    checkDocument(front + body, { ids: new Set(ids), path, images: new Set() });
+
+  // Each case: a document broken one way, the words its problem must
+  // contain, and whether it stops the build.
+  const cases: [string, string, RegExp, "blocking" | "worth fixing"][] = [
+    ["a cell with no id", "```python exec\nprint(1)\n```\n", /runnable cell with no `id:`/, "blocking"],
+    ["a pane with no id", "```html site\nsite: s\n<p>x</p>\n```\n", /web page pane with no `id:`/, "blocking"],
+    ["a question with no id", "```question\ntype: fill-in-the-blank\n\nA {gap}.\n```\n", /question with no `id:`/, "blocking"],
+    [
+      "one id shared by a cell and a question",
+      "```python exec\nid: same\nx = 1\n```\n\n```question\nid: same\ntype: fill-in-the-blank\n\nA {gap}.\n```\n",
+      /share the id `same`/,
+      "blocking",
+    ],
+    ["a pane with no site", "```css site\nid: p\np { color: red; }\n```\n", /no `site:` line/, "blocking"],
+    ["a question with no type", "```question\nid: q\n\nA {gap}.\n```\n", /no `type:` line/, "blocking"],
+    ["a gap that never closes", "```question\nid: q\ntype: fill-in-the-blank\n\nA {gap.\n```\n", /never closes/, "blocking"],
+    ["a fill-in with no gap", "```question\nid: q\ntype: fill-in-the-blank\n\nNo gap.\n```\n", /with no gap/, "blocking"],
+    ["a card with no url", "```card\n## A card\n\nWords.\n```\n", /card with no `url:`/, "blocking"],
+    ["a card with no heading", "```card\nurl: /x\n\nWords.\n```\n", /does not start with a heading/, "blocking"],
+    ["a link to no tutorial", "See [this](tutorial:nowhere).\n", /`tutorial:nowhere`/, "blocking"],
+    ["an image that is not there", "![A picture](missing.png)\n", /`missing\.png`/, "blocking"],
+  ];
+
+  for (const [name, body, message, severity] of cases) {
+    test(name, () => {
+      const problems = found(body);
+      const match = problems.find((problem) => message.test(problem.message));
+      expect(match, problems.map((problem) => problem.message).join(" | ")).toBeDefined();
+      expect(match!.severity).toBe(severity);
+    });
+  }
+
+  test("a link to a tutorial that exists is fine", () => {
+    expect(found("See [this](tutorial:somewhere).\n", ["somewhere"])).toEqual([]);
+  });
+
+  test("a problem names the line it is on", () => {
+    const problems = found("Prose.\n\n```python exec\nprint(1)\n```\n");
+    // Front matter (5 lines), a blank, the heading, a blank, prose, a
+    // blank: the fence opens on line 11.
+    expect(problems.map((problem) => problem.line)).toEqual([11]);
+  });
+
+  test("a bad version is worth fixing on a site page, and stops a tutorial", () => {
+    const page = checkDocument("---\ntitle: About\nversion: soon\n---\n", { ids: new Set(), path: "pages/about.md" });
+    expect(page.map((problem) => problem.severity)).toEqual(["worth fixing"]);
+    const tutorial = checkDocument('---\ntitle: T\nyear: "2026-2027"\nversion: soon\n---\n', { ids: new Set(), path });
+    expect(tutorial.map((problem) => problem.severity)).toEqual(["blocking"]);
+  });
+
+  test("every retired front-matter field is caught", () => {
+    for (const field of ["order", "slug", "module", "module_title", "series"]) {
+      const source = `---\ntitle: T\nyear: "2026-2027"\nversion: 2026.09.22.1\n${field}: x\n---\n`;
+      expect(checkDocument(source, { ids: new Set(), path }).map((problem) => problem.message).join())
+        .toContain(`\`${field}:\``);
+    }
+  });
+});
+
+describe("checkWorkspace", () => {
+  test("a README at the top is not a page; one in a tutorial's folder is, as dewlab's build loads it", () => {
+    const problems = checkWorkspace(
+      [
+        { path: "README.md", content: "# dewlab\n" },
+        { path: "tutorials/t/README.md", content: "Notes, no front matter.\n" },
+      ],
+      { ids: new Set() },
+    );
+    expect([...new Set(problems.map((problem) => problem.path))]).toEqual(["tutorials/t/README.md"]);
+  });
+});

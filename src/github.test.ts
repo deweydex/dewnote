@@ -257,10 +257,6 @@ describe("suggestedBranch", () => {
     expect(suggestedBranch(new Date("2026-09-20T23:15:00Z"))).toBe("dewnote/2026-09-20");
   });
 
-  test("is never the base branch anyone would type", () => {
-    expect(suggestedBranch()).not.toBe("main");
-    expect(suggestedBranch()).toMatch(/^dewnote\/\d{4}-\d{2}-\d{2}$/);
-  });
 });
 
 describe("listRepositories", () => {

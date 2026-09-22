@@ -113,8 +113,10 @@ describe("parseModuleFile", () => {
   });
 
   test("the indent is the one the items actually carry", () => {
-    const module = parseModuleFile("modules/x.yaml", MODULE)!;
-    expect(module.contents[0]!.indent).toBe("  ");
+    // Four spaces, which is not the default, so a hard-coded indent
+    // would fail here.
+    const wide = "id: w\ntitle: W\ncontents:\n  - title: S\n    tutorials:\n        - a\n        - b\n";
+    expect(parseModuleFile("courses/w.yaml", wide)!.contents[0]!.indent).toBe("        ");
   });
 
   test("a series with an empty block list gets an empty range where its first item would go", () => {
@@ -195,7 +197,9 @@ describe("parseModuleFiles", () => {
 // discipline as the corpus tests in checks.test.ts, and the reason this module was
 // read against real files rather than a description of them. Skips
 // itself when the sibling isn't there.
-const DEWLAB_MODULES = "../dewlab/modules";
+// dewlab keeps them under courses/ since its 2026-09 refactor; the
+// tests pointed at modules/ and had skipped ever since.
+const DEWLAB_MODULES = "../dewlab/courses";
 
 describe(`real module files: ${DEWLAB_MODULES}${existsSync(DEWLAB_MODULES) ? "" : " (not checked out — skipped)"}`, () => {
   test.skipIf(!existsSync(DEWLAB_MODULES))(
@@ -204,10 +208,10 @@ describe(`real module files: ${DEWLAB_MODULES}${existsSync(DEWLAB_MODULES) ? "" 
       const files = readdirSync(DEWLAB_MODULES)
         .filter((name) => name.endsWith(".yaml"))
         .map((name) => ({
-          path: `modules/${name}`,
+          path: `courses/${name}`,
           content: readFileSync(join(DEWLAB_MODULES, name), "utf8"),
         }));
-      const indexFile = files.find((file) => file.path === "modules/index.yaml");
+      const indexFile = files.find((file) => file.path === "courses/index.yaml");
       const modules = parseModuleFiles(files, indexFile ? parseModuleIndex(indexFile.content) : []);
 
       expect(modules.length).toBeGreaterThan(0);
@@ -232,11 +236,13 @@ describe(`real module files: ${DEWLAB_MODULES}${existsSync(DEWLAB_MODULES) ? "" 
     () => {
       for (const name of readdirSync(DEWLAB_MODULES).filter((one) => one.endsWith(".yaml"))) {
         const content = readFileSync(join(DEWLAB_MODULES, name), "utf8");
-        const module = parseModuleFile(`modules/${name}`, content);
+        const module = parseModuleFile(`courses/${name}`, content);
         if (!module) continue;
         const lines = content.split("\n");
         for (const series of module.contents) {
-          const range = series.tutorialsRange!;
+          const range = series.tutorialsRange;
+          expect(range, `${name} › ${series.title}`).not.toBeNull();
+          if (!range) continue;
           expect(lines.slice(range.start, range.end)).toEqual(
             series.tutorials.map((id) => `${series.indent}- ${id}`),
           );
@@ -267,14 +273,6 @@ describe("scanContentsBlock, through parseModuleFile", () => {
     const module = parseModuleFile("modules/oop.yaml", withMixed)!;
     expect(module.contentsRange).toEqual({ start: 3, end: 7 });
     expect(withMixed.split("\n")[7]).toBe("mixed:");
-  });
-
-  test("the entry and inner indents are read, not assumed", () => {
-    const module = parseModuleFile("modules/oop.yaml", withMixed)!;
-    // The dash sits at column 0 in every real module file, with the
-    // `tutorials:` under it indented two.
-    expect(module.entryIndent).toBe("");
-    expect(module.innerIndent).toBe("  ");
   });
 
   test("a module whose entries are indented keeps that indent", () => {

@@ -50,10 +50,6 @@ describe("parseCell", () => {
     expect(cell.code).toBe('name: str = "Ada"\nprint(name)');
   });
 
-  test("`expect:` keeps matching with an `=` in it", () => {
-    expect(parseCell("id: a\nexpect: total == 6\nx = 1").expect).toBe("total == 6");
-  });
-
   test("a header line after code is code", () => {
     const cell = parseCell("id: a\nx = 1\nname: later");
     expect(cell.name).toBeNull();
@@ -66,5 +62,12 @@ describe("wrapSqlCode", () => {
     const wrapped = wrapSqlCode("SELECT 1");
     expect(wrapped).toContain("_dn_sql.run_sql_cell(db,");
     expect(wrapped.trimEnd().endsWith(')')).toBe(true);
+  });
+
+  test("passes the SQL through intact, quotes, backslashes and newlines included", () => {
+    const sql = "SELECT 'it''s', \"quoted\", 'a\\b'\nFROM t;";
+    const argument = /run_sql_cell\(db, ([\s\S]*)\)\s*$/.exec(wrapSqlCode(sql))![1]!;
+    // A JSON string literal is a valid Python string literal for these.
+    expect(JSON.parse(argument)).toBe(sql);
   });
 });

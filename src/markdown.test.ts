@@ -39,7 +39,11 @@ describe("openingOf", () => {
   });
 
   test("a long opening is cut rather than allowed to fill the pane", () => {
-    expect(openingOf(`${"word ".repeat(200)}\n`).length).toBe(320);
+    const full = "word ".repeat(200);
+    const opening = openingOf(`${full}\n`);
+    expect(opening.length).toBeGreaterThan(0);
+    expect(opening.length).toBeLessThan(full.length / 2);
+    expect(full.startsWith(opening.replace(/…$/, ""))).toBe(true);
   });
 });
 

@@ -27,7 +27,10 @@ describe("rankRows", () => {
   test("sections keep their fixed order whatever the query", () => {
     // An empty query is the case where every kind is present at once,
     // which is what makes it the one that proves the order.
-    const { rows } = rankRows(WORKSPACE, "");
+    // Shuffled, commands first, so the order has to come from grouping
+    // by kind and not from the order the rows arrived in.
+    const shuffled = [WORKSPACE[4]!, WORKSPACE[3]!, WORKSPACE[0]!, WORKSPACE[5]!, WORKSPACE[1]!, WORKSPACE[2]!];
+    const { rows } = rankRows(shuffled, "");
     const kinds = [...new Set(rows.map((item) => item.kind))];
     expect(kinds).toEqual(["tutorial", "series", "command"]);
   });

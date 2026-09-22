@@ -52,8 +52,9 @@ describe("fuzzyScore", () => {
   });
 
   test("a match at the start beats the same letters in the middle", () => {
-    const start = fuzzyScore("mat", "Matrices")!;
-    const middle = fuzzyScore("mat", "The mathematics")!;
+    // The same length, so the length penalty cannot decide it.
+    const start = fuzzyScore("mat", "Matrices of x")!;
+    const middle = fuzzyScore("mat", "x of Matrices")!;
     expect(start).toBeGreaterThan(middle);
   });
 
@@ -76,7 +77,9 @@ describe("fuzzyScore", () => {
   });
 
   test("case never decides a match", () => {
-    expect(fuzzyScore("GRID", "grid of numbers")).not.toBeNull();
-    expect(fuzzyScore("grid", "GRID OF NUMBERS")).not.toBeNull();
+    const lower = fuzzyScore("grid", "grid of numbers");
+    expect(lower).not.toBeNull();
+    expect(fuzzyScore("GRID", "grid of numbers")).toBe(lower);
+    expect(fuzzyScore("grid", "GRID OF NUMBERS")).toBe(lower);
   });
 });

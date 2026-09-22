@@ -23,3 +23,19 @@ describe("SNIPPETS", () => {
     expect(written).toContain("<summary>");
   });
 });
+
+describe("every snippet", () => {
+  test("goes into a new tutorial as something the checker accepts, with ids nobody is using", async () => {
+    const { newTutorial } = await import("./authoring.ts");
+    const { checkDocument } = await import("./checks.ts");
+    const made = newTutorial("A Page", new Date("2026-09-22T12:00:00"));
+    // The new tutorial already holds `cell-1`, and every snippet is
+    // inserted with the ids used so far, the way the editor does it.
+    let document = made.content;
+    for (const item of SNIPPETS) {
+      const used = [...document.matchAll(/^id:\s*(\S+)/gm)].map((match) => match[1]!);
+      document += `\n${item.markdown(idMaker(used))}\n`;
+    }
+    expect(checkDocument(document, { ids: new Set(), path: made.path })).toEqual([]);
+  });
+});

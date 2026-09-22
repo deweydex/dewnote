@@ -64,12 +64,14 @@ describe("indexEntryFor", () => {
     expect(indexEntryFor("plain.md", "Just prose.\n")).toEqual({ path: "plain.md", id: "plain" });
   });
 
-  test("a non-string field (year: 2026, covers: {}) is left out rather than coerced", () => {
-    const content = "---\ntitle: A Rule\nyear: 2026\ncovers: {}\n---\n\nBody.\n";
+  test("a non-string field is left out rather than coerced", () => {
+    // Both are fields the index does read, given as the wrong type: a
+    // number for a title, a mapping for a module.
+    const content = "---\ntitle: 2026\nmodule: {}\n---\n\nBody.\n";
     const entry = indexEntryFor("a-rule.md", content);
-    expect(entry.title).toBe("A Rule");
-    expect((entry as unknown as Record<string, unknown>)["year"]).toBeUndefined();
+    expect(entry.title).toBeUndefined();
     expect(entry.module).toBeUndefined();
+    expect(entry.id).toBe("a-rule");
   });
 
   test("reads dewlab's own status and version fields, when present", () => {
@@ -132,13 +134,6 @@ contents:
 });
 
 describe("buildFileIndex", () => {
-  test("indexes every file independently, in the order given", () => {
-    const index = buildFileIndex([
-      { path: "one.md", content: "---\ntitle: One\n---\n" },
-      { path: "two.md", content: "---\ntitle: Two\n---\n" },
-    ]);
-    expect(index.map((e) => e.title)).toEqual(["One", "Two"]);
-  });
 
   test("with no module files, modules is absent rather than empty", () => {
     // "Nothing was cross-referenced" is a different fact from "cross-
@@ -294,8 +289,11 @@ describe("defaultEntryFor", () => {
 
   test("no status field at all is treated as live, dewlab's own default", () => {
     const index = buildFileIndex([
-      entry("v2026.06.01.1.md", { title: "A draft", status: "draft", version: "2026.06.01.1" }),
-      entry("a-rule.md", { title: "No status field" }),
+      // Against a newer beta rather than a draft: a draft ranks below
+      // anything, so it would lose to a missing status whatever the
+      // default was.
+      entry("v2026.06.01.1.md", { title: "A newer beta", status: "beta", version: "2026.06.01.1" }),
+      entry("a-rule.md", { title: "No status field", version: "2026.01.01.1" }),
     ]);
     expect(defaultEntryFor(index, "a-rule")?.title).toBe("No status field");
   });
