@@ -136,6 +136,7 @@ export function sampleStore(): Store {
   return {
     kind: "folder",
     label: "sample",
+    keepsDrafts: false,
     list: async (): Promise<StoreFile[]> =>
       [...held].map(([path, content]) => ({ path, content })),
     read: async (path) => held.get(path) ?? "",

@@ -1269,3 +1269,54 @@ test("Cancel after a conflict keeps your changes unsaved, and says so", async ({
   await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
   await expect(page.locator(".dn-spine-problem")).toContainText("Not saved");
 });
+
+async function editThenLoseTheTab(page: import("@playwright/test").Page) {
+  // The browser's own "leave site?" prompt, which an author closing a
+  // crashed or reloaded tab would answer yes to.
+  page.on("dialog", (dialog) => void dialog.accept());
+  await editStoring(page);
+  // The copy is taken a moment after typing stops.
+  await page.waitForTimeout(1_500);
+  await page.reload();
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+}
+
+test("unsaved changes survive a lost tab, and are offered back", async ({ page }) => {
+  await editThenLoseTheTab(page);
+  const ask = page.locator(".dn-ask");
+  await expect(ask).toContainText("Restore unsaved changes?");
+  await page.getByRole("button", { name: /Restore my changes/ }).click();
+
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+  // Restored, not saved: the author still decides.
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
+});
+
+test("a kept copy can be discarded, and is not offered again", async ({ page }) => {
+  await editThenLoseTheTab(page);
+  await page.getByRole("button", { name: /Discard them/ }).click();
+  await expect(page.locator(".milkdown")).not.toContainText("Unsaved words.");
+
+  await openAbout(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
+  await expect(page.locator(".dn-ask")).toHaveCount(0);
+});
+
+test("saving drops the kept copy", async ({ page }) => {
+  page.on("dialog", (dialog) => void dialog.accept());
+  await editStoring(page);
+  await page.waitForTimeout(1_500);
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  await page.reload();
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
+  await expect(page.locator(".dn-ask")).toHaveCount(0);
+});

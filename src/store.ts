@@ -44,6 +44,9 @@ async function inParallel<T, R>(
 
 export interface Store {
   readonly kind: "folder" | "repo";
+  /** False for a workspace that promises to keep nothing, the sample:
+   * no copy of unsaved changes is kept in the browser for it. */
+  readonly keepsDrafts?: boolean;
   /** What the spine says: a folder's name, or `owner/repo · base → branch`. */
   readonly label: string;
   /** Every markdown file and module descriptor, read once when the

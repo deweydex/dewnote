@@ -274,6 +274,15 @@ same question first. `showPath` skips it, and is only for callers that
 have already written what the document held (a release). A
 `beforeunload` handler covers closing or reloading the tab.
 
+`drafts.ts` covers the rest: a crash, or a close the author confirmed.
+While the document is dirty, the shell keeps its markdown in IndexedDB
+(debounced, keyed by store kind, label and path), drops it on save or
+discard, and offers it back when that file next opens and the copy
+differs from the file. A store with `keepsDrafts: false` (the sample)
+keeps none. Every storage failure is silent: a browser that refuses
+IndexedDB has no safety net, which is not worth interrupting anyone
+about.
+
 "Dirty" is a comparison, not a flag: the editor's current markdown
 against what it made of the file when it opened. The file itself is
 normalised on the way in, so comparing against the bytes on disk would

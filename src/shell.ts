@@ -21,6 +21,7 @@ import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
 import { mountConflict } from "./conflict.ts";
+import { draftFor, dropDraft, keepDraft } from "./drafts.ts";
 import { newTutorial, prepareRelease } from "./authoring.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
 import { checkDocument, checkWorkspace, type Problem } from "./checks.ts";
@@ -309,6 +310,7 @@ export function mountShell(page: HTMLElement): Shell {
     }
     files.set(made.frozenPath, made.frozenContent);
     files.set(made.livePath, made.liveContent);
+    await dropDraft(draftKey(made.livePath));
     if (!store.readPublished) {
       // In a folder, what was just written is what readers now get, and
       // a second release counts on from it.
@@ -359,7 +361,53 @@ export function mountShell(page: HTMLElement): Shell {
       `${open.path} has changes that are not saved.`,
     );
     if (answer === "save") return saveNow();
+    if (answer === "discard") void dropDraft(draftKey(open.path));
     return answer === "discard";
+  }
+
+  // ── drafts ─────────────────────────────────────────────────────────
+
+  /** One copy per file per workspace. */
+  function draftKey(path: string): string {
+    return `${store?.kind}:${store?.label}:${path}`;
+  }
+
+  const keepsDrafts = (): boolean => store !== null && store.keepsDrafts !== false;
+
+  /** Every edit refreshes the margin at once and the kept copy a moment
+   * later: a copy a second old is as good as a current one after a
+   * crash, and serialising the document on every keystroke is not. */
+  let draftTimer: ReturnType<typeof setTimeout> | undefined;
+  function onEdit(): void {
+    refreshSpine();
+    if (!keepsDrafts()) return;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      if (!open) return;
+      const key = draftKey(open.path);
+      if (isDirty()) void keepDraft(key, open.document.markdown());
+      else void dropDraft(key);
+    }, 800);
+  }
+
+  /** A copy left behind by a session that ended without saving. Offered
+   * rather than applied: the file may have been saved elsewhere since,
+   * and only the author knows which they want. */
+  async function offerDraft(path: string): Promise<void> {
+    if (!keepsDrafts() || !open || open.path !== path) return;
+    const draft = await draftFor(draftKey(path));
+    if (!draft || draft.text === open.saved) return;
+    const when = new Date(draft.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    const answer = await asker.choose(
+      "Restore unsaved changes?",
+      [
+        { value: "restore", label: "Restore my changes", note: "They open unsaved; save them when you are ready." },
+        { value: "discard", label: "Discard them", note: "Open the file as it was last saved." },
+      ],
+      `You changed ${path} on ${when} and did not save. dewnote kept a copy in this browser.`,
+    );
+    if (answer === "restore" && open?.path === path) await remount(draft.text);
+    else if (answer === "discard") await dropDraft(draftKey(path));
   }
 
   /** Opens a file in place of the open one, asking first if that would
@@ -376,11 +424,12 @@ export function mountShell(page: HTMLElement): Shell {
     const source = files.get(path) ?? (await store.read(path).catch(() => null));
     if (source === null || source === undefined) return false;
 
+    clearTimeout(draftTimer);
     open?.document.destroy();
     page.replaceChildren();
     const document_ = await mountEditor(page, {
       markdown: source,
-      onChange: () => refreshSpine(),
+      onChange: () => onEdit(),
       runCell: runOneCell,
       resolveImage: (src) => resolveImage(path, src),
       saveImage: (file) => saveImage(path, file),
@@ -393,6 +442,10 @@ export function mountShell(page: HTMLElement): Shell {
     open = { path, saved: document_.markdown(), document: document_ };
     spine.setProblem(null);
     refreshSpine();
+    // Not awaited: the document is open and usable now, and whoever
+    // opened it (the palette, which closes once this returns) should not
+    // wait on a storage lookup to finish.
+    void offerDraft(path);
     return true;
   }
 
@@ -475,7 +528,7 @@ export function mountShell(page: HTMLElement): Shell {
     page.replaceChildren();
     const document_ = await mountEditor(page, {
       markdown,
-      onChange: () => refreshSpine(),
+      onChange: () => onEdit(),
       runCell: runOneCell,
       resolveImage: (src) => resolveImage(path, src),
       saveImage: (file) => saveImage(path, file),
@@ -706,6 +759,7 @@ export function mountShell(page: HTMLElement): Shell {
   }
 
   function markSaved(path: string, text: string): void {
+    void dropDraft(draftKey(path));
     if (open?.path === path) open.saved = text;
     files.set(path, text);
     reindex();
@@ -740,6 +794,7 @@ export function mountShell(page: HTMLElement): Shell {
       return true;
     }
     if (choice === "theirs") {
+      await dropDraft(draftKey(path));
       files.set(path, theirs);
       reindex();
       await showPath(path);

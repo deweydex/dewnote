@@ -453,54 +453,36 @@ the HTML above.
 
 ## Checking for problems
 
-dewnote can check a document for anything that would stop the dewlab site
-building it, or that would confuse a reader.
+dewnote checks documents for anything that would stop the dewlab site
+building, or confuse a reader:
 
 - **Check this document** checks the open document.
-- **Check every document** checks the whole workspace, which is the only
-  way to find a broken link in a page nobody has open.
-- The **problems** count in the left margin updates as you type (a
-  moment behind) and opens the same list when clicked.
+- **Check every document** checks the whole workspace. It is the only way
+  to find a broken link in a page nobody has open. Click a problem to
+  open its file.
+- The **problems** count in the left margin updates as you type and
+  opens the same list when clicked.
 - **Open a pull request…** checks every document first.
 
-Each problem says what is wrong and what to do, and gives its line
-number. In the workspace check, click a problem to open its file.
-
-Problems come in two kinds:
-
-- **Stops the site building**: the dewlab build will fail until this is
-  fixed. Shown with an orange mark.
-- **Worth fixing**: the page builds, but something is not right.
+Each problem says what is wrong, what to do, and which line it is on.
+Problems marked in orange **stop the site building**; the rest are
+**worth fixing**. Saving is never blocked, so you can always save a
+half-finished draft.
 
 What is checked:
 
-| Problem | Why it matters |
-|---|---|
-| No front matter, or no `title:` | The site cannot build the page. |
-| A tutorial with no `year:` or `version:`, a `version:` not in year.month.day.number form, or a `status:` other than draft, beta, live or archived | The site cannot build it. |
-| A tutorial with `slug:`, `module:`, `module_title:`, `series:` or `order:` | These fields are no longer allowed; the site cannot build it. |
-| A cell, question or web page pane with no `id:` | A reader's work in it cannot be saved. |
-| Two blocks with the same `id:` | A reader's work in one overwrites the other. |
-| A `tutorial:` link to a tutorial that does not exist | Readers get a broken link. |
-| An image whose file is missing | Readers get a broken image. |
-| A question with no `type:`, or an unknown type | The question cannot be marked. |
-| A multiple-choice question with fewer than two options, no question text, or a `correct:` that names no option | The question cannot be marked. |
-| A fill-in-the-blank question with no gap, or a `{` with no `}` | There is nothing to fill in. |
-| A web page pane with no `site:` line | It cannot be joined with its other panes. |
-| A card with no `url:`, or not starting with a heading | The card goes nowhere, or has no title. |
+- **Front matter**: a title on every page; for tutorials, a `year:`, a
+  valid `version:` and `status:`, and none of the retired fields.
+- **Ids**: every cell, question and web page pane has one, and no two on
+  a page are the same.
+- **Links and images**: every `tutorial:` link names a real tutorial, and
+  every image in the text exists. Images inside code blocks are not
+  checked, since tutorials teaching HTML include them as examples.
+- **Questions, web pages and cards**: each has what the site needs to
+  show and mark it.
 
-Notes:
-
-- Only `tutorial:` links are checked, because they are the only kind the
-  dewlab build turns into addresses.
-- Images are only checked in the text, not inside code blocks, because
-  many tutorials teach HTML and include image tags as examples.
-- Files that are not pages, such as a README in a tutorial folder, are
-  not checked. Every `.md` file under `tutorials/` is a page, so one with
-  no front matter is reported.
-
-Saving is never blocked by problems. You can always save a half-finished
-draft.
+Only pages are checked: every `.md` file under `tutorials/`, and the site
+pages. A README beside a tutorial is not.
 
 ## Saving
 
@@ -515,6 +497,12 @@ a new tutorial or import a notebook while you have unsaved changes,
 dewnote asks whether to **Save and continue**, **Discard changes**, or
 **Keep editing**. If you close or reload the tab with unsaved changes,
 the browser asks you to confirm.
+
+While a document has unsaved changes, dewnote also keeps a copy of them
+in this browser. If the tab crashes or is closed anyway, the next time you
+open that file dewnote offers to **Restore my changes**. The copy is
+deleted when you save or discard. It is never sent anywhere, and it is
+not kept for the sample document.
 
 ### The first save tidies the file
 

@@ -5,22 +5,10 @@ item says what is wrong, why it matters, and the proposed approach. When
 an item is done, delete it here and describe the result in
 `ARCHITECTURE.md` or the user guide.
 
-Last reviewed: 2026-09-22.
-
----
-
-## Phase 1: Things that can lose or corrupt work
-
-### 1.3 Keep unsaved drafts across a closed tab
-
-**Problem.** The unsaved-changes prompt (done) stops a switch or a close
-from losing work, but a crash, a killed tab or a dead laptop still loses
-everything since the last save.
-
-**Approach.** Write the open document's markdown to IndexedDB, debounced,
-keyed by workspace and path. On opening that file again, if a draft
-exists and differs from the file, offer **Restore draft** or **Discard
-draft**. Clear it on save.
+Last reviewed: 2026-09-22. Phase 1 (things that could lose or corrupt
+work) is done: unsaved-changes prompts, kept drafts, save conflicts,
+releases that freeze the published version, and new tutorials the
+build accepts.
 
 ---
 
