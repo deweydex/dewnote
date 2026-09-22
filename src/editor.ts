@@ -16,7 +16,7 @@
 //      into a fence. Measured: 18 files in the dewlab corpus.
 
 import { Crepe } from "@milkdown/crepe";
-import { bulletListSchema, codeBlockSchema } from "@milkdown/kit/preset/commonmark";
+import { bulletListSchema, codeBlockSchema, remarkPreserveEmptyLinePlugin } from "@milkdown/kit/preset/commonmark";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $remark } from "@milkdown/kit/utils";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
@@ -28,7 +28,7 @@ import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } fro
 import { uploadConfig } from "@milkdown/kit/plugin/upload";
 import { imageInlineComponent, inlineImageConfig } from "@milkdown/kit/component/image-inline";
 import { isImageName, isLocalAsset } from "./images.ts";
-import { unmathPlainDollars } from "./maths.ts";
+import { canonicaliseDisplayMath, unmathPlainDollars } from "./maths.ts";
 import { idMaker, SNIPPETS } from "./slash-menu.ts";
 import { insert } from "@milkdown/kit/utils";
 import { commandsCtx } from "@milkdown/kit/core";
@@ -164,49 +164,6 @@ export const frontMatterRemark = $remark("frontMatter", () => remarkFrontmatter,
 /** Runs after Crepe's own maths pass, so a `$…$` span it claimed but
  * dewlab would read as prose is put back as the text it was written as. */
 export const plainDollars = $remark("dewnotePlainDollars", () => unmathPlainDollars);
-
-/** Rewrite every display-maths block into the one form Milkdown handles
- * correctly: `$$` alone on its own line at each end.
- *
- * Milkdown gets the other two wrong.
- *
- * - Delimiters sharing a line with content are **destroyed**:
- *   `$$a = 1\nb = 2$$` comes back as `$$$\nb = 2$$\n$$$`.
- * - A block on one line is read as *inline* maths and comes back as
- *   `$x = 1$`, at a different size. 18 of 184 dewlab files use it.
- *
- * dewlab's `DISPLAY_MATH_RE` accepts all three, so this changes how a
- * file is written and never what it renders.
- *
- * Only a span that owns its lines is touched, never one inside a fence. */
-export function canonicaliseDisplayMath(markdown: string): string {
-  const fences: [number, number][] = [];
-  let open: number | null = null;
-  for (const match of markdown.matchAll(/^(?:```|~~~).*$/gm)) {
-    if (open === null) open = match.index;
-    else {
-      fences.push([open, match.index + match[0].length]);
-      open = null;
-    }
-  }
-  if (open !== null) fences.push([open, markdown.length]);
-  const inFence = (at: number) => fences.some(([from, to]) => at >= from && at < to);
-
-  return markdown.replace(/\$\$([\s\S]*?)\$\$/g, (whole, inner: string, at: number) => {
-    if (inFence(at)) return whole;
-    // It has to own its lines: something before it or after it on the
-    // same line means it is inline maths and none of our business.
-    const before = markdown.lastIndexOf("\n", at - 1) + 1;
-    if (markdown.slice(before, at).trim() !== "") return whole;
-    const after = at + whole.length;
-    const lineEnd = markdown.indexOf("\n", after);
-    if (markdown.slice(after, lineEnd === -1 ? undefined : lineEnd).trim() !== "") return whole;
-
-    const body = inner.trim();
-    if (inner === `\n${body}\n`) return whole;   // already canonical
-    return `$$\n${body}\n$$`;
-  });
-}
 
 /** The info string past its first word, for the code block holding
  * `content`.
@@ -563,6 +520,16 @@ export async function mountEditor(
     .use(frontMatterSchema)
     .use(plainDollars);
   crepe.editor.use(tightBulletLists).use(tightListItems);
+
+  // Milkdown's "preserve empty line" plugin does two things, both wrong
+  // for a file dewlab builds. Reading, it deletes every `<br>` HTML node
+  // in the document, including one in the middle of a sentence ("a
+  // line<br />next" came back as "a linenext"). Writing, it turns every
+  // empty paragraph into `<br />`, so a practice answer written as a bare
+  // `4.` (an empty ordered item to CommonMark) came back as `4. <br />`.
+  // Without it, `<br>` is ordinary inline HTML and survives, and an
+  // empty paragraph is simply not written, which is what markdown does.
+  await crepe.editor.remove(remarkPreserveEmptyLinePlugin);
 
   let hydrated = false;
   if (options.onChange) {

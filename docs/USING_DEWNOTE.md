@@ -481,8 +481,10 @@ What is checked:
 - **Questions, web pages and cards**: each has what the site needs to
   show and mark it.
 
-Only pages are checked: every `.md` file under `tutorials/`, and the site
-pages. A README beside a tutorial is not.
+Only pages are checked: every `.md` file under `tutorials/`, and every
+other file with front matter. dewlab's build reads every `.md` file in a
+tutorial's folder as a page, so a note left there without front matter is
+reported; a README at the top of the repository is not.
 
 ## Saving
 

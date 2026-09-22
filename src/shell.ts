@@ -10,7 +10,7 @@ import { mountSpine, type Spine } from "./spine.ts";
 import { mountWorkspacePalette, type WorkspacePalette } from "./workspace-palette.ts";
 import { registerCommands, clearCommands } from "./commands.ts";
 import { buildFileIndex, locationOf, type FileIndexEntry } from "./workspace.ts";
-import { parseModuleFiles, isModuleFile } from "./modules.ts";
+import { parseModuleFiles, parseModuleIndex, isModuleFile } from "./modules.ts";
 import type { Module } from "./modules.ts";
 import { messageOf, type SaveProblem } from "./save-problem.ts";
 import { canStop, requestStop, restartInterpreter, runCell } from "./runtime/pyodide-engine.ts";
@@ -806,7 +806,13 @@ export function mountShell(page: HTMLElement): Shell {
 
   function reindex(): void {
     const all: StoreFile[] = [...files].map(([path, content]) => ({ path, content }));
-    modules = parseModuleFiles(all.filter((file) => isModuleFile(file.path)));
+    // courses/index.yaml says what order the courses come in; the
+    // palette and the series picker follow it.
+    const index_ = all.find((file) => /(^|\/)(courses|modules)\/index\.yaml$/.test(file.path));
+    modules = parseModuleFiles(
+      all.filter((file) => isModuleFile(file.path)),
+      index_ ? parseModuleIndex(index_.content) : [],
+    );
     index = buildFileIndex(
       all.filter((file) => file.path.endsWith(".md")),
       modules,

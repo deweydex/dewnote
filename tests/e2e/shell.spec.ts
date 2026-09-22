@@ -36,8 +36,14 @@ const WORKSPACE = {
     "",
     "A variable is a name.",
     "",
+    // Written with `*`; the editor writes `-`, so the document is
+    // normalised the moment it opens.
+    "* One kind.",
+    "* Another.",
+    "",
     "```python exec",
     "id: first",
+    "# a comment, not a heading",
     "x = 1",
     "```",
     "",
@@ -77,8 +83,8 @@ test("the outline lists the document's own headings", async ({ page }) => {
   await openWorkspace(page);
   await page.locator(".dn-wp-input").fill("storing");
   await page.keyboard.press("Enter");
-  // Two headings: the title and `## Variables`. A `#` inside the fence
-  // is not one.
+  // Two headings: the title and `## Variables`. The `# a comment` line
+  // inside the fence is not one.
   await expect(page.locator(".dn-spine-heading")).toHaveCount(2);
   await expect(page.locator(".dn-spine-heading").nth(1)).toHaveText("Variables");
 });
@@ -89,6 +95,14 @@ test("an untouched document is not dirty, although it was normalised on the way 
   await page.keyboard.press("Enter");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
   await expect(page.locator(".dn-spine-state")).toBeDisabled();
+
+  // It was normalised: the file says `*`, the document says `-`. Without
+  // this, a fixture that happened to round-trip byte for byte would let
+  // the test pass even if "dirty" compared against the raw file.
+  await page.keyboard.press("ControlOrMeta+/");
+  await expect(page.locator(".dn-source-text")).toHaveValue(/^- One kind\.$/m);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
 });
 
 test("an edit reaches the store, with the fence's info string intact", async ({ page }) => {
@@ -121,29 +135,19 @@ test("dewlab's own site pages are documents like any other", async ({ page }) =>
 });
 
 test("a runnable cell offers Run; an illustrative fence does not", async ({ page }) => {
-  await openWorkspace(page);
-  await page.locator(".dn-wp-input").fill("storing");
-  await page.keyboard.press("Enter");
-
-  // One `python exec` fence in the fixture, and no plain one.
-  await expect(page.locator(".dn-cell-run")).toHaveCount(1);
-  await expect(page.locator(".dn-cell-run")).toHaveText("Run");
-
-  // Pyodide itself is not reachable from this sandbox, so what is
-  // checked here is the affordance, not the interpreter. No test runs
-  // real Python yet; see planning/ROADMAP.md.
-});
-
-test("an illustrative fence has no Run button", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
-    "pages/plain.md": "---\ntitle: Plain\n---\n\n# Plain\n\n```python\nprint(1)\n```\n",
+    "pages/plain.md":
+      "---\ntitle: Plain\n---\n\n# Plain\n\n```python exec\nid: a\nprint(1)\n```\n\n```python\nprint(2)\n```\n",
   });
   await page.locator(".dn-wp-input").fill("plain");
   await page.keyboard.press("Enter");
-  // Crepe renders a code block as a CodeMirror instance, not a `pre`.
-  await expect(page.locator(".milkdown .cm-editor")).toHaveCount(1);
-  await expect(page.locator(".dn-cell-run")).toHaveCount(0);
+  // Two code blocks on screen (Crepe renders each as CodeMirror), and a
+  // Run button for only the one marked `exec`. Real runs are in
+  // pyodide.spec.ts.
+  await expect(page.locator(".milkdown .cm-editor")).toHaveCount(2);
+  await expect(page.locator(".dn-cell-run")).toHaveCount(1);
+  await expect(page.locator(".dn-cell-run")).toHaveText("Run");
 });
 
 test("every appearance setting is reachable from the palette, and moving the measure moves the page", async ({ page }) => {
@@ -218,6 +222,23 @@ test("an edit to the sample is kept, and goes nowhere", async ({ page }) => {
   await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+
+  // Kept: leave and come back, and the edit is still there.
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("practice");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("everything at once");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown")).toContainText("Edited.");
+
+  // Goes nowhere: a fresh sample has none of it.
+  await page.reload();
+  await page.locator('[data-choice="sample"]').click();
+  await page.locator(".dn-wp-input").fill("everything");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown h1")).toHaveText("Everything at Once");
+  await expect(page.locator(".milkdown")).not.toContainText("Edited.");
 });
 
 test("Connect counts the files as they arrive, and ignores a second press", async ({ page }) => {
@@ -263,6 +284,15 @@ test("Connect counts the files as they arrive, and ignores a second press", asyn
   await page.fill('[name="branch"]', "alt");
 
   const connect = page.locator('.dn-gate-repo button[type="submit"]');
+  // Every label the button shows, recorded as it changes: the count is
+  // on screen only between the reads finishing and the gate going away.
+  await connect.evaluate((button) => {
+    const seen: string[] = [];
+    (globalThis as any).__labels = seen;
+    new MutationObserver(() => seen.push(button.textContent ?? "")).observe(button, {
+      childList: true, characterData: true, subtree: true,
+    });
+  });
   await connect.click();
 
   // It says what it is doing rather than sitting silent, and stops
@@ -274,15 +304,22 @@ test("Connect counts the files as they arrive, and ignores a second press", asyn
   await connect.click({ force: true });
   await expect(page.locator(".dn-wp-overlay")).toBeVisible({ timeout: 10_000 });
   expect(await page.evaluate(() => (globalThis as any).__reads())).toBe(3);
+
+  // And it counted.
+  const labels: string[] = await page.evaluate(() => (globalThis as any).__labels);
+  expect(labels).toContain("Reading 3 of 3");
 });
 
-test("the gate's buttons show they were pressed", async ({ page }) => {
+test("the gate's buttons show a focus ring to the keyboard", async ({ page }) => {
   await page.goto(BUILT_APP);
-  const sample = page.locator('[data-choice="sample"]');
-  // A focus ring is the part a keyboard reader depends on.
-  await sample.focus();
-  const outline = await sample.evaluate((el) => getComputedStyle(el).outlineStyle);
-  expect(outline).not.toBe("none");
+  // Tab, not .focus(): `:focus-visible` is what a keyboard reader gets.
+  await page.keyboard.press("Tab");
+  const ring = await page.evaluate(() => {
+    const style = getComputedStyle(document.activeElement!);
+    return { style: style.outlineStyle, width: style.outlineWidth };
+  });
+  // dewnote's own ring, not the browser's default `auto` one.
+  expect(ring).toEqual({ style: "solid", width: "2px" });
 });
 
 test("the repository form fills in a working branch rather than asking for one", async ({ page }) => {
@@ -334,6 +371,11 @@ test("a pasted image is written beside the document and named in the markdown", 
   expect(
     await images.nth(1).evaluate((el: HTMLImageElement) => el.getAttribute("src")?.startsWith("blob:")),
   ).toBe(true);
+  // The markdown names the file, and nothing is inlined.
+  await page.keyboard.press("ControlOrMeta+/");
+  const source = page.locator(".dn-source-text");
+  await expect(source).toHaveValue(/!\[[^\]]*\]\(sketch\.png\)/);
+  await expect(source).not.toHaveValue(/data:image/);
 });
 
 test("Check every document reports a fault in a file nobody has open, and opens it", async ({ page }) => {
@@ -953,11 +995,13 @@ test("Preview opens the page in a tab, with its stylesheet and maths inside it",
   await expect(tab.locator("h1")).toHaveText("A Page");
   await expect(tab.locator(".katex").first()).toBeVisible();
 
-  // The stylesheet reaches it at all: the export used to inline the
-  // literal string "[object Object]", because the same file was
-  // imported once as a stylesheet and once as text.
-  expect(await tab.evaluate(() => document.querySelector("style")!.textContent!.slice(0, 40)))
-    .not.toContain("[object Object]");
+  // The stylesheet reaches it and applies: the export once inlined the
+  // literal string "[object Object]", and a page with no tokens reads in
+  // the browser's default serif at full width. Headings are dewlab's
+  // navy only if the reading stylesheet and the tokens both arrived.
+  expect(await tab.evaluate(() => getComputedStyle(document.querySelector("h1")!).color))
+    .toBe("rgb(27, 42, 74)");
+  expect(await tab.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Georgia");
 });
 
 test("an image whose file is not there is counted in the margin and named in the report", async ({ page }) => {
@@ -1004,8 +1048,16 @@ test("a paragraph and a list item are the same size, and follow the setting", as
       item: getComputedStyle(document.querySelector(".milkdown .ProseMirror li")!).fontSize,
     }));
 
-  expect(await sizes()).toEqual({ paragraph: "18px", item: "18px" });
-  await page.evaluate(() => document.documentElement.style.setProperty("--dl-font-size", "24px"));
+  const before = await sizes();
+  expect(before.item).toBe(before.paragraph);
+
+  // Through the Appearance panel, the way an author changes it.
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("appearance");
+  await page.keyboard.press("Enter");
+  await page.locator(".dn-settings-row", { hasText: "Text size" }).locator("input").fill("24");
+  await page.keyboard.press("Escape");
+
   expect(await sizes()).toEqual({ paragraph: "24px", item: "24px" });
 });
 
@@ -1014,13 +1066,13 @@ test("the palette says its prompt once", async ({ page }) => {
   await page.locator('[data-choice="sample"]').click();
   const box = page.locator(".dn-wp-box");
   await expect(box).toBeVisible();
-  // The label is for a screen reader; the placeholder is for the eye. It
-  // stays in the tree, named and associated, and takes up no space — a
-  // `display: none` label is a label no screen reader reads.
-  const label = box.locator("label");
-  await expect(label).toHaveAttribute("for", "dn-wp-input");
-  const size = await label.boundingBox();
-  expect(size).toMatchObject({ width: 1, height: 1 });
+  // A screen reader hears the prompt as the field's name; the eye sees
+  // it once, as the placeholder. A `display: none` label would take the
+  // name away, and a visible one would say the prompt twice.
+  await expect(page.getByRole("textbox", { name: "Find a tutorial, a series, or something to do" }))
+    .toBeVisible();
+  const label = await box.locator("label").boundingBox();
+  expect(label!.width * label!.height).toBeLessThanOrEqual(1);
 });
 
 test("the caret is drawn", async ({ page }) => {
@@ -1186,9 +1238,11 @@ test("Escape on the unsaved-changes question is the same as Keep editing", async
   await openAbout(page);
   await expect(page.locator(".dn-ask h2")).toBeVisible();
   await page.keyboard.press("Escape");
-  await page.keyboard.press("Escape");
 
+  await expect(page.locator(".dn-ask")).toBeHidden();
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
   await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
 });
 
 test("Discard changes opens the other document and writes nothing", async ({ page }) => {
@@ -1270,6 +1324,22 @@ test("Cancel after a conflict keeps your changes unsaved, and says so", async ({
   await expect(page.locator(".dn-spine-problem")).toContainText("Not saved");
 });
 
+/** The kept copies in IndexedDB, by key. Only call it once the app has
+ * opened the database itself: opening it first from here would create
+ * it with no store in it. */
+async function keptCopies(page: import("@playwright/test").Page): Promise<string[]> {
+  return page.evaluate(() => new Promise<string[]>((resolve) => {
+    const request = indexedDB.open("dewnote");
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("drafts")) return resolve([]);
+      const keys = db.transaction("drafts").objectStore("drafts").getAllKeys();
+      keys.onsuccess = () => resolve(keys.result.map(String));
+    };
+    request.onerror = () => resolve(["could not open"]);
+  }));
+}
+
 async function editThenLoseTheTab(page: import("@playwright/test").Page) {
   // The browser's own "leave site?" prompt, which an author closing a
   // crashed or reloaded tab would answer yes to.
@@ -1298,6 +1368,7 @@ test("a kept copy can be discarded, and is not offered again", async ({ page }) 
   await editThenLoseTheTab(page);
   await page.getByRole("button", { name: /Discard them/ }).click();
   await expect(page.locator(".milkdown")).not.toContainText("Unsaved words.");
+  await expect.poll(() => keptCopies(page)).toEqual([]);
 
   await openAbout(page);
   await page.keyboard.press("ControlOrMeta+k");
@@ -1311,12 +1382,28 @@ test("saving drops the kept copy", async ({ page }) => {
   page.on("dialog", (dialog) => void dialog.accept());
   await editStoring(page);
   await page.waitForTimeout(1_500);
+  expect(await keptCopies(page)).toHaveLength(1);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  await expect.poll(() => keptCopies(page)).toEqual([]);
   await page.reload();
   await openWorkspace(page);
   await page.locator(".dn-wp-input").fill("storing");
   await page.keyboard.press("Enter");
   await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
   await expect(page.locator(".dn-ask")).toHaveCount(0);
+});
+
+test("courses come in the order courses/index.yaml gives them", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    // Alphabetically "Algebra" would come first; the index says otherwise.
+    "courses/index.yaml": "order:\n  - zoology\n  - algebra\n",
+    "courses/algebra.yaml": "id: algebra\ntitle: Algebra\ncontents:\n  - title: Algebra Series\n    tutorials: []\n",
+    "courses/zoology.yaml": "id: zoology\ntitle: Zoology\ncontents:\n  - title: Zoology Series\n    tutorials: []\n",
+    "tutorials/a/a.md": '---\ntitle: A\nyear: "2026-2027"\nversion: 2026.09.22.1\n---\n\n# A\n',
+  });
+  await page.locator(".dn-wp-input").fill("series");
+  const series = page.locator(".dn-wp-row", { hasText: "Series" }).locator(".dn-wp-row-label");
+  await expect(series).toHaveText(["Zoology Series", "Algebra Series"]);
 });

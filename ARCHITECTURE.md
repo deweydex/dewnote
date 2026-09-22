@@ -466,8 +466,13 @@ bun run test:e2e                  # builds, then Playwright against the built fi
 `tests/e2e/roundtrip.spec.ts` is the one that matters. If it cannot be
 kept green, the document model is wrong.
 
-Pyodide loads from jsDelivr at runtime, so no test in the suite runs
-real Python: a sandbox without network reaches the Run button and an
-error, and the tests are written to pass either way. The `e2e (pyodide)`
-workflow runs the whole suite with network access, on demand. CI
-(`tests.yml`) runs only the unit tests and the type checker.
+CI (`tests.yml`) runs the unit tests, the type checker and the whole
+Playwright suite on every pull request.
+
+Pyodide loads from jsDelivr at runtime. `tests/e2e/pyodide.spec.ts` runs
+real Python (printing, shared variables, errors, stopping a loop, SQL)
+and skips itself where jsDelivr cannot be reached, such as a sandbox with
+restricted network. CI sets `DEWNOTE_REQUIRE_PYODIDE=1`, which turns that
+skip into a failure. Every other cell test stubs the interpreter or uses
+a cell that fails either way, so the rest of the suite passes with or
+without a network.

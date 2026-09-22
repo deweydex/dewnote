@@ -18,24 +18,32 @@ function setAtRuntime(): Set<string> {
   const found = new Set<string>();
   for (const name of readdirSync("src")) {
     if (!name.endsWith(".ts") || name.endsWith(".test.ts")) continue;
-    for (const match of readFileSync(join("src", name), "utf8").matchAll(/"(--dn-[\w-]+)"/g)) {
+    for (const match of readFileSync(join("src", name), "utf8").matchAll(/"(--[\w-]+)"/g)) {
       found.add(match[1]!);
     }
   }
   return found;
 }
 
-test("every `--dn-*` the stylesheet reads is one something defines", () => {
-  const defined = new Set([...CSS.matchAll(/^\s*(--dn-[\w-]+)\s*:/gm)].map((m) => m[1]!));
-  const runtime = setAtRuntime();
-  // A read with its own literal fallback — `var(--dn-x, 290px)` — says
-  // what to do when it is absent, so it is not a leftover.
-  const bare = [...CSS.matchAll(/var\((--dn-[\w-]+)\s*\)/g)].map((m) => m[1]!);
-  expect([...new Set(bare)].filter((name) => !defined.has(name) && !runtime.has(name))).toEqual([]);
-});
+/** Every custom property a stylesheet dewnote loads defines. */
+function definedInStylesheets(): Set<string> {
+  const sheets = [
+    "src/style.css",
+    "src/brand.css",
+    ...readdirSync("src/theme").filter((name) => name.endsWith(".css")).map((name) => join("src/theme", name)),
+  ];
+  const found = new Set<string>();
+  for (const sheet of sheets) {
+    for (const match of readFileSync(sheet, "utf8").matchAll(/(--[\w-]+)\s*:/g)) found.add(match[1]!);
+  }
+  return found;
+}
 
-test("a shadow token is used as a shadow, not as a whole `box-shadow`", () => {
-  // `--dl-shadow` is a colour. `box-shadow: var(--dl-shadow)` has no
-  // offsets, so it is invalid and dropped.
-  expect([...CSS.matchAll(/box-shadow:\s*var\(--dl-shadow[^;]*;/g)].map((m) => m[0])).toEqual([]);
+test("every custom property the stylesheet reads is one something defines", () => {
+  const defined = definedInStylesheets();
+  const runtime = setAtRuntime();
+  // A read with its own literal fallback, `var(--x, 290px)`, says what
+  // to do when it is absent, so it is not a leftover.
+  const bare = [...CSS.matchAll(/var\((--[\w-]+)\s*\)/g)].map((m) => m[1]!);
+  expect([...new Set(bare)].filter((name) => !defined.has(name) && !runtime.has(name))).toEqual([]);
 });

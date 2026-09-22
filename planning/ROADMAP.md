@@ -8,31 +8,8 @@ an item is done, delete it here and describe the result in
 Last reviewed: 2026-09-22. Phase 1 (things that could lose or corrupt
 work) is done: unsaved-changes prompts, kept drafts, save conflicts,
 releases that freeze the published version, and new tutorials the
-build accepts.
-
----
-
-## Phase 2: Tests that guard what the README says matters
-
-### 2.1 Run the Playwright suite in CI
-
-**Problem.** The README calls `tests/e2e/roundtrip.spec.ts` the test the
-application stands on, but CI (`tests.yml`) runs only unit tests and the
-type checker. The e2e suite runs only locally, or on demand.
-
-**Approach.** Add a job to `tests.yml` that installs Chromium, builds,
-and runs `bunx playwright test`. The suite takes about a minute and a
-half. The tests are already written to pass without network access.
-
-### 2.2 A test that runs real Python
-
-**Problem.** No test runs a cell through Pyodide. Every cell test passes
-whether Python loads or not, so a broken worker would not be caught.
-
-**Approach.** Add `tests/e2e/pyodide.spec.ts`, tagged so it runs only in
-the `e2e (pyodide)` workflow, which has network: run `print(2 + 2)` and
-assert the output is `4`; run a failing cell and assert the error; stop a
-`while True` loop.
+build accepts. Phase 2 (the browser tests, and real Python, run in CI on
+every pull request) is done.
 
 ---
 
@@ -124,7 +101,14 @@ A conflict offers one version or the other. When both people changed
 different paragraphs, keeping both needs a three-way merge against the
 version the author opened, which the shell already has in `opened`.
 
-### 4.6 A way to forget the token
+### 4.6 No trailing blank line after editing at the end of a document
+
+Clicking into a list or table that ends the document leaves Milkdown's
+empty trailing paragraph in place, and the file is saved ending in a
+blank line. Content is unchanged, but it is churn in a diff. Trim
+trailing empty paragraphs on save.
+
+### 4.7 A way to forget the token
 
 The GitHub token stays in localStorage until the browser's site data is
 cleared. Add a **Disconnect from GitHub** command that removes it.

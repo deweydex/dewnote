@@ -1,34 +1,43 @@
-// The test the rebuild stands on.
+// The test dewnote stands on.
 //
-// dewnote now saves by re-serialising the document (REBUILD.md §4), so
-// every construct dewlab and dewstack write has to survive a pass through
-// Milkdown. Two properties are asserted, and they are not the same:
+// dewnote saves by re-serialising the document through Milkdown, so every
+// construct dewlab and dewstack write has to survive a pass through it.
+// Two properties are asserted, and they are not the same:
 //
-//   * nothing structural is lost — fence info strings, cell ids, headings
-//     and raw-HTML folds come back exactly as they went in;
-//   * the pass is idempotent — f(f(x)) == f(x) — so a file is normalised
-//     at most once and is byte-stable from then on.
+//   * nothing the document says is lost or changed: the first pass may
+//     rewrite how the file is written, never what it says;
+//   * the pass is idempotent, f(f(x)) == f(x), so a file is normalised at
+//     most once and is byte-stable from then on.
 //
-// The second is what makes the first tolerable. A file that differs on
-// the first pass differs in formatting only, once, and can be reviewed as
-// a formatting commit. A file that differed on every pass would churn.
+// The second alone is not enough: a pass that deletes something is
+// usually stable afterwards. Until the first was checked properly this
+// suite passed while every inline `<br>` was being deleted.
+//
+// "What it says" is the markdown's parsed tree (structure.ts): headings,
+// every fence's info string and whole body, front matter, HTML, tables,
+// list numbering and task state, links, images and maths. The one
+// rewrite the source gets first is the display-maths canonicalisation
+// the editor applies before reading, which changes how a formula is
+// written and, by dewlab's own reading, never what it renders.
 
 import { test, expect } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { structureOf } from "./structure.ts";
+import { canonicaliseDisplayMath } from "../../src/maths.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BUILT_APP = "file://" + resolve(HERE, "../../dist/index.html");
 const FIXTURES = join(HERE, "..", "..", "fixtures");
 
-function corpus(): { name: string; source: string }[] {
-  const out: { name: string; source: string }[] = [];
+function corpus(): { dialect: string; name: string; source: string }[] {
+  const out: { dialect: string; name: string; source: string }[] = [];
   for (const dialect of readdirSync(FIXTURES)) {
     const dir = join(FIXTURES, dialect);
     for (const file of readdirSync(dir)) {
       if (!file.endsWith(".md")) continue;
-      out.push({ name: `${dialect}/${file}`, source: readFileSync(join(dir, file), "utf8") });
+      out.push({ dialect, name: `${dialect}/${file}`, source: readFileSync(join(dir, file), "utf8") });
     }
   }
   return out;
@@ -36,35 +45,21 @@ function corpus(): { name: string; source: string }[] {
 
 const FILES = corpus();
 
-/** A fence's whole info string, opening fences only. */
-const fences = (s: string) =>
-  [...s.matchAll(/^```(.*)$/gm)].map((m) => m[1]).filter((_, i) => i % 2 === 0);
-const cellIds = (s: string) => [...s.matchAll(/^id:\s*(\S+)/gm)].map((m) => m[1]);
-const headings = (s: string) => [...s.matchAll(/^(#{1,6})\s+(.*)$/gm)].map((m) => m[0]);
-const folds = (s: string) => (s.match(/<details/g) ?? []).length;
-// Delimiter pairs, not `$$` at a line start: dewlab sometimes opens a
-// block with content on the same line, and the pass normalises that to
-// the three-line form without losing a block.
-const mathBlocks = (s: string) => (s.match(/\$\$/g) ?? []).length;
-
 test.describe("round trip", () => {
-  test("the corpus is not empty", () => {
+  test("the corpus holds every dialect", () => {
     expect(FILES.length).toBeGreaterThan(20);
+    expect(new Set(FILES.map((file) => file.dialect))).toEqual(new Set(["dewlab", "dewstack", "plain"]));
   });
 
   for (const { name, source } of FILES) {
-    test(`keeps everything structural: ${name}`, async ({ page }) => {
+    test(`says the same after a save: ${name}`, async ({ page }) => {
       await page.goto(BUILT_APP);
       const once = await page.evaluate(async (md) => {
         await (globalThis as any).__dewnote.open(md);
         return (globalThis as any).__dewnote.markdown() as string;
       }, source);
 
-      expect(fences(once), "fence info strings").toEqual(fences(source));
-      expect(cellIds(once), "cell ids").toEqual(cellIds(source));
-      expect(headings(once), "headings").toEqual(headings(source));
-      expect(folds(once), "<details> folds").toBe(folds(source));
-      expect(mathBlocks(once), "display maths blocks").toBe(mathBlocks(source));
+      expect(structureOf(once)).toEqual(structureOf(canonicaliseDisplayMath(source)));
     });
 
     test(`is idempotent: ${name}`, async ({ page }) => {
@@ -77,6 +72,9 @@ test.describe("round trip", () => {
         return [first, api.markdown() as string];
       }, source);
 
+      // An editor that failed to mount returns "" twice, which is
+      // perfectly idempotent.
+      expect(once.trim()).not.toBe("");
       expect(twice).toBe(once);
     });
   }

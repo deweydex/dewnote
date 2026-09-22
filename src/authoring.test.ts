@@ -55,6 +55,15 @@ describe("idFromTitle", () => {
   });
 });
 
+describe("idFromTitle at its length limit", () => {
+  test("never ends in a hyphen where the cut falls on a space", () => {
+    // 59 letters, then a space: the 60th character becomes a hyphen.
+    const id = idFromTitle(`${"a".repeat(59)} tail`);
+    expect(id).toBe("a".repeat(59));
+    expect(id.endsWith("-")).toBe(false);
+  });
+});
+
 describe("newTutorial", () => {
   const made = newTutorial("Storing and Computing", new Date("2026-09-20T10:00:00"));
 

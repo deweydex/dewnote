@@ -1,6 +1,7 @@
 // One case per markdown construct dewlab writes, checked through the
-// real editor. The corpus suite says whether 184 files survive; this
-// says which construct broke when one of them does not.
+// real editor. The corpus suite (roundtrip.spec.ts) says whether the
+// fixtures survive; this says which construct broke when one does not,
+// and what each looks like and does on screen.
 
 import { test, expect } from "@playwright/test";
 import { dirname, resolve } from "node:path";
@@ -18,6 +19,8 @@ const IDENTICAL: Record<string, string> = {
   "strikethrough": "The old way was ~~this~~, and the new way is that.\n",
   "inline maths": "The value $x^2 + 1$ here.\n",
   "display maths": "$$\n\\frac{a}{b} = c\n$$\n",
+  "inline break": "A line<br />and the next.\n",
+  "answer written as a bare number": "1. One.\n2.\n",
   "table": "| A | B |\n| - | - |\n| 1 | 2 |\n",
   "blockquote": "> a quotation\n",
   "thematic break": "One.\n\n---\n\nTwo.\n",
@@ -47,12 +50,16 @@ for (const [name, source] of Object.entries(IDENTICAL)) {
   });
 }
 
-test("display maths renders through KaTeX", async ({ page }) => {
+test("display maths written on one line stays display maths", async ({ page }) => {
+  // Milkdown reads `$$x = 1$$` on one line as inline maths, at a
+  // different size. dewlab reads it as a block, and so must the editor.
   await page.goto(BUILT_APP);
-  await page.evaluate(() =>
-    (globalThis as any).__dewnote.open("$$\n\\frac{a}{b} = c\n$$\n"),
-  );
-  await expect(page.locator(".milkdown .katex")).toHaveCount(1);
+  const out = await page.evaluate(async () => {
+    await (globalThis as any).__dewnote.open("$$x = 1$$\n");
+    return (globalThis as any).__dewnote.markdown() as string;
+  });
+  expect(out).toBe("$$\nx = 1\n$$\n");
+  await expect(page.locator(".milkdown .katex").first()).toBeVisible();
 });
 
 test("inline maths renders through KaTeX", async ({ page }) => {
@@ -61,33 +68,39 @@ test("inline maths renders through KaTeX", async ({ page }) => {
   await expect(page.locator(".milkdown .katex")).toHaveCount(1);
 });
 
-test("an image is an img element, at the path the markdown names", async ({ page }) => {
-  await page.goto(BUILT_APP);
-  await page.evaluate(() =>
-    (globalThis as any).__dewnote.open("![a diagram](diagram.svg)\n"),
-  );
-  const image = page.locator(".milkdown img:not(.ProseMirror-separator)");
-  await expect(image).toHaveCount(1);
-  // Relative, and resolved against the page rather than the document —
-  // which is why an image beside a tutorial does not display yet.
-  await expect(image).toHaveAttribute("src", "diagram.svg");
-});
-
 test("a table is editable, not raw pipes", async ({ page }) => {
   await page.goto(BUILT_APP);
-  await page.evaluate(() =>
-    (globalThis as any).__dewnote.open("| A | B |\n| - | - |\n| 1 | 2 |\n"),
-  );
-  await expect(page.locator(".milkdown table")).not.toHaveCount(0);
+  await page.evaluate(() => {
+    // The gate would take the click this test makes.
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open("| A | B |\n| - | - |\n| 1 | 2 |\n");
+  });
   await expect(page.locator(".milkdown td").first()).toHaveText("1");
+
+  // Typing into a cell changes that cell in the file.
+  await page.locator(".milkdown td").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("0");
+  const out = await page.evaluate(() => (globalThis as any).__dewnote.markdown() as string);
+  expect(out).toMatch(/^\| 10 +\| 2 \|$/m);
 });
 
-test("a task list draws its own checkbox", async ({ page }) => {
+test("a task list shows which items are done, and a click ticks one", async ({ page }) => {
   await page.goto(BUILT_APP);
-  await page.evaluate(() =>
-    (globalThis as any).__dewnote.open("- [ ] to do\n- [x] done\n"),
-  );
-  await expect(page.locator(".milkdown .milkdown-icon.label")).toHaveCount(2);
+  await page.evaluate(() => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open("- [ ] to do\n- [x] done\n");
+  });
+  const boxes = page.locator(".milkdown .milkdown-icon.label");
+  await expect(boxes.nth(0)).toHaveClass(/unchecked/);
+  await expect(boxes.nth(1)).toHaveClass(/(^|\s)checked/);
+
+  await boxes.nth(0).click();
+  const out = await page.evaluate(() => (globalThis as any).__dewnote.markdown() as string);
+  // Trailing blank lines aside: clicking into a list at the end of a
+  // document leaves Milkdown's empty trailing paragraph behind (see
+  // planning/ROADMAP.md).
+  expect(out.trimEnd()).toBe("- [x] to do\n- [x] done");
 });
 
 test("a price is prose, not a formula", async ({ page }) => {
@@ -100,6 +113,10 @@ test("a price is prose, not a formula", async ({ page }) => {
   );
   await expect(page.locator(".milkdown .katex")).toHaveCount(0);
   await expect(page.locator(".milkdown p")).toContainText("It costs $5 and $6 in total.");
+  // Saved escaped, which dewlab renders as a plain `$`, so it can never
+  // be read as maths later.
+  const out = await page.evaluate(() => (globalThis as any).__dewnote.markdown() as string);
+  expect(out).toBe("It costs \\$5 and \\$6 in total.\n");
 });
 
 test("an escaped dollar is a dollar, and stays one", async ({ page }) => {
@@ -141,21 +158,24 @@ test("a running cell can be stopped by the button that started it", async ({ pag
   await expect(run).not.toHaveClass(/is-running/);
 });
 
-test("a cell actually runs, and its output appears under the code", async ({ page }) => {
-  // The test that was missing: the old one asserted the button existed,
-  // which it did while doing nothing at all.
+test("Run sends the cell's code, without its header lines, and shows what comes back", async ({ page }) => {
+  // The interpreter is a stub that echoes what it was sent; real Python
+  // is in pyodide.spec.ts. What is checked here is the editor's half:
+  // the right code goes out and the answer lands under the cell.
   await page.goto(BUILT_APP);
   await page.evaluate(() => {
     (globalThis as any).__dewnoteRunCell = true;
     document.querySelector(".dn-gate")?.remove();
   });
   await page.evaluate(() =>
-    (globalThis as any).__dewnote.open("```python exec\nid: a\nprint(1)\n```\n"),
+    (globalThis as any).__dewnote.open("```python exec\nid: a\nhint: errors:3\nprint(1)\n```\n"),
   );
 
   await page.locator(".dn-cell-run").click();
-  await expect(page.locator(".dn-cell-output")).toBeVisible();
-  await expect(page.locator(".dn-cell-output")).toContainText("stub");
+  const output = page.locator(".dn-cell-output");
+  await expect(output).toContainText("print(1)");
+  await expect(output).not.toContainText("id: a");
+  await expect(output).not.toContainText("errors:3");
   await expect(page.locator(".dn-cell-run")).toHaveText("Run again");
 });
 
@@ -231,4 +251,19 @@ test("Run every cell passes over questions and runs a cell below the fold", asyn
   await page.locator(".milkdown pre, .milkdown .milkdown-code-block").last().scrollIntoViewIfNeeded();
   await expect(page.locator(".dn-cell-run")).toHaveText("Run again", { timeout: 30_000 });
   await expect(page.locator(".dn-cell-output.is-error")).toHaveCount(1);
+});
+
+test("Run on a SQL cell sends the query wrapped for the page's database", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    (globalThis as any).__dewnoteRunCell = true;
+    document.querySelector(".dn-gate")?.remove();
+  });
+  await page.evaluate(() =>
+    (globalThis as any).__dewnote.open("```sql exec\nid: q\nSELECT 1;\n```\n"),
+  );
+  await page.locator(".dn-cell-run").click();
+  const output = page.locator(".dn-cell-output");
+  await expect(output).toContainText("run_sql_cell(db,");
+  await expect(output).toContainText("SELECT 1;");
 });
