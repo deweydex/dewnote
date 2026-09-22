@@ -76,11 +76,12 @@ export interface NewTutorial {
 
 /** A tutorial with the front matter dewlab's build expects and a first
  * cell, so the page runs the moment it opens. */
-export function newTutorial(title: string, now: Date = new Date()): NewTutorial {
+export function newTutorial(title: string, now: Date = new Date(), year = academicYear(now)): NewTutorial {
   const id = idFromTitle(title);
   const content = [
     "---",
     `title: ${asYamlScalar(title)}`,
+    `year: ${JSON.stringify(year)}`,
     "status: draft",
     `version: ${nextVersion([], now)}`,
     "---",
@@ -96,6 +97,14 @@ export function newTutorial(title: string, now: Date = new Date()): NewTutorial 
     "",
   ].join("\n");
   return { path: `tutorials/${id}/${id}.md`, content, id };
+}
+
+/** dewlab's `year:` is an academic year, "2026-2027", which turns over
+ * in September. Only the fallback: a workspace that already has
+ * tutorials says which year it is using. */
+export function academicYear(now: Date = new Date()): string {
+  const start = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${start}-${start + 1}`;
 }
 
 /** The next release on a date, counting a second one made the same day

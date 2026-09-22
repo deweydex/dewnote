@@ -308,6 +308,7 @@ The block between the two `---` lines at the top of a file is the
 ```
 ---
 title: Storing and Computing
+year: "2026-2027"
 status: live
 version: 2026.09.22.1
 ---
@@ -316,10 +317,17 @@ version: 2026.09.22.1
 | Field | Meaning |
 |---|---|
 | `title` | The page's title. Required. |
-| `status` | `draft` (not shown to readers) or `live` (shown). |
-| `version` | The release this is, as year.month.day.number. dewnote sets this when you release a new version. |
+| `year` | The academic year, such as `"2026-2027"`. Required for tutorials. |
+| `version` | The release this is, as year.month.day.number. Required for tutorials. dewnote sets it when you create a tutorial or release a new version. |
+| `status` | `draft`: not on the site at all. `beta`: on the site, with a notice that it is a trial, but not listed on its course. `live`: on the site and its course. `archived`: still reachable, so readers keep their saved work, but no longer on the course. Leaving it out means `live`. |
 
-dewlab reads other fields too; `planning/DIALECTS.md` lists them all.
+The site will not build if a tutorial is missing a required field or has
+any other `status`. dewlab reads other fields too; `planning/DIALECTS.md`
+lists them all.
+
+Some fields from older tutorials are no longer allowed: `slug`, `module`,
+`module_title`, `series` and `order`. Where a tutorial appears is now
+decided only by the course files.
 
 ## Cells
 
@@ -469,7 +477,8 @@ What is checked:
 | Problem | Why it matters |
 |---|---|
 | No front matter, or no `title:` | The site cannot build the page. |
-| A `version:` not in year.month.day.number form | Releasing a new version counts on from it. |
+| A tutorial with no `year:` or `version:`, a `version:` not in year.month.day.number form, or a `status:` other than draft, beta, live or archived | The site cannot build it. |
+| A tutorial with `slug:`, `module:`, `module_title:`, `series:` or `order:` | These fields are no longer allowed; the site cannot build it. |
 | A cell, question or web page pane with no `id:` | A reader's work in it cannot be saved. |
 | Two blocks with the same `id:` | A reader's work in one overwrites the other. |
 | A `tutorial:` link to a tutorial that does not exist | Readers get a broken link. |
@@ -563,7 +572,8 @@ there until you open another document. It says what went wrong and what to do. T
 ### Creating a tutorial
 
 Run **New tutorial…** and give it a title. dewnote creates
-`tutorials/<id>/<id>.md` with a title, `status: draft`, today's version,
+`tutorials/<id>/<id>.md` with a title, the same `year:` as the workspace's
+other tutorials, `status: draft`, today's version,
 a heading, and one empty Python cell, and opens it.
 
 ### Adding a tutorial to a series

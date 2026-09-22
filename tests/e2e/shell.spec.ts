@@ -359,7 +359,7 @@ test("Check every document reports a fault in a file nobody has open, and opens 
 test("a sound workspace says so rather than showing an empty list", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
-    "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nNo links here.\n",
+    "tutorials/a/a.md": "---\ntitle: A\nyear: \"2026-2027\"\nversion: 2026.09.22.1\n---\n\n# A\n\nNo links here.\n",
     // A README is not a page, and is not scolded for having no header.
     "README.md": "# dewlab\n",
   });
@@ -884,9 +884,9 @@ test("opening a pull request says what would stop the build, and still lets you"
   await page.evaluate(
     (files) => (globalThis as any).__dewnote.useStubStore(files, true),
     {
-      "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nSound.\n",
+      "tutorials/a/a.md": "---\ntitle: A\nyear: \"2026-2027\"\nversion: 2026.09.22.1\n---\n\n# A\n\nSound.\n",
       // A file nobody has open, with a cell that cannot save anybody's work.
-      "tutorials/b/b.md": "---\ntitle: B\n---\n\n# B\n\n```python exec\nprint(1)\n```\n",
+      "tutorials/b/b.md": "---\ntitle: B\nyear: \"2026-2027\"\nversion: 2026.09.22.1\n---\n\n# B\n\n```python exec\nprint(1)\n```\n",
     },
   );
   await page.keyboard.press("Escape");
@@ -919,7 +919,7 @@ test("a sound workspace opens a pull request with nothing in the way", async ({ 
   await page.goto(BUILT_APP);
   await page.evaluate(
     (files) => (globalThis as any).__dewnote.useStubStore(files, true),
-    { "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nSound.\n" },
+    { "tutorials/a/a.md": "---\ntitle: A\nyear: \"2026-2027\"\nversion: 2026.09.22.1\n---\n\n# A\n\nSound.\n" },
   );
   await page.keyboard.press("Escape");
   await page.keyboard.press("ControlOrMeta+k");
@@ -968,7 +968,7 @@ test("an image whose file is not there is counted in the margin and named in the
     [
       {
         "tutorials/a/a.md": [
-          "---", "title: A", "---", "",
+          "---", "title: A", 'year: "2026-2027"', "version: 2026.09.22.1", "---", "",
           "# A", "",
           "![A diagram that is there](diagram.svg)", "",
           "![One that is not](gone.png)", "",

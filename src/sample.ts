@@ -17,6 +17,7 @@ const DIAGRAM_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 90
 
 const TUTORIAL = `---
 title: Everything at Once
+year: "2026-2027"
 status: live
 version: 2026.09.20.1
 ---
@@ -91,7 +92,9 @@ print("nothing happens here")
 
 const PRACTICE = `---
 title: Everything at Once — Practice
+year: "2026-2027"
 status: live
+version: 2026.09.20.1
 practice_for: everything-at-once
 ---
 

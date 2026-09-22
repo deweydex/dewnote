@@ -44,7 +44,9 @@ no course" is a real state. `modules.ts` reads all of this, and the
 shell's **Add to a series…** and **Remove from a series…** edit it.
 
 **Front matter.** Required: `title`, `year`, `version` (`2026.09.04.1`
-form). Optional: `status` (`live` or `archived`), `packages` (a list,
+form). Optional: `status` (`draft`, `beta`, `live` or `archived`; absent
+means `live`, `draft` is left out of the build, anything else stops it —
+`STATUSES` in `build.py`), `packages` (a list,
 e.g. `[sympy]`), `practice_for` (a single tutorial id — a practice page
 names the one tutorial it practises), `practice_across` (a list of ids,
 for a mixed set spanning several tutorials instead), `covers` (sections

@@ -25,6 +25,7 @@ import { newTutorial, prepareRelease } from "./authoring.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
 import { checkDocument, checkWorkspace, type Problem } from "./checks.ts";
 import { distinctValues } from "./workspace.ts";
+import { extractFrontMatter } from "./frontmatter.ts";
 import { exportHtml, titleOf } from "./export-html.ts";
 import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
 // The reading half, not the editor's: an exported page is plain
@@ -164,7 +165,7 @@ export function mountShell(page: HTMLElement): Shell {
       confirm: "Create tutorial",
     });
     if (!title) return;
-    const made = newTutorial(title);
+    const made = newTutorial(title, new Date(), workspaceYear());
     if (files.has(made.path)) {
       spine.setProblem({ message: `There is already a tutorial at ${made.path}.` });
       return;
@@ -178,6 +179,19 @@ export function mountShell(page: HTMLElement): Shell {
     files.set(made.path, made.content);
     reindex();
     await showPath(made.path);
+  }
+
+  /** The `year:` most tutorials in the workspace carry, which is the one
+   * a new tutorial belongs with. Undefined when none has one. */
+  function workspaceYear(): string | undefined {
+    const counts = new Map<string, number>();
+    for (const [path, content] of files) {
+      if (!/^tutorials\/[^/]+\/[^/]+\.md$/.test(path)) continue;
+      const year = extractFrontMatter(content).fields["year"];
+      if (year === undefined || year === null) continue;
+      counts.set(String(year), (counts.get(String(year)) ?? 0) + 1);
+    }
+    return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
   }
 
   /** Which series lists the open tutorial, and putting it in one.

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { checkDocument } from "./checks.ts";
 import {
+  academicYear,
   idFromTitle,
   newTutorial,
   nextVersion,
@@ -68,6 +70,19 @@ describe("newTutorial", () => {
     expect(made.content).toContain("version: 2026.09.20.1");
   });
 
+  test("carries the year dewlab's build requires, as the academic year by default", () => {
+    expect(made.content).toContain('year: "2026-2027"');
+  });
+
+  test("takes the workspace's own year when given one", () => {
+    const given = newTutorial("A", new Date("2026-09-20T10:00:00"), "2025-2026");
+    expect(given.content).toContain('year: "2025-2026"');
+  });
+
+  test("passes the checker as written, so a new tutorial never breaks the build", () => {
+    expect(checkDocument(made.content, { ids: new Set(), path: made.path })).toEqual([]);
+  });
+
   test("opens with its own heading and a cell that runs", () => {
     expect(made.content).toContain("# Storing and Computing");
     expect(made.content).toContain("```python exec");
@@ -128,5 +143,12 @@ describe("prepareRelease", () => {
     const draft = PUBLISHED.replace("status: live", "status: draft");
     const made = prepareRelease(PATH, draft, EDITED, [], today);
     expect(made).toEqual({ error: "Only a tutorial with `status: live` can be released. A draft needs no versions: save it, and set `status: live` when it is ready." });
+  });
+});
+
+describe("academicYear", () => {
+  test("turns over in September", () => {
+    expect(academicYear(new Date("2026-08-31T12:00:00"))).toBe("2025-2026");
+    expect(academicYear(new Date("2026-09-01T12:00:00"))).toBe("2026-2027");
   });
 });

@@ -22,16 +22,6 @@ keyed by workspace and path. On opening that file again, if a draft
 exists and differs from the file, offer **Restore draft** or **Discard
 draft**. Clear it on save.
 
-### 1.4 Confirm `status: draft` means what dewnote says
-
-**Problem.** **New tutorial…** writes `status: draft`, and the guide says
-the site will not show a draft. `planning/DIALECTS.md` lists dewlab's
-`status` values as `live` and `archived` only.
-
-**Approach.** Check dewlab's `build.py`. If it does not treat `draft` as
-unpublished, either change dewnote to write the value dewlab uses, or
-add `draft` to dewlab. Then update DIALECTS.md and the guide.
-
 ---
 
 ## Phase 2: Tests that guard what the README says matters

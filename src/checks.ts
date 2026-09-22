@@ -34,6 +34,20 @@ export interface Problem {
   severity: "blocking" | "worth fixing";
 }
 
+/** dewlab's `STATUSES`, in build.py. `draft` is built into nothing;
+ * the others are published, and anything else stops the build. */
+export const TUTORIAL_STATUSES = ["draft", "beta", "live", "archived"] as const;
+
+/** dewlab's `MOVED_FRONTMATTER`: fields a tutorial used to carry, which
+ * the build now refuses, and where the information lives instead. */
+const MOVED_FIELDS: Record<string, string> = {
+  order: "the course file under courses/ lists tutorials in reading order",
+  slug: "the folder name is the tutorial's id",
+  module: "the course file that lists this tutorial says which course it is on",
+  module_title: "the course file's own `title:` names the course",
+  series: "a series is a heading in the course file under courses/",
+};
+
 /** A fence's language is its info string's first word. */
 function languageOf(info: string): string {
   return info.trim().split(/\s+/)[0] ?? "";
@@ -65,18 +79,53 @@ export function checkDocument(source: string, around: Around): Problem[] {
   const problems: Problem[] = [];
   const { present, fields } = extractFrontMatter(source);
 
+  // dewlab's build reads every tutorials/<id>/*.md, drafts included,
+  // through `split_frontmatter`, which refuses the file outright for any
+  // of these. Site pages go through a different reader and are only
+  // held to the title.
+  const tutorial = path !== undefined && /^tutorials\/[^/]+\/[^/]+\.md$/.test(path);
+
   if (!present) {
     problems.push({ message: "No front matter. Add a `---` block at the top with at least a `title:` line; the site cannot build the page without it.", severity: "blocking" });
   } else {
     if (typeof fields["title"] !== "string" || !fields["title"].trim()) {
       problems.push({ message: "No `title:` in the front matter. Add one; the site cannot build the page without a title.", severity: "blocking" });
     }
-    const version = fields["version"];
-    if (version !== undefined && !isReleaseVersion(version)) {
+    if (tutorial && fields["year"] === undefined) {
       problems.push({
-        message: `\`version: ${String(version)}\` is not in the form year.month.day.number, for example \`2026.09.22.1\`. Releasing a new version counts on from it.`,
-        severity: "worth fixing",
+        message: "No `year:` in the front matter. Add the academic year, for example `year: \"2026-2027\"`; the site cannot build a tutorial without it.",
+        severity: "blocking",
       });
+    }
+    const version = fields["version"];
+    if (tutorial && version === undefined) {
+      problems.push({
+        message: "No `version:` in the front matter. Add one in the form year.month.day.number, for example `version: 2026.09.22.1`; the site cannot build a tutorial without it.",
+        severity: "blocking",
+      });
+    } else if (version !== undefined && !isReleaseVersion(version)) {
+      problems.push({
+        message: `\`version: ${String(version)}\` is not in the form year.month.day.number, for example \`2026.09.22.1\`.` +
+          (tutorial ? " The site cannot build a tutorial without a valid version." : " Releasing a new version counts on from it."),
+        severity: tutorial ? "blocking" : "worth fixing",
+      });
+    }
+    const status = fields["status"];
+    if (tutorial && status !== undefined && !(TUTORIAL_STATUSES as readonly unknown[]).includes(status)) {
+      problems.push({
+        message: `\`status: ${String(status)}\` is not a status the site knows. Use ${TUTORIAL_STATUSES.map((each) => `\`${each}\``).join(", ")}.`,
+        severity: "blocking",
+      });
+    }
+    if (tutorial) {
+      for (const [field, instead] of Object.entries(MOVED_FIELDS)) {
+        if (field in fields) {
+          problems.push({
+            message: `\`${field}:\` no longer belongs in the front matter: ${instead}. Delete the line; the site will not build while it is there.`,
+            severity: "blocking",
+          });
+        }
+      }
     }
   }
 
