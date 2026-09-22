@@ -8,31 +8,8 @@ an item is done, delete it here and describe the result in
 Last reviewed: 2026-09-22. Phase 1 (things that could lose or corrupt
 work) is done: unsaved-changes prompts, kept drafts, save conflicts,
 releases that freeze the published version, and new tutorials the
-build accepts.
-
----
-
-## Phase 2: Tests that guard what the README says matters
-
-### 2.1 Run the Playwright suite in CI
-
-**Problem.** The README calls `tests/e2e/roundtrip.spec.ts` the test the
-application stands on, but CI (`tests.yml`) runs only unit tests and the
-type checker. The e2e suite runs only locally, or on demand.
-
-**Approach.** Add a job to `tests.yml` that installs Chromium, builds,
-and runs `bunx playwright test`. The suite takes about a minute and a
-half. The tests are already written to pass without network access.
-
-### 2.2 A test that runs real Python
-
-**Problem.** No test runs a cell through Pyodide. Every cell test passes
-whether Python loads or not, so a broken worker would not be caught.
-
-**Approach.** Add `tests/e2e/pyodide.spec.ts`, tagged so it runs only in
-the `e2e (pyodide)` workflow, which has network: run `print(2 + 2)` and
-assert the output is `4`; run a failing cell and assert the error; stop a
-`while True` loop.
+build accepts. Phase 2 (the browser tests, and real Python, run in CI on
+every pull request) is done.
 
 ---
 

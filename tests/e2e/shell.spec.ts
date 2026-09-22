@@ -130,8 +130,8 @@ test("a runnable cell offers Run; an illustrative fence does not", async ({ page
   await expect(page.locator(".dn-cell-run")).toHaveText("Run");
 
   // Pyodide itself is not reachable from this sandbox, so what is
-  // checked here is the affordance, not the interpreter. No test runs
-  // real Python yet; see planning/ROADMAP.md.
+  // checked here is the affordance, not the interpreter. Real runs are
+  // in pyodide.spec.ts.
 });
 
 test("an illustrative fence has no Run button", async ({ page }) => {
