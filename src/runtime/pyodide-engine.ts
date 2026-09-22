@@ -96,10 +96,10 @@ export function setStatusListener(listener: ((text: string) => void) | null): vo
 /** Runs one cell, streaming its output through `onOutput` as it happens —
  * a cell's print() should appear as the cell runs, not all at once when
  * it finishes. Resolves once the cell has finished (or been stopped).
- * `sql`, set for a `sql exec` cell (app.ts's own cell runner, deciding
- * from `execCellLanguage`), tells the worker this run needs sqlite3 and
+ * `sql`, set for a `sql exec` cell (the shell's cell runner, deciding
+ * from `cellLanguage` in cells.ts), tells the worker this run needs sqlite3 and
  * the shared `db` connection — `code` itself is already the wrapped
- * Python `wrapSqlExecCode` produces, not raw SQL; this flag only tells
+ * Python `wrapSqlCode` produces, not raw SQL; this flag only tells
  * the worker what to load and seed *before* running it. */
 export async function runCell(cellId: string, code: string, onOutput: OutputListener, opts: { sql?: boolean } = {}): Promise<{ ok: boolean }> {
   await ensureBooted();
@@ -144,7 +144,7 @@ export function canStop(): boolean {
  * an interrupt buffer. Terminating loses the shared namespace — the next
  * cell run boots a fresh interpreter from nothing, same as a first run —
  * and rejects whatever run-cell request was in flight, which is why
- * app.ts's Run handler always has a catch around `runCell`, not only a
+ * editor.ts's Run handler always has a catch around `runCell`, not only a
  * `finally`. */
 export function requestStop(): void {
   if (interruptBuffer) {

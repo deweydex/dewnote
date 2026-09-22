@@ -337,6 +337,24 @@ export async function mountEditor(
     return found;
   }
 
+  /** Every runnable cell in the document, in order, read from the tree
+   * rather than from the mounted panels: a cell below the fold has no
+   * panel yet, and questions and site panes carry ids but never run. */
+  function runnableCells(): { id: string; language: string; content: string }[] {
+    const found: { id: string; language: string; content: string }[] = [];
+    const editorView = view();
+    if (!editorView) return found;
+    editorView.state.doc.descendants((node: any) => {
+      if (node.type.name !== "code_block") return true;
+      const language = String(node.attrs.language ?? "");
+      if (!isRunnable(language, String(node.attrs.meta ?? ""))) return true;
+      const id = parseCell(node.textContent).id;
+      if (id) found.push({ id, language, content: node.textContent });
+      return true;
+    });
+    return found;
+  }
+
   const results = new Map<string, RunRecord>();
   /** One interpreter, so one cell runs at a time — and the button that
    * started it is the one that stops it. Holds the running cell's id. */
@@ -403,15 +421,19 @@ export async function mountEditor(
       options.stopCell?.();
       return false;
     }
-    if (running !== null) return false;
+    if (running !== null || !options.runCell) return false;
+    // A cell below the fold has not mounted, so it has no handle. It
+    // still runs, from the document's own text, and its panel shows the
+    // result once it scrolls into view.
     const handle = handles.get(id);
-    if (!handle || !options.runCell) return false;
+    const source = handle ?? runnableCells().find((cell) => cell.id === id);
+    if (!source) return false;
 
     running = id;
-    handle.apply(cellPanel(handle.language, handle.content, handle.apply));
+    handle?.apply(cellPanel(handle.language, handle.content, handle.apply));
 
-    const cell = parseCell(handle.content);
-    const sqlCell = cellLanguage(handle.language) === "sql";
+    const cell = parseCell(source.content);
+    const sqlCell = cellLanguage(source.language) === "sql";
     const output = await options
       .runCell({
         id,
@@ -424,8 +446,11 @@ export async function mountEditor(
       }));
 
     running = null;
-    results.set(id, { source: handle.content, output });
-    handle.apply(cellPanel(handle.language, handle.content, handle.apply));
+    results.set(id, { source: source.content, output });
+    // The handle may have arrived while the cell ran, if it scrolled
+    // into view; the latest one is the one on screen.
+    const shown = handles.get(id);
+    shown?.apply(cellPanel(shown.language, shown.content, shown.apply));
     return output.ok;
   }
 
@@ -562,7 +587,7 @@ export async function mountEditor(
   root.addEventListener("click", onRootClick);
 
   return {
-    cellIds: () => cellIdsInDocument(),
+    cellIds: () => runnableCells().map((cell) => cell.id),
     runCell: (id) => runCellById(id),
     markdown: () => crepe.getMarkdown(),
     headings() {

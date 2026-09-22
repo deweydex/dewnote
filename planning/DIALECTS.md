@@ -26,7 +26,7 @@ page and the key every reader's saved work lives under, so a field that
 could disagree with the folder would be a way to break both. An id is
 site-wide and unique per page, which is not the same as unique per file:
 a live tutorial and the frozen releases beside it all share one id, which
-is why `file-index.ts`'s `defaultEntryFor` still exists.
+is why `workspace.ts`'s `defaultEntryFor` exists.
 
 **Placement is `courses/`, never a front matter field.** As of dewlab's
 own 2026-09 refactor (its `refactor/PLAN.md`, and the spec it wrote for
@@ -40,8 +40,8 @@ titles, each an ordered list of tutorial ids. `courses/index.yaml`
 `courses/redirects.yaml` maps every old address to its new one so links
 into the pre-refactor layout still land. A tutorial may be listed by more
 than one course, and one listed by none still builds — "published but on
-no course" is a real state. courses.ts reads all of this; series-panel.ts
-shows it.
+no course" is a real state. `modules.ts` reads all of this, and the
+shell's **Add to a series…** and **Remove from a series…** edit it.
 
 **Front matter.** Required: `title`, `year`, `version` (`2026.09.04.1`
 form). Optional: `status` (`live` or `archived`), `packages` (a list,

@@ -203,3 +203,32 @@ test("Run every cell stops at the first cell that fails", async ({ page }) => {
   await expect(page.locator(".dn-cell-output.is-error")).toHaveCount(1);
   await expect(buttons.nth(1)).toHaveText("Run");
 });
+
+test("Run every cell passes over questions and runs a cell below the fold", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const filler = Array.from({ length: 80 }, (_, at) => `Paragraph ${at + 1}.\n`);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "pages/one.md": [
+      "---", "title: One", "---", "", "# One", "",
+      // A question carries an `id:` but never runs; it must not end the run.
+      "```question", "id: q", "type: fill-in-the-blank", "", "Two and two is {4}.", "```", "",
+      ...filler,
+      "```python exec", "id: far", "raise ValueError('reached')", "```", "",
+    ].join("\n"),
+  });
+  await page.locator(".dn-wp-input").fill("one");
+  await page.keyboard.press("Enter");
+  // The cell is far below the fold, so it has not mounted.
+  await expect(page.locator(".dn-cell-run")).toHaveCount(0);
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("run every cell");
+  await page.keyboard.press("Enter");
+
+  // Give the run time to happen, then bring the cell into view: its
+  // panel shows it was run, although it was never on screen.
+  await page.waitForTimeout(3_000);
+  await page.locator(".milkdown pre, .milkdown .milkdown-code-block").last().scrollIntoViewIfNeeded();
+  await expect(page.locator(".dn-cell-run")).toHaveText("Run again", { timeout: 30_000 });
+  await expect(page.locator(".dn-cell-output.is-error")).toHaveCount(1);
+});

@@ -10,30 +10,50 @@ in a Worker in the tab, and the whole application is one HTML file.
 ## The shape
 
 ```
-index.html            three mount points
-src/style.css         the chrome, in dewlab's own tokens
-src/theme/            dewlab's tokens, vendored
+index.html              one mount point, and the script
+src/main.ts             the opening screen: folder, repository or sample
+src/style.css           the editor's chrome, in dewlab's own tokens
+src/theme/              dewlab's tokens, vendored, and the reading stylesheet
 
-src/editor.ts         the only module that knows Milkdown exists
-src/cells.ts          what a runnable fence says
-src/markdown.ts       reading a document the editor has not opened
-src/frontmatter.ts    the leading `---` block
+src/editor.ts           the only module that knows Milkdown exists
+src/cells.ts            what a runnable fence says
+src/fences.ts           questions, cards and site panes
+src/slash-menu.ts       what the / menu inserts
+src/markdown.ts         reading a document the editor has not opened
+src/frontmatter.ts      the leading `---` block
+src/maths.ts            dollar signs that are not maths
+src/images.ts           where an image lives and what it is called
+src/links.ts            `tutorial:` links
 
-src/store.ts          folder and repository behind one interface
-src/folder.ts         the File System Access API
-src/github.ts         the REST API
+src/store.ts            folder and repository behind one interface
+src/folder.ts           the File System Access API
+src/github.ts           the REST API
+src/sample.ts           the sample workspace, held in memory
+src/save-problem.ts     why a save did not happen
 
-src/workspace.ts      the index: what every file is and where it sits
-src/modules.ts        course descriptors
-src/shell.ts          spine, palette, commands, save
-src/spine.ts          the left margin
-src/workspace-palette.ts   ⌘K
-src/commands.ts       one place a command is named
-src/settings.ts       what the reader chose
-src/settings-panel.ts the panel that changes it
+src/workspace.ts        the index: what every file is and where it sits
+src/modules.ts          course descriptors (a course is a "module" in code)
+src/placement.ts        adding and removing a tutorial from a series
+src/authoring.ts        new tutorials and releases
+src/checks.ts           what would break the build or confuse a reader
+src/export-html.ts      the page as a reader sees it
+src/notebook.ts         Jupyter import and export
 
-src/runtime/          Pyodide, in a Worker
+src/shell.ts            opening, saving, commands, reports
+src/spine.ts            the left margin
+src/workspace-palette.ts  the palette (Ctrl+K)
+src/commands.ts         one place a command is named
+src/ask.ts              the one-question dialog
+src/source-view.ts      Edit the markdown (Ctrl+/)
+src/settings.ts         what the reader chose
+src/settings-panel.ts   the panel that changes it
+src/keys.ts             how a shortcut is written on this platform
+
+src/runtime/            Pyodide, in a Worker
 ```
+
+The words the interface uses are fixed in `docs/VOCABULARY.md`. Read it
+before changing any text a user sees.
 
 ---
 
@@ -153,6 +173,8 @@ A pasted image goes through `plugin-upload`'s uploader: written beside
 the document under a name that is free, and referenced by that name. Not
 inlined as base64 — that is a file nobody can open, edit or replace.
 
+## Dependencies
+
 **Never add a `@codemirror/*` package at the top level.** Crepe carries
 its own, and a second copy in the bundle breaks its `instanceof` checks:
 "Unrecognized extension value in extension set", and no code block
@@ -160,12 +182,19 @@ mounts at all. Removing the dependency is not enough on its own — a
 stale `node_modules` keeps the copy, so `rm -rf node_modules && bun
 install`. This is why the source view is a textarea.
 
+`package.json` does list `@codemirror/*` packages today, and `editor.ts`
+imports three of them (`lang-python`, `lang-sql`, `language`) for cell
+highlighting. It works because the lockfile resolves each to the one
+copy Crepe also uses. Before bumping any of them, check `bun.lock` still
+holds a single `@codemirror/state`; a split breaks every code block.
+
 ## Export
 
-`exportHtml` renders from the markdown, not from the editor's DOM. The
-DOM carries contenteditable attributes, Vue wrappers, and code blocks
-that have not mounted because they are below the fold; the markdown is
-the document.
+`export-html.ts` renders from the markdown, not from the editor's DOM.
+The DOM carries contenteditable attributes, Vue wrappers, and code
+blocks that have not mounted because they are below the fold; the
+markdown is the document. **Preview as a reader** and **Download as
+HTML** are the same function, one to a tab and one to a file.
 
 KaTeX's stylesheet is inlined only when the rendered page contains
 KaTeX's own output — asked of the result rather than guessed from the
@@ -178,15 +207,9 @@ spans back as text, in the editor and in the export alike, so what is on
 screen is what the site will show. A save then writes `\$`, which dewlab
 renders as `$`.
 
-### The page a reader reads
+### The reading stylesheet
 
-`export-html.ts` renders the markdown, not the editor's DOM: the DOM
-carries contenteditable attributes, Vue wrappers, and code blocks that
-have not mounted because they are below the fold. **Preview this page**
-and **Save as an HTML page** are the same function, one to a tab and one
-to a file.
-
-It inlines `theme/reading.css` and dewlab's tokens, not `style.css`.
+The export inlines `theme/reading.css` and dewlab's tokens, not `style.css`.
 `style.css` describes the editor — the spine, the palette, Crepe's own
 chrome — and almost none of it applies to plain markdown markup.
 
@@ -225,7 +248,24 @@ Neither store has a file browser. The palette is the browser.
 The repository store sends the blob SHA it read a file at, which is
 GitHub's own optimistic-concurrency check and the only thing standing
 between two tabs and a silent overwrite. A 409 means both versions exist
-and the author has to choose.
+and the author has to choose. `SaveProblem.conflict` marks that case,
+but nothing reads it yet: the author is told to copy their changes and
+reload. A proper resolution is on `planning/ROADMAP.md`.
+
+### Unsaved changes
+
+Nothing replaces the open document without asking. `openPath` in
+`shell.ts` goes through `readyToLeave()`, which offers **Save and
+continue**, **Discard changes** or **Keep editing** when the document
+is dirty; **New tutorial…** and **Import a Jupyter notebook…** ask the
+same question first. `showPath` skips it, and is only for callers that
+have already written what the document held (a release). A
+`beforeunload` handler covers closing or reloading the tab.
+
+"Dirty" is a comparison, not a flag: the editor's current markdown
+against what it made of the file when it opened. The file itself is
+normalised on the way in, so comparing against the bytes on disk would
+call every document dirty the moment it opened.
 
 ---
 
@@ -234,7 +274,8 @@ and the author has to choose.
 Two things on screen: the document, and a column of small text in the
 left margin.
 
-The **spine** is that column — filename, breadcrumb, workspace, the
+The **spine** (the code's name for the left margin; users never see the
+word) is that column — filename, breadcrumb, workspace, the
 document's own headings, save state, and a refusal that holds until it is
 resolved. Its width is measured with a `ResizeObserver` rather than a
 media query, because the measure and the margins are reader settings that
@@ -398,11 +439,14 @@ bun run dev                       # hot reload
 bun run build                     # dist/index.html, one file
 bun run test                      # unit
 bun run typecheck
-bunx playwright test              # against the built file
+bun run test:e2e                  # builds, then Playwright against the built file
 ```
 
 `tests/e2e/roundtrip.spec.ts` is the one that matters. If it cannot be
 kept green, the document model is wrong.
 
-Pyodide loads from jsDelivr at runtime, so `tests/e2e/pyodide.spec.ts`
-needs a network the sandbox does not always have.
+Pyodide loads from jsDelivr at runtime, so no test in the suite runs
+real Python: a sandbox without network reaches the Run button and an
+error, and the tests are written to pass either way. The `e2e (pyodide)`
+workflow runs the whole suite with network access, on demand. CI
+(`tests.yml`) runs only the unit tests and the type checker.
