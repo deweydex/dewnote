@@ -4,7 +4,7 @@
 // against the real corpus.
 
 import { describe, expect, test } from "bun:test";
-import { canonicaliseDisplayMath } from "./editor.ts";
+import { canonicaliseDisplayMath } from "./maths.ts";
 
 describe("canonicaliseDisplayMath", () => {
   test("leaves a canonical block alone", () => {
