@@ -1393,3 +1393,17 @@ test("saving drops the kept copy", async ({ page }) => {
   await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
   await expect(page.locator(".dn-ask")).toHaveCount(0);
 });
+
+test("courses come in the order courses/index.yaml gives them", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    // Alphabetically "Algebra" would come first; the index says otherwise.
+    "courses/index.yaml": "order:\n  - zoology\n  - algebra\n",
+    "courses/algebra.yaml": "id: algebra\ntitle: Algebra\ncontents:\n  - title: Algebra Series\n    tutorials: []\n",
+    "courses/zoology.yaml": "id: zoology\ntitle: Zoology\ncontents:\n  - title: Zoology Series\n    tutorials: []\n",
+    "tutorials/a/a.md": '---\ntitle: A\nyear: "2026-2027"\nversion: 2026.09.22.1\n---\n\n# A\n',
+  });
+  await page.locator(".dn-wp-input").fill("series");
+  const series = page.locator(".dn-wp-row", { hasText: "Series" }).locator(".dn-wp-row-label");
+  await expect(series).toHaveText(["Zoology Series", "Algebra Series"]);
+});

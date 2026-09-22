@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { fromNotebook, joinSegments, segments, toNotebook } from "./notebook.ts";
+import { fenceBody, fromNotebook, joinSegments, segments, toNotebook } from "./notebook.ts";
 
 const FIXTURES = join(import.meta.dir, "..", "fixtures");
 
@@ -83,6 +83,20 @@ describe("toNotebook", () => {
   });
 });
 
+describe("fenceBody", () => {
+  test("is everything between the fence lines", () => {
+    expect(fenceBody("```python\na\nb\n```\n")).toBe("a\nb");
+  });
+
+  test("keeps the last line of a fence at the end of a file with no final newline", () => {
+    expect(fenceBody("```python\na\nb\n```")).toBe("a\nb");
+  });
+
+  test("keeps every line of a fence that never closes", () => {
+    expect(fenceBody("```python\na\nb\n")).toBe("a\nb");
+  });
+});
+
 describe("fromNotebook", () => {
   test("round-trips every fixture byte for byte", () => {
     for (const { name, source } of corpus()) {
@@ -100,7 +114,42 @@ describe("fromNotebook", () => {
         { cell_type: "code" as const, id: "b", metadata: {} as never, source: "print(1)" },
       ],
     };
-    expect(fromNotebook(notebook)).toBe("# Title\n```python\nprint(1)\n```\n");
+    // Each cell is its own block, a blank line apart.
+    expect(fromNotebook(notebook)).toBe("# Title\n\n```python\nprint(1)\n```\n\n");
+  });
+
+  test("two text cells from Jupyter stay two paragraphs", () => {
+    const notebook = {
+      nbformat: 4 as const,
+      nbformat_minor: 5 as const,
+      metadata: {},
+      cells: [
+        { cell_type: "markdown" as const, id: "a", metadata: {} as never, source: "First." },
+        { cell_type: "markdown" as const, id: "b", metadata: {} as never, source: "Second." },
+      ],
+    };
+    expect(fromNotebook(notebook)).toBe("First.\n\nSecond.\n\n");
+  });
+
+  test("an edit made in Jupyter comes back, and the untouched cells come back exactly", () => {
+    const source = "# Title\n\nProse.\n\n```python exec\nid: a\nprint(1)\n```\n\nMore prose.\n";
+    const notebook = toNotebook(source);
+    const code = notebook.cells.find((cell) => cell.cell_type === "code")!;
+    code.source = "id: a\nprint(2)";
+
+    const back = fromNotebook(notebook);
+    expect(back).toContain("```python exec\nid: a\nprint(2)\n```");
+    expect(back).not.toContain("print(1)");
+    expect(back.startsWith("# Title\n\nProse.\n\n")).toBe(true);
+    expect(back).toContain("More prose.\n");
+  });
+
+  test("an edit to a text cell in Jupyter comes back too", () => {
+    const notebook = toNotebook("# Title\n\nOld words.\n");
+    const prose = notebook.cells.find((cell) => String(cell.source).includes("Old words"))!;
+    prose.source = String(prose.source).replace("Old", "New");
+    expect(fromNotebook(notebook)).toContain("New words.");
+    expect(fromNotebook(notebook)).not.toContain("Old words.");
   });
 
   test("accepts a source written as an array of lines, which Jupyter does", () => {
@@ -110,6 +159,6 @@ describe("fromNotebook", () => {
       metadata: {},
       cells: [{ cell_type: "markdown" as const, id: "a", metadata: {} as never, source: ["# One\n", "Two"] }],
     };
-    expect(fromNotebook(notebook)).toBe("# One\nTwo\n");
+    expect(fromNotebook(notebook)).toBe("# One\nTwo\n\n");
   });
 });

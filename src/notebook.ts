@@ -119,8 +119,13 @@ const HEADER_LINE = /^\s*(id|hint|expect|name)\s*:/;
  * the notebook should see what the cell says, and the header lines are
  * part of that. */
 export function fenceBody(text: string): string {
-  const lines = text.split("\n");
-  return lines.slice(1, Math.max(1, lines.length - 2)).join("\n");
+  // Everything between the opening line and the closing fence. The
+  // closing line is found, not assumed to be second from the end: a
+  // fence at the end of a file with no final newline has no empty line
+  // after it, and an unclosed one has no closing line at all.
+  const lines = text.replace(/\n$/, "").split("\n").slice(1);
+  if (lines.length > 0 && /^ {0,3}(`{3,}|~{3,})\s*$/.test(lines.at(-1)!)) lines.pop();
+  return lines.join("\n");
 }
 
 function isExec(info: string): boolean {
@@ -170,18 +175,27 @@ function sourceOf(cell: NotebookCell): string {
   return Array.isArray(cell.source) ? cell.source.join("") : cell.source;
 }
 
+/** What `toNotebook` put in a cell's source for this segment text. */
+function sourceFor(raw: string, kind: string | undefined): string {
+  return kind === "fence" ? fenceBody(raw) : raw.replace(/\n$/, "");
+}
+
 export function fromNotebook(notebook: Notebook): string {
   return notebook.cells
     .map((cell) => {
-      const kept = cell.metadata?.dewnote?.raw;
-      if (typeof kept === "string") return kept;
-      // No metadata: written in Jupyter, so rebuild it.
       const text = sourceOf(cell);
+      const kept = cell.metadata?.dewnote?.raw;
+      // The exact text a cell came from, byte for byte, as long as the
+      // cell still says what it said. Edited in Jupyter, it is rebuilt
+      // from what it says now: the edit is the point of the round trip.
+      if (typeof kept === "string" && sourceFor(kept, cell.metadata?.dewnote?.kind) === text) return kept;
       if (cell.cell_type === "code") {
         const info = cell.metadata?.dewnote?.info ?? "python";
-        return `\`\`\`${info}\n${text}\n\`\`\`\n`;
+        return `\`\`\`${info}\n${text}\n\`\`\`\n\n`;
       }
-      return `${text}\n`;
+      if (cell.cell_type === "raw" && cell.metadata?.dewnote?.kind === "frontmatter") return `${text}\n\n`;
+      // A blank line after, so two text cells stay two paragraphs.
+      return `${text}\n\n`;
     })
     .join("");
 }

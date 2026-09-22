@@ -64,8 +64,10 @@ export function idFromTitle(title: string): string {
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
+    .slice(0, 60)
+    // After the cut, not before: a cut that lands on a hyphen would
+    // otherwise leave the address ending in one.
+    .replace(/^-+|-+$/g, "");
 }
 
 export interface NewTutorial {

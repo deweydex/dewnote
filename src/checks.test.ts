@@ -144,3 +144,13 @@ describe("tutorial front matter, as dewlab's build checks it", () => {
     expect(messages("title: About", "pages/about.md")).toEqual([]);
   });
 });
+
+describe("a fence at the very end of a file", () => {
+  test("is read whole when the file has no final newline", () => {
+    const source = [
+      "---", "title: Q", "---", "", "# Q", "",
+      "```question", "id: q", "type: multiple-choice", "correct: 2", "", "Which?", "", "- One.", "- Two.", "```",
+    ].join("\n");
+    expect(checkDocument(source, { ids: new Set() })).toEqual([]);
+  });
+});
