@@ -234,7 +234,7 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
         if (status === 409) {
           asProblem(saveProblem(
             `Not saved: ${path} was changed on ${branch} after you opened it, probably from another tab or by someone else. ` +
-              "Your changes are still on screen. Copy them somewhere safe, reload dewnote, and apply them again.",
+              "Your changes are still on screen. Save again to compare the two versions and choose one.",
             true,
           ));
         }

@@ -1275,3 +1275,72 @@ button.dn-report-row:focus-visible {
 /* A reported problem is a statement, not a button. */
 div.dn-report-row { cursor: default; }
 div.dn-report-row:hover { background: none; }
+
+/* A save conflict: what separates the two versions, and the choice. */
+.dn-conflict {
+  --dn-panel-width: 48rem;
+  --dn-panel-height: 84vh;
+  gap: 0.6rem;
+}
+
+.dn-conflict h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.dn-conflict > p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--dl-muted);
+}
+
+.dn-conflict-legend {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.dn-conflict-legend span {
+  padding: 0 0.35rem;
+  border-radius: 3px;
+}
+
+.dn-conflict-changes {
+  overflow-y: auto;
+  min-height: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.dn-conflict-where {
+  margin: 0 0 0.2rem;
+  font-size: 0.75rem;
+  color: var(--dl-muted);
+}
+
+.dn-conflict-hunk pre {
+  margin: 0;
+  padding: 0.4rem 0;
+  font-family: var(--dl-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  background: var(--dl-cell-bg);
+  border: 1px solid var(--dl-cell-border);
+  border-radius: 5px;
+}
+
+.dn-conflict-hunk pre span {
+  display: block;
+  padding: 0 0.6rem;
+}
+
+.dn-conflict-theirs {
+  background: var(--dl-error-bg);
+  color: var(--dl-error-fg);
+}
+
+.dn-conflict-mine {
+  background: var(--dl-pass-bg);
+  color: var(--dl-pass-fg);
+}

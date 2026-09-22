@@ -532,8 +532,16 @@ If a save fails, an orange warning appears in the left margin and stays
 there until you open another document. It says what went wrong and what to do. The common cases:
 
 - **The file was changed on the branch after you opened it**, for example
-  from another tab. Your changes are still on screen. Copy them somewhere
-  safe, reload dewnote, and apply them again.
+  from another tab or by someone else. dewnote shows what differs between
+  the saved version and yours, and asks which to keep:
+  - **Keep mine** saves your version over the other one.
+  - **Keep the saved version** discards your changes and opens the other
+    one.
+  - **Cancel** leaves your changes on screen, unsaved. Save again when you
+    are ready to choose.
+
+  Whichever you keep, the other version's changes are lost, so if both
+  matter, copy the parts you need before choosing.
 - **GitHub refused the token.** It may have expired. Reload dewnote and
   connect with a new token.
 - **A file already exists at that path.** Open that file instead.
@@ -663,10 +671,9 @@ These are planned but not built yet (see `planning/ROADMAP.md`):
 - Web page panes show as three code blocks rather than one editor with
   tabs.
 - Hints show as HTML in the editor rather than as a fold.
-- When a save fails because the file changed on GitHub, there is no way
-  to compare the two versions; you have to copy your changes and reload.
 - Files cannot be renamed, moved or deleted from dewnote.
 - There is no find and replace across the workspace.
+- A save conflict keeps one version or the other; it cannot combine them.
 
 ---
 

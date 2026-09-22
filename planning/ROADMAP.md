@@ -11,18 +11,6 @@ Last reviewed: 2026-09-22.
 
 ## Phase 1: Things that can lose or corrupt work
 
-### 1.1 Resolve save conflicts instead of only reporting them
-
-**Problem.** When a GitHub save fails because the file changed on the
-branch (HTTP 409), dewnote says so and tells the author to copy their
-changes and reload. `SaveProblem.conflict` marks the case, but nothing
-reads it.
-
-**Approach.** On a conflict, fetch the branch's current version and show
-both in a dialog, with three actions: **Keep mine** (overwrite, using the
-new SHA), **Take theirs** (discard local edits and reopen), and **Cancel**.
-A line diff is enough; a merge editor is not needed at this stage.
-
 ### 1.3 Keep unsaved drafts across a closed tab
 
 **Problem.** The unsaved-changes prompt (done) stops a switch or a close
@@ -152,7 +140,13 @@ Every save is a commit named `Edit <path>`. Either ask for a message when
 opening the pull request and squash-merge, or batch saves into one commit
 per session using the Git Data API.
 
-### 4.5 A way to forget the token
+### 4.5 Combine both sides of a save conflict
+
+A conflict offers one version or the other. When both people changed
+different paragraphs, keeping both needs a three-way merge against the
+version the author opened, which the shell already has in `opened`.
+
+### 4.6 A way to forget the token
 
 The GitHub token stays in localStorage until the browser's site data is
 cleared. Add a **Disconnect from GitHub** command that removes it.

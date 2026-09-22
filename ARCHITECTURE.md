@@ -257,8 +257,12 @@ The repository store sends the blob SHA it read a file at, which is
 GitHub's own optimistic-concurrency check and the only thing standing
 between two tabs and a silent overwrite. A 409 means both versions exist
 and the author has to choose. `SaveProblem.conflict` marks that case,
-but nothing reads it yet: the author is told to copy their changes and
-reload. A proper resolution is on `planning/ROADMAP.md`.
+and the shell answers it with `conflict.ts`: it reads the file again
+(which also refreshes the SHA), shows a line diff from `diff.ts`, and
+offers **Keep mine** (an ordinary write, now against the new SHA, and
+refused again if the file has moved again), **Keep the saved version**
+(reopen from what was read) or **Cancel** (the refusal stays in the
+margin).
 
 ### Unsaved changes
 

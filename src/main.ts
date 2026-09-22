@@ -14,7 +14,7 @@ import {
   suggestedBranch,
   type RepoChoice,
 } from "./github.ts";
-import { messageOf } from "./save-problem.ts";
+import { messageOf, saveProblem } from "./save-problem.ts";
 import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
 import { applyTokens } from "./theme/tokens.ts";
 
@@ -322,6 +322,15 @@ let held: Document | null = null;
       listFolder: async () => [],
       imagePaths: async () => images,
       async write(path: string, text: string) {
+        // A test sets `__dewnoteConflict` to have the next write to that
+        // path refused as a repository would refuse it: somebody else's
+        // version is already there.
+        const conflict = hooks["__dewnoteConflict"] as { path: string; theirs: string } | undefined;
+        if (conflict?.path === path) {
+          delete hooks["__dewnoteConflict"];
+          held_.set(path, conflict.theirs);
+          throw saveProblem(`Not saved: ${path} was changed after you opened it.`, true);
+        }
         held_.set(path, text);
         written.push({ path, text });
       },

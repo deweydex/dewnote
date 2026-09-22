@@ -1220,3 +1220,52 @@ test("a document with no changes opens another without asking", async ({ page })
   await expect(page.locator(".milkdown h1")).toHaveText("About");
   await expect(page.locator(".dn-ask")).toHaveCount(0);
 });
+
+async function conflictOnSave(page: import("@playwright/test").Page) {
+  await editStoring(page);
+  await page.evaluate(() => {
+    (globalThis as any).__dewnoteConflict = {
+      path: "tutorials/storing-and-computing/storing-and-computing.md",
+      theirs: "---\ntitle: Storing and Computing\nstatus: live\n---\n\n# Storing and Computing\n\nSomeone else's words.\n",
+    };
+  });
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-conflict")).toBeVisible();
+}
+
+test("a save conflict shows what differs between the two versions", async ({ page }) => {
+  await conflictOnSave(page);
+  const dialog = page.locator(".dn-conflict");
+  await expect(dialog.locator(".dn-conflict-theirs", { hasText: "Someone else's words." })).toHaveCount(1);
+  await expect(dialog.locator(".dn-conflict-mine", { hasText: "Unsaved words." })).toHaveCount(1);
+});
+
+test("Keep mine after a conflict saves your version over the other", async ({ page }) => {
+  await conflictOnSave(page);
+  await page.getByRole("button", { name: "Keep mine" }).click();
+
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  expect(written).toHaveLength(1);
+  expect(written[0].text).toContain("Unsaved words.");
+  expect(written[0].text).not.toContain("Someone else's words.");
+});
+
+test("Keep the saved version after a conflict discards yours and shows theirs", async ({ page }) => {
+  await conflictOnSave(page);
+  await page.getByRole("button", { name: "Keep the saved version" }).click();
+
+  await expect(page.locator(".milkdown")).toContainText("Someone else's words.");
+  await expect(page.locator(".milkdown")).not.toContainText("Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  expect(await page.evaluate(() => (globalThis as any).__dewnoteWrites)).toHaveLength(0);
+});
+
+test("Cancel after a conflict keeps your changes unsaved, and says so", async ({ page }) => {
+  await conflictOnSave(page);
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
+  await expect(page.locator(".dn-spine-problem")).toContainText("Not saved");
+});

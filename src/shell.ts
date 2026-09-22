@@ -20,6 +20,7 @@ import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
+import { mountConflict } from "./conflict.ts";
 import { newTutorial, prepareRelease } from "./authoring.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
 import { checkDocument, checkWorkspace, type Problem } from "./checks.ts";
@@ -151,6 +152,7 @@ export function mountShell(page: HTMLElement): Shell {
   document.body.appendChild(gear);
   const sourceView = mountSourceView();
   const asker = mountAsk();
+  const conflict = mountConflict();
 
   /** A new tutorial, written and opened. A draft, because a half-written
    * page should never be served. */
@@ -669,25 +671,68 @@ export function mountShell(page: HTMLElement): Shell {
 
   async function saveNow(): Promise<boolean> {
     if (!store || !open || !isDirty()) return false;
+    const path = open.path;
     const text = open.document.markdown();
     try {
-      await store.write(open.path, text, `Edit ${open.path}`);
+      await store.write(path, text, `Edit ${path}`);
     } catch (error) {
       const problem: SaveProblem =
         typeof error === "object" && error !== null && "conflict" in error
           ? (error as SaveProblem)
           : { message: messageOf(error), conflict: false };
+      if (problem.conflict) return resolveConflict(path, text, problem);
       // It holds until it is resolved. A refused save that looks like a
       // successful one is the worst failure this app can have, because
       // the next thing an author does is close the tab.
       spine.setProblem({ message: problem.message });
       return false;
     }
-    open.saved = text;
-    files.set(open.path, text);
+    markSaved(path, text);
+    return true;
+  }
+
+  function markSaved(path: string, text: string): void {
+    if (open?.path === path) open.saved = text;
+    files.set(path, text);
     reindex();
     refreshSpine();
-    return true;
+  }
+
+  /** The file changed on the branch after it was opened. Reading it
+   * again fetches the other version and, on a repository, the version
+   * stamp a write has to name — so Keep mine is an ordinary write after
+   * that, and still refused if the file moves yet again. True when the
+   * conflict ended with something saved or deliberately discarded. */
+  async function resolveConflict(path: string, mine: string, problem: SaveProblem): Promise<boolean> {
+    if (!store) return false;
+    let theirs: string;
+    try {
+      theirs = await store.read(path);
+    } catch {
+      spine.setProblem({ message: problem.message });
+      return false;
+    }
+
+    const choice = await conflict.resolve(path, theirs, mine);
+    if (choice === "mine") {
+      try {
+        await store.write(path, mine, `Edit ${path}`);
+      } catch (error) {
+        spine.setProblem({ message: messageOf(error) });
+        return false;
+      }
+      spine.setProblem(null);
+      markSaved(path, mine);
+      return true;
+    }
+    if (choice === "theirs") {
+      files.set(path, theirs);
+      reindex();
+      await showPath(path);
+      return true;
+    }
+    spine.setProblem({ message: problem.message });
+    return false;
   }
 
   function reindex(): void {
@@ -908,6 +953,7 @@ export function mountShell(page: HTMLElement): Shell {
       settings.destroy();
       sourceView.destroy();
       asker.destroy();
+      conflict.destroy();
       reportOverlay.remove();
       spine.destroy();
       clearCommands();
