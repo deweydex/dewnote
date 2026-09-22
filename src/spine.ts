@@ -10,6 +10,8 @@
 // 34rem measure there is about 450px of empty gutter each side. One side
 // carries it; the other stays empty.
 
+import { shortcut } from "./keys.ts";
+
 export interface SpineHost {
   /** The open document's own headings. They come from the editor's tree
    * rather than from a second parse of the text. There is one answer to
@@ -79,7 +81,9 @@ const SPINE_MAXIMUM = 310;
 const SPINE_GAP = 28;
 
 export function mountSpine(host: SpineHost): Spine {
-  let file: SpineFile = { name: "Untitled", dirty: false };
+  /** Null until a document opens: before then there is nothing to be
+   * saved, and saying "Saved" would be a claim about nothing. */
+  let file: SpineFile | null = null;
   let location: SpineLocation = { module: "", series: "", page: "" };
   let workspace: SpineWorkspace = { label: "", detail: "" };
   let problem: { message: string; action?: { label: string; run(): void } } | null = null;
@@ -143,17 +147,20 @@ export function mountSpine(host: SpineHost): Spine {
   state.className = "dn-spine-state";
   const hint = document.createElement("span");
   hint.className = "dn-spine-hint";
-  hint.textContent = "⌘K  anywhere";
+  hint.textContent = `${shortcut("K")} to open or do anything`;
   foot.append(health, state, hint);
 
   spine.append(identity, rule, problemBox, outline, foot);
   document.body.appendChild(spine);
 
   function renderIdentity(): void {
-    fileName.textContent = file.name;
-    fileName.classList.toggle("is-dirty", file.dirty);
+    fileName.textContent = file?.name ?? "";
+    fileName.hidden = file === null;
+    fileName.classList.toggle("is-dirty", file?.dirty ?? false);
     const parts = [location.module, location.series, location.page].filter(Boolean);
-    breadcrumb.textContent = parts.length ? parts.join(" › ") : "Choose a document…";
+    breadcrumb.textContent = parts.length
+      ? parts.join(" › ")
+      : `${file === null ? "Open a document" : "Open another document"} (${shortcut("K")})`;
     breadcrumb.classList.toggle("is-empty", parts.length === 0);
     context.textContent = [workspace.label, workspace.detail].filter(Boolean).join(" · ");
     context.hidden = context.textContent === "";
@@ -188,7 +195,9 @@ export function mountSpine(host: SpineHost): Spine {
   }
 
   function renderState(): void {
-    state.textContent = file.dirty ? "Save this" : "Saved";
+    state.hidden = file === null;
+    if (!file) return;
+    state.textContent = file.dirty ? `Save (${shortcut("S")})` : "Saved";
     state.classList.toggle("is-dirty", file.dirty);
     // Nothing to save is nothing to press. It stays in the tab order
     // only while it is a real action.
@@ -251,12 +260,12 @@ export function mountSpine(host: SpineHost): Spine {
     setHealth({ total, blocking }) {
       health.hidden = total === 0;
       health.classList.toggle("is-blocking", blocking > 0);
-      health.textContent = `${total} to fix`;
+      health.textContent = `${total} problem${total === 1 ? "" : "s"}`;
       health.setAttribute(
         "aria-label",
         blocking > 0
-          ? `${total} things to fix in this document, ${blocking} of which would stop the build. Show them.`
-          : `${total} things to fix in this document. Show them.`,
+          ? `${total} problem${total === 1 ? "" : "s"} in this document, ${blocking} of which stop the site building. Show them.`
+          : `${total} problem${total === 1 ? "" : "s"} in this document. Show them.`,
       );
     },
     setProblem(next) { problem = next; renderProblem(); },

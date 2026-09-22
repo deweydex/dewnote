@@ -41,14 +41,14 @@ const ROWS: Row[] = [
     { value: "comfortable", label: "Comfortable" },
     { value: "compact", label: "Compact" },
   ] },
-  { key: "cellTint", label: "Tinted cells", kind: "switch" },
+  { key: "cellTint", label: "Shade code cells", kind: "switch" },
   { key: "codeFontSize", label: "Code size", kind: "range", min: 11, max: 20, step: 1, unit: "px" },
   { key: "codeFont", label: "Code font", kind: "choice", options: [
     { value: "mono", label: "System mono" },
     { value: "humanist", label: "Humanist" },
     { value: "slab", label: "Slab" },
   ] },
-  { key: "pyodideBase", label: "Pyodide source", kind: "text", placeholder: "the default" },
+  { key: "pyodideBase", label: "Python runtime URL", kind: "text", placeholder: "Default (jsDelivr)" },
 ];
 
 export interface SettingsPanel {

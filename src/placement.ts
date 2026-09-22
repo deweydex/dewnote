@@ -45,7 +45,7 @@ export function addToSeries(
 ): string | { error: string } {
   if (series.tutorials.includes(id)) return { error: `${id} is already in ${series.title}.` };
   if (!series.tutorialsRange) {
-    return { error: `The list under ${series.title} is not written in a form dewnote can edit.` };
+    return { error: `dewnote cannot edit the tutorial list under ${series.title} in this course file. Edit the file by hand.` };
   }
   const lines = content.split("\n");
   lines.splice(series.tutorialsRange.end, 0, `${series.indent}- ${id}`);
@@ -59,7 +59,7 @@ export function removeFromSeries(
   id: string,
 ): string | { error: string } {
   if (!series.tutorialsRange) {
-    return { error: `The list under ${series.title} is not written in a form dewnote can edit.` };
+    return { error: `dewnote cannot edit the tutorial list under ${series.title} in this course file. Edit the file by hand.` };
   }
   const lines = content.split("\n");
   const { start, end } = series.tutorialsRange;

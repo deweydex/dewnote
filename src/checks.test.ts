@@ -88,7 +88,7 @@ describe(`the dewlab checkout: ${DEWLAB}${CHECKED_OUT ? "" : " (not checked out 
       "renamed-since.png",
     );
     expect(checkDocument(renamed, { ...around, path }).map((problem) => problem.message)).toEqual([
-      expect.stringContaining("`renamed-since.png` is not a file here"),
+      expect.stringContaining("`renamed-since.png` is not a file beside this document"),
     ]);
   });
 

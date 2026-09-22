@@ -75,7 +75,7 @@ export function mountAsk(): Ask {
         go.textContent = options.confirm ?? "Continue";
         const cancel = document.createElement("button");
         cancel.type = "button";
-        cancel.textContent = "Not now";
+        cancel.textContent = "Cancel";
         cancel.addEventListener("click", () => close(null));
         actions.append(go, cancel);
 

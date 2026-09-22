@@ -4,7 +4,14 @@
 // No DOM, no opinion about presentation. The palette draws these as
 // rows.
 
-export type CommandSection = "Document" | "Workspace" | "Appearance" | "Publish";
+export type CommandSection =
+  | "Document"
+  | "Cells"
+  | "Tutorial"
+  | "Workspace"
+  | "Import and export"
+  | "GitHub"
+  | "Appearance";
 
 export interface Command {
   /** Stable across renames, so a keybinding or a test can name one. */

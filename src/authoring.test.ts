@@ -116,7 +116,7 @@ describe("prepareRelease", () => {
 
   test("refuses a file that is not a live tutorial's own", () => {
     const made = prepareRelease("pages/about.md", PUBLISHED, EDITED, [], today);
-    expect(made).toEqual({ error: "Only a live tutorials/<id>/<id>.md file can be released." });
+    expect(made).toEqual({ error: "Only a tutorial's main file, tutorials/<id>/<id>.md, can have versions." });
   });
 
   test("refuses when nothing changed, rather than making an identical version", () => {
@@ -127,6 +127,6 @@ describe("prepareRelease", () => {
   test("refuses a draft: there is nothing published to freeze", () => {
     const draft = PUBLISHED.replace("status: live", "status: draft");
     const made = prepareRelease(PATH, draft, EDITED, [], today);
-    expect(made).toEqual({ error: "Only a live tutorial can be released." });
+    expect(made).toEqual({ error: "Only a tutorial with `status: live` can be released. A draft needs no versions: save it, and set `status: live` when it is ready." });
   });
 });

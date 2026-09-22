@@ -226,10 +226,20 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
         // 409 is the one failure the author has to resolve rather than
         // retry: the file moved under them and both versions exist.
         if (status === 409) {
-          asProblem(saveProblem(`${path} changed on ${branch} since you opened it.`, true));
+          asProblem(saveProblem(
+            `Not saved: ${path} was changed on ${branch} after you opened it, probably from another tab or by someone else. ` +
+              "Your changes are still on screen. Copy them somewhere safe, reload dewnote, and apply them again.",
+            true,
+          ));
         }
         if (status === 422 && !shas.has(path)) {
-          asProblem(saveProblem(`${path} already exists on ${branch}.`));
+          asProblem(saveProblem(`Not saved: ${path} already exists on ${branch}. Open that file instead.`));
+        }
+        if (status === 401 || status === 403) {
+          asProblem(saveProblem(
+            "Not saved: GitHub refused the token. It may have expired, or may not have write access to Contents. " +
+              "Reload dewnote and connect with a new token.",
+          ));
         }
         asProblem(error);
       }

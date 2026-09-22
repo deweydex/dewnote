@@ -31,6 +31,7 @@ import { fromNotebook, toNotebook, type Notebook } from "./notebook.ts";
 // with it, because a `var(--dl-*)` with nothing behind it is how an
 // exported page ends up in the browser's default serif.
 import { tokensCss } from "./theme/tokens.ts";
+import { shortcut } from "./keys.ts";
 import readingCss from "./theme/reading.css" with { type: "text" };
 
 const pageCss = `${tokensCss}\n${readingCss}`;
@@ -151,9 +152,9 @@ export function mountShell(page: HTMLElement): Shell {
   async function createTutorial(): Promise<void> {
     if (!store) return;
     if (!(await readyToLeave())) return;
-    const title = await asker.ask("What is the tutorial called?", {
-      label: "Its title becomes the address, so it is worth getting right.",
-      confirm: "Make it",
+    const title = await asker.ask("New tutorial", {
+      label: "Title. It also sets the tutorial's folder and web address, which are hard to change later.",
+      confirm: "Create tutorial",
     });
     if (!title) return;
     const made = newTutorial(title);
@@ -177,31 +178,36 @@ export function mountShell(page: HTMLElement): Shell {
    * A tutorial dewnote has just written is on no course at all, so it
    * has no breadcrumb and appears in no series — which is where making
    * one stops being useful. */
-  async function placeTutorial(): Promise<void> {
+  /** The open tutorial's id, when it has one a course can list. */
+  function openTutorialId(): string | undefined {
+    return open ? index.find((entry) => entry.path === open!.path)?.id : undefined;
+  }
+
+  async function placeTutorial(mode: "add" | "remove"): Promise<void> {
     if (!store || !open) return;
-    const id = index.find((entry) => entry.path === open!.path)?.id;
+    const id = openTutorialId();
     if (!id) {
-      spine.setProblem({ message: "This file has no id, so no course can list it." });
+      spine.setProblem({ message: "This file is not a tutorial, so it cannot be added to a series." });
       return;
     }
 
     const already = placementsOf(id, modules);
     const choices = modules.flatMap((module) =>
-      module.contents.map((series) => ({
-        value: `${module.id}\u0000${series.title}`,
-        label: `${module.title ?? module.id} › ${series.title}`,
-        note: series.tutorials.includes(id)
-          ? "already here — choosing it takes it out"
-          : `${series.tutorials.length} tutorial${series.tutorials.length === 1 ? "" : "s"}`,
-      })),
+      module.contents
+        .filter((series) => series.tutorials.includes(id) === (mode === "remove"))
+        .map((series) => ({
+          value: `${module.id}\u0000${series.title}`,
+          label: `${module.title ?? module.id} › ${series.title}`,
+          note: `${series.tutorials.length} tutorial${series.tutorials.length === 1 ? "" : "s"}`,
+        })),
     );
 
     const picked = await asker.choose(
-      "Which series should list this tutorial?",
+      mode === "add" ? "Add this tutorial to a series" : "Remove this tutorial from a series",
       choices,
       already.length === 0
-        ? "It is on no course yet, so it has no breadcrumb and appears in no series."
-        : `Now on ${already.map((where) => `${where.courseTitle} › ${where.seriesTitle}`).join(", ")}.`,
+        ? "It is not in any series yet, so readers cannot reach it from a course."
+        : `It is in ${already.map((where) => `${where.courseTitle} › ${where.seriesTitle}`).join(", ")}.`,
     );
     if (!picked) return;
 
@@ -222,7 +228,11 @@ export function mountShell(page: HTMLElement): Shell {
     }
 
     try {
-      await store.write(module.path, changed, `Place ${id} in ${series.title}`);
+      await store.write(
+        module.path,
+        changed,
+        mode === "add" ? `Add ${id} to ${series.title}` : `Remove ${id} from ${series.title}`,
+      );
     } catch (error) {
       spine.setProblem({ message: messageOf(error) });
       return;
@@ -246,10 +256,12 @@ export function mountShell(page: HTMLElement): Shell {
       spine.setProblem({ message: made.error });
       return;
     }
-    const going = await asker.ask(`Publish this as ${made.nextVersion}?`, {
-      label: `${made.previousVersion} is kept at ${made.frozenPath}, so a reader's saved work still resolves.`,
+    const going = await asker.ask(`Release a new version`, {
+      label:
+        `The current version, ${made.previousVersion}, is copied unchanged to ${made.frozenPath}. ` +
+        `Your edits become the new version, below. Readers' links and saved work keep working.`,
       value: made.nextVersion,
-      confirm: "Publish it",
+      confirm: "Release",
     });
     if (!going) return;
     try {
@@ -280,6 +292,7 @@ export function mountShell(page: HTMLElement): Shell {
     getIndex: () => index,
     getModules: () => modules,
     openPath: (path) => openPath(path),
+    hasDocument: () => open !== null,
     readPath: async (path) => files.get(path) ?? (store ? await store.read(path) : null),
   });
 
@@ -404,7 +417,7 @@ export function mountShell(page: HTMLElement): Shell {
         const notebook = JSON.parse(await file.text()) as Notebook;
         remount(fromNotebook(notebook));
       } catch (error) {
-        spine.setProblem({ message: `That is not a notebook dewnote can read: ${messageOf(error)}` });
+        spine.setProblem({ message: `dewnote could not read that file as a Jupyter notebook: ${messageOf(error)}` });
       }
     });
     picker.click();
@@ -455,7 +468,9 @@ export function mountShell(page: HTMLElement): Shell {
   async function runEveryCell(): Promise<void> {
     if (!open) return;
     for (const id of open.document.cellIds()) {
-      await open.document.runCell(id);
+      // A later cell usually depends on this one, so its error would
+      // only be a confusing echo of the first.
+      if (!(await open.document.runCell(id))) return;
     }
   }
 
@@ -471,10 +486,10 @@ export function mountShell(page: HTMLElement): Shell {
 
     if (blocking.length > 0) {
       const going = await asker.choose(
-        `${blocking.length} thing${blocking.length === 1 ? "" : "s"} in this workspace would stop the build.`,
+        `${blocking.length} problem${blocking.length === 1 ? "" : "s"} in this workspace would stop the site building`,
         [
-          { value: "look", label: "Show me", note: "The same report Check every page opens." },
-          { value: "go", label: "Open the pull request anyway", note: "A reviewer is the point of one." },
+          { value: "look", label: "Show the problems", note: "The same list Check every document shows." },
+          { value: "go", label: "Open the pull request anyway", note: "Reviewers will see the problems too." },
         ],
         blocking[0]!.message,
       );
@@ -516,16 +531,16 @@ export function mountShell(page: HTMLElement): Shell {
 
     const heading = document.createElement("h2");
     heading.textContent = found.length === 0
-      ? `Nothing to fix in ${scope}.`
-      : `${found.length} thing${found.length === 1 ? "" : "s"} to fix`;
+      ? `No problems found in ${scope}.`
+      : `${found.length} problem${found.length === 1 ? "" : "s"}`;
     box.appendChild(heading);
 
     if (blocking > 0) {
       const note = document.createElement("p");
       note.textContent =
         blocking === found.length
-          ? `${blocking === 1 ? "It" : "Every one of them"} would stop the build.`
-          : `${blocking} of them would stop the build.`;
+          ? `${blocking === 1 ? "It stops" : "All of them stop"} the site from building.`
+          : `${blocking} of them stop the site from building. The others are worth fixing but will not stop it.`;
       box.appendChild(note);
     }
 
@@ -701,25 +716,25 @@ export function mountShell(page: HTMLElement): Shell {
           id: "appearance",
           label: "Appearance…",
           section: "Appearance",
-          keywords: ["settings", "theme", "dark", "font", "size", "width"],
-          detail: "Theme, type, measure, spacing.",
+          keywords: ["settings", "theme", "dark", "font", "size", "width", "preferences"],
+          detail: "Theme, fonts, text size, line width and spacing. Only changes how dewnote looks to you.",
           run: () => settings.open(),
         },
         {
           id: "stop",
-          label: "Stop whatever is running",
-          section: "Document",
+          label: "Stop the running cell",
+          section: "Cells",
           keywords: ["interrupt", "halt", "cancel", "loop", "hang"],
-          detail: "Interrupts the interpreter without losing what it has in memory.",
+          detail: "Interrupts it. Variables from earlier cells are kept.",
           available: () => canStop(),
           run: () => requestStop(),
         },
         {
           id: "restart",
-          label: "Restart the interpreter",
-          section: "Document",
-          keywords: ["reset", "pyodide", "python", "clear", "fresh"],
-          detail: "Throws away every variable and starts again.",
+          label: "Restart Python",
+          section: "Cells",
+          keywords: ["reset", "pyodide", "interpreter", "clear", "fresh"],
+          detail: "Clears every variable, as if no cell had run.",
           available: () => canStop(),
           run: () => restartInterpreter(),
         },
@@ -728,70 +743,82 @@ export function mountShell(page: HTMLElement): Shell {
           label: "New tutorial…",
           section: "Workspace",
           keywords: ["create", "add", "write", "start"],
-          detail: "A draft, with its folder, its front matter and a cell.",
+          detail: "Creates a draft tutorial with its own folder, front matter and one cell.",
           run: () => void createTutorial(),
         },
         {
           id: "place",
-          label: "Place this tutorial…",
-          section: "Workspace",
-          keywords: ["course", "series", "module", "move", "contents"],
-          detail: "Which series lists it. Choosing one it is already in takes it out.",
-          available: () => open !== null,
-          run: () => void placeTutorial(),
+          label: "Add to a series…",
+          section: "Tutorial",
+          keywords: ["course", "series", "module", "place", "contents", "list"],
+          detail: "Lists this tutorial in a series on a course. Only the course file changes.",
+          available: () => openTutorialId() !== undefined,
+          run: () => void placeTutorial("add"),
+        },
+        {
+          id: "unplace",
+          label: "Remove from a series…",
+          section: "Tutorial",
+          keywords: ["course", "series", "module", "take out", "contents", "unlist"],
+          detail: "Takes this tutorial out of a series. The tutorial itself is not deleted.",
+          available: () => {
+            const id = openTutorialId();
+            return id !== undefined && placementsOf(id, modules).length > 0;
+          },
+          run: () => void placeTutorial("remove"),
         },
         {
           id: "release",
-          label: "Publish as a new version…",
-          section: "Publish",
-          keywords: ["release", "freeze", "version", "supersedes"],
-          detail: "Freezes what is published and dates what is open.",
+          label: "Release a new version…",
+          section: "Tutorial",
+          keywords: ["publish", "freeze", "version", "supersedes"],
+          detail: "Keeps a copy of the current version and makes your edits the next one.",
           // Only a tutorial's own live file has versions to count.
           available: () => open !== null && /^tutorials\/([^/]+)\/\1\.md$/.test(open.path),
           run: () => void releaseVersion(),
         },
         {
           id: "preview",
-          label: "Preview this page",
+          label: "Preview as a reader",
           section: "Document",
-          keywords: ["read", "look", "reader", "html", "how it looks"],
-          detail: "Opens it in a tab, the way a reader meets it.",
+          keywords: ["read", "look", "reader", "html", "how it looks", "page"],
+          detail: "Opens the page in a new tab, styled the way the site shows it.",
           available: () => open !== null,
           run: () => void previewPage(),
         },
         {
           id: "source",
-          label: "Show the whole file",
+          label: "Edit the markdown",
           section: "Document",
-          keywords: ["source", "markdown", "raw", "text", "front matter"],
-          detail: "⌘/ — front matter, fence markers and all.",
+          keywords: ["source", "whole file", "raw", "text", "front matter"],
+          detail: `${shortcut("/")}. The file exactly as it will be saved, front matter included.`,
           available: () => open !== null,
           run: () => showSource(),
         },
         {
           id: "export-html",
-          label: "Save as an HTML page",
-          section: "Publish",
-          keywords: ["export", "html", "send", "share", "download"],
-          detail: "One file: the document, its stylesheet and its images.",
+          label: "Download as HTML",
+          section: "Import and export",
+          keywords: ["export", "html", "send", "share", "save as"],
+          detail: "One self-contained file, with styles and images inside it, to send to someone.",
           available: () => open !== null,
           run: () => void saveAsHtml(),
         },
         {
           id: "export-ipynb",
-          label: "Save as a Jupyter notebook",
-          section: "Publish",
-          keywords: ["export", "ipynb", "jupyter", "notebook", "download"],
-          detail: "Every cell keeps its text, so importing it back is the same file.",
+          label: "Download as a Jupyter notebook",
+          section: "Import and export",
+          keywords: ["export", "ipynb", "jupyter", "notebook", "save as"],
+          detail: "An .ipynb file. Importing it back gives the same markdown, exactly.",
           available: () => open !== null,
           run: () => saveAsNotebook(),
         },
         {
           id: "import-ipynb",
-          label: "Open a Jupyter notebook…",
-          section: "Document",
-          keywords: ["import", "ipynb", "jupyter", "notebook"],
-          detail: "Replaces what is on screen. Nothing is saved until you save it.",
+          label: "Import a Jupyter notebook…",
+          section: "Import and export",
+          keywords: ["open", "ipynb", "jupyter", "notebook"],
+          detail: "Replaces this document's content with the notebook's. Nothing is saved until you save.",
           available: () => open !== null,
           run: () => openNotebook(),
         },
@@ -800,32 +827,33 @@ export function mountShell(page: HTMLElement): Shell {
           label: "Check this document",
           section: "Document",
           keywords: ["problems", "validate", "ids", "duplicate", "lint"],
-          detail: "Cells with no id, ids used twice, links to nothing.",
+          detail: "Lists anything that would break the site build or confuse a reader.",
           available: () => open !== null,
           run: () => checkThisDocument(),
         },
         {
           id: "run-all",
           label: "Run every cell",
-          section: "Document",
+          section: "Cells",
           keywords: ["execute", "all", "check", "top to bottom"],
-          detail: "In order, one at a time, the way a reader meets them.",
+          detail: "Top to bottom, stopping at the first that fails.",
           available: () => open !== null && open.document.cellIds().length > 0,
           run: () => void runEveryCell(),
         },
         {
           id: "check-workspace",
-          label: "Check every page",
+          label: "Check every document",
           section: "Workspace",
-          keywords: ["broken", "links", "ids", "front matter", "build"],
-          detail: "Every page in the workspace, not only the one that is open.",
+          keywords: ["broken", "links", "ids", "front matter", "build", "page", "all"],
+          detail: "The same checks, across the whole workspace.",
           run: () => checkWholeWorkspace(),
         },
         {
           id: "save",
-          label: "Save this document",
+          label: "Save",
           section: "Document",
           keywords: ["write", "commit"],
+          detail: `${shortcut("S")}.`,
           available: () => isDirty(),
           run: () => void saveNow(),
         },
@@ -833,8 +861,9 @@ export function mountShell(page: HTMLElement): Shell {
           ? [{
               id: "publish",
               label: "Open a pull request…",
-              section: "Publish" as const,
-              keywords: ["pr", "github", "review"],
+              section: "GitHub" as const,
+              keywords: ["pr", "github", "review", "publish"],
+              detail: "Asks for your working branch to be merged. Checks every document first.",
               run: () => void publish(next.publish!),
             }]
           : []),

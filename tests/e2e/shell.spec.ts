@@ -99,7 +99,7 @@ test("an edit reaches the store, with the fence's info string intact", async ({ 
   await page.locator(".milkdown p").first().click();
   await page.keyboard.press("End");
   await page.keyboard.type(" And now we keep one.");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
 
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
@@ -215,7 +215,7 @@ test("an edit to the sample is kept, and goes nowhere", async ({ page }) => {
   await page.locator(".milkdown p").first().click();
   await page.keyboard.press("End");
   await page.keyboard.type(" Edited.");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
 });
@@ -336,10 +336,10 @@ test("a pasted image is written beside the document and named in the markdown", 
   ).toBe(true);
 });
 
-test("Check every page reports a fault in a file nobody has open, and opens it", async ({ page }) => {
+test("Check every document reports a fault in a file nobody has open, and opens it", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.locator('[data-choice="sample"]').click();
-  await page.locator(".dn-wp-input").fill("check every page");
+  await page.locator(".dn-wp-input").fill("check every document");
   await page.keyboard.press("Enter");
 
   const report = page.locator(".dn-report");
@@ -365,9 +365,9 @@ test("a sound workspace says so rather than showing an empty list", async ({ pag
   });
   await page.keyboard.press("Escape");
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("check every page");
+  await page.locator(".dn-wp-input").fill("check every document");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in the workspace.");
+  await expect(page.locator(".dn-report h2")).toHaveText("No problems found in the workspace.");
 });
 
 test("a document saves as one HTML file, with its stylesheet and image inside it", async ({ page }) => {
@@ -378,7 +378,7 @@ test("a document saves as one HTML file, with its stylesheet and image inside it
 
   const download = page.waitForEvent("download");
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("html page");
+  await page.locator(".dn-wp-input").fill("download as html");
   await page.keyboard.press("Enter");
 
   const file = await download;
@@ -412,7 +412,7 @@ test("a document saves as a notebook whose cells keep their own text", async ({ 
 
   const download = page.waitForEvent("download");
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("save as a jupyter");
+  await page.locator(".dn-wp-input").fill("download as a jupyter");
   await page.keyboard.press("Enter");
 
   const file = await download;
@@ -456,7 +456,7 @@ test("the slash menu offers dewlab's own blocks, and inserts one with a free id"
   await page.keyboard.type("py");
   await expect(menu).not.toContainText("Heading 1");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
 
@@ -488,7 +488,7 @@ test("the slash menu writes a hint as the fold dewlab's build looks for", async 
   await expect(menu).toBeVisible();
   await expect(menu).toContainText("Hint");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
 
@@ -633,12 +633,12 @@ test("a tutorial on no course can be placed in a series, and shows a breadcrumb 
   await expect(page.locator(".dn-spine-breadcrumb")).not.toContainText("Maths for IT");
 
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("place this");
+  await page.locator(".dn-wp-input").fill("add to a series");
   await page.keyboard.press("Enter");
 
   const ask = page.locator(".dn-ask-choices");
   await expect(ask).toBeVisible();
-  await expect(ask).toContainText("It is on no course yet");
+  await expect(ask).toContainText("It is not in any series yet");
   await ask.locator(".dn-ask-choice", { hasText: "First Steps" }).click();
 
   // The course file gained one line, and nothing else moved.
@@ -651,7 +651,7 @@ test("a tutorial on no course can be placed in a series, and shows a breadcrumb 
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("First Steps");
 });
 
-test("choosing a series a tutorial is already in takes it out", async ({ page }) => {
+test("Remove from a series takes a tutorial out of one it is in", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
     "courses/maths.yaml":
@@ -662,11 +662,11 @@ test("choosing a series a tutorial is already in takes it out", async ({ page })
   await page.keyboard.press("Enter");
 
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("place this");
+  await page.locator(".dn-wp-input").fill("remove from a series");
   await page.keyboard.press("Enter");
 
   const ask = page.locator(".dn-ask-choices");
-  await expect(ask).toContainText("already here");
+  await expect(ask).toContainText("Remove this tutorial from a series");
   await ask.locator(".dn-ask-choice", { hasText: "First Steps" }).click();
 
   const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1));
@@ -712,7 +712,7 @@ test("a sound document says there is nothing to fix", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+k");
   await page.locator(".dn-wp-input").fill("check this document");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
+  await expect(page.locator(".dn-report h2")).toHaveText("No problems found in this document.");
 });
 
 test("the slash menu writes a question the build would accept", async ({ page }) => {
@@ -744,7 +744,7 @@ test("the slash menu writes a question the build would accept", async ({ page })
   await page.keyboard.press("ControlOrMeta+k");
   await page.locator(".dn-wp-input").fill("check this document");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
+  await expect(page.locator(".dn-report h2")).toHaveText("No problems found in this document.");
 });
 
 test("the slash menu writes three site panes under one name, each with its own id", async ({ page }) => {
@@ -788,7 +788,7 @@ test("the margin counts what is wrong, and the count opens the report", async ({
 
   // A cell with no id, found without anybody asking for it.
   const health = page.locator(".dn-spine-health");
-  await expect(health).toHaveText("1 to fix");
+  await expect(health).toHaveText("1 problem");
   await expect(health).toHaveClass(/is-blocking/);
 
   await health.click();
@@ -819,11 +819,11 @@ test("opening a pull request says what would stop the build, and still lets you"
   await page.keyboard.press("Enter");
 
   const ask = page.locator(".dn-ask-overlay");
-  await expect(ask).toContainText("1 thing in this workspace would stop the build");
+  await expect(ask).toContainText("1 problem in this workspace would stop the site building");
   expect(await page.evaluate(() => (globalThis as any).__dewnotePublished)).toBe(false);
 
-  // Show me leads to the same report the command opens.
-  await ask.getByText("Show me").click();
+  // Show the problems leads to the same report the command opens.
+  await ask.getByText("Show the problems").click();
   await expect(page.locator(".dn-report")).toContainText("no `id:`");
   await expect(page.locator(".dn-report-where")).toContainText("tutorials/b/b.md");
   await page.keyboard.press("Escape");
@@ -904,10 +904,10 @@ test("an image whose file is not there is counted in the margin and named in the
   await page.locator(".dn-wp-input").fill("a.md");
   await page.keyboard.press("Enter");
 
-  await expect(page.locator(".dn-spine-health")).toHaveText("1 to fix");
+  await expect(page.locator(".dn-spine-health")).toHaveText("1 problem");
   await page.locator(".dn-spine-health").click();
   const report = page.locator(".dn-report");
-  await expect(report).toContainText("`gone.png` is not a file here");
+  await expect(report).toContainText("The image `gone.png`");
   // The one that resolves is not mentioned.
   await expect(report).not.toContainText("diagram.svg");
 });
@@ -1084,7 +1084,7 @@ async function editStoring(page: import("@playwright/test").Page) {
   await page.locator(".milkdown p").first().click();
   await page.keyboard.press("End");
   await page.keyboard.type(" Unsaved words.");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
 }
 
 async function openAbout(page: import("@playwright/test").Page) {
@@ -1102,7 +1102,7 @@ test("opening another document with unsaved changes asks first, and Keep editing
 
   await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
   await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
 });
 
 test("Escape on the unsaved-changes question is the same as Keep editing", async ({ page }) => {

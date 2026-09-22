@@ -177,12 +177,12 @@ test("an output that predates an edit is kept, and marked as older", async ({ pa
   await expect(page.locator(".dn-cell-output.is-stale")).toBeVisible();
 });
 
-test("Run every cell runs them in order, top to bottom", async ({ page }) => {
+test("Run every cell stops at the first cell that fails", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
     "pages/one.md": [
       "---", "title: One", "---", "", "# One", "",
-      "```python exec", "id: a", "print(1)", "```", "",
+      "```python exec", "id: a", "raise ValueError('first')", "```", "",
       "```python exec", "id: b", "print(2)", "```", "",
     ].join("\n"),
   });
@@ -193,12 +193,13 @@ test("Run every cell runs them in order, top to bottom", async ({ page }) => {
   await page.locator(".dn-wp-input").fill("run every cell");
   await page.keyboard.press("Enter");
 
-  // Pyodide is unreachable here, so both runs end in an error — which is
-  // still proof that both were attempted. A cell that was never run says
+  // The first cell fails whether or not Pyodide can load: it raises if
+  // it runs, and errors if the interpreter is unreachable. Either way
+  // the second is never attempted. A cell that was never run says
   // "Run"; one that has been says "Run again".
   const buttons = page.locator(".dn-cell-run");
   await expect(buttons).toHaveCount(2);
-  await expect(buttons.nth(0)).toHaveText("Run again");
-  await expect(buttons.nth(1)).toHaveText("Run again");
-  await expect(page.locator(".dn-cell-output.is-error")).toHaveCount(2);
+  await expect(buttons.nth(0)).toHaveText("Run again", { timeout: 30_000 });
+  await expect(page.locator(".dn-cell-output.is-error")).toHaveCount(1);
+  await expect(buttons.nth(1)).toHaveText("Run");
 });

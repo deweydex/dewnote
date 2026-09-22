@@ -10,6 +10,8 @@
 // and no editor at all. Syntax colour in a panel somebody opens to fix
 // one line is not worth that.
 
+import { shortcut } from "./keys.ts";
+
 export interface SourceView {
   /** Show `text`; `onApply` is called with what the author kept. */
   open(text: string, onApply: (next: string) => void): void;
@@ -25,12 +27,14 @@ export function mountSourceView(): SourceView {
   const box = document.createElement("div");
   box.className = "dn-panel dn-source";
   box.setAttribute("role", "dialog");
-  box.setAttribute("aria-label", "The whole file");
+  box.setAttribute("aria-label", "Edit the markdown");
 
   const heading = document.createElement("h2");
-  heading.textContent = "The whole file";
+  heading.textContent = "Edit the markdown";
   const note = document.createElement("p");
-  note.textContent = "Front matter, fence markers and all. ⌘↵ keeps it, Esc leaves it.";
+  note.textContent =
+    `The file exactly as it will be saved, front matter included. ` +
+    `${shortcut("Enter")} applies your changes, Esc cancels. Nothing is saved until you save.`;
 
   const area = document.createElement("textarea");
   area.className = "dn-source-text";
@@ -42,10 +46,10 @@ export function mountSourceView(): SourceView {
   const keepButton = document.createElement("button");
   keepButton.type = "button";
   keepButton.className = "dn-source-keep";
-  keepButton.textContent = "Keep these changes";
+  keepButton.textContent = "Apply changes";
   const leaveButton = document.createElement("button");
   leaveButton.type = "button";
-  leaveButton.textContent = "Leave it as it was";
+  leaveButton.textContent = "Cancel";
   actions.append(keepButton, leaveButton);
 
   box.append(heading, note, area, actions);

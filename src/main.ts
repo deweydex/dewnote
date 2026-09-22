@@ -48,27 +48,34 @@ function gate(): HTMLElement {
   box.className = "dn-gate";
   box.innerHTML = `
     <h1 class="dn-brand">${BRAND_MARK}<span class="dn-brand-name">dewnote</span></h1>
-    <p>Where are the files?</p>
+    <p>Where are the tutorials you want to edit?</p>
     <div class="dn-gate-choices">
-      <button type="button" data-choice="folder">Open a local folder</button>
-      <button type="button" data-choice="repo">Connect a repository</button>
+      <button type="button" data-choice="folder">Open a folder on this computer</button>
+      <button type="button" data-choice="repo">Connect a GitHub repository</button>
     </div>
     <p class="dn-gate-aside">
-      Or <button type="button" data-choice="sample">try a sample document</button>
-      — nothing is saved anywhere.
+      Or <button type="button" data-choice="sample">try the sample document</button>.
+      Nothing you do in it is saved.
     </p>
     <form class="dn-gate-repo" hidden>
-      <label>Token <input name="token" type="password" autocomplete="off" required></label>
+      <label>GitHub token <input name="token" type="password" autocomplete="off" required></label>
+      <p class="dn-gate-note">
+        A token lets dewnote read and commit on your behalf.
+        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained token</a>
+        for just this repository, with <strong>Contents</strong> and <strong>Pull requests</strong>
+        set to read and write. dewnote keeps it in this browser only.
+      </p>
       <label>Repository
         <select name="repo" required disabled>
-          <option value="">Enter a token first</option>
+          <option value="">Paste a token first</option>
         </select>
       </label>
       <label>Working branch <input name="branch" required></label>
       <p class="dn-gate-note">
-        Saves commit to the working branch, never to the repository's own
-        default branch. One branch per day keeps a day's edits in one
-        pull request.
+        Every save is a commit on this branch. dewnote never commits to the
+        repository's main branch; when you are done, open a pull request
+        to merge your work into it. The suggested name starts a new branch
+        each day.
       </p>
       <button type="submit">Connect</button>
     </form>
@@ -90,7 +97,7 @@ function start(): void {
   // button that does nothing.
   if (!canOpenFolder()) {
     folderButton.disabled = true;
-    folderButton.title = "This browser has no folder picker. Use a repository.";
+    folderButton.title = "This browser cannot open folders. Use Chrome or Edge, or connect a GitHub repository.";
   }
 
   const done = () => box.remove();
@@ -164,7 +171,7 @@ function start(): void {
     repoSelect.replaceChildren();
     if (choices.length === 0) {
       repoSelect.disabled = true;
-      repoSelect.append(new Option("This token can write to no repository", ""));
+      repoSelect.append(new Option("This token cannot write to any repository", ""));
       return;
     }
     for (const key of reachable.keys()) repoSelect.append(new Option(key, key));
@@ -185,7 +192,7 @@ function start(): void {
     const token = tokenField.value.trim();
     if (!token) {
       repoSelect.disabled = true;
-      repoSelect.replaceChildren(new Option("Enter a token first", ""));
+      repoSelect.replaceChildren(new Option("Paste a token first", ""));
       return;
     }
     lookup = setTimeout(async () => {
@@ -195,7 +202,7 @@ function start(): void {
         offerRepositories(await listRepositories(token));
         problem.textContent = "";
       } catch (error) {
-        repoSelect.replaceChildren(new Option("That token was refused", ""));
+        repoSelect.replaceChildren(new Option("GitHub did not accept that token", ""));
         failed(error);
       }
     }, 400);
@@ -214,7 +221,7 @@ function start(): void {
     const branch = form.querySelector<HTMLInputElement>('[name="branch"]')!.value.trim();
     if (branch === chosen.defaultBranch) {
       problem.textContent =
-        `The working branch has to be something other than ${chosen.defaultBranch} — saves never write to a repository's default branch.`;
+        `The working branch has to be something other than ${chosen.defaultBranch}, which is the repository's main branch. Saves never go there directly.`;
       return;
     }
     const state = busy(connect, "Reading");

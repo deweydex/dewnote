@@ -66,15 +66,15 @@ export function checkDocument(source: string, around: Around): Problem[] {
   const { present, fields } = extractFrontMatter(source);
 
   if (!present) {
-    problems.push({ message: "No front matter: the build has no title to show.", severity: "blocking" });
+    problems.push({ message: "No front matter. Add a `---` block at the top with at least a `title:` line; the site cannot build the page without it.", severity: "blocking" });
   } else {
     if (typeof fields["title"] !== "string" || !fields["title"].trim()) {
-      problems.push({ message: "No `title:`, so the page has nothing to be called.", severity: "blocking" });
+      problems.push({ message: "No `title:` in the front matter. Add one; the site cannot build the page without a title.", severity: "blocking" });
     }
     const version = fields["version"];
     if (version !== undefined && !isReleaseVersion(version)) {
       problems.push({
-        message: `\`version: ${String(version)}\` is not a date and a counter, so a release cannot count from it.`,
+        message: `\`version: ${String(version)}\` is not in the form year.month.day.number, for example \`2026.09.22.1\`. Releasing a new version counts on from it.`,
         severity: "worth fixing",
       });
     }
@@ -87,7 +87,7 @@ export function checkDocument(source: string, around: Around): Problem[] {
   const claim = (id: string | null, what: string, line: number): void => {
     if (!id) {
       problems.push({
-        message: `A ${what} with no \`id:\`. Nobody's work can be saved against it.`,
+        message: `A ${what} with no \`id:\`. Add an \`id:\` line at its top; without one, a reader's work in it cannot be saved.`,
         line,
         severity: "blocking",
       });
@@ -95,7 +95,7 @@ export function checkDocument(source: string, around: Around): Problem[] {
     }
     if (seen.has(id)) {
       problems.push({
-        message: `Two blocks share the id \`${id}\` — they would share a reader's saved work too.`,
+        message: `Two blocks share the id \`${id}\`. Rename one; otherwise a reader's saved work in one overwrites the other.`,
         line,
         severity: "blocking",
       });
@@ -116,10 +116,10 @@ export function checkDocument(source: string, around: Around): Problem[] {
       if (isRunnable(languageOf(info), info)) {
         claim(parseCell(body).id, "runnable cell", line);
       } else if (pane) {
-        claim(pane.id, "site pane", line);
+        claim(pane.id, "web page pane", line);
         if (!pane.site) {
           problems.push({
-            message: "A site pane with no `site:`. It is what groups the panes into one editor.",
+            message: "A web page pane with no `site:` line. Add one naming its page; panes with the same `site:` become one editor.",
             line,
             severity: "blocking",
           });
@@ -139,7 +139,7 @@ export function checkDocument(source: string, around: Around): Problem[] {
       const at = assetPathFor(path, image.src);
       if (!images.has(at)) {
         problems.push({
-          message: `\`${image.src}\` is not a file here${image.alt ? ` — the image reads "${image.alt}"` : ""}.`,
+          message: `The image \`${image.src}\`${image.alt ? ` ("${image.alt}")` : ""} is not a file beside this document. Check the name, or add the file.`,
           line: image.line,
           severity: "blocking",
         });
@@ -149,7 +149,7 @@ export function checkDocument(source: string, around: Around): Problem[] {
 
   for (const link of brokenLinksIn("", source, knownIds)) {
     problems.push({
-      message: `\`tutorial:${link.target}\` names no page${link.text ? ` — the link reads "${link.text}"` : ""}.`,
+      message: `The link \`tutorial:${link.target}\`${link.text ? ` ("${link.text}")` : ""} names no tutorial in this workspace. Check the id.`,
       line: link.line,
       severity: "blocking",
     });
@@ -195,37 +195,37 @@ function checkQuestion(question: Question, line: number, problems: Problem[]): v
   const blocking = (message: string) => problems.push({ message, line, severity: "blocking" as const });
 
   if (!question.type) {
-    blocking("A question with no `type:`. It has to say how it is answered.");
+    blocking("A question with no `type:` line. Add `type: multiple-choice` or `type: fill-in-the-blank`.");
   } else if (!(QUESTION_TYPES as readonly string[]).includes(question.type)) {
-    blocking(`\`type: ${question.type}\` is not one of ${QUESTION_TYPES.join(" or ")}.`);
+    blocking(`\`type: ${question.type}\` is not a question type the site knows. Use ${QUESTION_TYPES.map((type) => `\`${type}\``).join(" or ")}.`);
   }
   if (!question.text.trim()) {
-    blocking("A question with nothing in it to answer.");
+    blocking("A question with no text. Write the question below its settings lines.");
     return;
   }
 
   if (question.type === "multiple-choice") {
     if (question.options.length < 2) {
-      blocking("A multiple-choice question with fewer than two options.");
+      blocking("A multiple-choice question with fewer than two options. Add options as a bulleted list.");
     } else if (!question.prompt) {
-      blocking("A multiple-choice question with options but nothing above them to answer.");
+      blocking("A multiple-choice question with no question above its options. Write it above the first bullet.");
     }
     const at = Number(question.correct);
     if (!question.correct) {
-      blocking("A multiple-choice question with no `correct:` line, so nothing marks it.");
+      blocking("A multiple-choice question with no `correct:` line, so answers cannot be marked. Add `correct:` with the number of the right option.");
     } else if (!/^\d+$/.test(question.correct) || at < 1 || at > question.options.length) {
       blocking(
-        `\`correct: ${question.correct}\` names none of the ${question.options.length} options — ` +
-          "they are counted from 1, in the order they are written.",
+        `\`correct: ${question.correct}\` names none of the ${question.options.length} options. ` +
+          "Options are numbered from 1, in the order they are written.",
       );
     }
   }
 
   if (question.type === "fill-in-the-blank") {
     if (!gapsBalanced(question.text)) {
-      blocking("A gap in this question opens with `{` and never closes.");
+      blocking("A gap in this question opens with `{` and never closes. Add the missing `}`.");
     } else if (!hasGap(question.text)) {
-      blocking("A fill-in-the-blank question with no `{…}` gap in it, so there is nothing to fill in.");
+      blocking("A fill-in-the-blank question with no gap. Put the answer in braces, like `{answer}`, where the blank should go.");
     }
   }
 }
@@ -233,11 +233,11 @@ function checkQuestion(question: Question, line: number, problems: Problem[]): v
 /** A `card` fence is a tile: somewhere to go, and something to read. */
 function checkCard(card: Card, line: number, problems: Problem[]): void {
   if (!card.url) {
-    problems.push({ message: "A card with no `url:`, so it goes nowhere.", line, severity: "blocking" });
+    problems.push({ message: "A card with no `url:` line, so clicking it goes nowhere. Add the address it should open.", line, severity: "blocking" });
   }
   if (!card.heading) {
     problems.push({
-      message: "A card whose text does not open with a heading, which is the tile's title.",
+      message: "A card that does not start with a heading. Add one; it becomes the card's title.",
       line,
       severity: "blocking",
     });

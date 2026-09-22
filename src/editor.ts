@@ -255,7 +255,9 @@ export interface Document {
   /** Every runnable cell's id, in the order they appear. */
   cellIds(): string[];
   /** Run one, by id. Resolves when it has finished. */
-  runCell(id: string): Promise<void>;
+  /** Runs one cell. True when it ran and succeeded; false when it
+   * failed, was stopped, or could not run at all. */
+  runCell(id: string): Promise<boolean>;
   /** The save path. Re-serialises the whole document, so a file is
    * normalised the first time it is saved and byte-stable after that. */
   markdown(): string;
@@ -396,14 +398,14 @@ export async function mountEditor(
     return panel;
   }
 
-  async function runCellById(id: string): Promise<void> {
+  async function runCellById(id: string): Promise<boolean> {
     if (running === id) {
       options.stopCell?.();
-      return;
+      return false;
     }
-    if (running !== null) return;
+    if (running !== null) return false;
     const handle = handles.get(id);
-    if (!handle || !options.runCell) return;
+    if (!handle || !options.runCell) return false;
 
     running = id;
     handle.apply(cellPanel(handle.language, handle.content, handle.apply));
@@ -424,6 +426,7 @@ export async function mountEditor(
     running = null;
     results.set(id, { source: handle.content, output });
     handle.apply(cellPanel(handle.language, handle.content, handle.apply));
+    return output.ok;
   }
 
   const crepe = new Crepe({

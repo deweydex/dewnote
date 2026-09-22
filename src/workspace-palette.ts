@@ -27,6 +27,9 @@ export interface PaletteHost {
    * could not, and the palette stays open rather than closing on a
    * navigation that did not happen. */
   openPath(path: string): Promise<boolean>;
+  /** Whether a document is open, which decides how an empty result
+   * explains itself. */
+  hasDocument(): boolean;
   /** A document's text, when the store can produce it without opening
    * it — for the preview pane. Null when it cannot, which is ordinary
    * rather than an error: the pane then shows what the index knows. */
@@ -69,9 +72,9 @@ interface Row {
 
 const SECTION_OF: Record<RowKind, string> = {
   tutorial: "Tutorials",
-  page: "Pages",
+  page: "Site pages",
   series: "Series",
-  command: "Do",
+  command: "Commands",
 };
 
 /** How many rows of each kind survive a query. A palette that lists
@@ -88,11 +91,6 @@ const LIMIT: Record<RowKind, number> = { tutorial: 8, page: 4, series: 6, comman
  * own title says it. */
 const KEYWORD_WEIGHT = 0.7;
 
-function ordinal(position: number): string {
-  const names = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"];
-  return names[position] ?? `${position + 1}th`;
-}
-
 /** Where a tutorial sits, said the way an author thinks of it: the
  * series it belongs to and how far in. A practice page says so instead,
  * since its position is its tutorial's. */
@@ -102,7 +100,7 @@ function noteFor(entry: FileIndexEntry, modules: readonly Module[]): string {
   for (const module of modules) {
     for (const series of module.contents) {
       const at = series.tutorials.indexOf(entry.id ?? "");
-      if (at !== -1) return `${series.title} · ${ordinal(at)}`;
+      if (at !== -1) return `${series.title} · ${at + 1} of ${series.tutorials.length}`;
     }
   }
   return entry.series ?? entry.module ?? "";
@@ -243,7 +241,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
         built.push({
           kind: "series",
           label: series.title,
-          note: `${series.tutorials.length} tutorials · ${module.title}`,
+          note: `${series.tutorials.length} tutorial${series.tutorials.length === 1 ? "" : "s"} · ${module.title}`,
           keywords: [module.title, module.id],
           path: target?.path,
           run: async () => { if (target) await host.openPath(target.path); },
@@ -298,7 +296,13 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
       list.appendChild(item);
     });
     empty.hidden = rows.length > 0;
-    if (rows.length === 0) empty.textContent = `Nothing here matches “${input.value}”.`;
+    if (rows.length === 0) {
+      // Commands that act on a document are hidden until one is open, so
+      // "nothing matches" would be wrong about what exists.
+      empty.textContent = host.hasDocument()
+        ? `Nothing matches “${input.value}”.`
+        : `Nothing matches “${input.value}”. Open a document to see the commands that act on it.`;
+    }
     list.querySelector<HTMLElement>(".dn-wp-row.is-active")?.scrollIntoView({ block: "nearest" });
   }
 

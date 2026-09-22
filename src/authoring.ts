@@ -135,15 +135,15 @@ export function prepareRelease(
   now: Date = new Date(),
 ): PreparedRelease | { error: string } {
   const match = /^tutorials\/([^/]+)\/\1\.md$/.exec(path);
-  if (!match) return { error: "Only a live tutorials/<id>/<id>.md file can be released." };
-  if (published === edited) return { error: "Nothing has changed, so a new version would be identical." };
+  if (!match) return { error: "Only a tutorial's main file, tutorials/<id>/<id>.md, can have versions." };
+  if (published === edited) return { error: "There are no changes since the current version, so there is nothing to release." };
 
   const publishedFields = extractFrontMatter(published).fields;
   const previous = typeof publishedFields["version"] === "string" ? publishedFields["version"] : "";
-  if (!VERSION_RE.test(previous)) return { error: "The published tutorial has no version to freeze." };
+  if (!VERSION_RE.test(previous)) return { error: "The current version has no `version:` line in its front matter, so there is nothing to count on from." };
 
   const status = typeof publishedFields["status"] === "string" ? publishedFields["status"] : "live";
-  if (status !== "live") return { error: "Only a live tutorial can be released." };
+  if (status !== "live") return { error: "Only a tutorial with `status: live` can be released. A draft needs no versions: save it, and set `status: live` when it is ready." };
 
   const next = nextVersion([...existingVersions, previous], now);
   let released = setFrontMatterField(edited, "version", next);
