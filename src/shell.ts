@@ -150,6 +150,7 @@ export function mountShell(page: HTMLElement): Shell {
    * page should never be served. */
   async function createTutorial(): Promise<void> {
     if (!store) return;
+    if (!(await readyToLeave())) return;
     const title = await asker.ask("What is the tutorial called?", {
       label: "Its title becomes the address, so it is worth getting right.",
       confirm: "Make it",
@@ -168,7 +169,7 @@ export function mountShell(page: HTMLElement): Shell {
     }
     files.set(made.path, made.content);
     reindex();
-    await openPath(made.path);
+    await showPath(made.path);
   }
 
   /** Which series lists the open tutorial, and putting it in one.
@@ -261,7 +262,7 @@ export function mountShell(page: HTMLElement): Shell {
     files.set(made.frozenPath, made.frozenContent);
     files.set(made.livePath, made.liveContent);
     reindex();
-    await openPath(made.livePath);
+    await showPath(made.livePath);
   }
 
   /** The file as text. Keeping it remounts the editor over the new
@@ -284,7 +285,38 @@ export function mountShell(page: HTMLElement): Shell {
 
   // ── opening and saving ─────────────────────────────────────────────
 
+  /** Before the open document is replaced by anything else: an author
+   * with unsaved changes is asked, and nothing is thrown away without a
+   * yes. False means stay where you are. */
+  async function readyToLeave(): Promise<boolean> {
+    if (!open || !isDirty()) return true;
+    const answer = await asker.choose(
+      "You have unsaved changes",
+      [
+        {
+          value: "save",
+          label: "Save and continue",
+          note: store?.kind === "repo" ? "Commits them to the working branch first." : "Writes them to the file first.",
+        },
+        { value: "discard", label: "Discard changes", note: "They cannot be recovered." },
+        { value: "stay", label: "Keep editing", note: "Go back to the document." },
+      ],
+      `${open.path} has changes that are not saved.`,
+    );
+    if (answer === "save") return saveNow();
+    return answer === "discard";
+  }
+
+  /** Opens a file in place of the open one, asking first if that would
+   * lose unsaved changes. */
   async function openPath(path: string): Promise<boolean> {
+    if (!(await readyToLeave())) return false;
+    return showPath(path);
+  }
+
+  /** Opens a file with no question asked — for callers that have
+   * already written what the open document held. */
+  async function showPath(path: string): Promise<boolean> {
     if (!store) return false;
     const source = files.get(path) ?? (await store.read(path).catch(() => null));
     if (source === null || source === undefined) return false;
@@ -360,7 +392,8 @@ export function mountShell(page: HTMLElement): Shell {
   /** A notebook, opened as the document. Replaces what is on screen
    * rather than writing anything: saving is still ⌘S, and still the
    * author's decision. */
-  function openNotebook(): void {
+  async function openNotebook(): Promise<void> {
+    if (!(await readyToLeave())) return;
     const picker = document.createElement("input");
     picker.type = "file";
     picker.accept = ".ipynb,application/json";
@@ -641,6 +674,15 @@ export function mountShell(page: HTMLElement): Shell {
   }
   window.addEventListener("keydown", onKeyDown);
 
+  /** The browser's own "leave site?" prompt, for closing or reloading
+   * the tab with changes that are not saved. */
+  function onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (!isDirty()) return;
+    event.preventDefault();
+    event.returnValue = "";
+  }
+  window.addEventListener("beforeunload", onBeforeUnload);
+
   return {
     async useStore(next, onProgress) {
       store = next;
@@ -803,6 +845,7 @@ export function mountShell(page: HTMLElement): Shell {
 
     destroy() {
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("beforeunload", onBeforeUnload);
       open?.document.destroy();
       palette.destroy();
       gear.remove();

@@ -37,6 +37,12 @@ export function mountAsk(): Ask {
   overlay.addEventListener("click", (event) => {
     if (event.target === overlay) close(null);
   });
+  // Escape closes a dialog natively, without passing through `close`.
+  // Whoever asked is still waiting, so they hear "no answer" here.
+  overlay.addEventListener("close", () => {
+    settle?.(null);
+    settle = null;
+  });
 
   return {
     ask(question, options = {}) {

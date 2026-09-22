@@ -1076,3 +1076,71 @@ test("an empty block says how to reach the rest", async ({ page }) => {
   await expect(page.locator(".milkdown [data-placeholder]").first())
     .toHaveAttribute("data-placeholder", "Type / for a cell, a question or a hint");
 });
+
+async function editStoring(page: import("@playwright/test").Page) {
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+}
+
+async function openAbout(page: import("@playwright/test").Page) {
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("about");
+  await page.keyboard.press("Enter");
+}
+
+test("opening another document with unsaved changes asks first, and Keep editing keeps them", async ({ page }) => {
+  await editStoring(page);
+  await openAbout(page);
+
+  await expect(page.locator(".dn-ask h2")).toHaveText("You have unsaved changes");
+  await page.getByRole("button", { name: /Keep editing/ }).click();
+
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+});
+
+test("Escape on the unsaved-changes question is the same as Keep editing", async ({ page }) => {
+  await editStoring(page);
+  await openAbout(page);
+  await expect(page.locator(".dn-ask h2")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+});
+
+test("Discard changes opens the other document and writes nothing", async ({ page }) => {
+  await editStoring(page);
+  await openAbout(page);
+  await page.getByRole("button", { name: /Discard changes/ }).click();
+
+  await expect(page.locator(".milkdown h1")).toHaveText("About");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  expect(written).toHaveLength(0);
+});
+
+test("Save and continue writes the changes, then opens the other document", async ({ page }) => {
+  await editStoring(page);
+  await openAbout(page);
+  await page.getByRole("button", { name: /Save and continue/ }).click();
+
+  await expect(page.locator(".milkdown h1")).toHaveText("About");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  expect(written).toHaveLength(1);
+  expect(written[0].text).toContain("Unsaved words.");
+});
+
+test("a document with no changes opens another without asking", async ({ page }) => {
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await openAbout(page);
+  await expect(page.locator(".milkdown h1")).toHaveText("About");
+  await expect(page.locator(".dn-ask")).toHaveCount(0);
+});
