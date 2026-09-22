@@ -234,8 +234,16 @@ export interface Store {
   readBytes(path: string): Promise<Uint8Array<ArrayBuffer> | null>;
   write(path: string, text: string, message: string): Promise<void>;
   publish?(): Promise<string>;
+  readPublished?(path: string): Promise<string | null>;
 }
 ```
+
+`readPublished` is the file as readers have it: the base branch, for a
+repository. A release freezes that, not the last save, since a save on
+a repository only reaches the working branch and an author may save
+half-way through the edits a release is for. A folder has no published
+copy of its own, so the shell keeps every file as the workspace opened
+with it and freezes that instead.
 
 A store never touches the DOM and never decides what to show. It throws a
 `SaveProblem` and nothing else, so a refused save always reaches the

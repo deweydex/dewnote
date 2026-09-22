@@ -136,7 +136,7 @@ export function prepareRelease(
 ): PreparedRelease | { error: string } {
   const match = /^tutorials\/([^/]+)\/\1\.md$/.exec(path);
   if (!match) return { error: "Only a tutorial's main file, tutorials/<id>/<id>.md, can have versions." };
-  if (published === edited) return { error: "There are no unsaved changes to release. Release before saving: the last saved file is what is kept as the old version, and your unsaved edits become the new one." };
+  if (published === edited) return { error: "There are no changes since the published version, so there is nothing to release." };
 
   const publishedFields = extractFrontMatter(published).fields;
   const previous = typeof publishedFields["version"] === "string" ? publishedFields["version"] : "";

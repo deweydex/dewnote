@@ -87,6 +87,11 @@ export function mountShell(page: HTMLElement): Shell {
   let images = new Set<string>();
   let modules: Module[] = [];
   let open: OpenDocument | null = null;
+  /** Every file as the workspace opened with it. For a store with no
+   * published copy of its own (a folder), this is the published version
+   * a release freezes: the last save is not, since an author may save
+   * half-way through the edits a release is for. */
+  let opened = new Map<string, string>();
 
   const isDirty = (): boolean => open !== null && open.document.markdown() !== open.saved;
 
@@ -246,8 +251,23 @@ export function mountShell(page: HTMLElement): Shell {
    * their own version, and what is open keeps the address readers have. */
   async function releaseVersion(): Promise<void> {
     if (!store || !open) return;
-    const published = files.get(open.path);
-    if (published === undefined) return;
+    let published: string | null | undefined;
+    try {
+      published = store.readPublished
+        ? await store.readPublished(open.path)
+        : opened.get(open.path);
+    } catch (error) {
+      spine.setProblem({ message: `Could not read the published version: ${messageOf(error)}` });
+      return;
+    }
+    if (published === null || published === undefined) {
+      spine.setProblem({
+        message: store.readPublished
+          ? "This tutorial is not on the main branch yet, so there is no published version to keep. Merge it first, then release new versions of it."
+          : "This tutorial is new since the folder was opened, so there is no published version to keep.",
+      });
+      return;
+    }
     const versions = index
       .filter((entry) => entry.path.startsWith(open!.path.split("/").slice(0, -1).join("/")))
       .map((entry) => entry.version);
@@ -273,6 +293,12 @@ export function mountShell(page: HTMLElement): Shell {
     }
     files.set(made.frozenPath, made.frozenContent);
     files.set(made.livePath, made.liveContent);
+    if (!store.readPublished) {
+      // In a folder, what was just written is what readers now get, and
+      // a second release counts on from it.
+      opened.set(made.frozenPath, made.frozenContent);
+      opened.set(made.livePath, made.liveContent);
+    }
     reindex();
     await showPath(made.livePath);
   }
@@ -703,6 +729,7 @@ export function mountShell(page: HTMLElement): Shell {
       store = next;
       const listed = await next.list(onProgress);
       files = new Map(listed.map((file) => [file.path, file.content]));
+      opened = new Map(files);
       images = new Set(await next.imagePaths().catch(() => []));
       reindex();
       spine.setWorkspace({

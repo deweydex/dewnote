@@ -71,6 +71,12 @@ export interface Store {
   /** Repository only: opens (or finds) the draft pull request for the
    * working branch, and answers with its URL. */
   publish?(): Promise<string>;
+  /** Repository only: the file as readers have it, on the base branch.
+   * `null` where the base branch has no such file. A release freezes
+   * this rather than the last save, which on a repository is only the
+   * working branch. A store without it has no published copy of its
+   * own, and the shell uses the file as the workspace opened with it. */
+  readPublished?(path: string): Promise<string | null>;
 }
 
 function isSaveProblem(value: unknown): value is SaveProblem {
@@ -248,5 +254,14 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
     publish: async () =>
       (await github.openPullRequest(repo, branch, base, `Edits from dewnote (${branch})`, token))
         .html_url,
+
+    async readPublished(path) {
+      try {
+        return (await github.getFileContent(repo, path, base, token)).content;
+      } catch (error) {
+        if (error instanceof github.GithubApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
   };
 }

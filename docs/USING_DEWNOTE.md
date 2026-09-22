@@ -573,20 +573,27 @@ Once a tutorial is live, readers may have saved work in it. Releasing a
 new version lets you change it without breaking their links or their
 saved work.
 
-Edit the live tutorial, then run **Release a new version…** (without
-saving first). dewnote:
+Edit the live tutorial, saving as often as you like, then run **Release
+a new version…**. dewnote:
 
-1. Copies the tutorial as it was last saved, unchanged, to
+1. Copies the **published** version, unchanged, to
    `tutorials/<id>/v<old version>.md`.
 2. Saves your edits in the tutorial's own file, with a new `version:`
    and a `supersedes:` line naming the old version.
 
+The published version is the one readers have now:
+
+- On GitHub, the file on the repository's main branch. Your saves on the
+  working branch are not published until the pull request is merged.
+- In a folder, the file as it was when you opened the folder.
+
 The tutorial keeps its address, so readers' links and saved work still
 work.
 
-This is only available for a tutorial's main file with `status: live`. A
-draft has no readers yet, so it does not need versions: save it as
-normal.
+This is only available for a tutorial's main file whose published
+version has `status: live`. A draft has no readers yet, so it does not
+need versions: save it as normal. On GitHub, a tutorial that is not on
+the main branch yet has no published version either; merge it first.
 
 ### Which version dewnote opens
 

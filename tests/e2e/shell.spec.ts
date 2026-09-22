@@ -618,6 +618,82 @@ test("a release freezes what is published and dates what is open", async ({ page
   expect(live.text).toContain("supersedes: 2026.08.01.1");
 });
 
+test("a release after saving still freezes the version the folder opened with", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "tutorials/grid/grid.md":
+      "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nOld words.\n",
+  });
+  await page.locator(".dn-wp-input").fill("grid");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Half the edits.");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  await page.keyboard.type(" The rest.");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("new version");
+  await page.keyboard.press("Enter");
+  await page.locator(".dn-ask .dn-ask-go").click();
+
+  const writes = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  const frozen = writes.find((w: { path: string }) => w.path === "tutorials/grid/v2026.08.01.1.md");
+  const live = writes.findLast((w: { path: string }) => w.path === "tutorials/grid/grid.md");
+  // The old version, as opened, with none of the edits saved on the way.
+  expect(frozen.text).toContain("Old words.");
+  expect(frozen.text).not.toContain("Half the edits.");
+  expect(live.text).toContain("Half the edits. The rest.");
+});
+
+test("a repository release freezes the copy on the base branch", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const onBranch =
+    "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nSaved on the branch.\n";
+  const onBase =
+    "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nWhat readers see.\n";
+  await page.evaluate(
+    ([branch, base]) =>
+      (globalThis as any).__dewnote.useStubStore(
+        { "tutorials/grid/grid.md": branch }, false, [], { "tutorials/grid/grid.md": base },
+      ),
+    [onBranch, onBase],
+  );
+  await page.locator(".dn-wp-input").fill("grid");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("new version");
+  await page.keyboard.press("Enter");
+  await page.locator(".dn-ask .dn-ask-go").click();
+
+  const writes = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  const frozen = writes.find((w: { path: string }) => w.path === "tutorials/grid/v2026.08.01.1.md");
+  expect(frozen.text).toContain("What readers see.");
+  const live = writes.find((w: { path: string }) => w.path === "tutorials/grid/grid.md");
+  expect(live.text).toContain("Saved on the branch.");
+  expect(live.text).toContain("supersedes: 2026.08.01.1");
+});
+
+test("a tutorial not yet on the base branch cannot be released, and says why", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    (text) =>
+      (globalThis as any).__dewnote.useStubStore({ "tutorials/grid/grid.md": text }, false, [], {}),
+    "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nNew.\n",
+  );
+  await page.locator(".dn-wp-input").fill("grid");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("new version");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(".dn-spine-problem")).toContainText("not on the main branch yet");
+  expect(await page.evaluate(() => (globalThis as any).__dewnoteWrites)).toHaveLength(0);
+});
+
 test("a tutorial on no course can be placed in a series, and shows a breadcrumb after", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {

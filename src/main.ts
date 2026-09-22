@@ -292,6 +292,9 @@ let held: Document | null = null;
     files: Record<string, string>,
     canPublish = false,
     images: string[] = [],
+    /** When given, the stub behaves as a repository whose base branch
+     * holds these files: a release reads its published copy from here. */
+    published?: Record<string, string>,
   ): Promise<void> {
     const held_ = new Map(Object.entries(files));
     const written: { path: string; text: string }[] = [];
@@ -307,6 +310,9 @@ let held: Document | null = null;
               return "about:blank";
             },
           }
+        : {}),
+      ...(published
+        ? { readPublished: async (path: string) => published[path] ?? null }
         : {}),
       kind: "folder",
       label: "stub",

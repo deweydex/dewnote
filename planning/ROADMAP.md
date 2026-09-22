@@ -23,21 +23,6 @@ both in a dialog, with three actions: **Keep mine** (overwrite, using the
 new SHA), **Take theirs** (discard local edits and reopen), and **Cancel**.
 A line diff is enough; a merge editor is not needed at this stage.
 
-### 1.2 Release freezes the last saved file, not the published one
-
-**Problem.** **Release a new version…** copies "the current version" from
-dewnote's in-memory copy of the file as last saved. On GitHub, that is the
-working branch, not what readers see on the main branch. If the author
-saves halfway through their edits and then releases, the frozen "old
-version" contains half the new edits. It also means releasing after
-saving fails with "no unsaved changes", which is a trap the guide now has
-to warn about.
-
-**Approach.** Freeze the file as it is on the base branch (GitHub) or as
-it was when the document was opened (folder). Add a `readAtBase(path)` to
-the store; the folder store can keep the opening snapshot. After this,
-release works whether or not the author has saved.
-
 ### 1.3 Keep unsaved drafts across a closed tab
 
 **Problem.** The unsaved-changes prompt (done) stops a switch or a close
