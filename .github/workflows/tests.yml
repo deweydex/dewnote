@@ -1,17 +1,14 @@
-# Runs the block model, dialect and export tests, plus the type checker,
-# on every push to main and every pull request — so a dependency bump
-# (this repo's own or Dependabot's, see dependabot.yml) has to pass the
-# same gate a hand-written change does before it lands. The full-corpus
-# test (src/full-corpus.test.ts) needs dewlab and dewstack checked out
-# beside this repo and skips itself here, same as it does for anyone
-# who clones dewnote alone; the fixtures/ round trip is what actually
-# runs in CI.
+# Runs the unit tests and the type checker on every push to main and
+# every pull request, so a dependency bump (this repo's own or
+# Dependabot's, see dependabot.yml) passes the same gate a hand-written
+# change does. The corpus tests in checks.test.ts and modules.test.ts
+# need dewlab checked out beside this repo and skip themselves here.
 #
-# The Playwright suite (tests/e2e/) stays local and manual for the same
-# reason dewlab's own tests.yml keeps its e2e suite out of CI: it needs a
-# real build and a real browser, and would dominate this workflow for a
-# suite that guards the surface, not the block model — see dewlab
-# DECISIONS_LOG 0.17, 0.20 for the same call made there.
+# The Playwright suite (tests/e2e/), including the round-trip test the
+# README calls the one that matters, does not run here yet: it needs a
+# build and a browser. Run it locally with `bun run test:e2e`, or on
+# demand with the e2e workflow. Bringing it into this gate is on
+# planning/ROADMAP.md.
 name: tests
 
 on:

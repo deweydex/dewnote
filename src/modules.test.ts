@@ -192,7 +192,7 @@ describe("parseModuleFiles", () => {
 });
 
 // The real thing, when dewlab is checked out beside this repo — the same
-// discipline full-corpus.test.ts uses, and the reason this module was
+// discipline as the corpus tests in checks.test.ts, and the reason this module was
 // read against real files rather than a description of them. Skips
 // itself when the sibling isn't there.
 const DEWLAB_MODULES = "../dewlab/modules";

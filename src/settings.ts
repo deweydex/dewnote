@@ -71,7 +71,7 @@ function clamp(value: number, range: { min: number; max: number }): number {
 /** The actual validation/fallback logic, kept free of `localStorage`
  * itself so it can be unit-tested directly against a plain value —
  * bun:test has no DOM or storage globals, matching every other
- * DOM-touching module in this codebase (app.ts included), which are
+ * DOM-touching module in this codebase (shell.ts included), which are
  * verified through Playwright instead, never a jsdom shim. Falls back to
  * `DEFAULT_SETTINGS` field by field — a value from an older version of
  * this settings shape, or hand-edited storage, degrades one field at a

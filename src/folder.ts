@@ -69,7 +69,7 @@ export async function listMarkdownFiles(root: DirectoryLike): Promise<FolderFile
 /** Every module file under `root` — Dewlab's current `courses/*.yaml`
  * or the earlier `modules/*.yaml`
  * (modules.ts), which say which tutorials a module lists and in what
- * order, and which series-panel.ts reads alongside `listMarkdownFiles`'s
+ * order, and which the shell reads alongside `listMarkdownFiles`'s
  * front-matter index. `index.yaml` and `redirects.yaml` come back too:
  * both live in the same directory, the first carries the order the
  * modules are shown in, and `isModuleFile` is what tells them apart. */
@@ -135,7 +135,7 @@ export async function readBytesAt(root: FileSystemDirectoryHandle, relativePath:
 
 /** Writes `content` over a file this store already holds — the write
  * half of `readFile` above, for a caller editing a file it never opened
- * into the editor (series-panel.ts's own module-file writes). Separate
+ * into the editor (a course file, when a tutorial is added to a series). Separate
  * from `createFile` below on purpose: this one requires the file to
  * exist already and replaces it, where that one requires it not to and
  * refuses to overwrite. */

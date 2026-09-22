@@ -44,6 +44,9 @@ async function inParallel<T, R>(
 
 export interface Store {
   readonly kind: "folder" | "repo";
+  /** False for a workspace that promises to keep nothing, the sample:
+   * no copy of unsaved changes is kept in the browser for it. */
+  readonly keepsDrafts?: boolean;
   /** What the spine says: a folder's name, or `owner/repo · base → branch`. */
   readonly label: string;
   /** Every markdown file and module descriptor, read once when the
@@ -71,6 +74,12 @@ export interface Store {
   /** Repository only: opens (or finds) the draft pull request for the
    * working branch, and answers with its URL. */
   publish?(): Promise<string>;
+  /** Repository only: the file as readers have it, on the base branch.
+   * `null` where the base branch has no such file. A release freezes
+   * this rather than the last save, which on a repository is only the
+   * working branch. A store without it has no published copy of its
+   * own, and the shell uses the file as the workspace opened with it. */
+  readPublished?(path: string): Promise<string | null>;
 }
 
 function isSaveProblem(value: unknown): value is SaveProblem {
@@ -226,10 +235,20 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
         // 409 is the one failure the author has to resolve rather than
         // retry: the file moved under them and both versions exist.
         if (status === 409) {
-          asProblem(saveProblem(`${path} changed on ${branch} since you opened it.`, true));
+          asProblem(saveProblem(
+            `Not saved: ${path} was changed on ${branch} after you opened it, probably from another tab or by someone else. ` +
+              "Your changes are still on screen. Save again to compare the two versions and choose one.",
+            true,
+          ));
         }
         if (status === 422 && !shas.has(path)) {
-          asProblem(saveProblem(`${path} already exists on ${branch}.`));
+          asProblem(saveProblem(`Not saved: ${path} already exists on ${branch}. Open that file instead.`));
+        }
+        if (status === 401 || status === 403) {
+          asProblem(saveProblem(
+            "Not saved: GitHub refused the token. It may have expired, or may not have write access to Contents. " +
+              "Reload dewnote and connect with a new token.",
+          ));
         }
         asProblem(error);
       }
@@ -238,5 +257,14 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
     publish: async () =>
       (await github.openPullRequest(repo, branch, base, `Edits from dewnote (${branch})`, token))
         .html_url,
+
+    async readPublished(path) {
+      try {
+        return (await github.getFileContent(repo, path, base, token)).content;
+      } catch (error) {
+        if (error instanceof github.GithubApiError && error.status === 404) return null;
+        throw error;
+      }
+    },
   };
 }

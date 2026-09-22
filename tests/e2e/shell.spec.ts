@@ -99,7 +99,7 @@ test("an edit reaches the store, with the fence's info string intact", async ({ 
   await page.locator(".milkdown p").first().click();
   await page.keyboard.press("End");
   await page.keyboard.type(" And now we keep one.");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
 
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
@@ -130,8 +130,8 @@ test("a runnable cell offers Run; an illustrative fence does not", async ({ page
   await expect(page.locator(".dn-cell-run")).toHaveText("Run");
 
   // Pyodide itself is not reachable from this sandbox, so what is
-  // checked here is the affordance, not the interpreter —
-  // tests/e2e/pyodide.spec.ts is where a real run belongs.
+  // checked here is the affordance, not the interpreter. No test runs
+  // real Python yet; see planning/ROADMAP.md.
 });
 
 test("an illustrative fence has no Run button", async ({ page }) => {
@@ -215,7 +215,7 @@ test("an edit to the sample is kept, and goes nowhere", async ({ page }) => {
   await page.locator(".milkdown p").first().click();
   await page.keyboard.press("End");
   await page.keyboard.type(" Edited.");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
 });
@@ -336,10 +336,10 @@ test("a pasted image is written beside the document and named in the markdown", 
   ).toBe(true);
 });
 
-test("Check every page reports a fault in a file nobody has open, and opens it", async ({ page }) => {
+test("Check every document reports a fault in a file nobody has open, and opens it", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.locator('[data-choice="sample"]').click();
-  await page.locator(".dn-wp-input").fill("check every page");
+  await page.locator(".dn-wp-input").fill("check every document");
   await page.keyboard.press("Enter");
 
   const report = page.locator(".dn-report");
@@ -359,15 +359,15 @@ test("Check every page reports a fault in a file nobody has open, and opens it",
 test("a sound workspace says so rather than showing an empty list", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
-    "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nNo links here.\n",
+    "tutorials/a/a.md": "---\ntitle: A\nyear: \"2026-2027\"\nversion: 2026.09.22.1\n---\n\n# A\n\nNo links here.\n",
     // A README is not a page, and is not scolded for having no header.
     "README.md": "# dewlab\n",
   });
   await page.keyboard.press("Escape");
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("check every page");
+  await page.locator(".dn-wp-input").fill("check every document");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in the workspace.");
+  await expect(page.locator(".dn-report h2")).toHaveText("No problems found in the workspace.");
 });
 
 test("a document saves as one HTML file, with its stylesheet and image inside it", async ({ page }) => {
@@ -378,7 +378,7 @@ test("a document saves as one HTML file, with its stylesheet and image inside it
 
   const download = page.waitForEvent("download");
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("html page");
+  await page.locator(".dn-wp-input").fill("download as html");
   await page.keyboard.press("Enter");
 
   const file = await download;
@@ -412,7 +412,7 @@ test("a document saves as a notebook whose cells keep their own text", async ({ 
 
   const download = page.waitForEvent("download");
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("save as a jupyter");
+  await page.locator(".dn-wp-input").fill("download as a jupyter");
   await page.keyboard.press("Enter");
 
   const file = await download;
@@ -456,7 +456,7 @@ test("the slash menu offers dewlab's own blocks, and inserts one with a free id"
   await page.keyboard.type("py");
   await expect(menu).not.toContainText("Heading 1");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
 
@@ -488,7 +488,7 @@ test("the slash menu writes a hint as the fold dewlab's build looks for", async 
   await expect(menu).toBeVisible();
   await expect(menu).toContainText("Hint");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-spine-state")).toHaveText("Save this");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
   await page.keyboard.press("ControlOrMeta+s");
   await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
 
@@ -618,6 +618,82 @@ test("a release freezes what is published and dates what is open", async ({ page
   expect(live.text).toContain("supersedes: 2026.08.01.1");
 });
 
+test("a release after saving still freezes the version the folder opened with", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "tutorials/grid/grid.md":
+      "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nOld words.\n",
+  });
+  await page.locator(".dn-wp-input").fill("grid");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Half the edits.");
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  await page.keyboard.type(" The rest.");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("new version");
+  await page.keyboard.press("Enter");
+  await page.locator(".dn-ask .dn-ask-go").click();
+
+  const writes = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  const frozen = writes.find((w: { path: string }) => w.path === "tutorials/grid/v2026.08.01.1.md");
+  const live = writes.findLast((w: { path: string }) => w.path === "tutorials/grid/grid.md");
+  // The old version, as opened, with none of the edits saved on the way.
+  expect(frozen.text).toContain("Old words.");
+  expect(frozen.text).not.toContain("Half the edits.");
+  expect(live.text).toContain("Half the edits. The rest.");
+});
+
+test("a repository release freezes the copy on the base branch", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const onBranch =
+    "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nSaved on the branch.\n";
+  const onBase =
+    "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nWhat readers see.\n";
+  await page.evaluate(
+    ([branch, base]) =>
+      (globalThis as any).__dewnote.useStubStore(
+        { "tutorials/grid/grid.md": branch }, false, [], { "tutorials/grid/grid.md": base },
+      ),
+    [onBranch, onBase],
+  );
+  await page.locator(".dn-wp-input").fill("grid");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("new version");
+  await page.keyboard.press("Enter");
+  await page.locator(".dn-ask .dn-ask-go").click();
+
+  const writes = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  const frozen = writes.find((w: { path: string }) => w.path === "tutorials/grid/v2026.08.01.1.md");
+  expect(frozen.text).toContain("What readers see.");
+  const live = writes.find((w: { path: string }) => w.path === "tutorials/grid/grid.md");
+  expect(live.text).toContain("Saved on the branch.");
+  expect(live.text).toContain("supersedes: 2026.08.01.1");
+});
+
+test("a tutorial not yet on the base branch cannot be released, and says why", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    (text) =>
+      (globalThis as any).__dewnote.useStubStore({ "tutorials/grid/grid.md": text }, false, [], {}),
+    "---\ntitle: Grid\nstatus: live\nversion: 2026.08.01.1\n---\n\n# Grid\n\nNew.\n",
+  );
+  await page.locator(".dn-wp-input").fill("grid");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("new version");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(".dn-spine-problem")).toContainText("not on the main branch yet");
+  expect(await page.evaluate(() => (globalThis as any).__dewnoteWrites)).toHaveLength(0);
+});
+
 test("a tutorial on no course can be placed in a series, and shows a breadcrumb after", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
@@ -633,12 +709,12 @@ test("a tutorial on no course can be placed in a series, and shows a breadcrumb 
   await expect(page.locator(".dn-spine-breadcrumb")).not.toContainText("Maths for IT");
 
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("place this");
+  await page.locator(".dn-wp-input").fill("add to a series");
   await page.keyboard.press("Enter");
 
   const ask = page.locator(".dn-ask-choices");
   await expect(ask).toBeVisible();
-  await expect(ask).toContainText("It is on no course yet");
+  await expect(ask).toContainText("It is not in any series yet");
   await ask.locator(".dn-ask-choice", { hasText: "First Steps" }).click();
 
   // The course file gained one line, and nothing else moved.
@@ -651,7 +727,7 @@ test("a tutorial on no course can be placed in a series, and shows a breadcrumb 
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("First Steps");
 });
 
-test("choosing a series a tutorial is already in takes it out", async ({ page }) => {
+test("Remove from a series takes a tutorial out of one it is in", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
     "courses/maths.yaml":
@@ -662,11 +738,11 @@ test("choosing a series a tutorial is already in takes it out", async ({ page })
   await page.keyboard.press("Enter");
 
   await page.keyboard.press("ControlOrMeta+k");
-  await page.locator(".dn-wp-input").fill("place this");
+  await page.locator(".dn-wp-input").fill("remove from a series");
   await page.keyboard.press("Enter");
 
   const ask = page.locator(".dn-ask-choices");
-  await expect(ask).toContainText("already here");
+  await expect(ask).toContainText("Remove this tutorial from a series");
   await ask.locator(".dn-ask-choice", { hasText: "First Steps" }).click();
 
   const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1));
@@ -712,7 +788,7 @@ test("a sound document says there is nothing to fix", async ({ page }) => {
   await page.keyboard.press("ControlOrMeta+k");
   await page.locator(".dn-wp-input").fill("check this document");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
+  await expect(page.locator(".dn-report h2")).toHaveText("No problems found in this document.");
 });
 
 test("the slash menu writes a question the build would accept", async ({ page }) => {
@@ -744,7 +820,7 @@ test("the slash menu writes a question the build would accept", async ({ page })
   await page.keyboard.press("ControlOrMeta+k");
   await page.locator(".dn-wp-input").fill("check this document");
   await page.keyboard.press("Enter");
-  await expect(page.locator(".dn-report h2")).toHaveText("Nothing to fix in this document.");
+  await expect(page.locator(".dn-report h2")).toHaveText("No problems found in this document.");
 });
 
 test("the slash menu writes three site panes under one name, each with its own id", async ({ page }) => {
@@ -788,7 +864,7 @@ test("the margin counts what is wrong, and the count opens the report", async ({
 
   // A cell with no id, found without anybody asking for it.
   const health = page.locator(".dn-spine-health");
-  await expect(health).toHaveText("1 to fix");
+  await expect(health).toHaveText("1 problem");
   await expect(health).toHaveClass(/is-blocking/);
 
   await health.click();
@@ -808,9 +884,9 @@ test("opening a pull request says what would stop the build, and still lets you"
   await page.evaluate(
     (files) => (globalThis as any).__dewnote.useStubStore(files, true),
     {
-      "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nSound.\n",
+      "tutorials/a/a.md": "---\ntitle: A\nyear: \"2026-2027\"\nversion: 2026.09.22.1\n---\n\n# A\n\nSound.\n",
       // A file nobody has open, with a cell that cannot save anybody's work.
-      "tutorials/b/b.md": "---\ntitle: B\n---\n\n# B\n\n```python exec\nprint(1)\n```\n",
+      "tutorials/b/b.md": "---\ntitle: B\nyear: \"2026-2027\"\nversion: 2026.09.22.1\n---\n\n# B\n\n```python exec\nprint(1)\n```\n",
     },
   );
   await page.keyboard.press("Escape");
@@ -819,11 +895,11 @@ test("opening a pull request says what would stop the build, and still lets you"
   await page.keyboard.press("Enter");
 
   const ask = page.locator(".dn-ask-overlay");
-  await expect(ask).toContainText("1 thing in this workspace would stop the build");
+  await expect(ask).toContainText("1 problem in this workspace would stop the site building");
   expect(await page.evaluate(() => (globalThis as any).__dewnotePublished)).toBe(false);
 
-  // Show me leads to the same report the command opens.
-  await ask.getByText("Show me").click();
+  // Show the problems leads to the same report the command opens.
+  await ask.getByText("Show the problems").click();
   await expect(page.locator(".dn-report")).toContainText("no `id:`");
   await expect(page.locator(".dn-report-where")).toContainText("tutorials/b/b.md");
   await page.keyboard.press("Escape");
@@ -843,7 +919,7 @@ test("a sound workspace opens a pull request with nothing in the way", async ({ 
   await page.goto(BUILT_APP);
   await page.evaluate(
     (files) => (globalThis as any).__dewnote.useStubStore(files, true),
-    { "tutorials/a/a.md": "---\ntitle: A\n---\n\n# A\n\nSound.\n" },
+    { "tutorials/a/a.md": "---\ntitle: A\nyear: \"2026-2027\"\nversion: 2026.09.22.1\n---\n\n# A\n\nSound.\n" },
   );
   await page.keyboard.press("Escape");
   await page.keyboard.press("ControlOrMeta+k");
@@ -892,7 +968,7 @@ test("an image whose file is not there is counted in the margin and named in the
     [
       {
         "tutorials/a/a.md": [
-          "---", "title: A", "---", "",
+          "---", "title: A", 'year: "2026-2027"', "version: 2026.09.22.1", "---", "",
           "# A", "",
           "![A diagram that is there](diagram.svg)", "",
           "![One that is not](gone.png)", "",
@@ -904,10 +980,10 @@ test("an image whose file is not there is counted in the margin and named in the
   await page.locator(".dn-wp-input").fill("a.md");
   await page.keyboard.press("Enter");
 
-  await expect(page.locator(".dn-spine-health")).toHaveText("1 to fix");
+  await expect(page.locator(".dn-spine-health")).toHaveText("1 problem");
   await page.locator(".dn-spine-health").click();
   const report = page.locator(".dn-report");
-  await expect(report).toContainText("`gone.png` is not a file here");
+  await expect(report).toContainText("The image `gone.png`");
   // The one that resolves is not mentioned.
   await expect(report).not.toContainText("diagram.svg");
 });
@@ -1075,4 +1151,172 @@ test("an empty block says how to reach the rest", async ({ page }) => {
   // reach everything a tutorial is made of.
   await expect(page.locator(".milkdown [data-placeholder]").first())
     .toHaveAttribute("data-placeholder", "Type / for a cell, a question or a hint");
+});
+
+async function editStoring(page: import("@playwright/test").Page) {
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await page.locator(".milkdown p").first().click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
+}
+
+async function openAbout(page: import("@playwright/test").Page) {
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("about");
+  await page.keyboard.press("Enter");
+}
+
+test("opening another document with unsaved changes asks first, and Keep editing keeps them", async ({ page }) => {
+  await editStoring(page);
+  await openAbout(page);
+
+  await expect(page.locator(".dn-ask h2")).toHaveText("You have unsaved changes");
+  await page.getByRole("button", { name: /Keep editing/ }).click();
+
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
+});
+
+test("Escape on the unsaved-changes question is the same as Keep editing", async ({ page }) => {
+  await editStoring(page);
+  await openAbout(page);
+  await expect(page.locator(".dn-ask h2")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+});
+
+test("Discard changes opens the other document and writes nothing", async ({ page }) => {
+  await editStoring(page);
+  await openAbout(page);
+  await page.getByRole("button", { name: /Discard changes/ }).click();
+
+  await expect(page.locator(".milkdown h1")).toHaveText("About");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  expect(written).toHaveLength(0);
+});
+
+test("Save and continue writes the changes, then opens the other document", async ({ page }) => {
+  await editStoring(page);
+  await openAbout(page);
+  await page.getByRole("button", { name: /Save and continue/ }).click();
+
+  await expect(page.locator(".milkdown h1")).toHaveText("About");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  expect(written).toHaveLength(1);
+  expect(written[0].text).toContain("Unsaved words.");
+});
+
+test("a document with no changes opens another without asking", async ({ page }) => {
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await openAbout(page);
+  await expect(page.locator(".milkdown h1")).toHaveText("About");
+  await expect(page.locator(".dn-ask")).toHaveCount(0);
+});
+
+async function conflictOnSave(page: import("@playwright/test").Page) {
+  await editStoring(page);
+  await page.evaluate(() => {
+    (globalThis as any).__dewnoteConflict = {
+      path: "tutorials/storing-and-computing/storing-and-computing.md",
+      theirs: "---\ntitle: Storing and Computing\nstatus: live\n---\n\n# Storing and Computing\n\nSomeone else's words.\n",
+    };
+  });
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-conflict")).toBeVisible();
+}
+
+test("a save conflict shows what differs between the two versions", async ({ page }) => {
+  await conflictOnSave(page);
+  const dialog = page.locator(".dn-conflict");
+  await expect(dialog.locator(".dn-conflict-theirs", { hasText: "Someone else's words." })).toHaveCount(1);
+  await expect(dialog.locator(".dn-conflict-mine", { hasText: "Unsaved words." })).toHaveCount(1);
+});
+
+test("Keep mine after a conflict saves your version over the other", async ({ page }) => {
+  await conflictOnSave(page);
+  await page.getByRole("button", { name: "Keep mine" }).click();
+
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  expect(written).toHaveLength(1);
+  expect(written[0].text).toContain("Unsaved words.");
+  expect(written[0].text).not.toContain("Someone else's words.");
+});
+
+test("Keep the saved version after a conflict discards yours and shows theirs", async ({ page }) => {
+  await conflictOnSave(page);
+  await page.getByRole("button", { name: "Keep the saved version" }).click();
+
+  await expect(page.locator(".milkdown")).toContainText("Someone else's words.");
+  await expect(page.locator(".milkdown")).not.toContainText("Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  expect(await page.evaluate(() => (globalThis as any).__dewnoteWrites)).toHaveLength(0);
+});
+
+test("Cancel after a conflict keeps your changes unsaved, and says so", async ({ page }) => {
+  await conflictOnSave(page);
+  await page.getByRole("button", { name: "Cancel" }).click();
+
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
+  await expect(page.locator(".dn-spine-problem")).toContainText("Not saved");
+});
+
+async function editThenLoseTheTab(page: import("@playwright/test").Page) {
+  // The browser's own "leave site?" prompt, which an author closing a
+  // crashed or reloaded tab would answer yes to.
+  page.on("dialog", (dialog) => void dialog.accept());
+  await editStoring(page);
+  // The copy is taken a moment after typing stops.
+  await page.waitForTimeout(1_500);
+  await page.reload();
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+}
+
+test("unsaved changes survive a lost tab, and are offered back", async ({ page }) => {
+  await editThenLoseTheTab(page);
+  const ask = page.locator(".dn-ask");
+  await expect(ask).toContainText("Restore unsaved changes?");
+  await page.getByRole("button", { name: /Restore my changes/ }).click();
+
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+  // Restored, not saved: the author still decides.
+  await expect(page.locator(".dn-spine-state")).toHaveText(/^Save \(/);
+});
+
+test("a kept copy can be discarded, and is not offered again", async ({ page }) => {
+  await editThenLoseTheTab(page);
+  await page.getByRole("button", { name: /Discard them/ }).click();
+  await expect(page.locator(".milkdown")).not.toContainText("Unsaved words.");
+
+  await openAbout(page);
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
+  await expect(page.locator(".dn-ask")).toHaveCount(0);
+});
+
+test("saving drops the kept copy", async ({ page }) => {
+  page.on("dialog", (dialog) => void dialog.accept());
+  await editStoring(page);
+  await page.waitForTimeout(1_500);
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  await page.reload();
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
+  await expect(page.locator(".dn-ask")).toHaveCount(0);
 });

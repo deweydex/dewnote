@@ -76,11 +76,12 @@ export interface NewTutorial {
 
 /** A tutorial with the front matter dewlab's build expects and a first
  * cell, so the page runs the moment it opens. */
-export function newTutorial(title: string, now: Date = new Date()): NewTutorial {
+export function newTutorial(title: string, now: Date = new Date(), year = academicYear(now)): NewTutorial {
   const id = idFromTitle(title);
   const content = [
     "---",
     `title: ${asYamlScalar(title)}`,
+    `year: ${JSON.stringify(year)}`,
     "status: draft",
     `version: ${nextVersion([], now)}`,
     "---",
@@ -96,6 +97,14 @@ export function newTutorial(title: string, now: Date = new Date()): NewTutorial 
     "",
   ].join("\n");
   return { path: `tutorials/${id}/${id}.md`, content, id };
+}
+
+/** dewlab's `year:` is an academic year, "2026-2027", which turns over
+ * in September. Only the fallback: a workspace that already has
+ * tutorials says which year it is using. */
+export function academicYear(now: Date = new Date()): string {
+  const start = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${start}-${start + 1}`;
 }
 
 /** The next release on a date, counting a second one made the same day
@@ -135,15 +144,15 @@ export function prepareRelease(
   now: Date = new Date(),
 ): PreparedRelease | { error: string } {
   const match = /^tutorials\/([^/]+)\/\1\.md$/.exec(path);
-  if (!match) return { error: "Only a live tutorials/<id>/<id>.md file can be released." };
-  if (published === edited) return { error: "Nothing has changed, so a new version would be identical." };
+  if (!match) return { error: "Only a tutorial's main file, tutorials/<id>/<id>.md, can have versions." };
+  if (published === edited) return { error: "There are no changes since the published version, so there is nothing to release." };
 
   const publishedFields = extractFrontMatter(published).fields;
   const previous = typeof publishedFields["version"] === "string" ? publishedFields["version"] : "";
-  if (!VERSION_RE.test(previous)) return { error: "The published tutorial has no version to freeze." };
+  if (!VERSION_RE.test(previous)) return { error: "The current version has no `version:` line in its front matter, so there is nothing to count on from." };
 
   const status = typeof publishedFields["status"] === "string" ? publishedFields["status"] : "live";
-  if (status !== "live") return { error: "Only a live tutorial can be released." };
+  if (status !== "live") return { error: "Only a tutorial with `status: live` can be released. A draft needs no versions: save it, and set `status: live` when it is ready." };
 
   const next = nextVersion([...existingVersions, previous], now);
   let released = setFrontMatterField(edited, "version", next);

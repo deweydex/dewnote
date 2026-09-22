@@ -14,7 +14,7 @@ describe("the registry", () => {
   test("a command that cannot run is left out rather than shown disabled", () => {
     let ready = false;
     registerCommand({ id: "a", label: "Alpha", section: "Document", run() {} });
-    registerCommand({ id: "b", label: "Beta", section: "Publish", available: () => ready, run() {} });
+    registerCommand({ id: "b", label: "Beta", section: "GitHub", available: () => ready, run() {} });
     expect(availableCommands().map((command) => command.id)).toEqual(["a"]);
     ready = true;
     expect(availableCommands().map((command) => command.id)).toEqual(["a", "b"]);

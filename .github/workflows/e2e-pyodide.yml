@@ -1,11 +1,8 @@
-# The one Playwright test that needs a real network — a real Pyodide
-# interpreter, fetched from jsdelivr, run in a real headless Chromium.
-# tests.yml keeps the whole e2e suite out of its own gate for the reasons
-# recorded there (dewlab DECISIONS_LOG 0.17, 0.20); this workflow exists
-# only so that suite can be run somewhere with real internet access,
-# on demand, for a change that touches cell execution — a development
-# sandbox with restricted outbound network can build, typecheck and run
-# every other test, but cannot itself reach jsdelivr to verify this one.
+# The whole Playwright suite, on demand, on a runner with real internet
+# access, so Pyodide can be fetched from jsDelivr. tests.yml does not run
+# the e2e suite; use this for a change that touches cell execution or the
+# round trip. A development sandbox with restricted network can run
+# everything except a real Python cell.
 name: e2e (pyodide)
 
 on:

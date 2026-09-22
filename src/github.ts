@@ -286,7 +286,7 @@ export async function listImageFiles(repo: RepoRef, ref: string, token: string):
 }
 
 /** Every module file (dewlab's own `modules/*.yaml`, modules.ts) in a
- * repository at `ref` — series-panel.ts's own source, alongside
+ * repository at `ref` — what the shell reads courses from, alongside
  * `listMarkdownFiles`'s front-matter index. A second, separate tree
  * fetch rather than one call serving both lists: simpler than threading
  * a second predicate through every caller of `listMarkdownFiles`, at the

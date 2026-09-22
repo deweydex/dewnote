@@ -88,7 +88,7 @@ describe(`the dewlab checkout: ${DEWLAB}${CHECKED_OUT ? "" : " (not checked out 
       "renamed-since.png",
     );
     expect(checkDocument(renamed, { ...around, path }).map((problem) => problem.message)).toEqual([
-      expect.stringContaining("`renamed-since.png` is not a file here"),
+      expect.stringContaining("The image `renamed-since.png`"),
     ]);
   });
 
@@ -109,5 +109,38 @@ describe(`the dewlab checkout: ${DEWLAB}${CHECKED_OUT ? "" : " (not checked out 
       expect(broken).not.toBe(sound);
       expect(checkDocument(broken, around).map((problem) => problem.message).join(" | ")).toMatch(expected);
     }
+  });
+});
+
+describe("tutorial front matter, as dewlab's build checks it", () => {
+  const path = "tutorials/grid/grid.md";
+  const around = { ids: new Set<string>(), path };
+  const page = (front: string) => `---\n${front}\n---\n\n# Grid\n`;
+  const messages = (front: string, at = path) =>
+    checkDocument(page(front), { ...around, path: at }).map((problem) => `${problem.severity}: ${problem.message}`);
+
+  test("a sound tutorial passes", () => {
+    expect(messages('title: Grid\nyear: "2026-2027"\nversion: 2026.09.22.1\nstatus: live')).toEqual([]);
+  });
+
+  test("no year and no version both stop the build", () => {
+    const found = messages("title: Grid");
+    expect(found).toHaveLength(2);
+    expect(found.join(" | ")).toContain("blocking: No `year:`");
+    expect(found.join(" | ")).toContain("blocking: No `version:`");
+  });
+
+  test("an unknown status stops the build; beta does not", () => {
+    expect(messages('title: G\nyear: "2026-2027"\nversion: 2026.09.22.1\nstatus: published').join()).toContain("`status: published`");
+    expect(messages('title: G\nyear: "2026-2027"\nversion: 2026.09.22.1\nstatus: beta')).toEqual([]);
+  });
+
+  test("a retired field stops the build and says where it went", () => {
+    expect(messages('title: G\nyear: "2026-2027"\nversion: 2026.09.22.1\nslug: grid').join())
+      .toContain("`slug:` no longer belongs in the front matter");
+  });
+
+  test("a site page is not held to a tutorial's fields", () => {
+    expect(messages("title: About", "pages/about.md")).toEqual([]);
   });
 });

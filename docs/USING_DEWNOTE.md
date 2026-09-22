@@ -1,131 +1,390 @@
 # Using dewnote
 
-For the person writing tutorials. For how dewnote is built, see
-`ARCHITECTURE.md`.
+This guide is for people writing tutorials in dewnote. It has three parts:
+
+- **[Part 1: Your first tutorial](#part-1-your-first-tutorial)** walks through
+  one session from start to finish. Read this first.
+- **[Part 2: Reference](#part-2-reference)** explains each part of dewnote in
+  detail. Use it to look things up.
+- **[Part 3: Glossary](#part-3-glossary)** defines the words dewnote uses.
+
+If you want to know how dewnote is built, read `ARCHITECTURE.md` instead.
+
+Shortcuts are written for Windows and Linux (**Ctrl**). On a Mac, use **⌘**
+(Command) wherever this guide says Ctrl. dewnote itself shows the right key
+for your computer.
 
 ---
 
-## 1. Start
+## What dewnote is
 
-dewnote opens on one question: local folder, or GitHub repository.
+dewnote is an editor for tutorials written in markdown. A tutorial can
+contain ordinary text, mathematics, code that runs in the page, and
+questions that a reader answers.
 
-**Open a local folder.** Chrome and Edge only. You pick a folder; dewnote
-reads every `.md` and every course descriptor in it. Save writes straight
-back to the file.
+dewnote is built for **dewlab**, a site that publishes tutorials from a
+folder of markdown files. It understands dewlab's layout: where tutorials
+live, how courses list them, and what the site needs in order to build a
+page. It saves plain markdown files that dewlab can read directly. Nothing
+dewnote writes is private to dewnote.
 
-**Connect a GitHub repository.** Any browser. You give a token, and
-dewnote works out the rest.
-
-A token says who you are, not which repository you mean, so the
-repository is still chosen — but from a list of the ones that token can
-commit to, most recently pushed first. Its owner comes with it, and so
-does its own default branch, whatever that is called. One you cannot
-write to is not offered, since committing is what dewnote is there for.
-
-**Working branch** is where saves go. It is filled in as
-`dewnote/<today's date>`, so a day's edits land on one branch and go back
-as one pull request, and tomorrow starts a fresh one. Change it if you
-would rather name it after what you are doing. It cannot be the
-repository's default branch: a save never writes there, which is the
-point of having two.
-
-dewnote remembers the token and the repository for next time.
-
-Safari has no folder picker. Use a repository.
+dewnote runs entirely in your browser. There is no dewnote server: your
+files stay on your computer or in your GitHub repository, and Python runs
+inside the browser tab.
 
 ---
 
-## 2. What is on screen
+# Part 1: Your first tutorial
 
-Two things: the document, and a column of small text in the left margin.
+This walkthrough takes about ten minutes. To try dewnote without connecting
+anything, choose **try the sample document** on the opening screen instead.
+Nothing you do in the sample is saved.
 
-The margin column, top to bottom:
+### Step 1: Open your tutorials
 
-| Line | What it is |
+When dewnote opens, it asks where your tutorials are. You have two choices.
+
+**Open a folder on this computer.** Choose this if you have a copy of the
+dewlab files on your computer. It works in Chrome and Edge only; Safari
+and Firefox cannot open folders. Choose the top folder of your dewlab copy
+(the one that contains `tutorials/` and `courses/`). Saving writes
+directly to the files in that folder.
+
+**Connect a GitHub repository.** Choose this to work on the dewlab
+repository on GitHub. It works in any browser. You need a **GitHub
+token**, which is a password that lets dewnote act on your behalf:
+
+1. Follow the **Create a fine-grained token** link on the opening screen.
+2. Under *Repository access*, choose *Only select repositories* and pick
+   the dewlab repository.
+3. Under *Permissions*, set **Contents** and **Pull requests** to
+   *Read and write*.
+4. Create the token, copy it, and paste it into dewnote's **GitHub token**
+   field.
+
+dewnote then lists every repository the token can write to. Choose one.
+
+The **Working branch** field is already filled in, with a name like
+`dewnote/2026-09-22`. Every save goes to this branch, never to the
+repository's main branch. Leave the suggested name unless you have a
+reason to change it (see [Saving](#saving) for why).
+
+Choose **Connect**. dewnote reads the files, which can take a few seconds
+for a large repository, and remembers the token and repository in this
+browser for next time.
+
+### Step 2: Create a tutorial
+
+Once the files are read, the **palette** opens. The palette is a search
+box that finds tutorials and runs commands. You can open it at any time
+with **Ctrl+K**.
+
+1. Type `new tutorial` and press **Enter**.
+2. Type the tutorial's title and choose **Create tutorial**.
+
+Choose the title carefully. dewnote builds the tutorial's folder name
+and web address from it, and changing them later breaks links to the
+tutorial.
+
+dewnote creates the file `tutorials/<id>/<id>.md`, where `<id>` is the
+title in lower case with hyphens, and opens it. The new tutorial is a
+**draft**: the site will not show it to readers until you mark it live
+(Step 7).
+
+### Step 3: Write
+
+The tutorial opens with a heading and one empty Python cell. Type as you
+would in a word processor:
+
+- Start a line with `#` and a space for a heading, `##` for a smaller one.
+- Select text to get a small toolbar for **bold**, *italic*, `code`,
+  maths and links.
+- In an empty line, type **/** to open the **block menu**. Keep typing to
+  filter it: `/py` finds *Python cell*. The menu also has questions,
+  hints and web page editors.
+
+### Step 4: Run your code
+
+Type some Python into the cell below the `id:` line, for example
+`print(2 + 2)`, and choose **Run** under the cell. The first run takes a
+few seconds while Python loads; after that, runs are quick. The output
+appears under the code.
+
+### Step 5: Save
+
+Press **Ctrl+S**. The bottom of the left margin changes from
+**Save (Ctrl+S)** to *Saved*.
+
+If you connected GitHub, each save is a commit on your working branch.
+
+### Step 6: Add the tutorial to a course
+
+A new tutorial is not listed on any course yet, so readers cannot find it
+by browsing. Open the palette, type `add to a series`, press **Enter**,
+and choose a series. dewnote adds the tutorial to that course's list and
+saves the course file.
+
+### Step 7: Check it and make it live
+
+1. Open the palette and run **Check this document**. dewnote lists
+   anything that would stop the site building the page, or confuse a
+   reader. Fix what it finds.
+2. Press **Ctrl+/** to see the raw markdown. At the top, change
+   `status: draft` to `status: live`. Choose **Apply changes**, then
+   press **Ctrl+S** to save.
+
+### Step 8: Send it for review (GitHub only)
+
+Open the palette and run **Open a pull request…**. dewnote first checks
+every document in the workspace. If it finds problems that would stop the
+site building, it tells you and offers to show them. Otherwise, it opens
+the pull request on GitHub in a new tab, where a reviewer can read your
+changes and merge them into the main branch.
+
+That is the whole cycle. The rest of this guide explains each part in
+more detail.
+
+---
+
+# Part 2: Reference
+
+## The screen
+
+dewnote shows three things: the document, a narrow column of text in the
+left margin, and a small round button in the top right corner that opens
+**Appearance**. There is no toolbar or menu bar; commands are in the
+palette.
+
+### The left margin
+
+From top to bottom:
+
+| What you see | What it means |
 |---|---|
-| `tutorials/…/name.md` | The file you are editing. A dot after it means unsaved. |
-| *Module › Series › Title* | Where this page sits. Click it to open the palette. |
-| `dewlab · main → branch` | The workspace, and for GitHub the branch Save commits to. |
-| Headings | Every heading in this document. Click one to jump to it. |
-| *Saved* / **Save this** | Whether your work is written. Click it to save. |
-| `⌘K anywhere` | The palette key. |
+| `tutorials/…/name.md` | The file you are editing. A dot after the name means it has unsaved changes. |
+| *Course › Series › Title* | Where this tutorial is listed. Click it to open the palette. If the tutorial is not in any series, this reads *Open another document*. |
+| `dewlab · main → dewnote/2026-09-22` | The workspace. For GitHub, this also shows the main branch and the working branch your saves go to. |
+| A list of headings | Every heading in the document. Click one to scroll to it. |
+| A warning in orange | Something failed, usually a save. It stays until you open another document; see [When a save fails](#when-a-save-fails). |
+| **3 problems** | How many problems **Check this document** would report. It has an orange dot if any would stop the site building. Click it to see them. It disappears when there are none. |
+| *Saved* or **Save (Ctrl+S)** | Whether your changes are saved. Click **Save** to save. |
+| *Ctrl+K to open or do anything* | A reminder of the palette shortcut. |
 
-Nothing else is on screen. There is no toolbar, no menu bar and no
-sidebar.
+On a narrow window the margin becomes a strip across the top, without the
+list of headings.
 
-If the window is too narrow for a margin column, those lines move to a
-single row across the top and the headings are dropped.
+## The palette
 
----
+Press **Ctrl+K** to open the palette, and **Ctrl+K** or **Esc** to close it.
+It also opens by itself when you first connect, because choosing a document
+is the first thing to do.
 
-## 3. The palette
+Type to search. The palette searches four kinds of thing, always shown in
+this order:
 
-**The palette is one box that finds anything in your workspace and does
-anything dewnote can do.**
-
-Press **⌘K** (Ctrl+K on Windows and Linux). It also opens by itself when
-you first open a workspace, because choosing a document is the next thing
-to do.
-
-Type, and it narrows to what you mean. It searches four things at once:
-
-- **Tutorials** — every tutorial and practice page, by title.
-- **Pages** — dewlab's `pages/` files: About, Home, Features.
-- **Series** — every series in every course. Opens at its first tutorial.
-- **Do** — everything dewnote can do.
-
-The right-hand half tells you what the highlighted row is before you
-commit: its path, its status and version, its first sentence, and its
-headings.
-
-| Key | What happens |
+| Section | What it lists |
 |---|---|
-| ⌘K | Open. Press again to close. |
-| Type | Narrow the list. |
-| ↑ ↓ | Move the highlight. |
-| ↵ | Open the highlighted row, or run the highlighted command. |
-| Esc | Close, change nothing. |
+| **Tutorials** | Every tutorial and practice page, by title. The note on the right says which series it is in and where, for example *First Steps · 2 of 5*. |
+| **Site pages** | dewlab's own pages from the `pages/` folder, such as About and Home. |
+| **Series** | Every series on every course. Choosing one opens its first tutorial. |
+| **Commands** | Everything dewnote can do. The note on the right says what kind of command it is. |
 
-You do not have to type letters that are next to each other. `wamat`
-finds *What a Matrix Does to a Picture*.
+You do not have to type whole words. Letters in order are enough:
+`wamat` finds *What a Matrix Does to a Picture*.
 
-The list is always in the same order — Tutorials, Pages, Series, Do — so
-a kind of thing is always in the same place. The **highlight** is on the
-best match wherever it is, so ↵ takes what you typed rather than whatever
-is at the top.
+The highlighted row is the best match for what you typed, even if it is
+not at the top of the list. **Enter** opens or runs it. **↑** and **↓**
+move the highlight. The right half of the palette previews the highlighted
+row: a tutorial's path, status, version, first sentence and headings, or
+a command's description.
 
----
+Commands that act on a document, such as **Check this document**, only
+appear while a document is open.
 
-## 4. Writing
+### Every command
 
-The document is what you edit. A heading looks like a heading, bold looks
-bold, a link looks like a link. Type `# ` at the start of a line and the
-line becomes a heading as you type it.
+| Command | Group | What it does |
+|---|---|---|
+| **Save** | Document | Saves the open document. Same as Ctrl+S. Only listed when there is something to save. |
+| **Preview as a reader** | Document | Opens the page in a new tab, styled as the site shows it. Nothing is saved. |
+| **Edit the markdown** | Document | Shows the file as plain text. Same as Ctrl+/. See [Editing the markdown](#editing-the-markdown). |
+| **Check this document** | Document | Lists problems in the open document. See [Checking for problems](#checking-for-problems). |
+| **Run every cell** | Cells | Runs every cell from top to bottom, and stops at the first one that fails. |
+| **Stop the running cell** | Cells | Interrupts a cell that is taking too long. Variables from earlier cells are kept. |
+| **Restart Python** | Cells | Clears every variable, as if no cell had run. |
+| **Add to a series…** | Tutorial | Lists the tutorial in a series on a course. |
+| **Remove from a series…** | Tutorial | Takes the tutorial out of a series. The tutorial itself is not deleted. |
+| **Release a new version…** | Tutorial | Keeps a copy of the current version and makes your edits the next one. See [Releasing a new version](#releasing-a-new-version). |
+| **New tutorial…** | Workspace | Creates a draft tutorial. |
+| **Check every document** | Workspace | Runs the same checks on every document in the workspace. |
+| **Download as HTML** | Import and export | Downloads the page as one self-contained file. |
+| **Download as a Jupyter notebook** | Import and export | Downloads the document as an `.ipynb` file. |
+| **Import a Jupyter notebook…** | Import and export | Replaces the open document's content with a notebook's. |
+| **Open a pull request…** | GitHub | Asks for your working branch to be merged. GitHub workspaces only. |
+| **Appearance…** | Appearance | Changes how dewnote looks to you. |
 
-Between blocks, hover for a **+** to add one. In an empty paragraph,
-typing **/** offers the same menu from the keyboard, and filters as you
-type — `/py` reaches a Python cell in three keystrokes. An empty block
-says so, so you do not have to remember.
+A command whose name ends in **…** asks you something before it acts.
 
-Selecting text raises a small toolbar: bold, italic, inline code, inline
-maths, and a link.
+## Writing
 
-Under **Tutorial** in that menu are the blocks a tutorial is made of:
+The document looks roughly as it will on the site: headings look like
+headings, bold looks bold. You edit it directly.
 
-| Item | What it writes |
+### Formatting
+
+- Type `#`, `##` or `###` and a space at the start of a line to make a
+  heading.
+- Type `-` and a space for a bulleted list, `1.` and a space for a
+  numbered one.
+- Select text to get a toolbar for bold, italic, inline code, inline
+  maths and links.
+- Hover between two blocks to get a **+** button, which opens the block
+  menu.
+- In an empty line, type **/** to open the same block menu from the
+  keyboard. Keep typing to filter it.
+
+An empty line shows a faint reminder: *Type / for a cell, a question or a
+hint*.
+
+### The block menu
+
+Besides ordinary blocks such as headings, lists and tables, the block menu
+has a **Tutorial** group:
+
+| Item | What it inserts |
 |---|---|
-| Python cell | A `python exec` fence with an `id:` nobody is using |
-| SQL cell | The same in dewlab's other language |
-| Multiple choice | A `question` fence with two options and a `correct:` line |
-| Fill in the blank | A `question` fence with a `{gap}` in it |
-| Web page | Three `site` panes — HTML, CSS and JavaScript — under one name |
-| Hint | The `<details class="dl-hint">` fold the build looks for |
+| **Python cell** | A code cell that runs Python. |
+| **SQL cell** | A code cell that runs SQL. |
+| **Multiple choice** | A question with options and one correct answer. |
+| **Fill in the blank** | A question with a gap for the reader to fill. |
+| **Web page** | An HTML, CSS and JavaScript editor that shows a live page. |
+| **Hint** | A fold the reader opens when stuck. |
 
-Every one of them writes something the build accepts, ids included.
+Every item is inserted with a unique `id:` already filled in, and passes
+**Check this document** as inserted.
+
+### Maths
+
+Write inline maths between single dollar signs: `$x^2 + 1$`.
+
+Write a block of maths between double dollar signs, each on its own line:
+
+```
+$$
+\int_0^1 x^2 \, dx
+$$
+```
+
+A dollar sign with a space next to it is treated as money, not maths:
+"it costs $5 and $6" stays as written. This matches how the dewlab site
+reads dollar signs.
+
+### Images
+
+Paste or drag an image into the document. dewnote saves the image file
+in the same folder as the tutorial and inserts a reference to it by name.
+If a file with that name already exists, dewnote adds a number to the new
+name rather than replacing the old file.
+
+If an image in a document cannot be found, it is left as written, and
+**Check this document** reports it, so you can see which name is wrong.
+
+### Editing the markdown
+
+Press **Ctrl+/** (or use **Edit the markdown**) to see the whole file as
+plain text, including the front matter at the top and the ``` lines
+around code. Use it to change front matter, to paste in a whole block, or
+to see exactly what a save will write.
+
+**Ctrl+Enter** or **Apply changes** puts your edits into the document.
+**Esc** or **Cancel** discards them. Either way, nothing is saved until
+you save.
+
+### Front matter
+
+The block between the two `---` lines at the top of a file is the
+**front matter**. It holds settings for the page rather than its content:
+
+```
+---
+title: Storing and Computing
+year: "2026-2027"
+status: live
+version: 2026.09.22.1
+---
+```
+
+| Field | Meaning |
+|---|---|
+| `title` | The page's title. Required. |
+| `year` | The academic year, such as `"2026-2027"`. Required for tutorials. |
+| `version` | The release this is, as year.month.day.number. Required for tutorials. dewnote sets it when you create a tutorial or release a new version. |
+| `status` | `draft`: not on the site at all. `beta`: on the site, with a notice that it is a trial, but not listed on its course. `live`: on the site and its course. `archived`: still reachable, so readers keep their saved work, but no longer on the course. Leaving it out means `live`. |
+
+The site will not build if a tutorial is missing a required field or has
+any other `status`. dewlab reads other fields too; `planning/DIALECTS.md`
+lists them all.
+
+Some fields from older tutorials are no longer allowed: `slug`, `module`,
+`module_title`, `series` and `order`. Where a tutorial appears is now
+decided only by the course files.
+
+## Cells
+
+A **cell** is a block of code that runs in the page. In the markdown, a
+cell is a code block whose first line includes `exec`:
+
+````
+```python exec
+id: first-sum
+print(2 + 2)
+```
+````
+
+A code block without `exec` is only an example. It is shown, but has no
+**Run** button and never runs.
+
+### Settings lines
+
+The first lines of a cell can be settings, written as `name: value`:
+
+| Line | What it does |
+|---|---|
+| `id:` | Names the cell. **Required**, and must be unique on the page. dewlab saves each reader's work under this name, so do not change the id of a cell readers have already used, or their work will be lost. |
+| `hint:` | When to offer the reader a hint, for example `errors:5` (after five errors). |
+| `expect:` | A condition a correct answer satisfies, for example `total == 6`. |
+| `name:` | A short label for the cell. |
+
+The code starts on the first line that is not a setting.
+
+### Running
+
+- **Run** runs the cell. Output appears underneath.
+- While a cell runs, its button reads **Stop**. Stopping interrupts the
+  code but keeps variables from earlier cells.
+- After a cell has run, its button reads **Run again**.
+- If you edit a cell after running it, the old output stays but fades,
+  because it came from the old code.
+- The **Hide** control, beside a cell's copy button, hides a cell's
+  code and leaves its output, which is how a finished cell reads.
+
+All cells on a page share one Python session, so a variable set in one
+cell is available in the cells below it. **Run every cell** runs them from
+the top, in order, and stops at the first one that fails, because later
+cells usually depend on earlier ones. It is the quickest way to check a
+tutorial still works after an edit.
+
+Python runs in your browser using Pyodide, which is downloaded the first
+time you run a cell. If Pyodide cannot be downloaded, for example on a
+restricted network, set **Python runtime URL** in Appearance to a copy
+you can reach.
 
 ## Questions
 
-A `question` fence is an exercise the page marks. Two kinds:
+A **question** is an exercise the page marks automatically. There are two
+kinds. Insert them from the block menu, or write them by hand.
+
+### Multiple choice
 
 ````
 ```question
@@ -140,8 +399,11 @@ Which counts this correctly?
 ```
 ````
 
-The prose above the first bullet is the question; each bullet is an
-option. `correct:` counts from 1, in the order the options are written.
+The text above the list is the question; each bullet is an option.
+`correct:` gives the number of the right option, counting from 1 in the
+order the options are written. Here, the right answer is *A combination*.
+
+### Fill in the blank
 
 ````
 ```question
@@ -152,296 +414,328 @@ A list you can change is called a {list|tuple|set}.
 ```
 ````
 
-Each `{…}` is a gap. A gap with `|` in it is a dropdown, one without is a
-typing box, and either way the first item is the expected answer.
+Each pair of braces `{…}` is a gap.
 
-A question's `id:` shares one namespace with every cell and site pane on
-the page — they are all keys into the same saved-work record, so no two
-can be named the same.
+- With `|` inside, the gap is a drop-down list of the choices.
+- Without `|`, the gap is a box the reader types into.
+- Either way, the **first** item is the correct answer.
+
+### Ids are shared
+
+Cells, questions and web page panes all share one set of ids on a page,
+because dewlab saves a reader's work in all of them the same way. No two
+of them on one page can have the same `id:`.
 
 ## Web pages
 
-Three fences — `html site`, `css site`, `js site` — with the same
-`site:` name become one live editor with a tab each. dewnote writes them
-as three code blocks, which is what the file holds; the build is what
-joins them.
+The **Web page** item in the block menu inserts three code blocks:
+`html site`, `css site` and `js site`. Each has a `site:` line with the
+same name. On the dewlab site, blocks with the same `site:` name become
+one editor with a tab for each language and a live preview.
 
-## Starting a tutorial
+In dewnote, they currently show as three separate code blocks.
 
-⌘K, **New tutorial…**, and give it a title. dewnote writes
-`tutorials/<id>/<id>.md`, where the id comes from the title — that id is
-the page's address, so the title is worth getting right before you press
-Make it.
+## Hints
 
-It starts as a **draft**, so a half-written page is never served, and it
-opens with a heading and one cell ready to run. Change `status:` to
-`live` in ⌘/ when it is ready.
+The **Hint** item inserts a fold that the reader clicks to open:
 
-## Putting a tutorial on a course
-
-A tutorial dewnote has just written is on no course, so it has no
-breadcrumb and appears in no series. ⌘K, **Place this tutorial…**, and
-pick one.
-
-The list shows every series on every course, with how many tutorials each
-already has. A series the tutorial is already in says so — choosing that
-one takes it out again.
-
-Only the course file changes, and only by one line.
-
-## Publishing a new version
-
-⌘K, **Publish as a new version…**, on a live tutorial you have edited.
-
-dewlab keeps two files. The version that is published is frozen at
-`v<version>.md` exactly as it was, and the file you are editing keeps its
-own address and gets today's date plus a `supersedes:` line. A reader's
-link still works, and so does their saved work, because both are keyed to
-the address rather than to the version.
-
-## The whole file
-
-**⌘/** shows the file as text — front matter, fence markers and all. It
-is the place to fix something the document cannot express, or to see
-exactly what a save will write.
-
-⌘↵ keeps what you changed; Esc leaves it. Either way nothing is written
-until you save.
-
-## Images
-
-Paste or drop an image into the document. It is written beside the
-markdown file, named after the file you pasted, and the document gets
-`![](name.png)` — the same bare name the site's build resolves. If that
-name is already taken, the new one is numbered rather than overwriting
-what is there.
-
-An image already named in a file draws from the folder it sits in. One
-that cannot be found stays as written, so you can see which name is
-wrong.
-
-## Reading it as a reader does
-
-⌘K, then **Preview this page**. It opens in a tab, dressed the way the
-site dresses it: dewlab's face and colours, the same measure, maths
-already typeset, images inside the file. Nothing is written anywhere.
-
-A cell appears as its code, without its `id:` and `hint:` lines — those
-are how you address a cell, not part of what a reader reads. A cell's
-output is not in it: output lives in the tab that ran the cell, which is
-the one you were just in.
-
-## Sending a document to somebody
-
-⌘K, then **Save as an HTML page**. The same page the preview shows, as a
-file: the document, its stylesheet, its maths already typeset, and every
-image inside the file rather than beside it. It needs nothing else to
-open, and nothing on the internet.
-
-## Jupyter
-
-⌘K, **Save as a Jupyter notebook**, writes an `.ipynb`. Prose becomes
-markdown cells, fences become code cells, and every cell quietly keeps
-the text it came from — so **Open a Jupyter notebook…** brings the same
-file back, byte for byte.
-
-An import replaces what is on screen. Nothing is written until you save.
-
-## Checking a document
-
-⌘K, then **Check this document**. It reads the file you have open and
-lists what would break dewlab's build or confuse a reader:
-
-| Problem | Why it matters |
-|---|---|
-| No front matter, or no `title:` | The build has no name for the page. |
-| A `version:` that is not a date and a counter | A release has nothing to count from. |
-| A cell, pane or question with no `id:` | A student's work has no key to save under. |
-| Two of them sharing an `id:` | One block's saved work overwrites the other's. |
-| A `tutorial:` link naming nothing | It ships as a broken address. |
-| An image whose file is not there | The reader gets a broken image. |
-| A question with no `type:`, or one the build does not know | Nothing marks it. |
-| A multiple-choice question with fewer than two options, or a `correct:` naming none of them | Nothing marks it. |
-| A fill-in-the-blank question with no `{…}` gap, or a gap that never closes | There is nothing to fill in. |
-| A site pane with no `site:` | It is what groups the panes into one editor. |
-| A card with no `url:`, or whose text does not open with a heading | The tile goes nowhere, or has no title. |
-
-Each row is marked **blocking** — dewlab will not build it — or **worth
-fixing**. A document with nothing wrong says so rather than showing an
-empty list.
-
-You do not have to remember to run it. The margin carries a running
-count — **3 to fix**, with an orange dot when any of them would stop the
-build — and clicking it opens the same report. The count follows what
-you type, a moment behind. A document with nothing wrong shows no
-count.
-
-`tutorial:` is the only scheme the build resolves. A `module:` or
-`series:` link ships as a literal broken address, so the checker reads
-`tutorial:` links and leaves every other kind alone.
-
-## Checking every page
-
-⌘K, then **Check every page**. The same rules, over the whole workspace
-rather than the file you have open — which is what says whether the site
-is sound. A broken link is otherwise found on the day somebody opens the
-page it is written on.
-
-Each row names its file and line. Click one to open that file.
-
-An image is looked for where the build would look for it — beside the
-document, or wherever a relative path leads. Only images in the prose
-count. An `<img src="…">` inside a fence, or inside `backticks`, is a
-tutorial teaching HTML, and dewlab has several.
-
-A README or a note left beside a tutorial is not a page and is not
-checked. A file under `tutorials/` is a page whether or not it has front
-matter; the missing header is the fault worth reporting.
-
----
-
-## 5. Cells
-
-A fence marked `exec` is a cell you can run:
-
-````
-```python exec
-id: first-sum
-print(2 + 2)
 ```
-````
+<details class="dl-hint"><summary>stuck? here are some steps</summary>
 
-Under it is a **Run** button. Press it, and the output appears below the
-code. Python is a real Python — Pyodide — running in this tab; the first
-run takes a few seconds while it loads, and every run after that is
-immediate.
+First step.
 
-The lines at the top of a cell are part of the file, and you type them
-like any other line:
+</details>
+```
 
-| Line | What it does |
-|---|---|
-| `id:` | Names the cell. Required. It is the key a student's saved work lives under, so never change one that has been in front of a class. |
-| `hint:` | When to offer a hint — `errors:5`, say. |
-| `expect:` | What a correct answer satisfies. |
-| `name:` | A short label. |
+Change the summary line and replace *First step.* with your hint. On the
+dewlab site this shows as a closed fold. In dewnote it currently shows as
+the HTML above.
 
-A fence with no `exec` is illustrative code. It has no Run button and
-never runs.
+## Checking for problems
 
-While a cell is running, its button says **Stop** — press it and the
-interpreter is interrupted, keeping everything it already has in memory.
-⌘K has **Restart the interpreter** for when you want none of it.
+dewnote checks documents for anything that would stop the dewlab site
+building, or confuse a reader:
 
-After you edit a cell, its last output stays on screen, faded, until you
-run it again — it belongs to the code you had a moment ago, not to the
-code on screen.
+- **Check this document** checks the open document.
+- **Check every document** checks the whole workspace. It is the only way
+  to find a broken link in a page nobody has open. Click a problem to
+  open its file.
+- The **problems** count in the left margin updates as you type and
+  opens the same list when clicked.
+- **Open a pull request…** checks every document first.
 
-Once a cell has run, **Hide** puts the code away and leaves the output,
-which is how a finished cell reads.
+Each problem says what is wrong, what to do, and which line it is on.
+Problems marked in orange **stop the site building**; the rest are
+**worth fixing**. Saving is never blocked, so you can always save a
+half-finished draft.
 
-⌘K, **Run every cell**, runs them from the top down, one after another,
-and stops at the first that fails. They run in order because a tutorial's
-cells usually depend on the ones above them, and they share one
-interpreter. It is the quickest way to find out whether the tutorial
-still works after an edit.
+What is checked:
 
----
+- **Front matter**: a title on every page; for tutorials, a `year:`, a
+  valid `version:` and `status:`, and none of the retired fields.
+- **Ids**: every cell, question and web page pane has one, and no two on
+  a page are the same.
+- **Links and images**: every `tutorial:` link names a real tutorial, and
+  every image in the text exists. Images inside code blocks are not
+  checked, since tutorials teaching HTML include them as examples.
+- **Questions, web pages and cards**: each has what the site needs to
+  show and mark it.
 
-## 6. Saving
+Only pages are checked: every `.md` file under `tutorials/`, and the site
+pages. A README beside a tutorial is not.
 
-**⌘S saves.** So does clicking **Save this** in the margin.
+## Saving
 
-- Local folder: writes the file.
-- GitHub: commits to the working branch.
+Press **Ctrl+S**, or click **Save** at the bottom of the left margin.
 
-The margin says *Saved* when it is written, and **Save this** when it is
-not.
+- In a folder, saving writes the file.
+- On GitHub, saving makes a commit on your working branch. Each save is
+  a separate commit, named after the file.
 
-**The first time dewnote saves a file, it tidies it.** Bullet markers
-become `-`, blank lines settle into one shape, a maths block is written
-on three lines. Nothing about what the page *shows* changes, and it
-happens once: every save after that writes exactly what you see.
+dewnote never saves by itself. If you try to open another document, start
+a new tutorial or import a notebook while you have unsaved changes,
+dewnote asks whether to **Save and continue**, **Discard changes**, or
+**Keep editing**. If you close or reload the tab with unsaved changes,
+the browser asks you to confirm.
 
-**If a save does not happen, the margin says so and keeps saying so.** It
-will not clear itself. The message names what went wrong — a file changed
-on the branch under you, an expired token, a path already taken.
+While a document has unsaved changes, dewnote also keeps a copy of them
+in this browser. If the tab crashes or is closed anyway, the next time you
+open that file dewnote offers to **Restore my changes**. The copy is
+deleted when you save or discard. It is never sent anywhere, and it is
+not kept for the sample document.
 
----
+### The first save tidies the file
 
-## 7. Reading and editing dewlab
+The first time dewnote saves a file, it may change how the markdown is
+written without changing what the page shows: bullet markers become `-`,
+blank lines are made consistent, and a maths block is written over three
+lines. This happens once. After that, saving writes exactly what you
+see.
 
-dewnote opens every markdown file in a dewlab checkout or repository:
+### The working branch
 
-- `tutorials/<id>/<id>.md` — a tutorial.
-- `tutorials/<id>/<id>-practice.md` — its practice page.
-- `pages/about.md`, `pages/home.md`, `pages/features.md` — the site's
-  own pages.
-- `courses/*.yaml` — course descriptors.
+On GitHub, dewnote saves to a **working branch**, a separate line of
+changes, and never to the repository's main branch. Your changes reach
+the main branch when a pull request is merged.
 
-A tutorial with several versions on disk resolves to the one dewlab's
-build would serve: the newest `live` version, or the newest there is.
+The suggested branch name includes today's date, so each day's edits go
+into their own pull request. If you choose your own branch name, do not
+reuse a branch whose pull request has already been merged; start a new
+one.
 
----
+### When a save fails
 
-## 8. Appearance
+If a save fails, an orange warning appears in the left margin and stays
+there until you open another document. It says what went wrong and what to do. The common cases:
 
-The circle in the top right opens it. So does ⌘K, **Appearance**.
+- **The file was changed on the branch after you opened it**, for example
+  from another tab or by someone else. dewnote shows what differs between
+  the saved version and yours, and asks which to keep:
+  - **Keep mine** saves your version over the other one.
+  - **Keep the saved version** discards your changes and opens the other
+    one.
+  - **Cancel** leaves your changes on screen, unsaved. Save again when you
+    are ready to choose.
 
-Press ⌘K, type `appearance`, press ↵.
+  Whichever you keep, the other version's changes are lost, so if both
+  matter, copy the parts you need before choosing.
+- **GitHub refused the token.** It may have expired. Reload dewnote and
+  connect with a new token.
+- **A file already exists at that path.** Open that file instead.
 
-| Setting | Range |
+## Tutorials and courses
+
+### How dewlab organises tutorials
+
+- Each tutorial lives in its own folder: `tutorials/<id>/<id>.md`.
+- A tutorial can have a practice page beside it:
+  `tutorials/<id>/<id>-practice.md`.
+- A **course** is described by a file in `courses/`, such as
+  `courses/maths-for-it.yaml`. It lists **series**, and each series lists
+  tutorials by id, in order.
+- A tutorial is not placed by anything in its own file. Only the course
+  files say where it appears.
+- dewlab's own site pages are in `pages/`.
+
+### Creating a tutorial
+
+Run **New tutorial…** and give it a title. dewnote creates
+`tutorials/<id>/<id>.md` with a title, the same `year:` as the workspace's
+other tutorials, `status: draft`, today's version,
+a heading, and one empty Python cell, and opens it.
+
+### Adding a tutorial to a series
+
+Run **Add to a series…**. The list shows every series the tutorial is not
+already in, with how many tutorials each has. Choose one, and dewnote adds
+the tutorial to the end of that series in the course file and saves it.
+
+**Remove from a series…** does the reverse. It only appears when the
+tutorial is in at least one series.
+
+### Releasing a new version
+
+Once a tutorial is live, readers may have saved work in it. Releasing a
+new version lets you change it without breaking their links or their
+saved work.
+
+Edit the live tutorial, saving as often as you like, then run **Release
+a new version…**. dewnote:
+
+1. Copies the **published** version, unchanged, to
+   `tutorials/<id>/v<old version>.md`.
+2. Saves your edits in the tutorial's own file, with a new `version:`
+   and a `supersedes:` line naming the old version.
+
+The published version is the one readers have now:
+
+- On GitHub, the file on the repository's main branch. Your saves on the
+  working branch are not published until the pull request is merged.
+- In a folder, the file as it was when you opened the folder.
+
+The tutorial keeps its address, so readers' links and saved work still
+work.
+
+This is only available for a tutorial's main file whose published
+version has `status: live`. A draft has no readers yet, so it does not
+need versions: save it as normal. On GitHub, a tutorial that is not on
+the main branch yet has no published version either; merge it first.
+
+### Which version dewnote opens
+
+If a tutorial folder holds several versions, dewnote opens the one dewlab
+would show: the newest `live` version, or if none is live, the newest.
+
+## Import and export
+
+- **Preview as a reader** opens the page in a new browser tab, styled the
+  way the dewlab site shows it, with maths typeset and images included.
+  Cells show their code but not their output, and without their `id:` and
+  `hint:` lines. Nothing is saved.
+- **Download as HTML** downloads the same page as one file, with its
+  styles and images inside it. It opens without an internet connection,
+  so you can send it to anyone.
+- **Download as a Jupyter notebook** downloads an `.ipynb` file. Text
+  becomes markdown cells and code blocks become code cells. Each cell
+  also keeps its original markdown, so importing the notebook back gives
+  the same file exactly.
+- **Import a Jupyter notebook…** replaces the open document's content
+  with a notebook's. The document keeps its file name, and nothing is
+  saved until you save.
+
+## Appearance
+
+Open it with the round button in the top right corner, or the
+**Appearance…** command. These settings only change how dewnote looks in
+this browser. They do not change your files or what readers see.
+
+| Setting | Choices |
 |---|---|
 | Theme | Match system, light, dark |
 | Body font | Serif, sans, mono |
-| Text size | 14–24px |
-| Line width | 24–48rem |
+| Text size | 14–24 px |
+| Line width | 24–48 rem |
 | Line height | 1.2–2.2 |
 | Paragraph spacing | Tight, normal, loose |
 | Margins | Comfortable, compact |
-| Tinted cells | On, off |
-| Code size | 11–20px |
-| Code font | Three monospace stacks |
-| Pyodide source | Blank for the default |
+| Shade code cells | On, off |
+| Code size | 11–20 px |
+| Code font | System mono, humanist, slab |
+| Python runtime URL | Leave blank to use the default |
 
-Every change applies at once and is remembered in this browser. **Reset
-to defaults** is at the bottom.
+Changes apply at once. **Reset to defaults** is at the bottom of the
+panel.
 
-Line width and margins move the margin column with them. Widen the
-measure far enough and the column narrows; widen it past the point where
-both fit and the column folds to a row across the top.
+A wide line width leaves less room for the left margin. If there is not
+enough room, the margin moves to a strip across the top.
 
----
+## Keyboard shortcuts
 
-## 9. Publishing to GitHub
-
-Saving commits. Publishing opens a pull request: ⌘K, then **Open a pull
-request**.
-
-Before the pull request opens, dewnote checks every page in the
-workspace. If anything would stop the build, it says how many and offers
-**Show me** — the same report **Check every page** opens. It is a
-warning, not a gate: **Open the pull request anyway** does what it says,
-because a reviewer is the point of one.
-
-Two things to know:
-
-- Each save is its own commit, named after the file.
-- A working branch whose pull request has already merged should not be
-  reused. The dated default handles this on its own; a branch you named
-  yourself does not.
-
-Saving is never checked. A draft you are half way through has to be
-possible to save.
-
----
-
-## 10. Every key
-
-| Key | What it does |
+| Shortcut | What it does |
 |---|---|
-| ⌘K / Ctrl+K | Palette |
-| ⌘S / Ctrl+S | Save |
-| ⌘/ / Ctrl+/ | The whole file, as text |
-| / | Block menu, in an empty paragraph |
-| Esc | Close whatever is open |
+| Ctrl+K | Open or close the palette |
+| Ctrl+S | Save |
+| Ctrl+/ | Edit the markdown |
+| Ctrl+Enter | Apply changes, in Edit the markdown |
+| / | Open the block menu, in an empty line |
+| ↑ ↓ | Move through a list |
+| Enter | Choose the highlighted item |
+| Esc | Close whatever is open, without changing anything |
+
+## Known limitations
+
+These are planned but not built yet (see `planning/ROADMAP.md`):
+
+- Web page panes show as three code blocks rather than one editor with
+  tabs.
+- Hints show as HTML in the editor rather than as a fold.
+- Files cannot be renamed, moved or deleted from dewnote.
+- There is no find and replace across the workspace.
+- A save conflict keeps one version or the other; it cannot combine them.
+
+---
+
+# Part 3: Glossary
+
+**Block menu.** The menu of things you can insert, opened with **/** in
+an empty line or the **+** between blocks.
+
+**Cell.** A block of code that runs in the page. Written as a code block
+with `exec` in its first line.
+
+**Commit.** One saved change on GitHub. Each save in a GitHub workspace
+makes one.
+
+**Course.** A set of series, described by a file in `courses/`. The code
+sometimes calls a course a *module*; they are the same thing.
+
+**Draft.** A tutorial with `status: draft`. The site does not show it to
+readers.
+
+**Front matter.** The block between two `---` lines at the top of a file,
+holding the page's title, status and version.
+
+**Id.** The name of a tutorial (from its folder), or of a cell, question
+or pane (from its `id:` line). Readers' saved work is stored under ids,
+so they should not change once readers have used them.
+
+**Live.** A tutorial with `status: live`. The site shows it to readers.
+
+**Main branch.** The repository's own branch, usually `main`, that the
+site is built from. dewnote never saves to it directly.
+
+**Markdown.** The plain-text format tutorials are written in.
+
+**Palette.** The search box opened with Ctrl+K, which finds documents and
+runs commands.
+
+**Pane.** One of the three code blocks (HTML, CSS, JavaScript) that make
+up a web page editor.
+
+**Practice page.** A page of exercises that goes with a tutorial, saved
+beside it as `<id>-practice.md`.
+
+**Problem.** Something **Check this document** reports. It either stops
+the site building, or is worth fixing.
+
+**Pull request.** A request, on GitHub, to merge your working branch into
+the main branch, so that a reviewer can read the changes first.
+
+**Release.** Freezing a live tutorial's current version and making your
+edits the next one. See [Releasing a new version](#releasing-a-new-version).
+
+**Series.** An ordered list of tutorials within a course.
+
+**Site page.** One of dewlab's own pages in `pages/`, such as About.
+
+**Token.** A password-like key from GitHub that lets dewnote read and
+commit on your behalf.
+
+**Tutorial.** One page of teaching material, in its own folder under
+`tutorials/`.
+
+**Working branch.** The branch your saves go to on GitHub. Its changes
+reach the main branch through a pull request.
+
+**Workspace.** Everything dewnote has open: a folder on your computer, or
+a GitHub repository.

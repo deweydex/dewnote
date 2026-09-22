@@ -1,45 +1,50 @@
 # dewnote
 
-An editor for tutorials written as markdown: prose, LaTeX maths, and code
-cells that run in the page. The file on disk is a plain markdown file in
-whichever dialect the target site expects, so nothing the editor writes is
-private to the editor.
+An editor for the tutorials on **dewlab**. A tutorial is a markdown file
+that mixes text, LaTeX maths, questions the page marks, and Python or SQL
+cells that run in the browser. dewnote edits those files as documents,
+runs their code, checks them against what dewlab's build accepts, and
+saves them back as plain markdown that dewlab reads unchanged.
 
-It runs as a single HTML file in a browser. There is no server.
+It runs in a browser as a single HTML file. There is no server: files come
+from a folder on your computer or from a GitHub repository, and Python
+runs in the tab via Pyodide.
 
 Named `dewnote`, to sit beside `dewlab`, `dewstack`, `dewmini` and
 `dewmark`.
 
-## Running things
+## Using it
+
+Read **[docs/USING_DEWNOTE.md](docs/USING_DEWNOTE.md)**. It starts with a
+ten-minute walkthrough of writing and saving a tutorial.
+
+To try it without connecting anything, choose **try the sample document**
+on the opening screen. The sample holds one of every block dewnote
+supports, and nothing you do in it is saved.
+
+## Developing it
 
 ```bash
 bun install
-bun run dev                  # hot reload
-bun run build                # dist/index.html, one file
-bun run test                 # unit
+bun run dev          # development server with hot reload
+bun run build        # builds dist/index.html, one self-contained file
+bun run test         # unit tests
 bun run typecheck
-bunx playwright test         # against the built file
+bun run test:e2e     # builds, then runs the Playwright tests against dist/index.html
 ```
 
-There is a sample workspace on the opening screen — one document holding
-every construct the editor knows, saved nowhere — for trying it without
-connecting anything.
+`tests/e2e/roundtrip.spec.ts` matters most. Every construct dewlab
+writes has to survive being opened and saved by dewnote, and a second
+open-and-save must change nothing. If that test cannot be kept passing,
+the document model is wrong.
 
-`tests/e2e/roundtrip.spec.ts` is the test this application stands on:
-every construct dewlab writes has to survive a pass through the editor,
-and the pass has to be idempotent. If it cannot be kept green, the
-document model is wrong.
+## Documents
 
-## Where things are
-
-| | |
-|---|---|
-| `ARCHITECTURE.md` | how it is built, and the three things the editor has to know about Milkdown |
-| `docs/USING_DEWNOTE.md` | the guide for the person writing tutorials |
-| `planning/DIALECTS.md` | what the files it opens and saves look like |
-| `planning/probe/` | the round-trip measurement, run against a whole dewlab checkout |
-
-## Not built yet
-
-A site editor shows as three stacked code blocks rather than one pane
-with three tabs, which is what the file holds and what the build joins.
+| File | For | What it covers |
+|---|---|---|
+| [docs/USING_DEWNOTE.md](docs/USING_DEWNOTE.md) | Authors | How to use dewnote, with a walkthrough, a reference and a glossary. |
+| [docs/VOCABULARY.md](docs/VOCABULARY.md) | Contributors | The words the interface uses and avoids. Read it before changing any text a user sees. |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Contributors | How dewnote is built, and the Milkdown behaviours it depends on. |
+| [planning/DIALECTS.md](planning/DIALECTS.md) | Contributors | The file formats dewnote reads and writes, from dewlab's and dewstack's builds. |
+| [planning/ROADMAP.md](planning/ROADMAP.md) | Contributors | Known problems and planned work. |
+| [planning/probe/](planning/probe/) | Contributors | The round-trip measurement, run against a whole dewlab checkout. |
