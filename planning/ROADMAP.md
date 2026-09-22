@@ -101,7 +101,14 @@ A conflict offers one version or the other. When both people changed
 different paragraphs, keeping both needs a three-way merge against the
 version the author opened, which the shell already has in `opened`.
 
-### 4.6 A way to forget the token
+### 4.6 No trailing blank line after editing at the end of a document
+
+Clicking into a list or table that ends the document leaves Milkdown's
+empty trailing paragraph in place, and the file is saved ending in a
+blank line. Content is unchanged, but it is churn in a diff. Trim
+trailing empty paragraphs on save.
+
+### 4.7 A way to forget the token
 
 The GitHub token stays in localStorage until the browser's site data is
 cleared. Add a **Disconnect from GitHub** command that removes it.

@@ -264,12 +264,17 @@ let held: Document | null = null;
       markdown,
       ...(mode
         ? {
-            runCell: () =>
+            // Echoes what it was asked to run, so a test can see the
+            // code the editor sends: header lines stripped, SQL wrapped.
+            runCell: (request: { code: string }) =>
               mode === "never"
                 ? new Promise<{ ok: boolean; markup: string }>((resolve) => {
                     release = () => resolve({ ok: true, markup: "<pre>done</pre>" });
                   })
-                : Promise.resolve({ ok: true, markup: "<pre>stub</pre>" }),
+                : Promise.resolve({
+                    ok: true,
+                    markup: `<pre>${request.code.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`,
+                  }),
             stopCell: () => {
               hooks["__dewnoteStopped"] = true;
               release?.();
