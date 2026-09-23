@@ -21,7 +21,8 @@ import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
-import { foldLine, siteGroups, sitePage, type SiteGroup } from "./fences.ts";
+import { describeTrigger, foldLine, hintIn, parseTrigger, siteGroups, sitePage, type SiteGroup, type StagedHint } from "./fences.ts";
+import { renderFragment } from "./export-html.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 import { setYamlField } from "./authoring.ts";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
@@ -504,6 +505,46 @@ function metaOf(view: { state: { doc: { descendants(fn: (node: any) => boolean):
   return found;
 }
 
+/** The runnable cell above the code block holding `content`: the one a
+ * staged hint with no `for:` line belongs to. Found the same way
+ * `metaOf` finds a block, by its text. */
+function cellAbove(view: { state: { doc: { forEach(fn: (node: any) => void): void } } } | null, content: string): string | null {
+  if (!view) return null;
+  let above: string | null = null;
+  let found: string | null | undefined;
+  view.state.doc.forEach((node: any) => {
+    if (found !== undefined || node.type.name !== "code_block") return;
+    if (node.textContent === content && node.attrs.language === "hint") {
+      found = above;
+      return;
+    }
+    if (isRunnable(String(node.attrs.language ?? ""), String(node.attrs.meta ?? ""))) {
+      above = parseCell(node.textContent).id;
+    }
+  });
+  return found ?? null;
+}
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** A staged hint as a reader meets it: its title and text in a hint
+ * box, under a line saying which cell it belongs to and what makes it
+ * appear. A string, so Crepe's own sanitiser sees the body's HTML. */
+function hintPreview(hint: StagedHint, cell: string | null): string {
+  const trigger = parseTrigger(hint.after);
+  const when = "error" in trigger
+    ? `<span class="dn-hint-fault">The <code>after:</code> line cannot be read. ${escapeHtml(trigger.error.replace(/`/g, ""))}</span>`
+    : `Appears ${escapeHtml(describeTrigger(trigger))} in ${cell ? `<code>${escapeHtml(cell)}</code>` : "the cell above"}.`;
+  return (
+    `<div class="dn-hint">` +
+    `<p class="dn-hint-when">Staged hint. ${when}</p>` +
+    `<div class="dn-hint-box"><p class="dn-hint-title">${escapeHtml(hint.title)}</p>` +
+    `${hint.text.trim() ? renderFragment(hint.text) : `<p class="dn-hint-fault">No text yet.</p>`}</div>` +
+    `</div>`
+  );
+}
+
 /** A cell's own output, as an element rather than a string: the panel
  * holds rendered HTML the Python side produced, and a string would be
  * sanitised on the way through Crepe's own DOMPurify pass. */
@@ -798,7 +839,8 @@ export async function mountEditor(
           LanguageDescription.of({ name: "python", support: python() }),
           LanguageDescription.of({ name: "sql", support: sql() }),
         ],
-        previewToggleButton: (showingPreview: boolean) => (showingPreview ? "Hide" : "Run"),
+        // Hides the code, leaving what it makes; then brings it back.
+        previewToggleButton: (codeShowing: boolean) => (codeShowing ? "Hide" : "Edit"),
         // Hidden in style.css: the Run button heads the panel.
         previewLabel: "Output",
         previewLoading: "Running…",
@@ -807,6 +849,10 @@ export async function mountEditor(
           // fires on every keystroke. It must therefore never start a
           // run of its own: all it does is build the panel, and the
           // panel's own button is what runs anything.
+          if (language === "hint") {
+            const hint = hintIn("hint", content)!;
+            return hintPreview(hint, hint.cell ?? cellAbove(view(), content));
+          }
           if (!options.runCell) return null;
           if (!isRunnable(language, metaOf(view(), content))) return null;
           return cellPanel(language, content, apply);

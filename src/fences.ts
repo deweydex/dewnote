@@ -107,6 +107,106 @@ export function sitePage(group: SiteGroup): string {
   );
 }
 
+// ── staged hints ───────────────────────────────────────────────────────
+
+/** What a ```` ```hint ```` fence's `after:` line may name, and the
+ * runtime's own key for each: dewlab's `TRIGGER_KEYS`. */
+const TRIGGER_KEYS: Record<string, string> = {
+  "errors": "errors", "error": "errors",
+  "identical errors": "same-errors", "identical error": "same-errors",
+  "same errors": "same-errors", "same error": "same-errors",
+  "same-error": "same-errors", "same-errors": "same-errors",
+  "identical-errors": "same-errors",
+  "unchanged runs": "unchanged", "unchanged run": "unchanged", "unchanged": "unchanged",
+  "runs": "runs", "run": "runs",
+  "failed checks": "check-fails", "failed check": "check-fails",
+  "check-fails": "check-fails", "failed-checks": "check-fails",
+  "empty results": "empty-results", "empty result": "empty-results",
+  "empty-results": "empty-results", "empty-result": "empty-results",
+  "minutes": "minutes", "minute": "minutes",
+};
+
+/** Each runtime key as a reader would say it, one and many. */
+const TRIGGER_WORDS: Record<string, [string, string]> = {
+  "errors": ["error", "errors"],
+  "same-errors": ["identical error", "identical errors"],
+  "unchanged": ["unchanged run", "unchanged runs"],
+  "runs": ["run", "runs"],
+  "check-fails": ["failed check", "failed checks"],
+  "empty-results": ["empty result", "empty results"],
+  "minutes": ["minute", "minutes"],
+};
+
+const TRIGGER_TERM_RE = /^(?:(\d+)\s+([a-z][a-z -]*[a-z])|([a-z][a-z-]*)\s*:\s*(\d+))$/;
+
+export const DEFAULT_HINT_AFTER = "errors:5";
+export const DEFAULT_HINT_TITLE = "Let\u2019s slow down a moment\u2026";
+
+export interface TriggerTerm {
+  key: string;
+  count: number;
+}
+
+/** An `after:` line read the way dewlab's `parse_trigger()` reads it:
+ * `5 errors`, `3 identical errors and 2 minutes` and `errors:5,
+ * minutes:2` all parse. A term it cannot read is the build's refusal,
+ * in the build's words. */
+export function parseTrigger(text: string): TriggerTerm[] | { error: string } {
+  const terms: TriggerTerm[] = [];
+  for (const raw of text.trim().toLowerCase().split(/\s*(?:,|\band\b|&)\s*/)) {
+    if (!raw) continue;
+    const match = TRIGGER_TERM_RE.exec(raw);
+    if (!match) return { error: `\`${raw}\` cannot be read. Write it like \`5 errors\` or \`errors:5\`.` };
+    const key = (match[2] ?? match[3])!.trim();
+    const count = Number(match[1] ?? match[4]);
+    const canonical = TRIGGER_KEYS[key];
+    if (!canonical) {
+      return {
+        error: `\`${key}\` is not something a hint can wait for. Use errors, identical errors, unchanged runs, runs, failed checks, empty results or minutes.`,
+      };
+    }
+    if (count < 1) return { error: `A hint waits for at least 1 of something, not ${count}.` };
+    terms.push({ key: canonical, count });
+  }
+  if (terms.length === 0) return { error: "The `after:` line is empty." };
+  return terms;
+}
+
+/** "after 3 errors and 2 minutes": the terms as a reader would say them.
+ * The runtime shows the hint once every one of them is reached
+ * (`triggerHolds()` in dewlab's tutorial-runtime.js); minutes count from
+ * the cell's first run. */
+export function describeTrigger(terms: readonly TriggerTerm[]): string {
+  const said = terms.map(({ key, count }) => {
+    const [one, many] = TRIGGER_WORDS[key] ?? [key, key];
+    return `${count} ${count === 1 ? one : many}`;
+  });
+  return `after ${said.length > 1 ? `${said.slice(0, -1).join(", ")} and ${said.at(-1)}` : said[0]}`;
+}
+
+export interface StagedHint {
+  /** The cell it belongs to, when `for:` names one; otherwise the exec
+   * cell above it, which the caller knows and this does not. */
+  cell: string | null;
+  after: string;
+  title: string;
+  /** The hint's own markdown. */
+  text: string;
+}
+
+/** A ```` ```hint ```` fence: `for:`, `after:` and `title:` lines, then
+ * the hint's markdown (dewlab's `parse_hint()`). */
+export function hintIn(info: string, body: string): StagedHint | null {
+  if (infoWords(info)[0] !== "hint") return null;
+  const { header, rest } = splitHeader(body, ["for", "after", "title"]);
+  return {
+    cell: header.get("for") || null,
+    after: header.get("after") || DEFAULT_HINT_AFTER,
+    title: header.get("title") || DEFAULT_HINT_TITLE,
+    text: rest,
+  };
+}
+
 // ── questions ──────────────────────────────────────────────────────────
 
 export const QUESTION_TYPES = ["multiple-choice", "fill-in-the-blank"] as const;

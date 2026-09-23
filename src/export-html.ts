@@ -85,6 +85,23 @@ export async function renderBody(source: string): Promise<string> {
   return String(file);
 }
 
+/** A piece of markdown, such as a hint's body, as HTML, at once. The
+ * editor draws these on every keystroke, so this cannot wait on anything;
+ * every step of the pipeline is synchronous. */
+export function renderFragment(source: string): string {
+  return String(
+    unified()
+      .use(remarkParse)
+      .use(remarkGfm)
+      .use(remarkMath)
+      .use(unmathPlainDollars)
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(rehypeKatex)
+      .use(rehypeStringify, { allowDangerousHtml: true })
+      .processSync(source),
+  );
+}
+
 const IMG_RE = /<img\b[^>]*\bsrc="([^"]*)"[^>]*>/g;
 
 /** Every image the document owns, inlined, so the file is one file. */

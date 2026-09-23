@@ -13,6 +13,8 @@ import { assetPathFor, isLocalAsset } from "./images.ts";
 import {
   QUESTION_TYPES,
   cardIn,
+  hintIn,
+  parseTrigger,
   gapsBalanced,
   hasGap,
   questionIn,
@@ -153,6 +155,12 @@ export function checkDocument(source: string, around: Around): Problem[] {
     seen.add(id);
   };
 
+  // A staged hint belongs to a cell: the one its `for:` names, or the
+  // runnable cell above it. Which cells exist is only known at the end.
+  const cells = new Set<string>();
+  let cellAbove: string | null = null;
+  const hints: { cell: string; line: number }[] = [];
+
   let line = 1;
   for (const part of segments(source)) {
     const info = part.info ?? "";
@@ -161,9 +169,31 @@ export function checkDocument(source: string, around: Around): Problem[] {
       const pane = sitePaneIn(info, body);
       const question = questionIn(info, body);
       const card = cardIn(info, body);
+      const hint = hintIn(info, body);
 
       if (isRunnable(languageOf(info), info)) {
-        claim(parseCell(body).id, "runnable cell", line);
+        const id = parseCell(body).id;
+        claim(id, "runnable cell", line);
+        if (id) cells.add(id);
+        cellAbove = id;
+      } else if (hint) {
+        const cell = hint.cell ?? cellAbove;
+        if (!cell) {
+          problems.push({
+            message: "A staged hint with no cell above it and no `for:` line. Move it under the cell it helps with, or add `for:` naming that cell's id.",
+            line,
+            severity: "blocking",
+          });
+        } else {
+          hints.push({ cell, line });
+        }
+        if (!hint.text.trim()) {
+          problems.push({ message: "A staged hint with no text. Write the hint below its settings lines.", line, severity: "blocking" });
+        }
+        const trigger = parseTrigger(hint.after);
+        if ("error" in trigger) {
+          problems.push({ message: `This hint's \`after:\` line: ${trigger.error}`, line, severity: "blocking" });
+        }
       } else if (pane) {
         claim(pane.id, "web page pane", line);
         if (!pane.site) {
@@ -181,6 +211,16 @@ export function checkDocument(source: string, around: Around): Problem[] {
       }
     }
     line += linesOf(part.text);
+  }
+
+  for (const hint of hints) {
+    if (!cells.has(hint.cell)) {
+      problems.push({
+        message: `A staged hint for \`${hint.cell}\`, which is not the id of any runnable cell on this page. Check the \`for:\` line.`,
+        line: hint.line,
+        severity: "blocking",
+      });
+    }
   }
 
   if (images && path !== undefined) {

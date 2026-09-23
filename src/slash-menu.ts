@@ -141,4 +141,12 @@ export const SNIPPETS: SnippetItem[] = [
     markdown: () =>
       '<details class="dl-hint"><summary>stuck? here are some steps</summary>\n\nFirst step.\n\n</details>',
   },
+  {
+    // Belongs to the cell above it, which is where the menu is usually
+    // opened: just under the cell it helps with.
+    key: "staged-hint",
+    label: "Staged hint",
+    icon: HINT_ICON,
+    markdown: () => "```hint\nafter: 3 errors\ntitle: Stuck? Try this\n\nWhat to look at first.\n```",
+  },
 ];

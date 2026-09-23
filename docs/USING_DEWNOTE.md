@@ -272,6 +272,7 @@ has a **Tutorial** group:
 | **Fill in the blank** | A question with a gap for the reader to fill. |
 | **Web page** | An HTML, CSS and JavaScript editor that shows a live page. |
 | **Hint** | A fold the reader opens when stuck. |
+| **Staged hint** | A hint that stays hidden until the reader has got stuck on the cell above. See [Staged hints](#staged-hints). |
 
 Every item is inserted with a unique `id:` already filled in, and passes
 **Check this document** as inserted.
@@ -492,6 +493,38 @@ change the summary, use **Edit the markdown** (Ctrl+/). On the dewlab
 site, readers see the summary and open the fold to read the hint. An
 answer fold, `class="dl-answer"`, shows the same way, labelled
 **ANSWER**.
+
+### Staged hints
+
+A hint fold is always there to open. A **staged hint** stays hidden
+until the reader has tried and got stuck: after a number of errors, say.
+The **Staged hint** item inserts one, just under the cell it helps with:
+
+````
+```hint
+after: 3 errors
+title: Stuck? Try this
+
+What to look at first.
+```
+````
+
+- `after:` is what makes it appear. Count errors, identical errors,
+  unchanged runs, runs, failed checks, empty results or minutes, for
+  example `3 errors` or `2 identical errors and 5 minutes`. With more
+  than one, all have to be reached. Leave the line out and it appears
+  after 5 errors.
+- `title:` is what the reader sees first. Leave it out and dewlab uses
+  "Let's slow down a moment…".
+- `for:` names the cell it belongs to, by its `id:`. Leave it out and
+  the hint belongs to the cell just above it.
+- Everything after those lines is the hint, in ordinary markdown.
+
+Under the lines you type, dewnote shows the hint as the reader will see
+it, and a line saying when it appears and for which cell. **Hide** in
+the block's corner hides the lines and leaves only that; **Edit** brings
+them back. If the `after:` line is something dewlab would refuse, the
+line says so in orange, and **Check this document** lists it.
 
 ## Checking for problems
 

@@ -201,7 +201,7 @@ comes from typing starts Python.
 
 ### Drawn over the document, not in it
 
-Three constructs are drawn differently from how the file holds them,
+Four constructs are drawn differently from how the file holds them,
 and in each case only the drawing changes, so the round-trip suite
 still guards the file:
 
@@ -220,6 +220,12 @@ still guards the file:
 - **Front matter.** A node view draws Title and Status as fields over
   the YAML, which stays the node's content, editable under Show all
   fields. A field change rewrites only its own line.
+- **Staged hints.** A ```` ```hint ```` fence stays a code block, and
+  Crepe's own preview panel under it (the one a cell's output uses)
+  draws the hint as a reader meets it. `renderPreview` fires on every
+  keystroke, so the hint's markdown goes through `renderFragment`,
+  which is synchronous, and is handed over as a string, so Crepe's
+  DOMPurify pass sees any HTML a hint's author wrote.
 
 Two things learned doing it. ProseMirror rebuilds a node view or widget
 whenever the selection moves into it, which a click does before its

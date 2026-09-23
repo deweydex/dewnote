@@ -491,3 +491,29 @@ test.describe("a web page's panes as one editor", () => {
     await expect(page.frameLocator(".dn-site-preview").locator("body")).toContainText("And more.");
   });
 });
+
+test("a staged hint shows as the hint a reader meets, and when it appears", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const source =
+    "```python exec\nid: totals\nx = 1\n```\n\n```hint\nafter: 3 errors and 2 minutes\ntitle: Look again\n\nCheck the **spelling**.\n```\n";
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open(text);
+  }, source);
+
+  const hint = page.locator(".dn-hint");
+  await expect(hint.locator(".dn-hint-when")).toHaveText("Staged hint. Appears after 3 errors and 2 minutes in totals.");
+  await expect(hint.locator(".dn-hint-title")).toHaveText("Look again");
+  await expect(hint.locator("strong")).toHaveText("spelling");
+  // Drawing it changes nothing in the file.
+  expect(await page.evaluate(() => (globalThis as any).__dewnote.markdown())).toBe(source);
+});
+
+test("a staged hint whose trigger the build would refuse says so where it is drawn", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open("```hint\nfor: somewhere\nafter: soon\n\nLook.\n```\n");
+  });
+  await expect(page.locator(".dn-hint-when")).toContainText("cannot be read");
+});

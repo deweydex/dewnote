@@ -187,8 +187,12 @@ unchanged runs, runs, failed checks, empty results, minutes; default
 `errors:5`); `title:` defaults to "Let's slow down a moment…". The rest is
 markdown.
 
-*dewnote:* shown as a code block. Not drawn as a hint, and the checker
-does not read it.
+*dewnote:* the lines stay editable, and under them the hint is drawn as
+a reader meets it, with a line saying when it appears and for which cell
+(`hintIn`, `parseTrigger`, `describeTrigger` in `fences.ts`). The
+checker reports a hint with no cell to belong to, one with no text, an
+`after:` line the build cannot read, and a `for:` naming no cell on the
+page. The `/` menu inserts one.
 
 ### Questions
 
@@ -384,15 +388,14 @@ nbformat 4.5 (`notebook.ts`).
 
 What dewlab's build reads and dewnote shows only as raw text, in the
 order an author would notice it. Each is planned in
-`planning/ROADMAP.md`, Phase 6.
+`planning/ROADMAP.md`, Phases 6 and 7.
 
-1. Staged `hint` fences: shown as code, not as the hint they are.
-2. `question` fences: checked, but shown as code rather than as the
+1. `question` fences: checked, but shown as code rather than as the
    question a reader sees.
-3. App panes: shown as code; nothing runs them.
-4. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
+2. App panes: shown as code; nothing runs them.
+3. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
    when run in dewnote.
-5. Cards, generated blocks and page wrappers: shown as code, text and
+4. Cards, generated blocks and page wrappers: shown as code, text and
    loose tags.
-6. The checker does not report footnotes inside fences, or `tutorial:`
+5. The checker does not report footnotes inside fences, or `tutorial:`
    anchors that name no heading.
