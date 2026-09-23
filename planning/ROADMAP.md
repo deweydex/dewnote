@@ -12,17 +12,11 @@ build accepts. Phase 2 (the browser tests, and real Python, run in CI on
 every pull request) is done. Phase 3 (the editor shows what the site
 shows: hint folds, one editor for web page panes, the Run button, the
 empty page, front matter fields, the margin) is done, as is Jedi help in
-Python cells.
+Python cells. In Phase 4, renaming, moving and deleting (4.1) is done.
 
 ---
 
 ## Phase 4: Missing features
-
-### 4.1 Rename, move and delete files
-
-Only creation exists. Renaming a tutorial is special: its id is its
-address and the key for readers' saved work, so a rename also has to add
-an entry to dewlab's `courses/redirects.yaml` and update course lists.
 
 ### 4.2 New practice page
 

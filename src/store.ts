@@ -10,6 +10,7 @@
 import * as github from "./github.ts";
 import * as folder from "./folder.ts";
 import { saveProblem, messageOf, type SaveProblem } from "./save-problem.ts";
+import type { Change } from "./rename.ts";
 
 export interface StoreFile {
   path: string;
@@ -71,6 +72,13 @@ export interface Store {
   /** Throws a `SaveProblem` and nothing else. Every failure an author can
    * do something about has a sentence written for them. */
   write(path: string, text: string, message: string): Promise<void>;
+  /** Several changes that belong together, as one commit where the
+   * store has commits: a tutorial renamed, with every file that names
+   * it. Throws a `SaveProblem`, as `write` does, and on a repository
+   * nothing is changed when it throws. A folder has no transactions, so
+   * there each change is made in turn, removals last, and a failure
+   * part-way is reported with what was left undone. */
+  apply(changes: readonly Change[], message: string): Promise<void>;
   /** Repository only: opens (or finds) the draft pull request for the
    * working branch, and answers with its URL. */
   publish?(): Promise<string>;
@@ -141,6 +149,41 @@ export async function openFolder(): Promise<Store | null> {
         handles.set(path, made.handle);
       } catch (error) {
         asProblem(error);
+      }
+    },
+
+    async apply(changes) {
+      const done: string[] = [];
+      try {
+        // Everything new first, so a failure leaves the old files in
+        // place: a copy too many rather than a file lost.
+        for (const change of changes) {
+          if (change.kind === "write") {
+            const handle = handles.get(change.path);
+            if (handle) await folder.writeFile(handle, change.text);
+            else handles.set(change.path, (await folder.createFile(root, change.path, change.text)).handle);
+            done.push(change.path);
+          } else if (change.kind === "move") {
+            const bytes = await folder.readBytesAt(root, change.from);
+            if (!bytes) throw new Error(`${change.from} is no longer there.`);
+            handles.set(change.to, (await folder.createFile(root, change.to, bytes)).handle);
+            done.push(change.to);
+          }
+        }
+        for (const change of changes) {
+          if (change.kind === "write") continue;
+          const path = change.kind === "move" ? change.from : change.path;
+          await folder.removeFile(root, path);
+          handles.delete(path);
+          done.push(path);
+        }
+      } catch (error) {
+        asProblem(saveProblem(
+          done.length === 0
+            ? `Nothing was changed: ${messageOf(error)}`
+            : `Stopped part-way: ${messageOf(error)} ${done.length} file${done.length === 1 ? " had" : "s had"} ` +
+              "already changed, so check the folder before carrying on.",
+        ));
       }
     },
 
@@ -248,6 +291,28 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
           asProblem(saveProblem(
             "Not saved: GitHub refused the token. It may have expired, or may not have write access to Contents. " +
               "Reload dewnote and connect with a new token.",
+          ));
+        }
+        asProblem(error);
+      }
+    },
+
+    async apply(changes, message) {
+      try {
+        const written = await github.commitChanges(repo, branch, changes, shas, message, token);
+        for (const change of changes) {
+          if (change.kind === "remove") shas.delete(change.path);
+          if (change.kind === "move") shas.delete(change.from);
+        }
+        for (const [path, sha] of written) shas.set(path, sha);
+      } catch (error) {
+        if (error instanceof github.CommitRefused) {
+          asProblem(saveProblem(`Nothing was changed: ${error.message}`, error.conflict));
+        }
+        const status = error instanceof github.GithubApiError ? error.status : 0;
+        if (status === 401 || status === 403) {
+          asProblem(saveProblem(
+            "Nothing was changed: GitHub refused the token. It may have expired, or may not have write access to Contents.",
           ));
         }
         asProblem(error);

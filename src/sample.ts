@@ -4,6 +4,7 @@
 // the quickest way to see whether a Milkdown upgrade broke something.
 // Edits are kept in memory and go nowhere.
 
+import { applyToFiles } from "./rename.ts";
 import type { Store, StoreFile } from "./store.ts";
 
 /** A real file beside the document, named the way a tutorial names one,
@@ -152,6 +153,17 @@ export function sampleStore(): Store {
     },
     writeBytes: async (path, value) => {
       bytes.set(path, value);
+    },
+    apply: async (changes) => {
+      for (const change of changes) {
+        if (change.kind === "move" && bytes.has(change.from)) {
+          bytes.set(change.to, bytes.get(change.from)!);
+          bytes.delete(change.from);
+        } else if (change.kind === "remove") {
+          bytes.delete(change.path);
+        }
+      }
+      applyToFiles(held, changes);
     },
   };
 }

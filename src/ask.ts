@@ -28,10 +28,11 @@ export function mountAsk(): Ask {
   let settle: ((value: string | null) => void) | null = null;
 
   function close(value: string | null): void {
+    const answer = settle;
+    settle = null;
     overlay.close();
     overlay.replaceChildren();
-    settle?.(value);
-    settle = null;
+    answer?.(value);
   }
 
   overlay.addEventListener("click", (event) => {
@@ -39,7 +40,11 @@ export function mountAsk(): Ask {
   });
   // Escape closes a dialog natively, without passing through `close`.
   // Whoever asked is still waiting, so they hear "no answer" here.
+  // The event arrives a task after the dialog closed, so when a second
+  // question follows at once it finds the dialog open again with the
+  // next question in it, and that one has not been answered.
   overlay.addEventListener("close", () => {
+    if (overlay.open) return;
     settle?.(null);
     settle = null;
   });

@@ -291,6 +291,7 @@ export interface Store {
   read(path: string): Promise<string>;
   readBytes(path: string): Promise<Uint8Array<ArrayBuffer> | null>;
   write(path: string, text: string, message: string): Promise<void>;
+  apply(changes: readonly Change[], message: string): Promise<void>;
   publish?(): Promise<string>;
   readPublished?(path: string): Promise<string | null>;
 }
@@ -321,6 +322,35 @@ offers **Keep mine** (an ordinary write, now against the new SHA, and
 refused again if the file has moved again), **Keep the saved version**
 (reopen from what was read) or **Cancel** (the refusal stays in the
 margin).
+
+### Renaming, moving and deleting
+
+A tutorial's id is its folder's name, its file's name, its address and
+the key readers' saved work is kept under, and other files name it:
+course lists, `tutorial:` links, `practice_for:`, `practice_across:`,
+`context_for:` and `courses/redirects.yaml`. `rename.ts` plans a rename
+over the workspace's text: the folder moves whole (only the names dewlab
+derives from the id change; an image or a frozen release keeps its
+name, since the markdown names it), every reference is rewritten, and a
+redirect is added from each old address that was ever served (not a
+draft's, since a redirect to a page the build does not write stops the
+build). A delete is refused while anything still points at the tutorial,
+and the refusal names each file.
+
+A plan is a list of changes (write, move, remove) that `Store.apply`
+carries out together. On a repository that is one commit through the Git
+Data API (`commitChanges` in `github.ts`): the branch's tree is read,
+each file the plan touches is checked against the blob SHA it was read
+at, a new tree is built over the old one (a moved image reuses its blob,
+so nothing is downloaded), and the branch is moved to the new commit
+without force. Any of those failing leaves the branch as it was. A
+folder has no transactions, so it writes everything new first and
+removes last: a failure part-way leaves a copy too many, never a file
+lost, and the message says the folder needs a look.
+
+The rename was checked against dewlab itself: two heavily linked
+tutorials renamed in a copy of the repository, and `build.py` still
+builds, with four more pages (the redirect stubs).
 
 ### Unsaved changes
 

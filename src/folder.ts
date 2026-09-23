@@ -176,3 +176,32 @@ export async function createFile(root: FileSystemDirectoryHandle, relativePath: 
   await writable.close();
   return { path: relativePath, handle };
 }
+
+/** Removes the file at `relativePath`, and then any folder it leaves
+ * empty on the way back up: a tutorial deleted or renamed should not
+ * leave its folder behind. Nothing there is not an error; the outcome
+ * wanted is that nothing is there. */
+export async function removeFile(root: FileSystemDirectoryHandle, relativePath: string): Promise<void> {
+  const segments = relativePath.split("/").filter(Boolean);
+  const fileName = segments.pop();
+  if (!fileName) return;
+  const dirs: FileSystemDirectoryHandle[] = [root];
+  try {
+    for (const segment of segments) dirs.push(await dirs[dirs.length - 1]!.getDirectoryHandle(segment));
+  } catch {
+    return;
+  }
+  await dirs[dirs.length - 1]!.removeEntry(fileName).catch((error: unknown) => {
+    if ((error as { name?: string }).name !== "NotFoundError") throw error;
+  });
+  for (let at = segments.length - 1; at >= 0; at -= 1) {
+    const dir = dirs[at + 1]!;
+    let empty = true;
+    for await (const _ of (dir as unknown as DirectoryLike).entries()) {
+      empty = false;
+      break;
+    }
+    if (!empty) break;
+    await dirs[at]!.removeEntry(segments[at]!);
+  }
+}

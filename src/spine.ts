@@ -46,7 +46,8 @@ export interface SpineWorkspace {
 }
 
 export interface Spine {
-  setFile(file: SpineFile): void;
+  /** Null once no document is open, as after deleting one. */
+  setFile(file: SpineFile | null): void;
   setLocation(location: SpineLocation): void;
   setWorkspace(workspace: SpineWorkspace): void;
   /** Re-reads the document's headings. Cheap — one parse of text this

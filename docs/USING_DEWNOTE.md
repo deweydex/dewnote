@@ -217,6 +217,10 @@ appear while a document is open.
 | **Restart Python** | Cells | Clears every variable, as if no cell had run. |
 | **Add to a series…** | Tutorial | Lists the tutorial in a series on a course. |
 | **Remove from a series…** | Tutorial | Takes the tutorial out of a series. The tutorial itself is not deleted. |
+| **Rename this tutorial…** | Tutorial | Changes the tutorial's id, and every file that names it. See [Renaming a tutorial](#renaming-a-tutorial). |
+| **Delete this tutorial…** | Tutorial | Deletes the tutorial's folder and takes it out of every course. See [Deleting](#deleting). |
+| **Move or rename this file…** | Document | Gives a page outside `tutorials/` a new path. |
+| **Delete this document…** | Document | Deletes a file that is not a tutorial's own, such as a practice page. |
 | **Release a new version…** | Tutorial | Keeps a copy of the current version and makes your edits the next one. See [Releasing a new version](#releasing-a-new-version). |
 | **New tutorial…** | Workspace | Creates a draft tutorial. |
 | **Check every document** | Workspace | Runs the same checks on every document in the workspace. |
@@ -607,6 +611,48 @@ the tutorial to the end of that series in the course file and saves it.
 **Remove from a series…** does the reverse. It only appears when the
 tutorial is in at least one series.
 
+### Renaming a tutorial
+
+A tutorial's id is the name of its folder and its file, and it is the
+page's web address. To change it, run **Rename this tutorial…**. dewnote
+suggests an id made from the title, which is usually what you want after
+changing the title. Type another if you like: lower-case letters, digits
+and single hyphens.
+
+Before anything changes, dewnote lists what it will do:
+
+- Move the tutorial's folder, renaming its file, its practice page and
+  their glossaries. Images and old versions keep their names.
+- Update every course list that includes the tutorial.
+- Update every link to it (`tutorial:<id>`) and every `practice_for:`,
+  `practice_across:` or `context_for:` that names it, in every page.
+- Add a line to `courses/redirects.yaml` so the old address still leads
+  to the page. A draft gets no line, because no reader has its address.
+
+On GitHub all of this is one commit. Rename a live tutorial only when
+you need to: readers' saved answers are stored under the id, so anyone
+part-way through it will find their answers gone.
+
+To move or rename any other page, such as one in `pages/`, run **Move or
+rename this file…** and type its new path.
+
+### Deleting
+
+**Delete this tutorial…** deletes the tutorial's whole folder (its
+practice page, glossary, images and old versions) and takes it out of
+every course. **Delete this document…** deletes any other file, such as a
+practice page on its own.
+
+dewnote refuses to delete a page while another file still points at it,
+and says which files do. Change those first. A deleted live tutorial
+breaks every reader's link to it, so for a tutorial that is no longer
+taught, setting its status to `archived` is usually better: it stays on
+the site and its links keep working, but the course shows it in its
+Archive rather than in the reading order.
+
+On GitHub the deleted files stay in the repository's history. In a
+folder they are gone.
+
 ### Releasing a new version
 
 Once a tutorial is live, readers may have saved work in it. Releasing a
@@ -700,7 +746,6 @@ enough room, the margin moves to a strip across the top.
 
 These are planned but not built yet (see `planning/ROADMAP.md`):
 
-- Files cannot be renamed, moved or deleted from dewnote.
 - There is no find and replace across the workspace.
 - A save conflict keeps one version or the other; it cannot combine them.
 

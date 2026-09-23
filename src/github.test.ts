@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
+  blobSha,
+  commitChanges,
+  CommitRefused,
   ensureBranch,
   fromBase64,
   listMarkdownFiles,
@@ -315,5 +318,102 @@ describe("listRepositories", () => {
   test("a repository with no default branch named still gets one", async () => {
     serve([[{ name: "odd", owner: { login: "x" }, default_branch: "" }]]);
     expect((await listRepositories("tok"))[0]!.defaultBranch).toBe("main");
+  });
+});
+
+describe("commitChanges", () => {
+  const repo = { owner: "deweydex", repo: "dewlab" };
+  const originalFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  /** A branch holding two files, and every request made of it. */
+  function branch(onPatch = () => new Response("{}", { status: 200 })) {
+    const calls: { method: string; url: string; body: any }[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+      calls.push({ method, url, body });
+      const json = (value: unknown) => new Response(JSON.stringify(value), { status: 200 });
+      if (url.includes("/git/ref/heads/")) return json({ object: { sha: "head" } });
+      if (url.endsWith("/git/commits/head")) return json({ tree: { sha: "tree" } });
+      if (url.includes("/git/trees/tree")) {
+        return json({
+          tree: [
+            { path: "tutorials/a/a.md", mode: "100644", type: "blob", sha: "a-sha" },
+            { path: "tutorials/a/a.svg", mode: "100644", type: "blob", sha: "svg-sha" },
+          ],
+        });
+      }
+      if (method === "POST" && url.endsWith("/git/trees")) return json({ sha: "new-tree" });
+      if (method === "POST" && url.endsWith("/git/commits")) return json({ sha: "new-commit" });
+      if (method === "PATCH") return onPatch();
+      return new Response("{}", { status: 404 });
+    }) as typeof fetch;
+    return calls;
+  }
+
+  test("git's own blob name for a text", async () => {
+    // `printf 'hello\n' | git hash-object --stdin`
+    expect(await blobSha("hello\n")).toBe("ce013625030ba8dba906f756967f9e9ca394464a");
+  });
+
+  test("a rename is one tree, one commit and one move of the branch, without force", async () => {
+    const calls = branch();
+    const shas = await commitChanges(
+      repo,
+      "work",
+      [
+        { kind: "write", path: "tutorials/b/b.md", text: "hello\n" },
+        { kind: "remove", path: "tutorials/a/a.md" },
+        { kind: "move", from: "tutorials/a/a.svg", to: "tutorials/b/a.svg" },
+      ],
+      new Map([["tutorials/a/a.md", "a-sha"]]),
+      "Rename a to b",
+      "tok",
+    );
+    const tree = calls.find((call) => call.method === "POST" && call.url.endsWith("/git/trees"))!.body;
+    expect(tree).toEqual({
+      base_tree: "tree",
+      tree: [
+        { path: "tutorials/b/b.md", mode: "100644", type: "blob", content: "hello\n" },
+        { path: "tutorials/a/a.md", mode: "100644", type: "blob", sha: null },
+        { path: "tutorials/b/a.svg", mode: "100644", type: "blob", sha: "svg-sha" },
+        { path: "tutorials/a/a.svg", mode: "100644", type: "blob", sha: null },
+      ],
+    });
+    const commit = calls.find((call) => call.method === "POST" && call.url.endsWith("/git/commits"))!.body;
+    expect(commit).toEqual({ message: "Rename a to b", tree: "new-tree", parents: ["head"] });
+    expect(calls.find((call) => call.method === "PATCH")!.body).toEqual({ sha: "new-commit", force: false });
+    expect(shas).toEqual(new Map([
+      ["tutorials/b/b.md", "ce013625030ba8dba906f756967f9e9ca394464a"],
+      ["tutorials/b/a.svg", "svg-sha"],
+    ]));
+  });
+
+  test("a file changed on the branch since it was read refuses the whole commit", async () => {
+    const calls = branch();
+    const refused = commitChanges(
+      repo, "work",
+      [{ kind: "write", path: "tutorials/a/a.md", text: "mine\n" }],
+      new Map([["tutorials/a/a.md", "older-sha"]]),
+      "Edit", "tok",
+    );
+    await expect(refused).rejects.toBeInstanceOf(CommitRefused);
+    expect(calls.some((call) => call.method !== "GET")).toBe(false);
+  });
+
+  test("writing over a file dewnote never read is refused, not an overwrite", async () => {
+    branch();
+    await expect(
+      commitChanges(repo, "work", [{ kind: "write", path: "tutorials/a/a.md", text: "x" }], new Map(), "Add", "tok"),
+    ).rejects.toThrow("already exists");
+  });
+
+  test("a branch that moved during the commit is refused, and says so", async () => {
+    branch(() => new Response(JSON.stringify({ message: "Update is not a fast forward" }), { status: 422 }));
+    await expect(
+      commitChanges(repo, "work", [{ kind: "remove", path: "tutorials/a/a.svg" }], new Map(), "Delete", "tok"),
+    ).rejects.toThrow("moved on while dewnote was committing");
   });
 });
