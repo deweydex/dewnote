@@ -873,11 +873,17 @@ export async function mountEditor(
   // empty paragraph is simply not written, which is what markdown does.
   await crepe.editor.remove(remarkPreserveEmptyLinePlugin);
 
+  /** A document ending in a list or a table gets an empty paragraph
+   * after it, so there is somewhere to put the cursor, and that
+   * paragraph is written as a blank line at the end of the file. No
+   * markdown file needs one, and it is churn in every diff. */
+  const oneFinalNewline = (markdown: string) => markdown.replace(/\n{2,}$/, "\n");
+
   let hydrated = false;
   if (options.onChange) {
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
-        if (hydrated) options.onChange!(markdown);
+        if (hydrated) options.onChange!(oneFinalNewline(markdown));
       });
     });
   }
@@ -898,7 +904,7 @@ export async function mountEditor(
   return {
     cellIds: () => runnableCells().map((cell) => cell.id),
     runCell: (id) => runCellById(id),
-    markdown: () => crepe.getMarkdown(),
+    markdown: () => oneFinalNewline(crepe.getMarkdown()),
     headings() {
       const found: Heading[] = [];
       crepe.editor.action((ctx) => {
