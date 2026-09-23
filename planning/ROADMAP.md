@@ -9,20 +9,10 @@ Last reviewed: 2026-09-22. Phase 1 (things that could lose or corrupt
 work) is done: unsaved-changes prompts, kept drafts, save conflicts,
 releases that freeze the published version, and new tutorials the
 build accepts. Phase 2 (the browser tests, and real Python, run in CI on
-every pull request) is done.
-
----
-
-## Phase 3: The editor shows what the site shows
-
-### 3.2 One editor for web page panes
-
-**Problem.** The `html site`, `css site` and `js site` blocks show as
-three separate code blocks. On the site they are one editor with tabs and
-a live preview.
-
-**Approach.** Group adjacent panes with the same `site:` into one node
-view with three tabs and an iframe preview. The file keeps three fences.
+every pull request) is done. Phase 3 (the editor shows what the site
+shows: hint folds, one editor for web page panes, the Run button, the
+empty page, front matter fields, the margin) is done, as is Jedi help in
+Python cells.
 
 ---
 

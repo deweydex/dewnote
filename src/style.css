@@ -1580,3 +1580,51 @@ div.dn-report-row:hover { background: none; }
   font-size: 0.75rem;
   color: var(--dl-muted);
 }
+
+/* A site editor: its panes as tabs of one editor, and the page they
+   make under them. The three fences stay three fences in the file. */
+.milkdown .dn-site-hidden {
+  display: none !important;
+}
+
+.milkdown .dn-site-tabs {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin: 1rem 0 -0.25rem;
+  font-size: 0.8rem;
+}
+
+.milkdown .dn-site-name {
+  margin-inline-end: 0.5rem;
+  font-family: var(--dl-mono);
+  color: var(--dl-muted);
+}
+
+.milkdown .dn-site-tabs button {
+  font: inherit;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--dl-rule);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--dl-muted);
+  cursor: pointer;
+}
+
+.milkdown .dn-site-tabs button.is-showing {
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+  color: var(--dl-fg);
+  font-weight: 600;
+}
+
+.milkdown .dn-site-preview {
+  display: block;
+  width: 100%;
+  height: 16rem;
+  margin: 0.25rem 0 1rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 6px;
+  background: #fff;
+  resize: vertical;
+}

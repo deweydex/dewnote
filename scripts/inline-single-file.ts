@@ -69,7 +69,15 @@ if (emittedIconPath && emittedIconPath !== join(DIST, "favicon.svg") && existsSy
 // build producing a 42 MB file (15x too large) with the script tag
 // duplicated 28 times, from exactly this, rather than assumed safe.
 html = html.replace(linkMatch[0], () => `<style>${css}</style>`);
-html = html.replace(scriptMatch[0], () => `<script type="module">${js}</script>`);
+// Inline, the script ends at the first `</script` the HTML parser meets,
+// wherever it is: a string in the application that holds the sequence
+// (the site editor's preview builds a page with a <script> in it) cut the
+// bundle off mid-file, and nothing loaded. Minifiers fold "</" + "script>"
+// back into the literal, so this cannot be avoided in source. `<\/script`
+// means the same in any JavaScript string, template or regex, and the
+// sequence cannot occur outside one.
+const inlineJs = js.replace(/<\/(script)/gi, "<\\/$1");
+html = html.replace(scriptMatch[0], () => `<script type="module">${inlineJs}</script>`);
 
 writeFileSync(htmlPath, html);
 unlinkSync(cssFile);

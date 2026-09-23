@@ -457,7 +457,11 @@ The **Web page** item in the block menu inserts three code blocks:
 same name. On the dewlab site, blocks with the same `site:` name become
 one editor with a tab for each language and a live preview.
 
-In dewnote, they currently show as three separate code blocks.
+dewnote shows them the same way: a tab for each pane above the code,
+one pane showing at a time, and the page they make, live, underneath.
+The preview updates a moment after you stop typing, and runs the page's
+JavaScript. Drag its bottom corner to make it taller. In the file, they
+stay three code blocks.
 
 ## Hints
 
@@ -696,8 +700,6 @@ enough room, the margin moves to a strip across the top.
 
 These are planned but not built yet (see `planning/ROADMAP.md`):
 
-- Web page panes show as three code blocks rather than one editor with
-  tabs.
 - Files cannot be renamed, moved or deleted from dewnote.
 - There is no find and replace across the workspace.
 - A save conflict keeps one version or the other; it cannot combine them.

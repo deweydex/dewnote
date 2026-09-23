@@ -17,11 +17,11 @@
 
 import { Crepe } from "@milkdown/crepe";
 import { bulletListSchema, codeBlockSchema, htmlSchema, remarkPreserveEmptyLinePlugin } from "@milkdown/kit/preset/commonmark";
-import { Plugin } from "@milkdown/kit/prose/state";
+import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
-import { foldLine } from "./fences.ts";
+import { foldLine, siteGroups, sitePage, type SiteGroup } from "./fences.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 import { setYamlField } from "./authoring.ts";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
@@ -336,6 +336,144 @@ export const foldBodies = $prose(
           });
           return DecorationSet.create(state.doc, marks);
         },
+      },
+    }),
+);
+
+/** The site editors in a document, from its top-level blocks, with each
+ * pane's position so decorations can find it. */
+function sitesIn(state: EditorState): { group: SiteGroup; from: number[]; to: number[] }[] {
+  const blocks: ({ info: string; body: string } | null)[] = [];
+  const from: number[] = [];
+  const to: number[] = [];
+  state.doc.forEach((block, offset) => {
+    from.push(offset);
+    to.push(offset + block.nodeSize);
+    blocks.push(
+      block.type.name === "code_block"
+        ? { info: `${block.attrs["language"] ?? ""} ${block.attrs["meta"] ?? ""}`, body: block.textContent }
+        : null,
+    );
+  });
+  return siteGroups(blocks).map((group) => ({
+    group,
+    from: group.panes.map((pane) => from[pane.at]!),
+    to: group.panes.map((pane) => to[pane.at]!),
+  }));
+}
+
+const TAB_NAMES: Record<string, string> = { html: "HTML", css: "CSS", js: "JavaScript" };
+const siteKey = new PluginKey<Map<number, string>>("dewnoteSites");
+
+/** A site editor's panes as one editor: a tab bar over them, one pane
+ * showing at a time, and the page they make, live, under them. The file
+ * keeps three fences, as dewlab writes and builds them; only the drawing
+ * changes. Which tab is showing is per editor, by its place among the
+ * document's site editors, and is the editor's own state, not the file's. */
+export const siteEditors = $prose(
+  () =>
+    new Plugin<Map<number, string>>({
+      key: siteKey,
+      state: {
+        init: () => new Map(),
+        apply(transaction, chosen) {
+          const choice = transaction.getMeta(siteKey) as { editor: number; language: string } | undefined;
+          if (!choice) return chosen;
+          return new Map(chosen).set(choice.editor, choice.language);
+        },
+      },
+      props: {
+        decorations(state) {
+          const chosen = siteKey.getState(state) ?? new Map<number, string>();
+          const marks: Decoration[] = [];
+          sitesIn(state).forEach(({ group, from, to }, editor) => {
+            const languages = group.panes.map((pane) => pane.language);
+            const showing = chosen.has(editor) && languages.includes(chosen.get(editor)!)
+              ? chosen.get(editor)!
+              : languages[0]!;
+
+            marks.push(
+              Decoration.widget(
+                from[0]!,
+                (view) => {
+                  const bar = document.createElement("div");
+                  bar.className = "dn-site-tabs";
+                  bar.contentEditable = "false";
+                  const name = document.createElement("span");
+                  name.className = "dn-site-name";
+                  name.textContent = group.site;
+                  bar.appendChild(name);
+                  for (const language of languages) {
+                    const tab = document.createElement("button");
+                    tab.type = "button";
+                    tab.textContent = TAB_NAMES[language] ?? language;
+                    tab.classList.toggle("is-showing", language === showing);
+                    tab.setAttribute("aria-pressed", String(language === showing));
+                    // On mousedown, with the default prevented, like the
+                    // front-matter toggle: a click would move the
+                    // selection first and may land on a rebuilt bar.
+                    tab.addEventListener("mousedown", (event) => {
+                      event.preventDefault();
+                      view.dispatch(view.state.tr.setMeta(siteKey, { editor, language }));
+                    });
+                    bar.appendChild(tab);
+                  }
+                  return bar;
+                },
+                { side: -1, key: `dn-site-tabs-${editor}-${group.site}-${showing}-${languages.join(",")}` },
+              ),
+            );
+
+            group.panes.forEach((pane, at) => {
+              marks.push(
+                Decoration.node(from[at]!, to[at]!, {
+                  class: pane.language === showing ? "dn-site-pane" : "dn-site-pane dn-site-hidden",
+                }),
+              );
+            });
+
+            const page = sitePage(group);
+            marks.push(
+              Decoration.widget(
+                to[to.length - 1]!,
+                () => {
+                  const frame = document.createElement("iframe");
+                  frame.className = "dn-site-preview";
+                  frame.title = `The page ${group.site} makes`;
+                  frame.dataset["dnSite"] = String(editor);
+                  // Scripts run; nothing else. It cannot reach the editor.
+                  frame.setAttribute("sandbox", "allow-scripts");
+                  frame.srcdoc = page;
+                  return frame;
+                },
+                { side: 1, key: `dn-site-preview-${editor}-${group.site}` },
+              ),
+            );
+          });
+          return DecorationSet.create(state.doc, marks);
+        },
+      },
+      /** The preview widget keeps its iframe between keystrokes, so it
+       * does not flash; this refreshes what it shows, a moment after the
+       * typing stops. */
+      view() {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        return {
+          update(view, previous) {
+            if (view.state.doc.eq(previous.doc)) return;
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+              sitesIn(view.state).forEach(({ group }, editor) => {
+                const frame = view.dom.querySelector<HTMLIFrameElement>(`iframe[data-dn-site="${editor}"]`);
+                const page = sitePage(group);
+                if (frame && frame.srcdoc !== page) frame.srcdoc = page;
+              });
+            }, 400);
+          },
+          destroy() {
+            clearTimeout(timer);
+          },
+        };
       },
     }),
 );
@@ -721,7 +859,8 @@ export async function mountEditor(
     .use(frontMatterView)
     .use(plainDollars)
     .use(foldLineView)
-    .use(foldBodies);
+    .use(foldBodies)
+    .use(siteEditors);
   crepe.editor.use(tightBulletLists).use(tightListItems);
 
   // Milkdown's "preserve empty line" plugin does two things, both wrong

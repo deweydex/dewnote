@@ -60,6 +60,53 @@ export function sitePaneIn(info: string, body: string): SitePane | null {
   };
 }
 
+/** One live editor: consecutive panes naming the same site, in the
+ * order they are written. `at` is each pane's place in the list of
+ * blocks it was found in. */
+export interface SiteGroup {
+  site: string;
+  panes: { at: number; language: string; code: string }[];
+}
+
+/** The site editors among a document's top-level blocks, grouped the way
+ * dewlab's build groups them: panes naming the same site, with nothing
+ * but other such panes between them. A block that is not a pane is
+ * `null`, and ends any group running up to it. A pane with no `site:`
+ * belongs to no editor (the checker reports it). */
+export function siteGroups(blocks: readonly ({ info: string; body: string } | null)[]): SiteGroup[] {
+  const groups: SiteGroup[] = [];
+  let current: SiteGroup | null = null;
+  blocks.forEach((block, at) => {
+    const pane = block ? sitePaneIn(block.info, block.body) : null;
+    if (!pane?.site) {
+      current = null;
+      return;
+    }
+    const code = splitHeader(block!.body, ["id", "site"]).rest;
+    if (current && current.site === pane.site) {
+      current.panes.push({ at, language: pane.language, code });
+    } else {
+      current = { site: pane.site, panes: [{ at, language: pane.language, code }] };
+      groups.push(current);
+    }
+  });
+  return groups;
+}
+
+/** The page a site editor previews, put together the way dewlab's
+ * site-relay.js does: the CSS in the head, the HTML as the body, the
+ * JavaScript last. A `</script>` inside the JavaScript would close the
+ * tag early, so it is escaped. */
+export function sitePage(group: SiteGroup): string {
+  const of = (language: string) =>
+    group.panes.filter((pane) => pane.language === language).map((pane) => pane.code).join("\n");
+  const script = of("js").replace(/<\/script/gi, "<\\/script");
+  return (
+    `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${of("css")}</style></head>` +
+    `<body>${of("html")}${script ? `<script>${script}</script>` : ""}</body></html>`
+  );
+}
+
 // ── questions ──────────────────────────────────────────────────────────
 
 export const QUESTION_TYPES = ["multiple-choice", "fill-in-the-blank"] as const;

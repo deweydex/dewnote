@@ -430,3 +430,53 @@ test.describe("front matter as fields", () => {
     await expect.poll(() => markdown(page)).toMatch(/^---\n[^]*packages: \[sympy\][^]*\n---\n\n# A Page/);
   });
 });
+
+test.describe("a web page's panes as one editor", () => {
+  const SOURCE = [
+    "```html site", "id: page-html", "site: demo", "<p class=\"note\">Hello.</p>", "```", "",
+    "```css site", "id: page-css", "site: demo", ".note { color: rgb(1, 2, 3); }", "```", "",
+    "```js site", "id: page-js", "site: demo", "document.querySelector('p').dataset.ran = 'yes';", "```", "",
+  ].join("\n");
+
+  async function openSite(page: import("@playwright/test").Page) {
+    await page.goto(BUILT_APP);
+    await page.evaluate(() => document.querySelector(".dn-gate")?.remove());
+    const out = await page.evaluate(async (md) => {
+      await (globalThis as any).__dewnote.open(md);
+      return (globalThis as any).__dewnote.markdown() as string;
+    }, SOURCE);
+    // Still three fences in the file.
+    expect(out).toBe(SOURCE);
+  }
+
+  test("has a tab per pane, and shows one pane at a time", async ({ page }) => {
+    await openSite(page);
+    const tabs = page.locator(".dn-site-tabs button");
+    await expect(tabs).toHaveText(["HTML", "CSS", "JavaScript"]);
+    await expect(page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden)")).toHaveCount(1);
+    await expect(page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden)")).toContainText("Hello.");
+
+    await tabs.filter({ hasText: "CSS" }).dispatchEvent("mousedown");
+    await expect(page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden)")).toContainText("color: rgb(1, 2, 3)");
+    await expect(page.locator(".dn-site-tabs button.is-showing")).toHaveText("CSS");
+  });
+
+  test("previews the page the panes make, CSS and JavaScript applied", async ({ page }) => {
+    await openSite(page);
+    const preview = page.frameLocator(".dn-site-preview");
+    const paragraph = preview.locator("p");
+    await expect(paragraph).toHaveText("Hello.");
+    await expect(paragraph).toHaveAttribute("data-ran", "yes");
+    expect(await paragraph.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(1, 2, 3)");
+  });
+
+  test("the preview follows an edit", async ({ page }) => {
+    await openSite(page);
+    const pane = page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden) .cm-line").last();
+    await pane.click();
+    await page.keyboard.press("End");
+    // Plain text: the HTML pane closes a typed tag by itself.
+    await page.keyboard.type(" And more.");
+    await expect(page.frameLocator(".dn-site-preview").locator("body")).toContainText("And more.");
+  });
+});

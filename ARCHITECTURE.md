@@ -185,6 +185,38 @@ inside an open call. `editorHelp` in the engine gives up after 1.5s
 (a cell may be running), and the first request of either kind that
 comes from typing starts Python.
 
+### Drawn over the document, not in it
+
+Three constructs are drawn differently from how the file holds them,
+and in each case only the drawing changes, so the round-trip suite
+still guards the file:
+
+- **Folds.** A hint or answer is two inline HTML atoms, its
+  `<details …><summary>…</summary>` and its `</details>`, with ordinary
+  blocks between. A node view (`foldLineView`) draws the atoms as a
+  labelled header and an end mark; a decoration plugin (`foldBodies`)
+  rules the blocks between.
+- **Site editors.** Consecutive `html site`/`css site`/`js site` fences
+  naming one site, grouped as dewlab's build groups them (`siteGroups`
+  in `fences.ts`), get a tab bar widget, a class hiding every pane but
+  the chosen one, and a sandboxed preview iframe (`sitePage`). The
+  chosen tab is plugin state. The iframe widget keeps its key between
+  keystrokes so it does not flash; a plugin view refreshes its
+  `srcdoc` 400ms after typing stops.
+- **Front matter.** A node view draws Title and Status as fields over
+  the YAML, which stays the node's content, editable under Show all
+  fields. A field change rewrites only its own line.
+
+Two things learned doing it. ProseMirror rebuilds a node view or widget
+whenever the selection moves into it, which a click does before its
+`click` event fires, so controls in these views act on `mousedown`
+with the default prevented, and keep any state outside the view. And
+the build inlines the bundle into one `<script>`, which ends at the
+first `</script` anywhere in it, strings included; the site preview
+builds a page with a script in it, and minifiers fold `"</" + "script>"`
+back together, so `scripts/inline-single-file.ts` escapes the sequence
+as `<\/script` when it inlines.
+
 ## Images
 
 An image lives beside the document that names it, and the markdown says
