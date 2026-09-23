@@ -13,6 +13,8 @@ import { assetPathFor, isLocalAsset } from "./images.ts";
 import {
   QUESTION_TYPES,
   cardIn,
+  generatedBlockIn,
+  GENERATED_BLOCKS,
   hintIn,
   parseTrigger,
   gapsBalanced,
@@ -87,6 +89,9 @@ export function checkDocument(source: string, around: Around): Problem[] {
   // of these. Site pages go through a different reader and are only
   // held to the title.
   const tutorial = path !== undefined && /^tutorials\/[^/]+\/[^/]+\.md$/.test(path);
+  /** One of dewlab's hand-written pages (`read_page()`), the only place
+   * `[[name]]` is read. */
+  const sitePage = path !== undefined && /(^|\/)pages\/[^/]+\.md$/.test(path);
 
   if (!present) {
     problems.push({ message: "No front matter. Add a `---` block at the top with at least a `title:` line; the site cannot build the page without it.", severity: "blocking" });
@@ -220,6 +225,21 @@ export function checkDocument(source: string, around: Around): Problem[] {
       } else if (card) {
         checkCard(card, line, problems);
       }
+    } else if (sitePage) {
+      // `[[name]]` on a line of its own asks the build for a block it
+      // makes; one it does not know stops the build.
+      part.text.split("\n").forEach((text, at) => {
+        const generated = generatedBlockIn(text);
+        if (generated && !generated.description) {
+          problems.push({
+            message:
+              `\`[[${generated.name}]]\` is not a block the site knows how to build. ` +
+              `Use ${Object.keys(GENERATED_BLOCKS).map((name) => `\`[[${name}]]\``).join(" or ")}.`,
+            line: line + at,
+            severity: "blocking",
+          });
+        }
+      });
     }
     line += linesOf(part.text);
   }

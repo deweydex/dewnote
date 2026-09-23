@@ -37,6 +37,9 @@ const IDENTICAL: Record<string, string> = {
   // edit. dewlab does not write them yet; this says dewnote is ready if
   // it starts to.
   "footnote": "A claim[^1] and another[^b].\n\n[^1]: The first note.\n\n[^b]: The second.\n",
+  // A page's request for a block the build makes. Escaped as `\[\[`, it
+  // is no longer one, and the page shows the brackets instead.
+  "generated block": "Search:\n\n[[search-box]]\n\nOr browse:\n\n[[course-cards]]\n",
 };
 
 for (const [name, source] of Object.entries(IDENTICAL)) {
@@ -610,4 +613,49 @@ test("a query that fails shows its reason in the app's page", async ({ page }) =
   await expect(page.frameLocator("iframe[data-dn-app]").locator(".dn-app-error")).toHaveText(
     "There is no database yet. Run the SQL cells that make the tables first.",
   );
+});
+
+
+test("a hand-written page's sections, cards and generated blocks are drawn as the site uses them", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const source = [
+    '<div class="dl-hero">',
+    "",
+    "Learn in your browser.",
+    "",
+    "```card",
+    "url: features.html",
+    "status: beta",
+    "meta: 5N0554",
+    "### What dewlab can do",
+    "The tools on every page,",
+    "and how it works offline.",
+    "```",
+    "",
+    "</div>",
+    "",
+    "[[search-box]]",
+    "",
+    "[[search-bar]]",
+    "",
+  ].join("\n");
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open(text);
+  }, source);
+
+  await expect(page.locator(".dn-fold-open.is-wrapper .dn-fold-label")).toHaveText("Hero");
+  await expect(page.locator(".milkdown .dn-fold-body")).toHaveCount(2);
+
+  const card = page.locator(".dn-card");
+  await expect(card.locator(".dn-card-heading")).toContainText("What dewlab can do");
+  await expect(card.locator(".dn-card-badge")).toHaveText("beta");
+  await expect(card.locator(".dn-card-meta")).toHaveText("5N0554");
+  // A line break in the card's markdown is a space, as on the site.
+  await expect(card).toContainText("The tools on every page, and how it works offline.");
+  await expect(page.locator(".dn-card-where")).toContainText("Opens features.html");
+
+  await expect(page.locator(".dn-generated").first()).toContainText("The site-wide search box, put here by the site:");
+  await expect(page.locator(".dn-generated.is-unknown")).toContainText("it will not build this");
+  expect(await page.evaluate(() => (globalThis as any).__dewnote.markdown())).toBe(source);
 });

@@ -342,18 +342,46 @@ export interface Card {
   url: string | null;
   /** The markdown heading the body has to open with. */
   heading: string | null;
+  status: string | null;
+  meta: string | null;
+  /** `wide: true` (or `yes`): the card spans the grid. */
+  wide: boolean;
+  /** The markdown under the heading. */
+  text: string;
 }
 
 /** A `card` fence: `url:`, `status:`, `meta:` and `wide:` header lines,
- * then a markdown heading and, optionally, a line or two under it. */
+ * then a markdown heading and, optionally, a line or two under it
+ * (dewlab's `parse_card()`). */
 export function cardIn(info: string, body: string): Card | null {
   if (infoWords(info)[0] !== "card") return null;
   const { header, rest } = splitHeader(body, ["url", "status", "meta", "wide"]);
-  const heading = /^#{1,6}\s*(.+?)\s*#*$/.exec(rest.split("\n")[0] ?? "");
+  const lines = rest.split("\n");
+  const heading = /^#{1,6}\s*(.+?)\s*#*$/.exec(lines[0] ?? "");
   return {
     url: header.get("url") ?? null,
     heading: heading ? heading[1]! : null,
+    status: header.get("status") || null,
+    meta: header.get("meta") || null,
+    wide: /^(true|yes)$/i.test(header.get("wide") ?? ""),
+    text: (heading ? lines.slice(1) : lines).join("\n").trim(),
   };
+}
+
+// ── generated blocks ──────────────────────────────────────────────────
+
+/** What dewlab's `GENERATED_BLOCKS` puts in place of each `[[name]]` line
+ * on a hand-written page. */
+export const GENERATED_BLOCKS: Record<string, string> = {
+  "search-box": "The site-wide search box",
+  "course-cards": "A card for each course, in the order courses/index.yaml gives",
+};
+
+/** A paragraph that is only `[[name]]`: dewlab's `GENERATED_BLOCK_RE`. */
+export function generatedBlockIn(text: string): { name: string; description: string | null } | null {
+  const match = /^\[\[([a-z-]+)\]\]\s*$/.exec(text.trim());
+  if (!match) return null;
+  return { name: match[1]!, description: GENERATED_BLOCKS[match[1]!] ?? null };
 }
 
 /** What a line of raw HTML is, as a fold: the opening of a
@@ -361,19 +389,38 @@ export function cardIn(info: string, body: string): Card | null {
  * close. dewlab writes a fold as `<details class="dl-hint"><summary>…</summary>`
  * on one line and `</details>` on another, with ordinary markdown
  * between, which is how the editor holds it: two inline HTML atoms and
- * the blocks between them. */
+ * the blocks between them.
+ *
+ * A hand-written page's section wrappers have the same shape (dewlab's
+ * `MARKDOWN_WRAPPER_RE`): `<div class="dl-hero">` on its own line, the
+ * markdown the build converts, then `</div>`. They are read here too,
+ * each with the tag that closes it, so a wrapper's `</div>` never ends a
+ * hint. */
 export type FoldLine =
-  | { kind: "open"; label: string; summary: string }
-  | { kind: "close" };
+  | { kind: "open"; label: string; summary: string; tag: string; wrapper: boolean }
+  | { kind: "close"; tag: string };
 
 const FOLD_LABELS: Record<string, string> = { "dl-hint": "Hint", "dl-answer": "Answer" };
 
+const WRAPPER_LABELS: Record<string, string> = {
+  "div dl-hero": "Hero",
+  "div dl-audience": "Audience",
+  "div dl-attribution": "Attribution",
+  "ul dl-feature-list": "Feature list",
+};
+
 export function foldLine(html: string): FoldLine | null {
   const text = html.trim();
-  if (/^<\/details>$/i.test(text)) return { kind: "close" };
+  const close = /^<\/(details|div|ul)>$/i.exec(text);
+  if (close) return { kind: "close", tag: close[1]!.toLowerCase() };
+  const wrapper = /^<(div|ul) class="([^"]+)">$/i.exec(text);
+  if (wrapper) {
+    const label = WRAPPER_LABELS[`${wrapper[1]!.toLowerCase()} ${wrapper[2]}`];
+    return label ? { kind: "open", label, summary: "", tag: wrapper[1]!.toLowerCase(), wrapper: true } : null;
+  }
   const open = /^<details\b([^>]*)>\s*<summary>([\s\S]*?)<\/summary>$/i.exec(text);
   if (!open) return null;
   const classes = /\bclass="([^"]*)"/.exec(open[1]!)?.[1]?.split(/\s+/) ?? [];
   const known = classes.map((name) => FOLD_LABELS[name]).find(Boolean);
-  return { kind: "open", label: known ?? "Fold", summary: open[2]!.trim() };
+  return { kind: "open", label: known ?? "Fold", summary: open[2]!.trim(), tag: "details", wrapper: false };
 }

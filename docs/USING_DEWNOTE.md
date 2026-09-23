@@ -568,6 +568,39 @@ the block's corner hides the lines and leaves only that; **Edit** brings
 them back. If the `after:` line is something dewlab would refuse, the
 line says so in orange, and **Check this document** lists it.
 
+## Site pages
+
+dewlab's own pages, such as Home and About, live in `pages/`. They are
+ordinary markdown with three additions, and dewnote draws each the way
+the site uses it. In the file, each stays exactly as written.
+
+- **Sections.** A line such as `<div class="dl-hero">`, then markdown,
+  then `</div>`, makes a styled section of the page. dewnote labels it
+  (**HERO**, **AUDIENCE**, **ATTRIBUTION** or **FEATURE LIST**) with a
+  rule down the side of what is in it, and an *end* where it closes.
+  Leave a blank line after the opening line and before the closing one,
+  or the site shows the markdown inside as plain text.
+- **Cards.** A ```` ```card ```` block is a tile readers click:
+
+  ````
+  ```card
+  url: features.html
+  status: beta
+  meta: 5N0554
+  ### What dewlab can do
+  The tools on every page, and how it works offline.
+  ```
+  ````
+
+  `url:` is where it goes, and the first line under the settings has to
+  be a heading. `status:`, `meta:` and `wide: true` are optional. Under
+  the lines, dewnote draws the tile, and says where it goes.
+- **Generated blocks.** A line holding only `[[search-box]]` or
+  `[[course-cards]]` is replaced by the site with its search box, or a
+  card for each course. dewnote shows the line in a grey band with what
+  the site puts there. Any other name stops the site building, and
+  dewnote says so in orange.
+
 ## Checking for problems
 
 dewnote checks documents for anything that would stop the dewlab site

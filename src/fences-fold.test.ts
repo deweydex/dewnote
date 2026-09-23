@@ -7,6 +7,8 @@ describe("foldLine", () => {
       kind: "open",
       label: "Hint",
       summary: "stuck? here are some steps",
+      tag: "details",
+      wrapper: false,
     });
   });
 
@@ -16,7 +18,15 @@ describe("foldLine", () => {
   });
 
   test("reads the close", () => {
-    expect(foldLine("</details>")).toEqual({ kind: "close" });
+    expect(foldLine("</details>")).toEqual({ kind: "close", tag: "details" });
+  });
+
+  test("reads a hand-written page's section wrappers, each with the tag that closes it", () => {
+    expect(foldLine('<div class="dl-hero">')).toEqual({ kind: "open", label: "Hero", summary: "", tag: "div", wrapper: true });
+    expect(foldLine('<ul class="dl-feature-list">')).toMatchObject({ label: "Feature list", tag: "ul" });
+    expect(foldLine("</div>")).toEqual({ kind: "close", tag: "div" });
+    // Only the wrappers dewlab's build converts the inside of.
+    expect(foldLine('<div class="note">')).toBeNull();
   });
 
   test("is not fooled by other HTML", () => {
@@ -108,5 +118,26 @@ describe("app panes", () => {
       .map((problem) => problem.message);
     expect(messages[0]).toContain("An app pane with no `app:` line");
     expect(messages[1]).toContain("An app pane with no `id:`");
+  });
+});
+
+describe("generated blocks", () => {
+  test("are read from a line holding only [[name]], known or not", async () => {
+    const { generatedBlockIn } = await import("./fences.ts");
+    expect(generatedBlockIn("[[search-box]]")).toEqual({ name: "search-box", description: "The site-wide search box" });
+    expect(generatedBlockIn("[[search-bar]]")).toEqual({ name: "search-bar", description: null });
+    expect(generatedBlockIn("See [[search-box]] above.")).toBeNull();
+  });
+
+  test("an unknown one stops the build on a hand-written page, and means nothing in a tutorial", async () => {
+    const { checkDocument } = await import("./checks.ts");
+    const source = "---\ntitle: Home\n---\n\nIntro.\n\n[[search-bar]]\n\n[[search-box]]\n";
+    const onPage = checkDocument(source, { ids: new Set(), path: "pages/home.md" });
+    expect(onPage).toEqual([{
+      message: "`[[search-bar]]` is not a block the site knows how to build. Use `[[search-box]]` or `[[course-cards]]`.",
+      line: 7,
+      severity: "blocking",
+    }]);
+    expect(checkDocument(source, { ids: new Set(), path: "notes/home.md" })).toEqual([]);
   });
 });

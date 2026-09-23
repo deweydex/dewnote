@@ -333,10 +333,15 @@ Three things a page has that a tutorial does not:
   `dl-audience`, `dl-attribution` and `<ul class="dl-feature-list">`,
   whose markdown inside the build converts.
 
-*dewnote:* the palette lists pages separately from tutorials. The checker
-reports a card with no `url:` or no heading. A card shows as a code
-block, a generated block as a line of text, and a wrapper as its opening
-and closing tags around the paragraphs inside.
+*dewnote:* the palette lists pages separately from tutorials. A card is
+drawn as its tile, under its lines (`cardPreview`, as `render_card()`).
+A generated block's line is kept as written and labelled with what the
+site puts there (`generatedBlocks` in `editor.ts`); the serialiser's
+escaping of its brackets, which would have made the build pass it over,
+is undone on save. A wrapper is drawn as a labelled section, with the
+fold drawing (`foldLine` reads it, with the tag that closes it). The
+checker reports a card with no `url:` or no heading, and a generated
+block the build does not know.
 
 ### Written by the build, never by an author
 
@@ -399,11 +404,9 @@ nbformat 4.5 (`notebook.ts`).
 
 What dewlab's build reads and dewnote shows only as raw text, in the
 order an author would notice it. Each is planned in
-`planning/ROADMAP.md`, Phases 6 and 7.
+`planning/ROADMAP.md`, Phase 7.
 
 1. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
    when run in dewnote.
-2. Cards, generated blocks and page wrappers: shown as code, text and
-   loose tags.
-3. The checker does not report footnotes inside fences, or `tutorial:`
+2. The checker does not report footnotes inside fences, or `tutorial:`
    anchors that name no heading.

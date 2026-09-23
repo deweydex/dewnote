@@ -21,7 +21,7 @@ import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
-import { appPage, describeTrigger, foldLine, hintIn, paneGroups, parseTrigger, questionIn, sitePage, type PaneKind, type Question, type SiteGroup, type StagedHint } from "./fences.ts";
+import { appPage, cardIn, describeTrigger, foldLine, generatedBlockIn, GENERATED_BLOCKS, hintIn, paneGroups, parseTrigger, questionIn, sitePage, type PaneKind, type Question, type SiteGroup, type StagedHint } from "./fences.ts";
 import { renderFragment } from "./export-html.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 import { setYamlField } from "./authoring.ts";
@@ -305,7 +305,12 @@ export const foldLineView = $view(htmlSchema.node, () => (node) => {
     summary.className = "dn-fold-summary";
     summary.textContent = fold.summary;
     dom.append(label, summary);
-    dom.title = "Readers see this line, and open it to read what is below. Edit the summary in the markdown (Ctrl+/).";
+    if (fold.wrapper) {
+      dom.classList.add("is-wrapper");
+      dom.title = "A section of the page, styled by the site from here to its end. Change it in the markdown (Ctrl+/).";
+    } else {
+      dom.title = "Readers see this line, and open it to read what is below. Edit the summary in the markdown (Ctrl+/).";
+    }
   } else {
     dom.className = "dn-fold-close";
     dom.textContent = "end";
@@ -321,19 +326,54 @@ export const foldBodies = $prose(
       props: {
         decorations(state) {
           const marks: Decoration[] = [];
-          let inside = false;
+          // The tag the open fold is waiting for, so a wrapper's `</div>`
+          // never ends a hint, nor a hint's `</details>` a wrapper.
+          let inside: string | null = null;
           state.doc.forEach((block, offset) => {
             const only = block.type.name === "paragraph" && block.childCount === 1 ? block.firstChild : null;
             const fold = only?.type.name === "html" ? foldLine(String(only.attrs["value"] ?? "")) : null;
-            if (fold?.kind === "open") {
-              inside = true;
+            if (fold?.kind === "open" && inside === null) {
+              inside = fold.tag;
               marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-head" }));
-            } else if (fold?.kind === "close" && inside) {
-              inside = false;
+            } else if (fold?.kind === "close" && inside === fold.tag) {
+              inside = null;
               marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-foot" }));
-            } else if (inside) {
+            } else if (inside !== null) {
               marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-body" }));
             }
+          });
+          return DecorationSet.create(state.doc, marks);
+        },
+      },
+    }),
+);
+
+/** A line holding only `[[search-box]]` or `[[course-cards]]`: on a
+ * hand-written page, dewlab's build puts something there no author
+ * writes. The line stays as it is written; a label beside it says what
+ * readers get, or that the build knows no such block. */
+export const generatedBlocks = $prose(
+  () =>
+    new Plugin({
+      props: {
+        decorations(state) {
+          const marks: Decoration[] = [];
+          state.doc.forEach((block, offset) => {
+            if (block.type.name !== "paragraph") return;
+            const generated = generatedBlockIn(block.textContent);
+            if (!generated) return;
+            marks.push(Decoration.node(offset, offset + block.nodeSize, {
+              class: generated.description ? "dn-generated" : "dn-generated is-unknown",
+            }));
+            marks.push(Decoration.widget(offset + 1, () => {
+              const label = document.createElement("span");
+              label.className = "dn-generated-label";
+              label.contentEditable = "false";
+              label.textContent = generated.description
+                ? `${generated.description}, put here by the site:`
+                : `The site knows ${Object.keys(GENERATED_BLOCKS).map((name) => `[[${name}]]`).join(" and ")}; it will not build this:`;
+              return label;
+            }, { side: -1, key: `dn-generated-${generated.name}` }));
           });
           return DecorationSet.create(state.doc, marks);
         },
@@ -666,6 +706,26 @@ function questionPreview(question: Question): string {
   return `<div class="dn-question"><p class="dn-question-kind dn-hint-fault">A question needs a \`type:\` of multiple-choice or fill-in-the-blank.</p></div>`;
 }
 
+/** A card as the tile a reader clicks: its heading, status and meta
+ * line, and its text, with where it goes underneath. dewlab's
+ * `render_card()`; a string, through Crepe's sanitiser. */
+function cardPreview(content: string): string {
+  const card = cardIn("card", content)!;
+  const badge = card.status ? `<span class="dn-card-badge">${escapeHtml(card.status)}</span>` : "";
+  const meta = card.meta ? `<span class="dn-card-meta">${escapeHtml(card.meta)}</span>` : "";
+  const heading = card.heading
+    ? `<p class="dn-card-heading">${escapeHtml(card.heading)}${badge}</p>`
+    : `<p class="dn-card-heading dn-hint-fault">No heading. The first line under the settings has to be one, like ### Title.</p>`;
+  const where = card.url
+    ? `Opens <code>${escapeHtml(card.url)}</code>${card.wide ? ". Wide: spans the row." : "."}`
+    : `<span class="dn-hint-fault">No <code>url:</code> line, so it goes nowhere.</span>`;
+  return (
+    `<div class="dn-card-preview"><p class="dn-card-where">${where}</p>` +
+    `<div class="dn-card${card.wide ? " is-wide" : ""}">${heading}${meta}` +
+    `${card.text ? renderFragment(card.text) : ""}</div></div>`
+  );
+}
+
 /** A cell's own output, as an element rather than a string: the panel
  * holds rendered HTML the Python side produced, and a string would be
  * sanitised on the way through Crepe's own DOMPurify pass. */
@@ -974,6 +1034,7 @@ export async function mountEditor(
           // run of its own: all it does is build the panel, and the
           // panel's own button is what runs anything.
           if (language === "question") return questionPreview(questionIn("question", content)!);
+          if (language === "card") return cardPreview(content);
           if (language === "hint") {
             const hint = hintIn("hint", content)!;
             return hintPreview(hint, hint.cell ?? cellAbove(view(), content));
@@ -1031,6 +1092,7 @@ export async function mountEditor(
     .use(plainDollars)
     .use(foldLineView)
     .use(foldBodies)
+    .use(generatedBlocks)
     .use(siteEditors)
     .use($prose(() => paneEditors("app", options.queryRows)));
   crepe.editor.use(tightBulletLists).use(tightListItems);
@@ -1051,11 +1113,21 @@ export async function mountEditor(
    * markdown file needs one, and it is churn in every diff. */
   const oneFinalNewline = (markdown: string) => markdown.replace(/\n{2,}$/, "\n");
 
+  /** A line holding only `[[search-box]]` is where a hand-written page
+   * asks dewlab's build for a generated block. The serialiser escapes
+   * its brackets, since `[` can open a link, and `\[\[search-box]]` is
+   * no longer something the build recognises: the page would show the
+   * text instead of the search box. A whole line of `[[name]]` is never
+   * a link, so it goes back as written. */
+  const generatedBlocksAsWritten = (markdown: string) =>
+    markdown.replace(/^\\\[\\\[([a-z-]+)\]\](\s*)$/gm, "[[$1]]$2");
+  const asSaved = (markdown: string) => oneFinalNewline(generatedBlocksAsWritten(markdown));
+
   let hydrated = false;
   if (options.onChange) {
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
-        if (hydrated) options.onChange!(oneFinalNewline(markdown));
+        if (hydrated) options.onChange!(asSaved(markdown));
       });
     });
   }
@@ -1076,7 +1148,7 @@ export async function mountEditor(
   return {
     cellIds: () => runnableCells().map((cell) => cell.id),
     runCell: (id) => runCellById(id),
-    markdown: () => oneFinalNewline(crepe.getMarkdown()),
+    markdown: () => asSaved(crepe.getMarkdown()),
     headings() {
       const found: Heading[] = [];
       crepe.editor.action((ctx) => {

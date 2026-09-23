@@ -17,18 +17,8 @@ pages; find and replace; named pull requests; keeping both sides of a
 conflict; no trailing blank line; disconnecting from GitHub) is done.
 Phase 5 (splitting `shell.ts`, calling a course a course in code,
 bringing `planning/DIALECTS.md` up to date) is done.
-
----
-
-## Phase 6: The rest of dewlab's format
-
-dewlab's build reads constructs dewnote only shows as raw text. Each is
-listed, with what dewlab does with it, in `planning/DIALECTS.md` §5.
-
-### 6.4 Pages: cards, generated blocks, wrappers
-
-On `pages/`, a card shows as code, `[[search-box]]` as text, and a
-`dl-hero` wrapper as loose tags around its paragraphs.
+Phase 6 (staged hints, questions, app panes and site pages drawn as
+readers see them) is done.
 
 ---
 

@@ -201,7 +201,7 @@ comes from typing starts Python.
 
 ### Drawn over the document, not in it
 
-Five constructs are drawn differently from how the file holds them,
+Seven constructs are drawn differently from how the file holds them,
 and in each case only the drawing changes, so the round-trip suite
 still guards the file:
 
@@ -238,6 +238,16 @@ still guards the file:
   `render_question()` builds the reader's version. A fill-in-the-blank's
   gaps stand aside as tokens while the sentence becomes HTML, so a price
   in the sentence stays a price.
+- **Cards**, the same again, drawn as the tile a reader clicks.
+- **A hand-written page's sections and generated blocks.** A wrapper
+  (`<div class="dl-hero">` … `</div>`) is a fold to `foldLine`, which
+  records the tag each opening waits for, so a wrapper's `</div>` never
+  closes a hint. A `[[search-box]]` line gets a node class and a label
+  widget. Its brackets needed one more fix, on save: the serialiser
+  escapes `[` as `\[` in case it opens a link, which the round-trip
+  suite could not see (it compares structure, and the text is the
+  same) but dewlab's build could, since `\[\[search-box]]` is not a
+  generated block. A whole line of `[[name]]` is put back as written.
 
 Two things learned doing it. ProseMirror rebuilds a node view or widget
 whenever the selection moves into it, which a click does before its
