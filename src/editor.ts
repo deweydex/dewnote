@@ -21,7 +21,7 @@ import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
-import { describeTrigger, foldLine, hintIn, parseTrigger, siteGroups, sitePage, type SiteGroup, type StagedHint } from "./fences.ts";
+import { describeTrigger, foldLine, hintIn, parseTrigger, questionIn, siteGroups, sitePage, type Question, type SiteGroup, type StagedHint } from "./fences.ts";
 import { renderFragment } from "./export-html.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 import { setYamlField } from "./authoring.ts";
@@ -545,6 +545,62 @@ function hintPreview(hint: StagedHint, cell: string | null): string {
   );
 }
 
+/** One paragraph's markdown as inline HTML: an option sits on a line of
+ * its own, not in a paragraph. */
+function inlineFragment(markdown: string): string {
+  const html = renderFragment(markdown).trim();
+  return /^<p>[\s\S]*<\/p>$/.test(html) && html.indexOf("<p>", 1) === -1 ? html.slice(3, -4) : html;
+}
+
+/** A question as its author needs to see it: what the reader is asked,
+ * and the answer marked, which a reader has to find for themselves.
+ * Built the way dewlab's `render_question()` builds it; a string, like a
+ * hint, so Crepe's sanitiser sees it. */
+function questionPreview(question: Question): string {
+  if (question.type === "multiple-choice") {
+    const correct = Number(question.correct);
+    const options = question.options
+      .map((option, at) => {
+        const right = at + 1 === correct;
+        return (
+          `<li class="dn-question-option${right ? " is-correct" : ""}">` +
+          `<span class="dn-question-mark" aria-label="${right ? "correct" : "wrong"}">${right ? "✓" : ""}</span>` +
+          `<span>${inlineFragment(option)}</span></li>`
+        );
+      })
+      .join("");
+    const noted = Number.isInteger(correct) && correct >= 1 && correct <= question.options.length
+      ? `Multiple choice. The answer is option ${correct}.`
+      : `<span class="dn-hint-fault">Multiple choice, with no correct option marked.</span>`;
+    return (
+      `<div class="dn-question"><p class="dn-question-kind">${noted}</p>` +
+      `<div class="dn-question-prompt">${question.prompt ? renderFragment(question.prompt) : ""}</div>` +
+      `<ol class="dn-question-options">${options}</ol></div>`
+    );
+  }
+  if (question.type === "fill-in-the-blank") {
+    // Each gap stands aside while the sentence around it becomes HTML,
+    // as dewlab's build does it, then comes back as the answer.
+    const gaps: string[] = [];
+    const tokenised = question.text.replace(/\{([^{}]*)\}/g, (_whole, raw: string) => `dngap${gaps.push(raw) - 1}z`);
+    let html = renderFragment(tokenised);
+    gaps.forEach((raw, at) => {
+      const choices = raw.includes("|") ? raw.split("|").map((choice) => choice.trim()) : null;
+      const shown = choices
+        ? `${escapeHtml(choices[0] ?? "")}<span class="dn-question-others"> / ${choices.slice(1).map(escapeHtml).join(" / ")}</span>`
+        : escapeHtml(raw.trim());
+      html = html.replace(`dngap${at}z`, `<span class="dn-question-gap">${shown}</span>`);
+    });
+    const count = gaps.length;
+    return (
+      `<div class="dn-question"><p class="dn-question-kind">Fill in the blank. ` +
+      `${count} gap${count === 1 ? "" : "s"}, answers shown; in a drop-down the first choice is right.</p>` +
+      `<div class="dn-question-prompt">${html}</div></div>`
+    );
+  }
+  return `<div class="dn-question"><p class="dn-question-kind dn-hint-fault">A question needs a \`type:\` of multiple-choice or fill-in-the-blank.</p></div>`;
+}
+
 /** A cell's own output, as an element rather than a string: the panel
  * holds rendered HTML the Python side produced, and a string would be
  * sanitised on the way through Crepe's own DOMPurify pass. */
@@ -849,6 +905,7 @@ export async function mountEditor(
           // fires on every keystroke. It must therefore never start a
           // run of its own: all it does is build the panel, and the
           // panel's own button is what runs anything.
+          if (language === "question") return questionPreview(questionIn("question", content)!);
           if (language === "hint") {
             const hint = hintIn("hint", content)!;
             return hintPreview(hint, hint.cell ?? cellAbove(view(), content));

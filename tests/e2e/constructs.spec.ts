@@ -517,3 +517,44 @@ test("a staged hint whose trigger the build would refuse says so where it is dra
   });
   await expect(page.locator(".dn-hint-when")).toContainText("cannot be read");
 });
+
+test("a multiple-choice question shows its options, with the correct one marked", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const source = "```question\nid: loops\ntype: multiple-choice\ncorrect: 2\nWhich loop runs **at least** once?\n- `for`\n- `while` with the test at the end\n```\n";
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open(text);
+  }, source);
+
+  const question = page.locator(".dn-question");
+  await expect(question.locator(".dn-question-kind")).toHaveText("Multiple choice. The answer is option 2.");
+  await expect(question.locator(".dn-question-prompt strong")).toHaveText("at least");
+  await expect(question.locator(".dn-question-option")).toHaveCount(2);
+  await expect(question.locator(".dn-question-option.is-correct")).toContainText("with the test at the end");
+  expect(await page.evaluate(() => (globalThis as any).__dewnote.markdown())).toBe(source);
+});
+
+test("a fill-in-the-blank question shows each gap's answer in its sentence", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open(
+      "```question\nid: lists\ntype: fill-in-the-blank\nA list uses {square} brackets and {is|is not} ordered. It costs $5.\n```\n",
+    );
+  });
+  const prompt = page.locator(".dn-question-prompt");
+  await expect(page.locator(".dn-question-gap")).toHaveCount(2);
+  await expect(page.locator(".dn-question-gap").first()).toHaveText("square");
+  await expect(page.locator(".dn-question-gap").nth(1)).toHaveText("is / is not");
+  // The dollar sign outside a gap is a price, as on the site.
+  await expect(prompt).toContainText("It costs $5.");
+});
+
+test("a question with no type the site knows says so where it is drawn", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open("```question\nid: q\ntype: essay\nWrite.\n```\n");
+  });
+  await expect(page.locator(".dn-question-kind")).toContainText("needs a `type:`");
+});

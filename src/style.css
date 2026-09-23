@@ -920,13 +920,13 @@ body {
 /* Crepe heads its preview panel with a label, "Output", which put the
  * Run button under a heading that made it read as output. The panel
  * heads itself. */
-.milkdown .milkdown-code-block .preview-panel:has(:is(.dn-cell, .dn-hint)) .preview-label {
+.milkdown .milkdown-code-block .preview-panel:has(:is(.dn-cell, .dn-hint, .dn-question)) .preview-label {
   display: none;
 }
 
 /* Crepe centres its preview; output reads from the left, like the code
  * above it. */
-.milkdown .milkdown-code-block .preview-panel .preview:has(:is(.dn-cell, .dn-hint)) {
+.milkdown .milkdown-code-block .preview-panel .preview:has(:is(.dn-cell, .dn-hint, .dn-question)) {
   text-align: left;
 }
 
@@ -960,6 +960,62 @@ body {
 
 .dn-hint-fault {
   color: var(--dl-orange);
+}
+
+/* A question, with its answer marked: what a reader is asked, and what
+ * they have to find. */
+.dn-question {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.milkdown .dn-question .dn-question-kind {
+  margin: 0;
+  font-family: var(--dl-mono);
+  font-size: 0.78rem;
+  color: var(--dl-muted);
+}
+
+.dn-question-prompt > :first-child { margin-top: 0; }
+.dn-question-prompt > :last-child { margin-bottom: 0; }
+
+.dn-question-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.dn-question-option {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 5px;
+}
+
+.dn-question-option.is-correct {
+  border-color: var(--dl-orange);
+}
+
+.dn-question-mark {
+  width: 1em;
+  color: var(--dl-orange);
+  font-weight: 600;
+}
+
+.dn-question-gap {
+  padding: 0 0.35rem;
+  border-bottom: 2px solid var(--dl-orange);
+  font-family: var(--dl-mono);
+  font-size: 0.9em;
+}
+
+.dn-question-others {
+  color: var(--dl-muted);
 }
 
 .dn-cell-run:disabled {

@@ -25,12 +25,6 @@ bringing `planning/DIALECTS.md` up to date) is done.
 dewlab's build reads constructs dewnote only shows as raw text. Each is
 listed, with what dewlab does with it, in `planning/DIALECTS.md` §5.
 
-### 6.2 Questions as questions
-
-A ```` ```question ```` fence is checked but shown as code. Draw a
-multiple-choice question with its options and the correct one marked,
-and a fill-in-the-blank one with its gaps.
-
 ### 6.3 App panes
 
 `html app`, `css app` and `js app` are shown as code. Group them as the

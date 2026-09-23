@@ -215,7 +215,10 @@ question's options are its bullet lines (`OPTION_LINE_RE`), and
 question marks each gap as `{answer}`, or `{right|wrong|wrong}` for a
 drop-down, the first item being correct (`GAP_RE`).
 
-*dewnote:* shown as a code block. The checker reports a missing id or
+*dewnote:* the lines stay editable, and under them the question is
+drawn with its answer marked: the correct option ticked, or each gap
+filled in with its answer (`questionPreview` in `editor.ts`, built the
+way `render_question()` builds it). The checker reports a missing id or
 type, a question with no text, a multiple-choice question with fewer
 than two options or no `correct:`, and a fill-in-the-blank question with
 no gap or one that does not close (`questionIn` in `fences.ts`). The `/`
@@ -390,12 +393,10 @@ What dewlab's build reads and dewnote shows only as raw text, in the
 order an author would notice it. Each is planned in
 `planning/ROADMAP.md`, Phases 6 and 7.
 
-1. `question` fences: checked, but shown as code rather than as the
-   question a reader sees.
-2. App panes: shown as code; nothing runs them.
-3. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
+1. App panes: shown as code; nothing runs them.
+2. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
    when run in dewnote.
-4. Cards, generated blocks and page wrappers: shown as code, text and
+3. Cards, generated blocks and page wrappers: shown as code, text and
    loose tags.
-5. The checker does not report footnotes inside fences, or `tutorial:`
+4. The checker does not report footnotes inside fences, or `tutorial:`
    anchors that name no heading.

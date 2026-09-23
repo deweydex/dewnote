@@ -455,6 +455,16 @@ Each pair of braces `{…}` is a gap.
 - Without `|`, the gap is a box the reader types into.
 - Either way, the **first** item is the correct answer.
 
+### How dewnote shows a question
+
+Under the lines you type, dewnote draws the question: the question
+itself, then either the options, with the correct one ticked and
+outlined, or the sentence with each gap filled in with its answer (a
+drop-down's other choices in grey after it). A reader sees neither
+answer; they are there so you can check you marked the right one.
+**Hide** in the block's corner leaves only the drawn question; **Edit**
+brings the lines back.
+
 ### Ids are shared
 
 Cells, questions and web page panes all share one set of ids on a page,

@@ -201,7 +201,7 @@ comes from typing starts Python.
 
 ### Drawn over the document, not in it
 
-Four constructs are drawn differently from how the file holds them,
+Five constructs are drawn differently from how the file holds them,
 and in each case only the drawing changes, so the round-trip suite
 still guards the file:
 
@@ -226,6 +226,11 @@ still guards the file:
   keystroke, so the hint's markdown goes through `renderFragment`,
   which is synchronous, and is handed over as a string, so Crepe's
   DOMPurify pass sees any HTML a hint's author wrote.
+- **Questions.** The same, for a ```` ```question ````: drawn as its
+  author needs it, with the answer marked, built the way dewlab's
+  `render_question()` builds the reader's version. A fill-in-the-blank's
+  gaps stand aside as tokens while the sentence becomes HTML, so a price
+  in the sentence stays a price.
 
 Two things learned doing it. ProseMirror rebuilds a node view or widget
 whenever the selection moves into it, which a click does before its
