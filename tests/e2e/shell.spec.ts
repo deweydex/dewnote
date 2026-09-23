@@ -632,6 +632,34 @@ test("a new tutorial is written, opened, and starts as a draft", async ({ page }
   expect(written.text).toContain("```python exec");
 });
 
+test("a tutorial gets a practice page beside it, and then a way back to it", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {
+    "tutorials/lists/lists.md": '---\ntitle: Lists\nyear: "2025-2026"\nstatus: live\n---\n\n# Lists\n',
+  });
+  await page.locator(".dn-wp-input").fill("lists");
+  await page.keyboard.press("Enter");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("new practice page");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(".dn-spine-file")).toHaveAttribute("title", "tutorials/lists/lists-practice.md");
+  await expect(page.locator(".milkdown h1")).toHaveText("Lists — Practice");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1));
+  expect(written.path).toBe("tutorials/lists/lists-practice.md");
+  expect(written.text).toContain("practice_for: lists\n");
+
+  // Back on the tutorial, the command that made it now opens it.
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("lists.md");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("practice page");
+  await expect(page.locator(".dn-wp-list")).not.toContainText("New practice page");
+  await expect(page.locator(".dn-wp-list")).toContainText("Open the practice page");
+});
+
 test("a release freezes what is published and dates what is open", async ({ page }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {

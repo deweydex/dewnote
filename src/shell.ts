@@ -22,7 +22,7 @@ import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
 import { mountConflict } from "./conflict.ts";
 import { draftFor, dropDraft, keepDraft } from "./drafts.ts";
-import { idFromTitle, newTutorial, prepareRelease } from "./authoring.ts";
+import { idFromTitle, newPracticePage, newTutorial, prepareRelease } from "./authoring.ts";
 import { applyToFiles, planDeleteFile, planDeleteTutorial, planMove, planRename, tutorialIdOf, type Plan } from "./rename.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
 import { checkDocument, checkWorkspace, type Problem } from "./checks.ts";
@@ -170,6 +170,30 @@ export function mountShell(page: HTMLElement): Shell {
     const made = newTutorial(title, new Date(), workspaceYear());
     if (files.has(made.path)) {
       spine.setProblem({ message: `There is already a tutorial at ${made.path}.` });
+      return;
+    }
+    try {
+      await store.write(made.path, made.content, `Add ${made.path}`);
+    } catch (error) {
+      spine.setProblem({ message: messageOf(error) });
+      return;
+    }
+    files.set(made.path, made.content);
+    reindex();
+    await showPath(made.path);
+  }
+
+  /** A practice page beside the open tutorial, written and opened. */
+  async function createPracticePage(): Promise<void> {
+    if (!store || !open) return;
+    if (!(await readyToLeave())) return;
+    const made = newPracticePage(open.path, files.get(open.path) ?? "");
+    if ("error" in made) {
+      spine.setProblem({ message: made.error });
+      return;
+    }
+    if (files.has(made.path)) {
+      await showPath(made.path);
       return;
     }
     try {
@@ -1137,6 +1161,33 @@ export function mountShell(page: HTMLElement): Shell {
             return id !== undefined && placementsOf(id, modules).length > 0;
           },
           run: () => void placeTutorial("remove"),
+        },
+        {
+          id: "new-practice",
+          label: "New practice page",
+          section: "Tutorial",
+          keywords: ["create", "add", "exercises", "problems", "practice"],
+          detail: "Creates this tutorial's practice page as a draft, beside it, and opens it.",
+          available: () => {
+            const id = open ? tutorialIdOf(open.path) : undefined;
+            return id !== undefined && !files.has(`tutorials/${id}/${id}-practice.md`);
+          },
+          run: () => void createPracticePage(),
+        },
+        {
+          id: "open-practice",
+          label: "Open the practice page",
+          section: "Tutorial",
+          keywords: ["exercises", "problems", "practice"],
+          detail: "Opens the practice page that goes with this tutorial.",
+          available: () => {
+            const id = open ? tutorialIdOf(open.path) : undefined;
+            return id !== undefined && files.has(`tutorials/${id}/${id}-practice.md`);
+          },
+          run: () => {
+            const id = tutorialIdOf(open!.path)!;
+            void openPath(`tutorials/${id}/${id}-practice.md`);
+          },
         },
         {
           id: "rename-tutorial",

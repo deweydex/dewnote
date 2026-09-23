@@ -217,6 +217,7 @@ appear while a document is open.
 | **Restart Python** | Cells | Clears every variable, as if no cell had run. |
 | **Add to a series…** | Tutorial | Lists the tutorial in a series on a course. |
 | **Remove from a series…** | Tutorial | Takes the tutorial out of a series. The tutorial itself is not deleted. |
+| **New practice page** | Tutorial | Creates the tutorial's practice page, as a draft, and opens it. Once it exists, **Open the practice page** takes its place. |
 | **Rename this tutorial…** | Tutorial | Changes the tutorial's id, and every file that names it. See [Renaming a tutorial](#renaming-a-tutorial). |
 | **Delete this tutorial…** | Tutorial | Deletes the tutorial's folder and takes it out of every course. See [Deleting](#deleting). |
 | **Move or rename this file…** | Document | Gives a page outside `tutorials/` a new path. |
@@ -601,6 +602,18 @@ Run **New tutorial…** and give it a title. dewnote creates
 `tutorials/<id>/<id>.md` with a title, the same `year:` as the workspace's
 other tutorials, `status: draft`, today's version,
 a heading, and one empty Python cell, and opens it.
+
+### Adding a practice page
+
+With a tutorial open, run **New practice page**. dewnote creates
+`tutorials/<id>/<id>-practice.md` beside it, titled "<tutorial title> —
+Practice", with `practice_for: <id>` so dewlab links the two, the
+tutorial's `year:`, `status: draft`, and one empty cell, and opens it.
+A practice page is never listed in a course: readers reach it from its
+tutorial.
+
+When the tutorial already has one, the palette offers **Open the
+practice page** instead.
 
 ### Adding a tutorial to a series
 
