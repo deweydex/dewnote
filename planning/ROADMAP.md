@@ -24,15 +24,6 @@ a live preview.
 **Approach.** Group adjacent panes with the same `site:` into one node
 view with three tabs and an iframe preview. The file keeps three fences.
 
-### 3.5 Edit front matter as fields
-
-**Problem.** Front matter shows as a raw YAML block. Changing `status`
-from `draft` to `live`, the most common edit, means using **Edit the
-markdown**.
-
-**Approach.** A small form above the title for `title`, `status` and
-`version`, with the raw block still reachable through Edit the markdown.
-
 ---
 
 ## Phase 4: Missing features

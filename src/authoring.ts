@@ -56,6 +56,13 @@ export function setFrontMatterField(source: string, key: string, value: string):
   return source.replace(whole, `${open}${lines.join("\n")}${close}`);
 }
 
+/** The same, for front matter held as its bare YAML (the editor's
+ * front-matter node holds it without the `---` lines). */
+export function setYamlField(yaml: string, key: string, value: string): string {
+  const wrapped = setFrontMatterField(`---\n${yaml}\n---\n`, key, value);
+  return wrapped.slice(4, -5);
+}
+
 /** dewlab's id rule: the folder's name and the file's name are the same
  * word, and it is what the page's address is made of. */
 export function idFromTitle(title: string): string {

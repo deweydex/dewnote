@@ -183,15 +183,69 @@ body {
   margin-block-start: 0.45rem;
 }
 
-/* Front matter reads as a label on the document, not as content. */
-.milkdown [data-front-matter] {
-  font-family: var(--dl-mono);
+/* Front matter reads as a label on the document, not as content: its
+   fields in a row, and the YAML itself only when asked for. */
+.milkdown .dn-front {
+  border-left: 2px solid var(--dl-rule);
+  padding: 0.3rem 0 0.3rem 0.75rem;
+  margin-bottom: 1.5rem;
   font-size: 0.8em;
   color: var(--dl-muted);
-  border-left: 2px solid var(--dl-rule);
-  padding: 0.25rem 0 0.25rem 0.75rem;
-  margin-bottom: 1.5rem;
+}
+
+.milkdown .dn-front-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 1rem;
+}
+
+.milkdown .dn-front-fields label {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.milkdown .dn-front-fields label > span {
+  font-family: var(--dl-mono);
+  font-size: 0.85em;
+  letter-spacing: 0.03em;
+}
+
+.milkdown .dn-front-fields input,
+.milkdown .dn-front-fields select {
+  font: inherit;
+  font-size: 1.05em;
+  color: var(--dl-fg);
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 4px;
+  background: var(--dl-bg);
+}
+
+.milkdown .dn-front-title {
+  min-width: min(22rem, 60vw);
+}
+
+.milkdown .dn-front-version {
+  font-family: var(--dl-mono);
+  padding: 0.2rem 0;
+  color: var(--dl-fg);
+}
+
+.milkdown .dn-front-toggle {
+  font: inherit;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: var(--dl-link);
+  cursor: pointer;
+}
+
+.milkdown .dn-front-raw {
+  margin: 0.6rem 0 0;
+  font-family: var(--dl-mono);
   white-space: pre-wrap;
+  color: var(--dl-fg);
 }
 
 /* The spine lives in the margin the page already had, so the page keeps

@@ -22,6 +22,8 @@ import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
 import { foldLine } from "./fences.ts";
+import { extractFrontMatter } from "./frontmatter.ts";
+import { setYamlField } from "./authoring.ts";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import remarkFrontmatter from "remark-frontmatter";
 import { python } from "@codemirror/lang-python";
@@ -164,6 +166,119 @@ export const frontMatterSchema = $nodeSchema("front_matter", () => ({
 }));
 
 export const frontMatterRemark = $remark("frontMatter", () => remarkFrontmatter, ["yaml"]);
+
+const STATUSES = ["draft", "beta", "live", "archived"];
+
+/** Whether the YAML is showing, kept outside the view: ProseMirror
+ * rebuilds a node view whenever it likes (a click that moves the
+ * selection is enough), and a rebuild must not close what the author
+ * opened. One document is open at a time, so one flag will do. */
+let frontMatterRawShown = false;
+
+/** Front matter as the fields an author changes most, over the YAML it
+ * is. Title and status are fields; a change rewrites that one line of
+ * the YAML (setYamlField) and nothing else, so key order and quoting
+ * survive as they always have. Version is shown and set only by a
+ * release. The YAML itself stays editable under "Show all fields". */
+export const frontMatterView = $view(frontMatterSchema.node, () => (initial, view, getPos) => {
+  let node = initial;
+  const dom = document.createElement("div");
+  dom.className = "dn-front";
+  dom.dataset["frontMatter"] = "true";
+
+  const form = document.createElement("div");
+  form.className = "dn-front-fields";
+  form.contentEditable = "false";
+
+  const field = (labelText: string, control: HTMLElement): HTMLLabelElement => {
+    const label = document.createElement("label");
+    const name = document.createElement("span");
+    name.textContent = labelText;
+    label.append(name, control);
+    return label;
+  };
+
+  const title = document.createElement("input");
+  title.type = "text";
+  title.className = "dn-front-title";
+  const status = document.createElement("select");
+  const version = document.createElement("span");
+  version.className = "dn-front-version";
+  version.title = "Set by Release a new version.";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "dn-front-toggle";
+
+  form.append(field("Title", title), field("Status", status), field("Version", version), toggle);
+
+  const raw = document.createElement("pre");
+  raw.className = "dn-front-raw";
+  dom.append(form, raw);
+
+  const drawToggle = () => {
+    toggle.textContent = frontMatterRawShown ? "Hide all fields" : "Show all fields";
+    raw.hidden = !frontMatterRawShown;
+  };
+  // On mousedown, and with the default prevented: a click arrives after
+  // the selection has moved, by which time this view may have been
+  // rebuilt and the button it lands on is gone.
+  toggle.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    frontMatterRawShown = !frontMatterRawShown;
+    drawToggle();
+  });
+  toggle.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    frontMatterRawShown = !frontMatterRawShown;
+    drawToggle();
+  });
+
+  const yaml = () => node.textContent;
+  const fields = () => extractFrontMatter(`---\n${yaml()}\n---\n`).fields;
+
+  function draw(): void {
+    const values = fields();
+    if (document.activeElement !== title) title.value = typeof values["title"] === "string" ? values["title"] : "";
+    const current = typeof values["status"] === "string" ? values["status"] : "live";
+    const options = STATUSES.includes(current) ? STATUSES : [...STATUSES, current];
+    status.replaceChildren(...options.map((value) => new Option(value, value, false, value === current)));
+    version.textContent = values["version"] === undefined ? "none yet" : String(values["version"]);
+  }
+
+  /** Replaces the node's YAML with `next`, as one undoable step. */
+  function write(next: string): void {
+    const pos = typeof getPos === "function" ? getPos() : undefined;
+    if (pos === undefined || next === yaml()) return;
+    const from = pos + 1;
+    const to = from + node.content.size;
+    view.dispatch(view.state.tr.replaceWith(from, to, next ? view.state.schema.text(next) : []));
+  }
+
+  title.addEventListener("change", () => write(setYamlField(yaml(), "title", title.value.trim())));
+  title.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") title.blur();
+  });
+  status.addEventListener("change", () => write(setYamlField(yaml(), "status", status.value)));
+
+  draw();
+  drawToggle();
+
+  return {
+    dom,
+    contentDOM: raw,
+    update(next) {
+      if (next.type !== node.type) return false;
+      node = next;
+      draw();
+      return true;
+    },
+    // The form's own events and changes are the form's: ProseMirror
+    // leaves them alone. Only the YAML under it is document.
+    stopEvent: (event) => form.contains(event.target as Node),
+    ignoreMutation: (mutation) => form.contains(mutation.target),
+  };
+});
 
 /** A fold's opening and closing lines, drawn as what they are. dewlab
  * writes a hint or an answer as `<details class="dl-hint"><summary>…</summary>`,
@@ -603,6 +718,7 @@ export async function mountEditor(
     .use(codeBlockWithMeta)
     .use(frontMatterRemark)
     .use(frontMatterSchema)
+    .use(frontMatterView)
     .use(plainDollars)
     .use(foldLineView)
     .use(foldBodies);

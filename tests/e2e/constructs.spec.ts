@@ -380,3 +380,53 @@ test("Run is drawn as a button heading the panel, and output reads from the left
   await expect(output).toBeVisible();
   expect(await output.evaluate((el) => getComputedStyle(el.closest(".preview")!).textAlign)).toBe("left");
 });
+
+test.describe("front matter as fields", () => {
+  const SOURCE = '---\ntitle: A Page\nyear: "2026-2027"\nstatus: draft\nversion: 2026.09.22.1\n---\n\n# A Page\n';
+
+  async function openPage(page: import("@playwright/test").Page) {
+    await page.goto(BUILT_APP);
+    await page.evaluate(() => document.querySelector(".dn-gate")?.remove());
+    const out = await page.evaluate(async (md) => {
+      await (globalThis as any).__dewnote.open(md);
+      return (globalThis as any).__dewnote.markdown() as string;
+    }, SOURCE);
+    // Drawing it as a form changes nothing in the file.
+    expect(out).toBe(SOURCE);
+  }
+  const markdown = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => (globalThis as any).__dewnote.markdown() as string);
+
+  test("shows title, status and version, and hides the YAML until asked", async ({ page }) => {
+    await openPage(page);
+    await expect(page.locator(".dn-front-title")).toHaveValue("A Page");
+    await expect(page.locator(".dn-front-fields select")).toHaveValue("draft");
+    await expect(page.locator(".dn-front-version")).toHaveText("2026.09.22.1");
+    await expect(page.locator(".dn-front-raw")).toBeHidden();
+  });
+
+  test("changing the status rewrites that one line", async ({ page }) => {
+    await openPage(page);
+    await page.selectOption(".dn-front-fields select", "live");
+    expect(await markdown(page)).toBe(SOURCE.replace("status: draft", "status: live"));
+  });
+
+  test("changing the title rewrites that one line, quoted where YAML needs it", async ({ page }) => {
+    await openPage(page);
+    await page.fill(".dn-front-title", "Yes: a Page");
+    await page.keyboard.press("Enter");
+    expect(await markdown(page)).toBe(SOURCE.replace("title: A Page", 'title: "Yes: a Page"'));
+  });
+
+  test("Show all fields opens the YAML, which stays editable", async ({ page }) => {
+    await openPage(page);
+    await page.click(".dn-front-toggle");
+    const raw = page.locator(".dn-front-raw");
+    await expect(raw).toBeVisible();
+    await raw.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type("\npackages: [sympy]");
+    // Wherever the click put it, the new line is inside the front matter.
+    await expect.poll(() => markdown(page)).toMatch(/^---\n[^]*packages: \[sympy\][^]*\n---\n\n# A Page/);
+  });
+});

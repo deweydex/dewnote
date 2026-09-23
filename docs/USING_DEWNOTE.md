@@ -129,9 +129,8 @@ saves the course file.
 1. Open the palette and run **Check this document**. dewnote lists
    anything that would stop the site building the page, or confuse a
    reader. Fix what it finds.
-2. Press **Ctrl+/** to see the raw markdown. At the top, change
-   `status: draft` to `status: live`. Choose **Apply changes**, then
-   press **Ctrl+S** to save.
+2. At the top of the tutorial, change **Status** from *draft* to
+   *live*, then press **Ctrl+S** to save.
 
 ### Step 8: Send it for review (GitHub only)
 
@@ -307,7 +306,11 @@ you save.
 ### Front matter
 
 The block between the two `---` lines at the top of a file is the
-**front matter**. It holds settings for the page rather than its content:
+**front matter**. It holds settings for the page rather than its content.
+dewnote shows it at the top of the document as three fields: **Title**
+and **Status**, which you can change there, and **Version**, which is set
+when you release a new version. **Show all fields** shows the whole
+block, which you can edit directly. In the file, it looks like this:
 
 ```
 ---
