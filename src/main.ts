@@ -260,8 +260,22 @@ let held: Document | null = null;
     const mode = hooks["__dewnoteRunCell"] as string | boolean | undefined;
     let release: (() => void) | null = null;
     hooks["__dewnoteFinishRun"] = () => release?.();
+    // A test sets `__dewnoteJedi` to canned answers by kind, to drive the
+    // editor's half of Python help without an interpreter. Every question
+    // asked is recorded in `__dewnoteJediAsked`.
+    const jedi = hooks["__dewnoteJedi"] as Record<string, unknown> | undefined;
+    const asked: unknown[] = [];
+    hooks["__dewnoteJediAsked"] = asked;
     held = await mountEditor(page, {
       markdown,
+      ...(jedi
+        ? {
+            askPython: async (kind: string, source: string, context: string, line: number, column: number) => {
+              asked.push({ kind, source, context, line, column });
+              return jedi[kind] ?? null;
+            },
+          }
+        : {}),
       ...(mode
         ? {
             // Echoes what it was asked to run, so a test can see the

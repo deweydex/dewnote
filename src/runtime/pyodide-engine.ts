@@ -174,3 +174,37 @@ function terminateWorker(reason: string): void {
 export function restartInterpreter(): void {
   terminateWorker("Stopped: the interpreter was restarted");
 }
+
+export type HelpKind = "complete" | "hover" | "signature";
+
+/** Help while writing a cell, from Jedi in the worker: completions, a
+ * name's documentation, or the signature of the call being typed.
+ * `line` counts from 1 and `column` from 0, as Jedi does, within
+ * `source`; `context` is the code of the cells above.
+ *
+ * Never waits long and never throws: an answer that arrives after the
+ * author has typed on is worthless, so a slow one (a cell is running, or
+ * Jedi is still loading) is null. Before Python has booted, `boot` starts
+ * it — typing into a cell is a clear sign Python is about to be wanted —
+ * and this answer is null. */
+export async function editorHelp(
+  kind: HelpKind,
+  source: string,
+  context: string,
+  line: number,
+  column: number,
+  options: { boot?: boolean } = {},
+): Promise<unknown> {
+  if (!bootPromise) {
+    if (options.boot) void ensureBooted().catch(() => undefined);
+    return null;
+  }
+  try {
+    await bootPromise;
+  } catch {
+    return null;
+  }
+  const answer = request("help", { kind, source, context, line, column }).catch(() => null);
+  const late = new Promise((resolve) => setTimeout(() => resolve(null), 1500));
+  return Promise.race([answer, late]);
+}

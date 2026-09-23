@@ -13,7 +13,7 @@ import { buildFileIndex, locationOf, type FileIndexEntry } from "./workspace.ts"
 import { parseModuleFiles, parseModuleIndex, isModuleFile } from "./modules.ts";
 import type { Module } from "./modules.ts";
 import { messageOf, type SaveProblem } from "./save-problem.ts";
-import { canStop, requestStop, restartInterpreter, runCell } from "./runtime/pyodide-engine.ts";
+import { canStop, editorHelp, requestStop, restartInterpreter, runCell } from "./runtime/pyodide-engine.ts";
 import type { CellOutput } from "./cells.ts";
 import { assetPathFor, freeAssetName, imageTypeOf } from "./images.ts";
 import type { Progress, Store, StoreFile } from "./store.ts";
@@ -431,6 +431,7 @@ export function mountShell(page: HTMLElement): Shell {
       markdown: source,
       onChange: () => onEdit(),
       runCell: runOneCell,
+      askPython: editorHelp,
       resolveImage: (src) => resolveImage(path, src),
       saveImage: (file) => saveImage(path, file),
       stopCell: () => requestStop(),
@@ -530,6 +531,7 @@ export function mountShell(page: HTMLElement): Shell {
       markdown,
       onChange: () => onEdit(),
       runCell: runOneCell,
+      askPython: editorHelp,
       resolveImage: (src) => resolveImage(path, src),
       saveImage: (file) => saveImage(path, file),
       stopCell: () => requestStop(),

@@ -68,6 +68,15 @@ export function parseCell(body: string): CellSource {
   return cell;
 }
 
+/** A cell's body with its header lines blanked rather than removed: the
+ * code as Python sees it, on the same line numbers as the editor shows,
+ * which is what a position in the editor has to be translated against. */
+export function codeOnItsLines(body: string): string {
+  const lines = body.split("\n");
+  const headerCount = headerLineCount(lines);
+  return lines.map((line, at) => (at < headerCount ? "" : line)).join("\n");
+}
+
 /** The Python a `sql exec` cell actually runs: the fence's raw SQL,
  * wrapped into a call against the one shared, page-wide `db` connection,
  * mirroring dewlab's own `wrapSqlCode()`. Left as the cell's trailing

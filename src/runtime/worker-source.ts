@@ -34,6 +34,11 @@ let sqlTools = null;
 let sqliteLoading = null;
 let matplotlibConfigured = false;
 let sharedDbSeeded = false;
+// Jedi, for help while writing a cell: completion, a name's
+// documentation, the signature of the call being typed. Loaded after boot
+// and never awaited by a run, since jedi and parso are a download no cell
+// depends on. Until it is ready, a help request answers nothing.
+let jediReady = false;
 
 function post(message) {
   self.postMessage(message);
@@ -59,6 +64,22 @@ async function boot(message) {
 
   pyodide.FS.writeFile("/home/pyodide/dewnote_tools.py", ${pythonSourceLiteral}, { encoding: "utf8" });
   tools = pyodide.pyimport("dewnote_tools");
+  loadJedi();
+}
+
+async function loadJedi() {
+  try {
+    await pyodide.loadPackage(["jedi", "parso"]);
+    jediReady = true;
+  } catch (error) {
+    console.warn("dewnote worker: Jedi did not load; cells get no completion from it", error);
+  }
+}
+
+function help(message) {
+  if (!jediReady || !tools) return null;
+  const answer = tools[message.kind](message.source, message.context, message.line, message.column);
+  return JSON.parse(answer);
 }
 
 async function runCell(message) {
@@ -146,6 +167,8 @@ self.onmessage = async (event) => {
       result = await runSql(message);
     } else if (message.type === "reset-sql") {
       result = await resetSql(message);
+    } else if (message.type === "help") {
+      result = help(message);
     } else {
       throw new Error("unknown message type: " + message.type);
     }

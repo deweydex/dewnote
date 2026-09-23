@@ -374,8 +374,25 @@ the top, in order, and stops at the first one that fails, because later
 cells usually depend on earlier ones. It is the quickest way to check a
 tutorial still works after an edit.
 
+### Help while you write
+
+In a Python block, dewnote helps as you type:
+
+- **Completion.** Suggestions appear as you type a name, or after a `.`.
+  Press **Ctrl+Space** to ask for them. They include names defined in
+  the cells above, even before anything has run.
+- **Documentation.** Hover over a name to see what it is and its
+  documentation.
+- **Signatures.** Inside a function call, the function's parameters are
+  shown, with the one you are typing in bold.
+
+This help comes from Jedi, a Python analysis tool, running alongside
+Python in your browser. dewlab's tutorial pages and dewmini use the same
+tool. It starts the first time you type in a cell and takes a few seconds
+to load; until then, you get simpler suggestions from the editor itself.
+
 Python runs in your browser using Pyodide, which is downloaded the first
-time you run a cell. If Pyodide cannot be downloaded, for example on a
+time you run a cell, or type in one. If Pyodide cannot be downloaded, for example on a
 restricted network, set **Python runtime URL** in Appearance to a copy
 you can reach.
 

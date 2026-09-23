@@ -267,3 +267,77 @@ test("Run on a SQL cell sends the query wrapped for the page's database", async 
   await expect(output).toContainText("run_sql_cell(db,");
   await expect(output).toContainText("SELECT 1;");
 });
+
+test.describe("help while writing a Python cell", () => {
+  const TWO_CELLS = "```python exec\nid: a\ndef area(width, height):\n    return width * height\n```\n\n```python exec\nid: b\nar\n```\n";
+
+  async function openWithJedi(page: import("@playwright/test").Page, answers: Record<string, unknown>) {
+    await page.goto(BUILT_APP);
+    await page.evaluate((canned) => {
+      (globalThis as any).__dewnoteJedi = canned;
+      document.querySelector(".dn-gate")?.remove();
+    }, answers);
+    await page.evaluate((md) => (globalThis as any).__dewnote.open(md), TWO_CELLS);
+    await expect(page.locator(".milkdown .cm-content")).toHaveCount(2);
+  }
+
+  /** Puts the cursor at the end of the second cell's last line. */
+  async function typeInSecondCell(page: import("@playwright/test").Page, text: string) {
+    const second = page.locator(".milkdown .cm-content").nth(1);
+    await second.locator(".cm-line").last().click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(text);
+  }
+
+  test("completion offers Jedi's names, and asks with the cells above as context", async ({ page }) => {
+    await openWithJedi(page, { complete: [{ label: "area", type: "function" }, { label: "arbitrary_name", type: "variable" }] });
+    await typeInSecondCell(page, "b");
+    await page.keyboard.press("Control+Space");
+
+    const options = page.locator(".cm-tooltip-autocomplete .cm-completionLabel");
+    await expect(options.filter({ hasText: "arbitrary_name" })).toHaveCount(1);
+
+    const asked: any[] = await page.evaluate(() => (globalThis as any).__dewnoteJediAsked);
+    const question = asked.find((one) => one.kind === "complete");
+    // The cell above, header blanked; this cell's header blanked too, on
+    // the same lines, so the position still points at "arb".
+    expect(question.context).toBe("\ndef area(width, height):\n    return width * height\n");
+    expect(question.source).toBe("\narb");
+    expect(question).toMatchObject({ line: 2, column: 3 });
+  });
+
+  test("hovering a name shows its documentation", async ({ page }) => {
+    await openWithJedi(page, { hover: "area(width, height)\n\nThe area of a rectangle." });
+    const name = page.locator(".milkdown .cm-content").first().getByText("area", { exact: false }).first();
+    await name.hover();
+    await expect(page.locator(".dn-help-doc")).toContainText("The area of a rectangle.");
+  });
+
+  test("typing a call shows its signature, with the argument being typed in bold", async ({ page }) => {
+    await openWithJedi(page, { signature: { label: "area(width, height)", index: 1 } });
+    await typeInSecondCell(page, "ea(3, ");
+    const signature = page.locator(".dn-help-signature");
+    await expect(signature).toContainText("area(width, height)");
+    await expect(signature.locator("strong")).toHaveText("height");
+
+    // Closing the call puts it away.
+    await page.keyboard.type("4)");
+    await expect(signature).toHaveCount(0);
+  });
+
+  test("a block in another language asks nothing", async ({ page }) => {
+    await page.goto(BUILT_APP);
+    await page.evaluate(() => {
+      (globalThis as any).__dewnoteJedi = { signature: { label: "nope()", index: 0 } };
+      document.querySelector(".dn-gate")?.remove();
+    });
+    await page.evaluate(() => (globalThis as any).__dewnote.open("```sql\nSELECT max(\n```\n"));
+    await page.locator(".milkdown .cm-line").first().click();
+    await page.keyboard.press("End");
+    await page.keyboard.type("x, ");
+    await page.waitForTimeout(500);
+    const asked: any[] = await page.evaluate(() => (globalThis as any).__dewnoteJediAsked);
+    expect(asked.filter((one) => one.kind !== "complete")).toEqual([]);
+    await expect(page.locator(".dn-help-signature")).toHaveCount(0);
+  });
+});

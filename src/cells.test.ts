@@ -2,7 +2,7 @@
 // actually bitten, and it is dewlab's own.
 
 import { describe, expect, test } from "bun:test";
-import { cellLanguage, isRunnable, parseCell, wrapSqlCode } from "./cells.ts";
+import { cellLanguage, codeOnItsLines, isRunnable, parseCell, wrapSqlCode } from "./cells.ts";
 
 describe("isRunnable", () => {
   test("takes `exec` from the info string, not the language", () => {
@@ -69,5 +69,17 @@ describe("wrapSqlCode", () => {
     const argument = /run_sql_cell\(db, ([\s\S]*)\)\s*$/.exec(wrapSqlCode(sql))![1]!;
     // A JSON string literal is a valid Python string literal for these.
     expect(JSON.parse(argument)).toBe(sql);
+  });
+});
+
+describe("codeOnItsLines", () => {
+  test("blanks the header lines and keeps every line where it was", () => {
+    const body = "id: a\nhint: errors:3\nx = 1\nprint(x)";
+    expect(codeOnItsLines(body)).toBe("\n\nx = 1\nprint(x)");
+    expect(codeOnItsLines(body).split("\n")).toHaveLength(body.split("\n").length);
+  });
+
+  test("leaves a body with no header alone", () => {
+    expect(codeOnItsLines("x = 1\n")).toBe("x = 1\n");
   });
 });

@@ -188,3 +188,83 @@ def reset_namespace() -> None:
     _page_globals["__name__"] = "__dewnote__"
     _page_globals["read_sql"] = read_sql
     _figures_rendered.clear()
+
+
+# ── help while writing a cell ───────────────────────────────────────────
+#
+# Completion, the documentation for a name, and the signature of the call
+# being typed, all from Jedi. jedi.Interpreter reads the source as text
+# and the page's live namespace as objects, so one mechanism answers both
+# for a name defined in a cell that has not run (from its source) and for
+# one that has (from the object itself, which is more exact). `context` is
+# the code of the cells above, so a function defined two cells up is known
+# before anything has run.
+#
+# Jedi is loaded by the worker after boot, in the background; nothing here
+# imports it until the first request, which the worker only sends once it
+# has loaded. Every answer is JSON text, since the worker hands it straight
+# to the page. A source mid-edit can make Jedi raise almost anything, so
+# every failure is an empty answer rather than an error.
+
+_JEDI_TYPES = {
+    "module": "namespace",
+    "class": "class",
+    "instance": "variable",
+    "function": "function",
+    "param": "variable",
+    "path": "text",
+    "keyword": "keyword",
+    "property": "property",
+    "statement": "variable",
+}
+
+
+def _jedi_script(source: str, context: str) -> Any:
+    import jedi
+
+    return jedi.Interpreter(context + source, [_page_globals])
+
+
+def _jedi_line(line: int, context: str) -> int:
+    return line + context.count("\n")
+
+
+def complete(source: str, context: str, line: int, column: int) -> str:
+    import json
+
+    try:
+        found = _jedi_script(source, context).complete(_jedi_line(line, context), column)
+    except Exception:
+        return "[]"
+    items = []
+    for completion in found[:100]:
+        if completion.name.startswith("__") and not completion.name.endswith("__"):
+            continue
+        items.append({"label": completion.name, "type": _JEDI_TYPES.get(completion.type, "variable")})
+    return json.dumps(items)
+
+
+def hover(source: str, context: str, line: int, column: int) -> str:
+    import json
+
+    try:
+        for name in _jedi_script(source, context).help(_jedi_line(line, context), column):
+            text = name.docstring()
+            if text:
+                return json.dumps(text[:2000])
+    except Exception:
+        pass
+    return "null"
+
+
+def signature(source: str, context: str, line: int, column: int) -> str:
+    import json
+
+    try:
+        found = _jedi_script(source, context).get_signatures(_jedi_line(line, context), column)
+    except Exception:
+        return "null"
+    if not found:
+        return "null"
+    first = found[0]
+    return json.dumps({"label": first.to_string(), "index": first.index})

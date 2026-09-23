@@ -24,11 +24,12 @@ import remarkFrontmatter from "remark-frontmatter";
 import { python } from "@codemirror/lang-python";
 import { sql } from "@codemirror/lang-sql";
 import { LanguageDescription } from "@codemirror/language";
-import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } from "./cells.ts";
+import { cellLanguage, codeOnItsLines, isRunnable, parseCell, wrapSqlCode, type CellOutput } from "./cells.ts";
 import { uploadConfig } from "@milkdown/kit/plugin/upload";
 import { imageInlineComponent, inlineImageConfig } from "@milkdown/kit/component/image-inline";
 import { isImageName, isLocalAsset } from "./images.ts";
 import { canonicaliseDisplayMath, unmathPlainDollars } from "./maths.ts";
+import { pythonHelp, type PythonHelpHost } from "./python-help.ts";
 import { idMaker, SNIPPETS } from "./slash-menu.ts";
 import { insert } from "@milkdown/kit/utils";
 import { commandsCtx } from "@milkdown/kit/core";
@@ -234,6 +235,10 @@ export interface EditorOptions {
    * rare mistake — it is the first thing a class writes — so the button
    * that starts one has to be able to stop it. */
   stopCell?(): void;
+  /** Asks Jedi for help while a Python cell is written: completion, a
+   * name's documentation, the signature of the call being typed. Absent
+   * means none, which is right for an export or a test. */
+  askPython?: PythonHelpHost["ask"];
   /** Turns a `src` the document owns into something a browser can draw.
    * Null where nothing is at that path, which is ordinary for a document
    * being written. Absent means images stay as written. */
@@ -310,6 +315,19 @@ export async function mountEditor(
       return true;
     });
     return found;
+  }
+
+  /** The code of every runnable Python cell above the one holding
+   * `source`, in order: what the page will have run by the time this
+   * one runs. Header lines are blanked, not removed, for the same reason
+   * as in the cell itself. */
+  function pythonAbove(source: string): string {
+    const above: string[] = [];
+    for (const cell of runnableCells()) {
+      if (cell.content === source) break;
+      if (cellLanguage(cell.language) === "python") above.push(codeOnItsLines(cell.content));
+    }
+    return above.length ? `${above.join("\n")}\n` : "";
   }
 
   const results = new Map<string, RunRecord>();
@@ -457,6 +475,9 @@ export async function mountEditor(
         },
       },
       [Crepe.Feature.CodeMirror]: {
+        extensions: options.askPython
+          ? [pythonHelp({ ask: options.askPython, contextFor: (source) => pythonAbove(source) })]
+          : [],
         languages: [
           LanguageDescription.of({ name: "python", support: python() }),
           LanguageDescription.of({ name: "sql", support: sql() }),

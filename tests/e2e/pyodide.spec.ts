@@ -107,3 +107,67 @@ test("a SQL cell runs against the page's database", async ({ page }) => {
   await expect(output).toContainText("2", { timeout: BOOT });
   await expect(output).not.toHaveClass(/is-error/);
 });
+
+test.describe("Jedi, for help while writing a cell", () => {
+  const cells = [
+    cell("define", 'def area(width, height):\n    """The area of a rectangle."""\n    return width * height'),
+    cell("use", "ar"),
+  ];
+
+  /** Asks for completion until Jedi, loading in the background after
+   * boot, answers with `label`. */
+  async function completionIncludes(page: Page, label: string) {
+    const second = page.locator(".milkdown .cm-content").nth(1);
+    await expect
+      .poll(
+        async () => {
+          await second.locator(".cm-line").last().click();
+          await page.keyboard.press("End");
+          await page.keyboard.press("Control+Space");
+          await page.waitForTimeout(300);
+          const labels = await page.locator(".cm-tooltip-autocomplete .cm-completionLabel").allTextContents();
+          await page.keyboard.press("Escape");
+          return labels;
+        },
+        { timeout: BOOT, intervals: [1_000] },
+      )
+      .toContain(label);
+  }
+
+  test("completes a function defined in a cell above, before anything has run", async ({ page }) => {
+    await openCells(page, cells);
+    // Typing starts Python; nothing is run. `area` can only come from
+    // Jedi reading the first cell's source, since CodeMirror's own
+    // completion does not look across cells.
+    await completionIncludes(page, "area");
+  });
+
+  test("shows a name's documentation on hover once Jedi is ready", async ({ page }) => {
+    await openCells(page, cells);
+    await completionIncludes(page, "area");
+    const name = page.locator(".milkdown .cm-content").first().getByText("area", { exact: false }).first();
+    await expect
+      .poll(
+        async () => {
+          await page.mouse.move(0, 0);
+          await name.hover();
+          await page.waitForTimeout(600);
+          return (await page.locator(".dn-help-doc").allTextContents()).join("");
+        },
+        { timeout: BOOT, intervals: [1_000] },
+      )
+      .toContain("The area of a rectangle.");
+  });
+
+  test("shows the signature of the call being typed", async ({ page }) => {
+    await openCells(page, cells);
+    await completionIncludes(page, "area");
+    const second = page.locator(".milkdown .cm-content").nth(1);
+    await second.locator(".cm-line").last().click();
+    await page.keyboard.press("End");
+    await page.keyboard.type("ea(3, ");
+    const signature = page.locator(".dn-help-signature");
+    await expect(signature).toContainText("area(width, height)", { timeout: BOOT });
+    await expect(signature.locator("strong")).toHaveText("height");
+  });
+});

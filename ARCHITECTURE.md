@@ -49,6 +49,7 @@ src/settings.ts         what the reader chose
 src/settings-panel.ts   the panel that changes it
 src/keys.ts             how a shortcut is written on this platform
 
+src/python-help.ts      completion, hover docs and signatures, from Jedi
 src/runtime/            Pyodide, in a Worker
 ```
 
@@ -158,6 +159,31 @@ buffer; where a page has no cross-origin isolation the worker is
 terminated and restarted instead.
 
 ---
+
+### Help while writing a cell
+
+Completion, hover docs and signature help come from Jedi, as on dewlab's
+tutorial pages and in dewmini. The worker loads `jedi` and `parso` in
+the background after boot; no run waits for them, and a help request
+before they are ready answers nothing. The Python side is
+`complete`/`hover`/`signature` in `runtime/dewnote_tools.py`, which use
+`jedi.Interpreter` over the page's live namespace: one mechanism for a
+name that has run (read from the object) and one that has not (read
+from source). dewlab uses two, the live namespace first and Jedi for
+the gap. The editor sends the code of the runnable Python cells above as
+context, so a function defined earlier is known before anything runs.
+Header lines are blanked, not removed, so line numbers still match
+(`codeOnItsLines` in `cells.ts`).
+
+`python-help.ts` adds three CodeMirror pieces to every code block, each
+checking the block is Python first. Completion is a language-data
+source for `pythonLanguage`, joining the autocompletion `basicSetup`
+already carries rather than adding a second one; CodeMirror merges
+identical suggestions from the two. Hover is `hoverTooltip`; signature
+help is a `StateField` of tooltips, asked again 200ms after typing stops
+inside an open call. `editorHelp` in the engine gives up after 1.5s
+(a cell may be running), and the first request of either kind that
+comes from typing starts Python.
 
 ## Images
 
