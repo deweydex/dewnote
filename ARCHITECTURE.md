@@ -331,7 +331,14 @@ and the shell answers it with `conflict.ts`: it reads the file again
 offers **Keep mine** (an ordinary write, now against the new SHA, and
 refused again if the file has moved again), **Keep the saved version**
 (reopen from what was read) or **Cancel** (the refusal stays in the
-margin).
+margin). Where the two sides changed different lines it first offers
+**Keep both**: `mergeLines` is a three-way merge by lines against what
+the editor made of the file as last saved (not the bytes, so the
+editor's tidying on open is not read as an edit). Lines neither side
+changed hold the versions in step; between them, a stretch one side
+changed takes that side, and a stretch both changed differently refuses
+the whole merge, since a file saved with conflict markers in it would
+stop the build.
 
 ### Renaming, moving and deleting
 

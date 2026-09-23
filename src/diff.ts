@@ -116,3 +116,73 @@ export function hunks(lines: readonly DiffLine[], context = 2): Hunk[] {
     lines: lines.slice(from, to + 1),
   }));
 }
+
+/** Which line of `other` each line of `base` survives as, where it
+ * does: the common lines of the two, from the same diff the dialog
+ * draws. */
+function survivors(base: string, other: string): Map<number, number> {
+  const found = new Map<number, number>();
+  let at = 0;
+  let there = 0;
+  for (const line of diffLines(base, other)) {
+    if (line.kind === "same") found.set(at++, there++);
+    else if (line.kind === "theirs") at += 1;
+    else there += 1;
+  }
+  return found;
+}
+
+const sameLines = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((line, at) => line === b[at]);
+
+/**
+ * Both sides' changes to `base`, together, where they do not touch the
+ * same lines: a three-way merge by lines.
+ *
+ * The lines neither side changed hold the three versions in step.
+ * Between two of them, a stretch only one side changed takes that
+ * side's lines; a stretch both changed the same way takes either; a
+ * stretch both changed differently is a clash, and the whole merge is
+ * refused rather than guessed at, since a tutorial saved with conflict
+ * markers in it would stop the build. Null on a clash.
+ */
+export function mergeLines(base: string, theirs: string, mine: string): string | null {
+  const o = base.split("\n");
+  const a = theirs.split("\n");
+  const b = mine.split("\n");
+  const inA = survivors(base, theirs);
+  const inB = survivors(base, mine);
+
+  const out: string[] = [];
+  let io = 0;
+  let ia = 0;
+  let ib = 0;
+
+  const settle = (to: number, toA: number, toB: number): boolean => {
+    const oo = o.slice(io, to);
+    const aa = a.slice(ia, toA);
+    const bb = b.slice(ib, toB);
+    if (sameLines(aa, oo)) out.push(...bb);
+    else if (sameLines(bb, oo) || sameLines(aa, bb)) out.push(...aa);
+    else return false;
+    io = to;
+    ia = toA;
+    ib = toB;
+    return true;
+  };
+
+  while (io < o.length) {
+    let k = io;
+    while (k < o.length && !(inA.has(k) && inB.has(k))) k += 1;
+    if (k === o.length) break;
+    const toA = inA.get(k)!;
+    const toB = inB.get(k)!;
+    if (!settle(k, toA, toB)) return null;
+    out.push(o[k]!);
+    io = k + 1;
+    ia = toA + 1;
+    ib = toB + 1;
+  }
+  if (!settle(o.length, a.length, b.length)) return null;
+  return out.join("\n");
+}

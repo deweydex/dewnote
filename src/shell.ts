@@ -24,6 +24,7 @@ import { mountFindPanel } from "./find-panel.ts";
 import { describeChanges, suggestTitle, titleFrom } from "./pull-request.ts";
 import { findAll, replaceAll } from "./find.ts";
 import { mountConflict } from "./conflict.ts";
+import { mergeLines } from "./diff.ts";
 import { draftFor, dropDraft, keepDraft } from "./drafts.ts";
 import { idFromTitle, newPracticePage, newTutorial, prepareRelease } from "./authoring.ts";
 import { applyToFiles, planDeleteFile, planDeleteTutorial, planMove, planRename, tutorialIdOf, type Plan } from "./rename.ts";
@@ -1098,7 +1099,24 @@ export function mountShell(page: HTMLElement): Shell {
       return false;
     }
 
-    const choice = await conflict.resolve(path, theirs, mine);
+    // What both sides started from: what the editor made of the file as
+    // last saved. The editor's form rather than the bytes, so that the
+    // tidying it does when a file opens is not read as an edit of mine.
+    const base = open?.path === path ? open.saved : files.get(path);
+    const combined = base === undefined ? null : mergeLines(base, theirs, mine);
+    const choice = await conflict.resolve(path, theirs, mine, combined);
+    if (choice === "both" && combined !== null) {
+      try {
+        await store.write(path, combined, `Edit ${path}`);
+      } catch (error) {
+        spine.setProblem({ message: messageOf(error) });
+        return false;
+      }
+      spine.setProblem(null);
+      markSaved(path, combined);
+      if (open?.path === path) await showPath(path);
+      return true;
+    }
     if (choice === "mine") {
       try {
         await store.write(path, mine, `Edit ${path}`);

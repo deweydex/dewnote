@@ -13,17 +13,12 @@ every pull request) is done. Phase 3 (the editor shows what the site
 shows: hint folds, one editor for web page panes, the Run button, the
 empty page, front matter fields, the margin) is done, as is Jedi help in
 Python cells. In Phase 4, renaming, moving and deleting (4.1), new practice pages
-(4.2), find and replace (4.3) and named pull requests (4.4) are done.
+(4.2), find and replace (4.3), named pull requests (4.4) and
+keeping both sides of a conflict (4.5) are done.
 
 ---
 
 ## Phase 4: Missing features
-
-### 4.5 Combine both sides of a save conflict
-
-A conflict offers one version or the other. When both people changed
-different paragraphs, keeping both needs a three-way merge against the
-version the author opened, which the shell already has in `opened`.
 
 ### 4.6 No trailing blank line after editing at the end of a document
 

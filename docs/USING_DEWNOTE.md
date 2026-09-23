@@ -593,14 +593,19 @@ there until you open another document. It says what went wrong and what to do. T
 
 - **The file was changed on the branch after you opened it**, for example
   from another tab or by someone else. dewnote shows what differs between
-  the saved version and yours, and asks which to keep:
+  the saved version and yours, and asks what to keep:
+  - **Keep both** saves one version with your changes and the other ones
+    in it. It is offered only when the two sets of changes are on
+    different lines, for example when you each edited a different
+    paragraph.
   - **Keep mine** saves your version over the other one.
   - **Keep the saved version** discards your changes and opens the other
     one.
   - **Cancel** leaves your changes on screen, unsaved. Save again when you
     are ready to choose.
 
-  Whichever you keep, the other version's changes are lost, so if both
+  When both of you changed the same lines, **Keep both** is not offered,
+  and whichever version you keep, the other's changes are lost. If both
   matter, copy the parts you need before choosing.
 - **GitHub refused the token.** It may have expired. Reload dewnote and
   connect with a new token.
@@ -804,7 +809,8 @@ enough room, the margin moves to a strip across the top.
 
 These are planned but not built yet (see `planning/ROADMAP.md`):
 
-- A save conflict keeps one version or the other; it cannot combine them.
+- When a save conflict has both sides changing the same lines, you keep
+  one version or the other. There is no way to pick line by line.
 
 ---
 

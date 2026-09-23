@@ -1366,6 +1366,38 @@ test("a save conflict shows what differs between the two versions", async ({ pag
   await expect(dialog.locator(".dn-conflict-mine", { hasText: "Unsaved words." })).toHaveCount(1);
 });
 
+test("changes on different lines can be kept together", async ({ page }) => {
+  await editStoring(page);
+  // The other save changed a paragraph further down; this one changed
+  // the first.
+  await page.evaluate((file) => {
+    (globalThis as any).__dewnoteConflict = {
+      path: "tutorials/storing-and-computing/storing-and-computing.md",
+      theirs: file.replace("A variable is a name.", "A variable is a label."),
+    };
+  }, WORKSPACE["tutorials/storing-and-computing/storing-and-computing.md"]);
+  await page.keyboard.press("ControlOrMeta+s");
+
+  const dialog = page.locator(".dn-conflict");
+  await expect(dialog).toContainText("dewnote can keep both");
+  await expect(page.getByRole("button", { name: "Keep both" })).toBeFocused();
+  await page.getByRole("button", { name: "Keep both" }).click();
+
+  await expect(page.locator(".dn-spine-state")).toHaveText("Saved");
+  const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+  expect(written).toHaveLength(1);
+  expect(written[0].text).toContain("Last time we learned to do arithmetic. Unsaved words.");
+  expect(written[0].text).toContain("A variable is a label.");
+  await expect(page.locator(".milkdown")).toContainText("A variable is a label.");
+  await expect(page.locator(".milkdown")).toContainText("Unsaved words.");
+});
+
+test("changes to the same line cannot be kept together, and the dialog says why", async ({ page }) => {
+  await conflictOnSave(page);
+  await expect(page.locator(".dn-conflict")).toContainText("cannot be combined here");
+  await expect(page.getByRole("button", { name: "Keep both" })).toHaveCount(0);
+});
+
 test("Keep mine after a conflict saves your version over the other", async ({ page }) => {
   await conflictOnSave(page);
   await page.getByRole("button", { name: "Keep mine" }).click();
