@@ -348,6 +348,10 @@ folder has no transactions, so it writes everything new first and
 removes last: a failure part-way leaves a copy too many, never a file
 lost, and the message says the folder needs a look.
 
+**Replace all** (`find.ts`, `find-panel.ts`) goes the same way: one
+write per document that changes, applied together, so a replacement
+across forty files is one commit.
+
 The rename was checked against dewlab itself: two heavily linked
 tutorials renamed in a copy of the repository, and `build.py` still
 builds, with four more pages (the redirect stubs).

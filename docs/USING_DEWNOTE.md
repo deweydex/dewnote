@@ -224,6 +224,7 @@ appear while a document is open.
 | **Delete this document…** | Document | Deletes a file that is not a tutorial's own, such as a practice page. |
 | **Release a new version…** | Tutorial | Keeps a copy of the current version and makes your edits the next one. See [Releasing a new version](#releasing-a-new-version). |
 | **New tutorial…** | Workspace | Creates a draft tutorial. |
+| **Find and replace in every document…** | Workspace | Searches every document, and replaces every match at once. Same as Ctrl+Shift+F. See [Finding and replacing](#finding-and-replacing). |
 | **Check every document** | Workspace | Runs the same checks on every document in the workspace. |
 | **Download as HTML** | Import and export | Downloads the page as one self-contained file. |
 | **Download as a Jupyter notebook** | Import and export | Downloads the document as an `.ipynb` file. |
@@ -699,6 +700,26 @@ the main branch yet has no published version either; merge it first.
 If a tutorial folder holds several versions, dewnote opens the one dewlab
 would show: the newest `live` version, or if none is live, the newest.
 
+## Finding and replacing
+
+**Find and replace in every document…** (Ctrl+Shift+F) opens a panel
+that searches every markdown document in the workspace, front matter
+included. Course files are not searched; change those with **Add to a
+series…** and **Remove from a series…**.
+
+- Type in **Find**. The matches appear as you type, each with its file
+  and line. Click one to open that document.
+- The search is for the text exactly as typed: `f(x)` finds those four
+  characters. It ignores case unless you tick **Match case**.
+- To replace, type in **Replace with**. **Replace all** replaces every
+  match the panel shows, in every document, and saves them. On GitHub
+  that is one commit, so it can be reviewed, or reverted, as one change.
+- If the open document has unsaved changes, dewnote asks about them
+  first, as it does before opening another document.
+
+Replacing with nothing (deleting every match) is not offered: an empty
+**Replace with** means you are only finding.
+
 ## Import and export
 
 - **Preview as a reader** opens the page in a new browser tab, styled the
@@ -749,6 +770,7 @@ enough room, the margin moves to a strip across the top.
 | Ctrl+K | Open or close the palette |
 | Ctrl+S | Save |
 | Ctrl+/ | Edit the markdown |
+| Ctrl+Shift+F | Find and replace in every document |
 | Ctrl+Enter | Apply changes, in Edit the markdown |
 | / | Open the block menu, in an empty line |
 | ↑ ↓ | Move through a list |
@@ -759,7 +781,6 @@ enough room, the margin moves to a strip across the top.
 
 These are planned but not built yet (see `planning/ROADMAP.md`):
 
-- There is no find and replace across the workspace.
 - A save conflict keeps one version or the other; it cannot combine them.
 
 ---

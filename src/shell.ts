@@ -20,6 +20,8 @@ import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
+import { mountFindPanel } from "./find-panel.ts";
+import { findAll, replaceAll } from "./find.ts";
 import { mountConflict } from "./conflict.ts";
 import { draftFor, dropDraft, keepDraft } from "./drafts.ts";
 import { idFromTitle, newPracticePage, newTutorial, prepareRelease } from "./authoring.ts";
@@ -288,6 +290,28 @@ export function mountShell(page: HTMLElement): Shell {
     reindex();
     refreshSpine();
   }
+
+  // ── find and replace ───────────────────────────────────────────────
+
+  const finder = mountFindPanel({
+    search: (query, options) => findAll(files, query, options),
+    open: (path) => void openPath(path),
+    async replace(query, replacement, options) {
+      if (!store) return null;
+      // The open document's unsaved edits are not in `files`, and a
+      // replacement written over them would lose them.
+      if (!(await readyToLeave())) return null;
+      const { changes, count } = replaceAll(files, query, replacement, options);
+      if (changes.length === 0) return 0;
+      const plan: Plan = { changes, summary: [], moves: new Map() };
+      if (!(await carryOut(plan, `Replace "${query}" with "${replacement}"`))) return null;
+      spine.setProblem(null);
+      if (open && changes.some((change) => change.kind === "write" && change.path === open!.path)) {
+        await showPath(open.path);
+      }
+      return count;
+    },
+  });
 
   // ── renaming, moving and deleting ──────────────────────────────────
 
@@ -1075,6 +1099,11 @@ export function mountShell(page: HTMLElement): Shell {
       showSource();
       return;
     }
+    if (meta && event.shiftKey && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      if (store) finder.open();
+      return;
+    }
     if (meta && event.key.toLowerCase() === "s") {
       event.preventDefault();
       void saveNow();
@@ -1299,6 +1328,14 @@ export function mountShell(page: HTMLElement): Shell {
           run: () => void runEveryCell(),
         },
         {
+          id: "find",
+          label: "Find and replace in every document…",
+          section: "Workspace",
+          keywords: ["search", "find", "replace", "text", "grep", "everywhere"],
+          detail: `${shortcut("Shift+F")}. Every match in every document, and replace them all at once.`,
+          run: () => finder.open(),
+        },
+        {
           id: "check-workspace",
           label: "Check every document",
           section: "Workspace",
@@ -1339,6 +1376,7 @@ export function mountShell(page: HTMLElement): Shell {
       settings.destroy();
       sourceView.destroy();
       asker.destroy();
+      finder.destroy();
       conflict.destroy();
       reportOverlay.remove();
       spine.destroy();

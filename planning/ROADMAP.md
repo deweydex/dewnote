@@ -12,17 +12,12 @@ build accepts. Phase 2 (the browser tests, and real Python, run in CI on
 every pull request) is done. Phase 3 (the editor shows what the site
 shows: hint folds, one editor for web page panes, the Run button, the
 empty page, front matter fields, the margin) is done, as is Jedi help in
-Python cells. In Phase 4, renaming, moving and deleting (4.1) and new practice pages
-(4.2) are done.
+Python cells. In Phase 4, renaming, moving and deleting (4.1), new practice pages
+(4.2) and find and replace (4.3) are done.
 
 ---
 
 ## Phase 4: Missing features
-
-### 4.3 Find and replace across the workspace
-
-The palette finds documents by title only. Add a text search across every
-document's content, with replace.
 
 ### 4.4 Fewer, better-named commits
 

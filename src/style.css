@@ -1141,6 +1141,60 @@ button.dn-report-row:focus-visible {
   white-space: nowrap;
 }
 
+/* Find and replace in every document. */
+.dn-find-overlay {
+  --dn-overlay-drop: 8vh;
+}
+
+.dn-find {
+  --dn-panel-width: 44rem;
+  --dn-panel-height: 80vh;
+  display: grid;
+  grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr);
+  gap: 0.6rem;
+}
+
+.dn-find h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.dn-find-case {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.dn-find-replace[hidden] { display: none; }
+
+.dn-find-summary {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--dl-muted);
+}
+
+.dn-find-results {
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 0.1rem;
+}
+
+.dn-find-snippet {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dn-find-snippet mark {
+  background: color-mix(in srgb, var(--dl-orange) 30%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}
+
 /* The whole file, as text. */
 .dn-source-overlay {
   align-items: center;
