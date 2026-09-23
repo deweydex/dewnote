@@ -30,20 +30,34 @@ src/folder.ts           the File System Access API
 src/github.ts           the REST API
 src/sample.ts           the sample workspace, held in memory
 src/save-problem.ts     why a save did not happen
+src/drafts.ts           unsaved changes kept in the browser
+src/diff.ts             line diffs, and the three-way merge
+src/conflict.ts         the save-conflict dialog
 
 src/workspace.ts        the index: what every file is and where it sits
 src/modules.ts          course descriptors (a course is a "module" in code)
 src/placement.ts        adding and removing a tutorial from a series
-src/authoring.ts        new tutorials and releases
+src/authoring.ts        new tutorials, practice pages and releases
+src/rename.ts           renaming, moving and deleting, as plans
+src/find.ts             finding and replacing text across documents
+src/pull-request.ts     a pull request's suggested title and description
 src/checks.ts           what would break the build or confuse a reader
 src/export-html.ts      the page as a reader sees it
 src/notebook.ts         Jupyter import and export
 
-src/shell.ts            opening, saving, commands, reports
+src/shell.ts            the workspace's state: opening, saving, drafts
+src/shell-context.ts    what the shell lends the flows
+src/authoring-flows.ts  new tutorial, practice page, series, release
+src/file-flows.ts       rename, move, delete, find and replace
+src/export-flows.ts     HTML, preview and notebook, out and in
+src/github-flows.ts     pull requests, and forgetting the token
+src/shell-commands.ts   every command the palette offers
+src/report.ts           the list of problems
 src/spine.ts            the left margin
 src/workspace-palette.ts  the palette (Ctrl+K)
 src/commands.ts         one place a command is named
 src/ask.ts              the one-question dialog
+src/find-panel.ts       Find and replace in every document
 src/source-view.ts      Edit the markdown (Ctrl+/)
 src/settings.ts         what the reader chose
 src/settings-panel.ts   the panel that changes it
@@ -398,6 +412,29 @@ normalised on the way in, so comparing against the bytes on disk would
 call every document dirty the moment it opened.
 
 ---
+
+## The shell and its flows
+
+`shell.ts` owns the workspace's state: the store, every file's text as
+last saved, the index and course list built from them, the images, and
+the open document. It does what changes those together: opening a
+document (asking about unsaved changes first), saving, resolving a save
+conflict, keeping drafts, reindexing.
+
+Everything else an author can do is a flow, a module of its own that is
+handed a `ShellContext` (`shell-context.ts`): getters for the state, and
+the shell's own operations to call. A flow asks its questions, writes
+through the store, and tells the shell what changed; it keeps no copy
+of the state. `authoring-flows.ts` makes tutorials and practice pages,
+places them in series and releases them; `file-flows.ts` renames,
+moves, deletes and replaces text; `export-flows.ts` downloads, previews
+and imports; `github-flows.ts` opens pull requests and forgets the
+token. `shell-commands.ts` names every one of them for the palette, and
+says when each applies.
+
+The getters are functions because the shell replaces its maps when a
+workspace opens; a flow that kept the map it was given would be
+writing to the last workspace.
 
 ## The interface
 

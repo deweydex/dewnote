@@ -20,15 +20,6 @@ conflict; no trailing blank line; disconnecting from GitHub) is done.
 
 ## Phase 5: Code structure
 
-### 5.1 Split `shell.ts`
-
-At nearly 1,500 lines, it holds opening and saving, every command's
-registration, the problem report, authoring flows (new tutorial,
-practice page, series, release, rename, delete, find and replace, pull
-request) and export. Move the command list, the report overlay, and the
-authoring flows into their own modules; `shell.ts` keeps opening,
-saving and the state they share.
-
 ### 5.2 Call a course a course in code
 
 The interface says *course*; the code says `Module` (`modules.ts`,
