@@ -154,7 +154,8 @@ export function mountSpine(host: SpineHost): Spine {
   document.body.appendChild(spine);
 
   function renderIdentity(): void {
-    fileName.textContent = file?.name ?? "";
+    fileName.textContent = file ? (file.name.split("/").pop() ?? file.name) : "";
+    fileName.title = file?.name ?? "";
     fileName.hidden = file === null;
     fileName.classList.toggle("is-dirty", file?.dirty ?? false);
     const parts = [location.module, location.series, location.page].filter(Boolean);

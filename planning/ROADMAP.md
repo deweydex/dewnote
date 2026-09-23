@@ -33,15 +33,6 @@ markdown**.
 **Approach.** A small form above the title for `title`, `status` and
 `version`, with the raw block still reachable through Edit the markdown.
 
-### 3.6 Make the margin easier to read
-
-**Problem.** The left margin's text is small, grey and partly monospace,
-and the file path is truncated.
-
-**Approach.** Raise the contrast to the body text's muted colour, show
-the file name rather than the full path (path on hover), and keep
-monospace for the path only.
-
 ---
 
 ## Phase 4: Missing features

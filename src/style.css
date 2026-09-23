@@ -253,13 +253,16 @@ body {
   align-items: flex-start;
   min-width: 0;
 }
+/* The file's name, not its path: the path's folder repeats the name, and
+ * at this width the path was an ellipsis more often than not. The full
+ * path is on hover. */
 .dn-spine-file {
   max-width: 100%;
   overflow: hidden;
-  font-family: var(--dl-mono);
-  font-size: 0.72rem;
+  font-size: 0.92rem;
+  font-weight: 600;
   line-height: 1.35;
-  color: var(--dl-fg);
+  color: var(--dl-heading);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -320,7 +323,7 @@ body {
   max-width: 100%;
   overflow: hidden;
   font-family: var(--dl-mono);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   color: var(--dl-muted);
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -161,7 +161,7 @@ From top to bottom:
 
 | What you see | What it means |
 |---|---|
-| `tutorials/…/name.md` | The file you are editing. A dot after the name means it has unsaved changes. |
+| `name.md` | The file you are editing. Hover over it for its whole path. A dot after the name means it has unsaved changes. |
 | *Course › Series › Title* | Where this tutorial is listed. Click it to open the palette. If the tutorial is not in any series, this reads *Open another document*. |
 | `dewlab · main → dewnote/2026-09-22` | The workspace. For GitHub, this also shows the main branch and the working branch your saves go to. |
 | A list of headings | Every heading in the document. Click one to scroll to it. |

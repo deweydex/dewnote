@@ -73,7 +73,12 @@ test("the palette opens a document, and the spine says where it sits", async ({ 
   await page.keyboard.press("Enter");
 
   await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
-  await expect(page.locator(".dn-spine-file")).toContainText("storing-and-computing.md");
+  // The file's name, with its whole path on hover.
+  await expect(page.locator(".dn-spine-file")).toHaveText("storing-and-computing.md");
+  await expect(page.locator(".dn-spine-file")).toHaveAttribute(
+    "title",
+    "tutorials/storing-and-computing/storing-and-computing.md",
+  );
   // Module › Series › Title, read from the course descriptor.
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("Maths for IT");
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("First Steps");
@@ -615,7 +620,8 @@ test("a new tutorial is written, opened, and starts as a draft", async ({ page }
 
   // Written at dewlab's own address, and opened.
   await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
-  await expect(page.locator(".dn-spine-file")).toContainText(
+  await expect(page.locator(".dn-spine-file")).toHaveAttribute(
+    "title",
     "tutorials/storing-and-computing/storing-and-computing.md",
   );
 
