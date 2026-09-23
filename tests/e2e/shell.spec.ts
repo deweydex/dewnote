@@ -79,7 +79,7 @@ test("the palette opens a document, and the spine says where it sits", async ({ 
     "title",
     "tutorials/storing-and-computing/storing-and-computing.md",
   );
-  // Module › Series › Title, read from the course descriptor.
+  // Course › Series › Title, read from the course descriptor.
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("Maths for IT");
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("First Steps");
 });

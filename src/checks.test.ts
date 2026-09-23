@@ -10,7 +10,7 @@ import { checkDocument, checkWorkspace, imagesIn } from "./checks.ts";
 // positive — and a checker that reports nothing on a broken file is
 // worth nothing either, so the same real file is broken three ways and
 // has to be caught each time. Skips itself when the sibling repository
-// is not there, the same discipline modules.test.ts uses.
+// is not there, the same discipline courses.test.ts uses.
 const DEWLAB = "../dewlab";
 /** `staging/` holds an import mid-flight and `site/` is built. */
 const SKIPPED = new Set(["site", "staging", "node_modules", ".git"]);

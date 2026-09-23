@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseModuleFile } from "./modules.ts";
+import { parseCourseFile } from "./courses.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
 
 const COURSE = [
@@ -19,19 +19,19 @@ const COURSE = [
   "",
 ].join("\n");
 
-const module = parseModuleFile("courses/maths.yaml", COURSE)!;
-const first = module.contents[0]!;
-const second = module.contents[1]!;
+const course = parseCourseFile("courses/maths.yaml", COURSE)!;
+const first = course.contents[0]!;
+const second = course.contents[1]!;
 
 describe("placementsOf", () => {
   test("says which series lists a tutorial", () => {
-    expect(placementsOf("grid-of-numbers", [module])).toEqual([
+    expect(placementsOf("grid-of-numbers", [course])).toEqual([
       { courseId: "maths", courseTitle: "Maths for IT", seriesTitle: "First Steps" },
     ]);
   });
 
   test("a tutorial nothing lists is placed nowhere", () => {
-    expect(placementsOf("brand-new", [module])).toEqual([]);
+    expect(placementsOf("brand-new", [course])).toEqual([]);
   });
 });
 
@@ -57,7 +57,7 @@ describe("addToSeries", () => {
 
   test("the result still parses, and now lists it", () => {
     const out = addToSeries(COURSE, first, "brand-new") as string;
-    const again = parseModuleFile("courses/maths.yaml", out)!;
+    const again = parseCourseFile("courses/maths.yaml", out)!;
     expect(again.contents[0]!.tutorials).toEqual([
       "storing-and-computing",
       "grid-of-numbers",
@@ -70,7 +70,7 @@ describe("addToSeries", () => {
 describe("removeFromSeries", () => {
   test("takes one line out and leaves the rest", () => {
     const out = removeFromSeries(COURSE, first, "grid-of-numbers") as string;
-    const again = parseModuleFile("courses/maths.yaml", out)!;
+    const again = parseCourseFile("courses/maths.yaml", out)!;
     expect(again.contents[0]!.tutorials).toEqual(["storing-and-computing"]);
     expect(out).toContain("mixed:\n  - a-mixed-practice");
   });

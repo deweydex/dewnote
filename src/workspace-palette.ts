@@ -17,12 +17,12 @@
 
 import { defaultEntryFor, type FileIndexEntry } from "./workspace.ts";
 import { availableCommands, fuzzyScore, type Command } from "./commands.ts";
-import type { Module } from "./modules.ts";
+import type { Course } from "./courses.ts";
 import { headingsOf, openingOf, plainInline } from "./markdown.ts";
 
 export interface PaletteHost {
   getIndex(): FileIndexEntry[];
-  getModules(): Module[];
+  getCourses(): Course[];
   /** Opens a path through whichever store is mounted. False means it
    * could not, and the palette stays open rather than closing on a
    * navigation that did not happen. */
@@ -48,7 +48,7 @@ type RowKind = "tutorial" | "page" | "series" | "command";
 /** A hand-written site page rather than a tutorial — dewlab's own
  * `pages/about.md`, `pages/home.md`, `pages/features.md`, which its
  * `build.py` reads through `read_page()` and places nowhere in any
- * module. They were always in the index and always openable; they were
+ * course. They were always in the index and always openable; they were
  * filed under "Tutorials" with a blank note, which is the sort of small
  * lie that makes a list untrustworthy. They are ordinary markdown and
  * edit and save exactly as a tutorial does. */
@@ -60,7 +60,7 @@ interface Row {
   kind: RowKind;
   /** What the matcher sees and the row shows. */
   label: string;
-  /** Right-aligned on the row: a series and position, a module, nothing. */
+  /** Right-aligned on the row: a series and position, a course, nothing. */
   note?: string;
   /** Extra matchable words that are never shown. */
   keywords?: string[] | undefined;
@@ -94,11 +94,11 @@ const KEYWORD_WEIGHT = 0.7;
 /** Where a tutorial sits, said the way an author thinks of it: the
  * series it belongs to and how far in. A practice page says so instead,
  * since its position is its tutorial's. */
-function noteFor(entry: FileIndexEntry, modules: readonly Module[]): string {
+function noteFor(entry: FileIndexEntry, courses: readonly Course[]): string {
   if (entry.practiceFor) return "practice";
   if (entry.practiceAcross?.length) return "mixed practice";
-  for (const module of modules) {
-    for (const series of module.contents) {
+  for (const course of courses) {
+    for (const series of course.contents) {
       const at = series.tutorials.indexOf(entry.id ?? "");
       if (at !== -1) return `${series.title} · ${at + 1} of ${series.tutorials.length}`;
     }
@@ -124,7 +124,7 @@ export function rankRows(rows: readonly Row[], query: string): { rows: Row[]; be
     // the discount the hidden text wins outright, because a slug is a
     // subsequence goldmine: every hyphen in
     // `mit-pdp-maths-prog-integration` scores as a word start, so
-    // "matri" pulled in every series of that module ahead of the
+    // "matri" pulled in every series of that course ahead of the
     // tutorial actually called "What a Matrix Does to a Picture".
     let best = fuzzyScore(query, row.label);
     for (const keyword of row.keywords ?? []) {
@@ -210,7 +210,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
 
   function buildRows(): Row[] {
     const index = host.getIndex();
-    const modules = host.getModules();
+    const courses = host.getCourses();
     const built: Row[] = [];
 
     // One row per *page*, not per file: a slug with a live version and
@@ -226,7 +226,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
       built.push({
         kind: page ? "page" : "tutorial",
         label: best.title ?? best.id ?? best.path,
-        note: page ? "site page" : noteFor(best, modules),
+        note: page ? "site page" : noteFor(best, courses),
         keywords: [best.path, best.id ?? ""].filter(Boolean),
         entry: best,
         path: best.path,
@@ -234,15 +234,15 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
       });
     }
 
-    for (const module of modules) {
-      for (const series of module.contents) {
+    for (const course of courses) {
+      for (const series of course.contents) {
         const first = series.tutorials[0];
         const target = first ? defaultEntryFor(index, first) : undefined;
         built.push({
           kind: "series",
           label: series.title,
-          note: `${series.tutorials.length} tutorial${series.tutorials.length === 1 ? "" : "s"} · ${module.title}`,
-          keywords: [module.title, module.id],
+          note: `${series.tutorials.length} tutorial${series.tutorials.length === 1 ? "" : "s"} · ${course.title}`,
+          keywords: [course.title, course.id],
           path: target?.path,
           run: async () => { if (target) await host.openPath(target.path); },
         });
@@ -330,8 +330,8 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
     if (row.kind === "series") {
       preview.append(previewLine(row.note ?? "", "dn-wp-preview-kicker"));
       preview.append(previewLine(row.label, "dn-wp-preview-title"));
-      const module = host.getModules().find((item) => item.contents.some((series) => series.title === row.label));
-      const series = module?.contents.find((item) => item.title === row.label);
+      const course = host.getCourses().find((item) => item.contents.some((series) => series.title === row.label));
+      const series = course?.contents.find((item) => item.title === row.label);
       if (series) {
         const inside = document.createElement("div");
         inside.className = "dn-wp-preview-list";

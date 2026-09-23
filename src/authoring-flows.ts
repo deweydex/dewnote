@@ -104,15 +104,15 @@ export function authoringFlows(ctx: ShellContext): AuthoringFlows {
         spine.setProblem({ message: "This file is not a tutorial, so it cannot be added to a series." });
         return;
       }
-      const modules = ctx.modules();
+      const courses = ctx.courses();
 
-      const already = placementsOf(id, modules);
-      const choices = modules.flatMap((module) =>
-        module.contents
+      const already = placementsOf(id, courses);
+      const choices = courses.flatMap((course) =>
+        course.contents
           .filter((series) => series.tutorials.includes(id) === (mode === "remove"))
           .map((series) => ({
-            value: `${module.id}\u0000${series.title}`,
-            label: `${module.title ?? module.id} › ${series.title}`,
+            value: `${course.id}\u0000${series.title}`,
+            label: `${course.title ?? course.id} › ${series.title}`,
             note: `${series.tutorials.length} tutorial${series.tutorials.length === 1 ? "" : "s"}`,
           })),
       );
@@ -127,11 +127,11 @@ export function authoringFlows(ctx: ShellContext): AuthoringFlows {
       if (!picked) return;
 
       const [courseId, seriesTitle] = picked.split("\u0000") as [string, string];
-      const module = modules.find((each) => each.id === courseId);
-      const series = module?.contents.find((each) => each.title === seriesTitle);
-      if (!module || !series) return;
+      const course = courses.find((each) => each.id === courseId);
+      const series = course?.contents.find((each) => each.title === seriesTitle);
+      if (!course || !series) return;
 
-      const content = ctx.files().get(module.path);
+      const content = ctx.files().get(course.path);
       if (content === undefined) return;
 
       const changed = series.tutorials.includes(id)
@@ -144,7 +144,7 @@ export function authoringFlows(ctx: ShellContext): AuthoringFlows {
 
       try {
         await store.write(
-          module.path,
+          course.path,
           changed,
           mode === "add" ? `Add ${id} to ${series.title}` : `Remove ${id} from ${series.title}`,
         );
@@ -152,7 +152,7 @@ export function authoringFlows(ctx: ShellContext): AuthoringFlows {
         spine.setProblem({ message: messageOf(error) });
         return;
       }
-      ctx.files().set(module.path, changed);
+      ctx.files().set(course.path, changed);
       ctx.reindex();
       ctx.refreshSpine();
     },

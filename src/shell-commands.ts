@@ -92,7 +92,7 @@ export function shellCommands(
       detail: "Takes this tutorial out of a series. The tutorial itself is not deleted.",
       available: () => {
         const id = authoring.openTutorialId();
-        return id !== undefined && placementsOf(id, ctx.modules()).length > 0;
+        return id !== undefined && placementsOf(id, ctx.courses()).length > 0;
       },
       run: () => void authoring.placeTutorial("remove"),
     },

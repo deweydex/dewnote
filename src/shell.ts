@@ -13,8 +13,8 @@ import { mountSpine, type Spine } from "./spine.ts";
 import { mountWorkspacePalette, type WorkspacePalette } from "./workspace-palette.ts";
 import { registerCommands, clearCommands } from "./commands.ts";
 import { buildFileIndex, locationOf, type FileIndexEntry } from "./workspace.ts";
-import { parseModuleFiles, parseModuleIndex, isModuleFile } from "./modules.ts";
-import type { Module } from "./modules.ts";
+import { parseCourseFiles, parseCourseIndex, isCourseFile } from "./courses.ts";
+import type { Course } from "./courses.ts";
 import { messageOf, type SaveProblem } from "./save-problem.ts";
 import { editorHelp, requestStop, runCell } from "./runtime/pyodide-engine.ts";
 import type { CellOutput } from "./cells.ts";
@@ -62,7 +62,7 @@ export function mountShell(page: HTMLElement): Shell {
    * an image whose file was renamed looks exactly like one that is
    * fine. Anything dewnote writes is added as it is written. */
   let images = new Set<string>();
-  let modules: Module[] = [];
+  let courses: Course[] = [];
   let open: OpenDocument | null = null;
   /** Every file as the workspace opened with it. For a store with no
    * published copy of its own (a folder), this is the published version
@@ -84,8 +84,8 @@ export function mountShell(page: HTMLElement): Shell {
   function refreshSpine(): void {
     if (!open) return;
     spine.setFile({ name: open.path, dirty: isDirty() });
-    const where = locationOf(open.path, index, modules);
-    spine.setLocation(where ?? { module: "", series: "", page: "" });
+    const where = locationOf(open.path, index, courses);
+    spine.setLocation(where ?? { course: "", series: "", page: "" });
     spine.refreshOutline();
     refreshHealth();
   }
@@ -137,7 +137,7 @@ export function mountShell(page: HTMLElement): Shell {
     opened: () => opened,
     images: () => images,
     index: () => index,
-    modules: () => modules,
+    courses: () => courses,
     open: () => open,
     isDirty,
     spine,
@@ -178,7 +178,7 @@ export function mountShell(page: HTMLElement): Shell {
 
   const palette: WorkspacePalette = mountWorkspacePalette({
     getIndex: () => index,
-    getModules: () => modules,
+    getCourses: () => courses,
     openPath: (path) => openPath(path),
     hasDocument: () => open !== null,
     readPath: async (path) => files.get(path) ?? (store ? await store.read(path) : null),
@@ -304,7 +304,7 @@ export function mountShell(page: HTMLElement): Shell {
     open?.document.destroy();
     open = null;
     spine.setFile(null);
-    spine.setLocation({ module: "", series: "", page: "" });
+    spine.setLocation({ course: "", series: "", page: "" });
     spine.refreshOutline();
     refreshHealth();
     showEmptyPage();
@@ -609,13 +609,13 @@ export function mountShell(page: HTMLElement): Shell {
     // courses/index.yaml says what order the courses come in; the
     // palette and the series picker follow it.
     const index_ = all.find((file) => /(^|\/)(courses|modules)\/index\.yaml$/.test(file.path));
-    modules = parseModuleFiles(
-      all.filter((file) => isModuleFile(file.path)),
-      index_ ? parseModuleIndex(index_.content) : [],
+    courses = parseCourseFiles(
+      all.filter((file) => isCourseFile(file.path)),
+      index_ ? parseCourseIndex(index_.content) : [],
     );
     index = buildFileIndex(
       all.filter((file) => file.path.endsWith(".md")),
-      modules,
+      courses,
     );
   }
 

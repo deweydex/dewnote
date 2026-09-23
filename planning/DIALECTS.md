@@ -40,7 +40,7 @@ titles, each an ordered list of tutorial ids. `courses/index.yaml`
 `courses/redirects.yaml` maps every old address to its new one so links
 into the pre-refactor layout still land. A tutorial may be listed by more
 than one course, and one listed by none still builds — "published but on
-no course" is a real state. `modules.ts` reads all of this, and the
+no course" is a real state. `courses.ts` reads all of this, and the
 shell's **Add to a series…** and **Remove from a series…** edit it.
 
 **Front matter.** Required: `title`, `year`, `version` (`2026.09.04.1`

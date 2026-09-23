@@ -66,14 +66,14 @@ export async function listMarkdownFiles(root: DirectoryLike): Promise<FolderFile
   return walk(root, (path) => path.endsWith(".md"));
 }
 
-/** Every module file under `root` — Dewlab's current `courses/*.yaml`
- * or the earlier `modules/*.yaml`
- * (modules.ts), which say which tutorials a module lists and in what
- * order, and which the shell reads alongside `listMarkdownFiles`'s
- * front-matter index. `index.yaml` and `redirects.yaml` come back too:
- * both live in the same directory, the first carries the order the
- * modules are shown in, and `isModuleFile` is what tells them apart. */
-export async function listModuleFiles(root: DirectoryLike): Promise<FolderFile[]> {
+/** Every course file under `root` — dewlab's current `courses/*.yaml`
+ * or the earlier `modules/*.yaml` (courses.ts), which say which
+ * tutorials a course lists and in what order, and which the shell reads
+ * alongside `listMarkdownFiles`'s front-matter index. `index.yaml` and
+ * `redirects.yaml` come back too: both live in the same directory, the
+ * first carries the order the courses are shown in, and `isCourseFile`
+ * is what tells them apart. */
+export async function listCourseFiles(root: DirectoryLike): Promise<FolderFile[]> {
   return walk(root, (path) => /(^|\/)(?:courses|modules)\/[^/]+\.yaml$/.test(path));
 }
 
@@ -93,7 +93,7 @@ export async function readFile(handle: FileSystemFileHandle): Promise<string> {
  * directory, not the filtered list `walk` builds.
  *
  * That distinction is the whole point: `listMarkdownFiles` and
- * `listModuleFiles` deliberately see only what this editor opens, so a
+ * `listCourseFiles` deliberately see only what this editor opens, so a
  * picture already sitting beside a tutorial is invisible to both. Naming
  * a new one from that list would call a taken name free. Empty for a
  * folder that doesn't exist, which is the right answer for "what is
@@ -113,7 +113,7 @@ export async function listNamesIn(root: FileSystemDirectoryHandle, folder: strin
 
 /** The raw bytes of the file at `relativePath` under `root`, or null if
  * there is none — an image the editor has to show, which `walk` never
- * listed because it only ever looked for markdown and module files. A
+ * listed because it only ever looked for markdown and course files. A
  * missing directory along the way is a missing file, not an error: an
  * image name with nothing behind it is a real state the editor renders
  * (as a broken image, the same as the built page would) rather than

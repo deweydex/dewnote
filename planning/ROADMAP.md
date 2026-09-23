@@ -20,11 +20,6 @@ conflict; no trailing blank line; disconnecting from GitHub) is done.
 
 ## Phase 5: Code structure
 
-### 5.2 Call a course a course in code
-
-The interface says *course*; the code says `Module` (`modules.ts`,
-`SpineLocation.module`). Rename, now that dewlab itself uses `courses/`.
-
 ### 5.3 Review `planning/DIALECTS.md`
 
 Parts describe dewlab before its 2026-09 refactor, and it was written

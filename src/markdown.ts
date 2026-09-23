@@ -52,7 +52,7 @@ export function plainInline(text: string): string {
 }
 
 /** The first real sentence. Headings are skipped, and so is a dewlab
- * tutorial's own bold subtitle line — it names the module, and it is
+ * tutorial's own bold subtitle line — it names the course, and it is
  * never the sentence that says what the page is about. */
 export function openingOf(source: string): string {
   for (const run of proseRuns(source)) {

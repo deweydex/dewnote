@@ -35,7 +35,7 @@ src/diff.ts             line diffs, and the three-way merge
 src/conflict.ts         the save-conflict dialog
 
 src/workspace.ts        the index: what every file is and where it sits
-src/modules.ts          course descriptors (a course is a "module" in code)
+src/courses.ts          course files: which series list which tutorials
 src/placement.ts        adding and removing a tutorial from a series
 src/authoring.ts        new tutorials, practice pages and releases
 src/rename.ts           renaming, moving and deleting, as plans

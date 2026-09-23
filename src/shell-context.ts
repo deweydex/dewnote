@@ -13,7 +13,7 @@ import type { Spine } from "./spine.ts";
 import type { Ask } from "./ask.ts";
 import type { Store } from "./store.ts";
 import type { FileIndexEntry } from "./workspace.ts";
-import type { Module } from "./modules.ts";
+import type { Course } from "./courses.ts";
 
 export interface OpenDocument {
   path: string;
@@ -34,7 +34,7 @@ export interface ShellContext {
   /** Every image path in the workspace. */
   images(): Set<string>;
   index(): FileIndexEntry[];
-  modules(): Module[];
+  courses(): Course[];
   open(): OpenDocument | null;
   isDirty(): boolean;
 

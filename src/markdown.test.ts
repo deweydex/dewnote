@@ -24,7 +24,7 @@ describe("openingOf", () => {
     "",
   ].join("\n");
 
-  test("skips front matter, the title, and the bold module line", () => {
+  test("skips front matter, the title, and the bold course line", () => {
     expect(openingOf(TUTORIAL)).toBe(
       "Last time we learned to do arithmetic. But we had a limitation: every result was gone once we had it.",
     );
