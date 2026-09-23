@@ -24,14 +24,6 @@ a live preview.
 **Approach.** Group adjacent panes with the same `site:` into one node
 view with three tabs and an iframe preview. The file keeps three fences.
 
-### 3.4 Say something when no document is open
-
-**Problem.** Pressing Esc on the palette when a workspace first opens
-leaves an empty page.
-
-**Approach.** An empty state in the page area: *Open a document
-(Ctrl+K)*, *New tutorial…*, and the last few documents opened.
-
 ### 3.5 Edit front matter as fields
 
 **Problem.** Front matter shows as a raw YAML block. Changing `status`

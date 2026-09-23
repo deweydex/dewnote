@@ -365,6 +365,82 @@ export function mountShell(page: HTMLElement): Shell {
     return answer === "discard";
   }
 
+  // ── the empty page ──────────────────────────────────────────────
+
+  /** The documents last opened in this workspace, newest first, kept in
+   * this browser. A convenience only: storage that refuses is no list. */
+  const RECENT = 6;
+  function recentKey(): string {
+    return `dewnote:recent:${store?.kind}:${store?.label}`;
+  }
+  function recentPaths(): string[] {
+    try {
+      const saved = JSON.parse(localStorage.getItem(recentKey()) ?? "[]");
+      return Array.isArray(saved) ? saved.filter((path): path is string => typeof path === "string" && files.has(path)) : [];
+    } catch {
+      return [];
+    }
+  }
+  function rememberOpened(path: string): void {
+    try {
+      const list = [path, ...recentPaths().filter((each) => each !== path)].slice(0, RECENT);
+      localStorage.setItem(recentKey(), JSON.stringify(list));
+    } catch {
+      // A private window, or storage turned off: no list, no harm.
+    }
+  }
+
+  /** What the page shows before any document is open: the ways forward,
+   * rather than a blank page after Esc. Replaced by the first document. */
+  function showEmptyPage(): void {
+    const box = document.createElement("div");
+    box.className = "dn-empty";
+
+    const heading = document.createElement("h1");
+    heading.textContent = "No document open";
+    const note = document.createElement("p");
+    note.textContent = `Open a tutorial or a page from the workspace, or start a new tutorial.`;
+
+    const actions = document.createElement("div");
+    actions.className = "dn-empty-actions";
+    const find = document.createElement("button");
+    find.type = "button";
+    find.className = "dn-empty-primary";
+    find.textContent = `Open a document (${shortcut("K")})`;
+    find.addEventListener("click", () => palette.open());
+    const create = document.createElement("button");
+    create.type = "button";
+    create.textContent = "New tutorial…";
+    create.addEventListener("click", () => void createTutorial());
+    actions.append(find, create);
+    box.append(heading, note, actions);
+
+    const recent = recentPaths();
+    if (recent.length > 0) {
+      const title = document.createElement("h2");
+      title.textContent = "Opened recently";
+      const list = document.createElement("ul");
+      list.className = "dn-empty-recent";
+      for (const path of recent) {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        const entry = index.find((each) => each.path === path);
+        const name = document.createElement("span");
+        name.textContent = entry?.title ?? path;
+        const where = document.createElement("span");
+        where.className = "dn-empty-path";
+        where.textContent = path;
+        button.append(name, where);
+        button.addEventListener("click", () => void openPath(path));
+        item.appendChild(button);
+        list.appendChild(item);
+      }
+      box.append(title, list);
+    }
+    page.replaceChildren(box);
+  }
+
   // ── drafts ─────────────────────────────────────────────────────────
 
   /** One copy per file per workspace. */
@@ -441,6 +517,7 @@ export function mountShell(page: HTMLElement): Shell {
     // against the bytes on disk would show every file as dirty the
     // moment it opened.
     open = { path, saved: document_.markdown(), document: document_ };
+    rememberOpened(path);
     spine.setProblem(null);
     refreshSpine();
     // Not awaited: the document is open and usable now, and whoever
@@ -860,6 +937,7 @@ export function mountShell(page: HTMLElement): Shell {
       });
       spine.show();
       gear.hidden = false;
+      showEmptyPage();
       registerCommands([
         {
           id: "appearance",

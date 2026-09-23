@@ -173,6 +173,10 @@ From top to bottom:
 On a narrow window the margin becomes a strip across the top, without the
 list of headings.
 
+When no document is open, the page offers **Open a document** and **New
+tutorial…**, and lists the documents you opened most recently in this
+workspace. The list is kept in this browser only.
+
 ## The palette
 
 Press **Ctrl+K** to open the palette, and **Ctrl+K** or **Esc** to close it.

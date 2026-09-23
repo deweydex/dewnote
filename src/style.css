@@ -1437,3 +1437,89 @@ div.dn-report-row:hover { background: none; }
   color: var(--dl-muted);
   opacity: 0.7;
 }
+
+/* The page before any document is open. */
+.dn-empty {
+  padding-top: 18vh;
+  font-family: var(--dl-font-family);
+  color: var(--dl-fg);
+}
+
+.dn-empty h1 {
+  margin: 0 0 0.4rem;
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--dl-heading);
+}
+
+.dn-empty > p {
+  margin: 0 0 1.2rem;
+  color: var(--dl-muted);
+}
+
+.dn-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dn-empty-actions button,
+.dn-empty-recent button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dn-empty-actions button {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 999px;
+  background: var(--dl-panel-bg, transparent);
+}
+
+.dn-empty-actions .dn-empty-primary {
+  border-color: var(--dl-orange);
+  color: var(--dl-orange);
+}
+
+.dn-empty-actions button:hover { border-color: var(--dl-orange); }
+
+.dn-empty h2 {
+  margin: 2.4rem 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dl-muted);
+}
+
+.dn-empty-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dn-empty-recent button {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  text-align: left;
+}
+
+.dn-empty-recent button:hover,
+.dn-empty-recent button:focus-visible {
+  background: color-mix(in srgb, var(--dl-orange) 10%, transparent);
+  outline: none;
+}
+
+.dn-empty-path {
+  font-family: var(--dl-mono);
+  font-size: 0.75rem;
+  color: var(--dl-muted);
+}
