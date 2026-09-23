@@ -183,15 +183,69 @@ body {
   margin-block-start: 0.45rem;
 }
 
-/* Front matter reads as a label on the document, not as content. */
-.milkdown [data-front-matter] {
-  font-family: var(--dl-mono);
+/* Front matter reads as a label on the document, not as content: its
+   fields in a row, and the YAML itself only when asked for. */
+.milkdown .dn-front {
+  border-left: 2px solid var(--dl-rule);
+  padding: 0.3rem 0 0.3rem 0.75rem;
+  margin-bottom: 1.5rem;
   font-size: 0.8em;
   color: var(--dl-muted);
-  border-left: 2px solid var(--dl-rule);
-  padding: 0.25rem 0 0.25rem 0.75rem;
-  margin-bottom: 1.5rem;
+}
+
+.milkdown .dn-front-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 1rem;
+}
+
+.milkdown .dn-front-fields label {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.milkdown .dn-front-fields label > span {
+  font-family: var(--dl-mono);
+  font-size: 0.85em;
+  letter-spacing: 0.03em;
+}
+
+.milkdown .dn-front-fields input,
+.milkdown .dn-front-fields select {
+  font: inherit;
+  font-size: 1.05em;
+  color: var(--dl-fg);
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 4px;
+  background: var(--dl-bg);
+}
+
+.milkdown .dn-front-title {
+  min-width: min(22rem, 60vw);
+}
+
+.milkdown .dn-front-version {
+  font-family: var(--dl-mono);
+  padding: 0.2rem 0;
+  color: var(--dl-fg);
+}
+
+.milkdown .dn-front-toggle {
+  font: inherit;
+  padding: 0.2rem 0;
+  border: 0;
+  background: none;
+  color: var(--dl-link);
+  cursor: pointer;
+}
+
+.milkdown .dn-front-raw {
+  margin: 0.6rem 0 0;
+  font-family: var(--dl-mono);
   white-space: pre-wrap;
+  color: var(--dl-fg);
 }
 
 /* The spine lives in the margin the page already had, so the page keeps
@@ -253,13 +307,16 @@ body {
   align-items: flex-start;
   min-width: 0;
 }
+/* The file's name, not its path: the path's folder repeats the name, and
+ * at this width the path was an ellipsis more often than not. The full
+ * path is on hover. */
 .dn-spine-file {
   max-width: 100%;
   overflow: hidden;
-  font-family: var(--dl-mono);
-  font-size: 0.72rem;
+  font-size: 0.92rem;
+  font-weight: 600;
   line-height: 1.35;
-  color: var(--dl-fg);
+  color: var(--dl-heading);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -320,7 +377,7 @@ body {
   max-width: 100%;
   overflow: hidden;
   font-family: var(--dl-mono);
-  font-size: 0.68rem;
+  font-size: 0.74rem;
   color: var(--dl-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -833,15 +890,44 @@ body {
   font-family: var(--dl-font-family);
 }
 
-.dn-cell-run {
+/* Scoped under .milkdown, which is what it sits in: Crepe's reset clears
+ * border and background from `.milkdown button`, and a bare class loses
+ * to that, leaving Run as plain text under a heading that said Output. */
+.milkdown .dn-cell-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font: inherit;
   font-size: 0.85rem;
-  padding: 0.25rem 0.75rem;
-  border: 1px solid var(--dl-rule);
+  padding: 0.25rem 0.85rem;
+  border: 1px solid var(--dl-orange);
   border-radius: 999px;
   background: var(--dl-panel-bg, transparent);
-  color: inherit;
+  color: var(--dl-orange);
   cursor: pointer;
+}
+
+/* A play mark on Run and Run again; Stop has its own pulse. */
+.milkdown .dn-cell-run:not(.is-running)::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0.3rem 0 0.3rem 0.5rem;
+  border-color: transparent transparent transparent currentColor;
+}
+
+/* Crepe heads its preview panel with a label, "Output", which put the
+ * Run button under a heading that made it read as output. The panel
+ * heads itself. */
+.milkdown .milkdown-code-block .preview-panel:has(.dn-cell) .preview-label {
+  display: none;
+}
+
+/* Crepe centres its preview; output reads from the left, like the code
+ * above it. */
+.milkdown .milkdown-code-block .preview-panel .preview:has(.dn-cell) {
+  text-align: left;
 }
 
 .dn-cell-run:disabled {
@@ -958,20 +1044,20 @@ body {
  * label changing, which on a slow connect is several seconds away. */
 .dn-gate button:hover:not(:disabled),
 .dn-settings button:hover:not(:disabled),
-.dn-cell-run:hover:not(:disabled) {
+.milkdown .dn-cell-run:hover:not(:disabled) {
   border-color: var(--dl-orange);
 }
 
 .dn-gate button:active:not(:disabled),
 .dn-settings button:active:not(:disabled),
-.dn-cell-run:active:not(:disabled) {
+.milkdown .dn-cell-run:active:not(:disabled) {
   transform: translateY(1px);
   background: color-mix(in srgb, var(--dl-orange) 14%, transparent);
 }
 
 .dn-gate button:focus-visible,
 .dn-settings button:focus-visible,
-.dn-cell-run:focus-visible,
+.milkdown .dn-cell-run:focus-visible,
 .dn-gate input:focus-visible,
 .dn-settings input:focus-visible,
 .dn-settings select:focus-visible {
@@ -1233,12 +1319,12 @@ button.dn-report-row:focus-visible {
 
 /* A cell that is running says so, and the button that started it is the
  * one that stops it. */
-.dn-cell-run.is-running {
+.milkdown .dn-cell-run.is-running {
   border-color: var(--dl-orange);
   color: var(--dl-orange);
 }
 
-.dn-cell-run.is-running::before {
+.milkdown .dn-cell-run.is-running::before {
   content: "";
   display: inline-block;
   width: 0.5rem;
@@ -1255,7 +1341,7 @@ button.dn-report-row:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dn-cell-run.is-running::before { animation: none; }
+  .milkdown .dn-cell-run.is-running::before { animation: none; }
 }
 
 .dn-report-row.is-blocking .dn-report-what::before,
@@ -1343,4 +1429,202 @@ div.dn-report-row:hover { background: none; }
 .dn-conflict-mine {
   background: var(--dl-pass-bg);
   color: var(--dl-pass-fg);
+}
+
+/* Help while writing a Python cell: a name's documentation on hover, and
+   the signature of the call being typed. */
+.dn-help {
+  max-width: min(36rem, 90vw);
+  padding: 0.45rem 0.6rem;
+  font-family: var(--dl-mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--dl-fg);
+}
+
+.dn-help-doc {
+  max-height: 16rem;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.dn-help-signature strong {
+  color: var(--dl-orange);
+  font-weight: 600;
+}
+
+/* A hint or answer fold: its opening line as a labelled header, what it
+   holds ruled on the left, and its close as a quiet end mark. */
+.milkdown .ProseMirror .dn-fold-head,
+.milkdown .ProseMirror .dn-fold-body,
+.milkdown .ProseMirror .dn-fold-foot {
+  border-left: 3px solid color-mix(in srgb, var(--dl-orange) 45%, transparent);
+  padding-left: 0.9rem;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.milkdown .ProseMirror .dn-fold-head { padding-top: 0.2rem; }
+.milkdown .ProseMirror .dn-fold-body { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+.milkdown .ProseMirror .dn-fold-foot { line-height: 1; padding-bottom: 0.3rem; }
+
+.dn-fold-open {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  cursor: default;
+}
+
+.dn-fold-label {
+  font-family: var(--dl-mono);
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dl-orange);
+}
+
+.dn-fold-summary {
+  font-style: italic;
+  color: var(--dl-muted);
+}
+
+.dn-fold-close {
+  font-family: var(--dl-mono);
+  font-size: 0.7em;
+  color: var(--dl-muted);
+  opacity: 0.7;
+}
+
+/* The page before any document is open. */
+.dn-empty {
+  padding-top: 18vh;
+  font-family: var(--dl-font-family);
+  color: var(--dl-fg);
+}
+
+.dn-empty h1 {
+  margin: 0 0 0.4rem;
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--dl-heading);
+}
+
+.dn-empty > p {
+  margin: 0 0 1.2rem;
+  color: var(--dl-muted);
+}
+
+.dn-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dn-empty-actions button,
+.dn-empty-recent button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dn-empty-actions button {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 999px;
+  background: var(--dl-panel-bg, transparent);
+}
+
+.dn-empty-actions .dn-empty-primary {
+  border-color: var(--dl-orange);
+  color: var(--dl-orange);
+}
+
+.dn-empty-actions button:hover { border-color: var(--dl-orange); }
+
+.dn-empty h2 {
+  margin: 2.4rem 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dl-muted);
+}
+
+.dn-empty-recent {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dn-empty-recent button {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  text-align: left;
+}
+
+.dn-empty-recent button:hover,
+.dn-empty-recent button:focus-visible {
+  background: color-mix(in srgb, var(--dl-orange) 10%, transparent);
+  outline: none;
+}
+
+.dn-empty-path {
+  font-family: var(--dl-mono);
+  font-size: 0.75rem;
+  color: var(--dl-muted);
+}
+
+/* A site editor: its panes as tabs of one editor, and the page they
+   make under them. The three fences stay three fences in the file. */
+.milkdown .dn-site-hidden {
+  display: none !important;
+}
+
+.milkdown .dn-site-tabs {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin: 1rem 0 -0.25rem;
+  font-size: 0.8rem;
+}
+
+.milkdown .dn-site-name {
+  margin-inline-end: 0.5rem;
+  font-family: var(--dl-mono);
+  color: var(--dl-muted);
+}
+
+.milkdown .dn-site-tabs button {
+  font: inherit;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--dl-rule);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--dl-muted);
+  cursor: pointer;
+}
+
+.milkdown .dn-site-tabs button.is-showing {
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+  color: var(--dl-fg);
+  font-weight: 600;
+}
+
+.milkdown .dn-site-preview {
+  display: block;
+  width: 100%;
+  height: 16rem;
+  margin: 0.25rem 0 1rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 6px;
+  background: #fff;
+  resize: vertical;
 }

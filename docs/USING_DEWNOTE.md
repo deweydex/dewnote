@@ -129,9 +129,8 @@ saves the course file.
 1. Open the palette and run **Check this document**. dewnote lists
    anything that would stop the site building the page, or confuse a
    reader. Fix what it finds.
-2. Press **Ctrl+/** to see the raw markdown. At the top, change
-   `status: draft` to `status: live`. Choose **Apply changes**, then
-   press **Ctrl+S** to save.
+2. At the top of the tutorial, change **Status** from *draft* to
+   *live*, then press **Ctrl+S** to save.
 
 ### Step 8: Send it for review (GitHub only)
 
@@ -161,7 +160,7 @@ From top to bottom:
 
 | What you see | What it means |
 |---|---|
-| `tutorials/…/name.md` | The file you are editing. A dot after the name means it has unsaved changes. |
+| `name.md` | The file you are editing. Hover over it for its whole path. A dot after the name means it has unsaved changes. |
 | *Course › Series › Title* | Where this tutorial is listed. Click it to open the palette. If the tutorial is not in any series, this reads *Open another document*. |
 | `dewlab · main → dewnote/2026-09-22` | The workspace. For GitHub, this also shows the main branch and the working branch your saves go to. |
 | A list of headings | Every heading in the document. Click one to scroll to it. |
@@ -172,6 +171,10 @@ From top to bottom:
 
 On a narrow window the margin becomes a strip across the top, without the
 list of headings.
+
+When no document is open, the page offers **Open a document** and **New
+tutorial…**, and lists the documents you opened most recently in this
+workspace. The list is kept in this browser only.
 
 ## The palette
 
@@ -303,7 +306,11 @@ you save.
 ### Front matter
 
 The block between the two `---` lines at the top of a file is the
-**front matter**. It holds settings for the page rather than its content:
+**front matter**. It holds settings for the page rather than its content.
+dewnote shows it at the top of the document as three fields: **Title**
+and **Status**, which you can change there, and **Version**, which is set
+when you release a new version. **Show all fields** shows the whole
+block, which you can edit directly. In the file, it looks like this:
 
 ```
 ---
@@ -374,8 +381,25 @@ the top, in order, and stops at the first one that fails, because later
 cells usually depend on earlier ones. It is the quickest way to check a
 tutorial still works after an edit.
 
+### Help while you write
+
+In a Python block, dewnote helps as you type:
+
+- **Completion.** Suggestions appear as you type a name, or after a `.`.
+  Press **Ctrl+Space** to ask for them. They include names defined in
+  the cells above, even before anything has run.
+- **Documentation.** Hover over a name to see what it is and its
+  documentation.
+- **Signatures.** Inside a function call, the function's parameters are
+  shown, with the one you are typing in bold.
+
+This help comes from Jedi, a Python analysis tool, running alongside
+Python in your browser. dewlab's tutorial pages and dewmini use the same
+tool. It starts the first time you type in a cell and takes a few seconds
+to load; until then, you get simpler suggestions from the editor itself.
+
 Python runs in your browser using Pyodide, which is downloaded the first
-time you run a cell. If Pyodide cannot be downloaded, for example on a
+time you run a cell, or type in one. If Pyodide cannot be downloaded, for example on a
 restricted network, set **Python runtime URL** in Appearance to a copy
 you can reach.
 
@@ -433,7 +457,11 @@ The **Web page** item in the block menu inserts three code blocks:
 same name. On the dewlab site, blocks with the same `site:` name become
 one editor with a tab for each language and a live preview.
 
-In dewnote, they currently show as three separate code blocks.
+dewnote shows them the same way: a tab for each pane above the code,
+one pane showing at a time, and the page they make, live, underneath.
+The preview updates a moment after you stop typing, and runs the page's
+JavaScript. Drag its bottom corner to make it taller. In the file, they
+stay three code blocks.
 
 ## Hints
 
@@ -447,9 +475,13 @@ First step.
 </details>
 ```
 
-Change the summary line and replace *First step.* with your hint. On the
-dewlab site this shows as a closed fold. In dewnote it currently shows as
-the HTML above.
+In dewnote it shows as a fold: a **HINT** label and its summary, what
+the fold holds marked with a rule down its left side, and a small *end*
+where it closes. Write the hint under the label as ordinary text. To
+change the summary, use **Edit the markdown** (Ctrl+/). On the dewlab
+site, readers see the summary and open the fold to read the hint. An
+answer fold, `class="dl-answer"`, shows the same way, labelled
+**ANSWER**.
 
 ## Checking for problems
 
@@ -668,9 +700,6 @@ enough room, the margin moves to a strip across the top.
 
 These are planned but not built yet (see `planning/ROADMAP.md`):
 
-- Web page panes show as three code blocks rather than one editor with
-  tabs.
-- Hints show as HTML in the editor rather than as a fold.
 - Files cannot be renamed, moved or deleted from dewnote.
 - There is no find and replace across the workspace.
 - A save conflict keeps one version or the other; it cannot combine them.

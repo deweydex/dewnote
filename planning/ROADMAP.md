@@ -9,65 +9,10 @@ Last reviewed: 2026-09-22. Phase 1 (things that could lose or corrupt
 work) is done: unsaved-changes prompts, kept drafts, save conflicts,
 releases that freeze the published version, and new tutorials the
 build accepts. Phase 2 (the browser tests, and real Python, run in CI on
-every pull request) is done.
-
----
-
-## Phase 3: The editor shows what the site shows
-
-### 3.1 Show hints as a fold
-
-**Problem.** The block menu's **Hint** inserts
-`<details class="dl-hint">…</details>`, and the editor shows it as that
-raw HTML. The one construct the menu inserts looks broken.
-
-**Approach.** A Milkdown node for `<details>`/`<summary>` that renders as
-a fold with an editable summary and body, and serialises back to the
-same HTML. The round-trip test already covers `<details>`, so it will
-catch a regression.
-
-### 3.2 One editor for web page panes
-
-**Problem.** The `html site`, `css site` and `js site` blocks show as
-three separate code blocks. On the site they are one editor with tabs and
-a live preview.
-
-**Approach.** Group adjacent panes with the same `site:` into one node
-view with three tabs and an iframe preview. The file keeps three fences.
-
-### 3.3 Make Run look like a button
-
-**Problem.** The Run button is plain text under Crepe's "OUTPUT" label,
-so it reads as output rather than as a control.
-
-**Approach.** Style it as a button, and put it on the cell's own toolbar
-beside Crepe's copy control rather than in the output area.
-
-### 3.4 Say something when no document is open
-
-**Problem.** Pressing Esc on the palette when a workspace first opens
-leaves an empty page.
-
-**Approach.** An empty state in the page area: *Open a document
-(Ctrl+K)*, *New tutorial…*, and the last few documents opened.
-
-### 3.5 Edit front matter as fields
-
-**Problem.** Front matter shows as a raw YAML block. Changing `status`
-from `draft` to `live`, the most common edit, means using **Edit the
-markdown**.
-
-**Approach.** A small form above the title for `title`, `status` and
-`version`, with the raw block still reachable through Edit the markdown.
-
-### 3.6 Make the margin easier to read
-
-**Problem.** The left margin's text is small, grey and partly monospace,
-and the file path is truncated.
-
-**Approach.** Raise the contrast to the body text's muted colour, show
-the file name rather than the full path (path on hover), and keep
-monospace for the path only.
+every pull request) is done. Phase 3 (the editor shows what the site
+shows: hint folds, one editor for web page panes, the Run button, the
+empty page, front matter fields, the margin) is done, as is Jedi help in
+Python cells.
 
 ---
 

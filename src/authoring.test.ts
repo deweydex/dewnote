@@ -7,6 +7,7 @@ import {
   nextVersion,
   prepareRelease,
   setFrontMatterField,
+  setYamlField,
 } from "./authoring.ts";
 
 describe("setFrontMatterField", () => {
@@ -159,5 +160,21 @@ describe("academicYear", () => {
   test("turns over in September", () => {
     expect(academicYear(new Date("2026-08-31T12:00:00"))).toBe("2025-2026");
     expect(academicYear(new Date("2026-09-01T12:00:00"))).toBe("2026-2027");
+  });
+});
+
+describe("setYamlField", () => {
+  const yaml = 'title: A Page\nyear: "2026-2027"\nstatus: draft\nversion: 2026.09.22.1';
+
+  test("changes one field's line and nothing else", () => {
+    expect(setYamlField(yaml, "status", "live")).toBe('title: A Page\nyear: "2026-2027"\nstatus: live\nversion: 2026.09.22.1');
+  });
+
+  test("quotes a title YAML would misread", () => {
+    expect(setYamlField(yaml, "title", "Yes: or no")).toContain('title: "Yes: or no"');
+  });
+
+  test("adds a field that is missing, at the end", () => {
+    expect(setYamlField("title: A", "status", "live")).toBe("title: A\nstatus: live");
   });
 });

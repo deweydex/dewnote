@@ -49,6 +49,7 @@ src/settings.ts         what the reader chose
 src/settings-panel.ts   the panel that changes it
 src/keys.ts             how a shortcut is written on this platform
 
+src/python-help.ts      completion, hover docs and signatures, from Jedi
 src/runtime/            Pyodide, in a Worker
 ```
 
@@ -158,6 +159,63 @@ buffer; where a page has no cross-origin isolation the worker is
 terminated and restarted instead.
 
 ---
+
+### Help while writing a cell
+
+Completion, hover docs and signature help come from Jedi, as on dewlab's
+tutorial pages and in dewmini. The worker loads `jedi` and `parso` in
+the background after boot; no run waits for them, and a help request
+before they are ready answers nothing. The Python side is
+`complete`/`hover`/`signature` in `runtime/dewnote_tools.py`, which use
+`jedi.Interpreter` over the page's live namespace: one mechanism for a
+name that has run (read from the object) and one that has not (read
+from source). dewlab uses two, the live namespace first and Jedi for
+the gap. The editor sends the code of the runnable Python cells above as
+context, so a function defined earlier is known before anything runs.
+Header lines are blanked, not removed, so line numbers still match
+(`codeOnItsLines` in `cells.ts`).
+
+`python-help.ts` adds three CodeMirror pieces to every code block, each
+checking the block is Python first. Completion is a language-data
+source for `pythonLanguage`, joining the autocompletion `basicSetup`
+already carries rather than adding a second one; CodeMirror merges
+identical suggestions from the two. Hover is `hoverTooltip`; signature
+help is a `StateField` of tooltips, asked again 200ms after typing stops
+inside an open call. `editorHelp` in the engine gives up after 1.5s
+(a cell may be running), and the first request of either kind that
+comes from typing starts Python.
+
+### Drawn over the document, not in it
+
+Three constructs are drawn differently from how the file holds them,
+and in each case only the drawing changes, so the round-trip suite
+still guards the file:
+
+- **Folds.** A hint or answer is two inline HTML atoms, its
+  `<details …><summary>…</summary>` and its `</details>`, with ordinary
+  blocks between. A node view (`foldLineView`) draws the atoms as a
+  labelled header and an end mark; a decoration plugin (`foldBodies`)
+  rules the blocks between.
+- **Site editors.** Consecutive `html site`/`css site`/`js site` fences
+  naming one site, grouped as dewlab's build groups them (`siteGroups`
+  in `fences.ts`), get a tab bar widget, a class hiding every pane but
+  the chosen one, and a sandboxed preview iframe (`sitePage`). The
+  chosen tab is plugin state. The iframe widget keeps its key between
+  keystrokes so it does not flash; a plugin view refreshes its
+  `srcdoc` 400ms after typing stops.
+- **Front matter.** A node view draws Title and Status as fields over
+  the YAML, which stays the node's content, editable under Show all
+  fields. A field change rewrites only its own line.
+
+Two things learned doing it. ProseMirror rebuilds a node view or widget
+whenever the selection moves into it, which a click does before its
+`click` event fires, so controls in these views act on `mousedown`
+with the default prevented, and keep any state outside the view. And
+the build inlines the bundle into one `<script>`, which ends at the
+first `</script` anywhere in it, strings included; the site preview
+builds a page with a script in it, and minifiers fold `"</" + "script>"`
+back together, so `scripts/inline-single-file.ts` escapes the sequence
+as `<\/script` when it inlines.
 
 ## Images
 

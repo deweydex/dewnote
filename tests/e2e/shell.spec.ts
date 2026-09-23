@@ -73,7 +73,12 @@ test("the palette opens a document, and the spine says where it sits", async ({ 
   await page.keyboard.press("Enter");
 
   await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
-  await expect(page.locator(".dn-spine-file")).toContainText("storing-and-computing.md");
+  // The file's name, with its whole path on hover.
+  await expect(page.locator(".dn-spine-file")).toHaveText("storing-and-computing.md");
+  await expect(page.locator(".dn-spine-file")).toHaveAttribute(
+    "title",
+    "tutorials/storing-and-computing/storing-and-computing.md",
+  );
   // Module › Series › Title, read from the course descriptor.
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("Maths for IT");
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("First Steps");
@@ -615,7 +620,8 @@ test("a new tutorial is written, opened, and starts as a draft", async ({ page }
 
   // Written at dewlab's own address, and opened.
   await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
-  await expect(page.locator(".dn-spine-file")).toContainText(
+  await expect(page.locator(".dn-spine-file")).toHaveAttribute(
+    "title",
     "tutorials/storing-and-computing/storing-and-computing.md",
   );
 
@@ -1406,4 +1412,30 @@ test("courses come in the order courses/index.yaml gives them", async ({ page })
   await page.locator(".dn-wp-input").fill("series");
   const series = page.locator(".dn-wp-row", { hasText: "Series" }).locator(".dn-wp-row-label");
   await expect(series).toHaveText(["Zoology Series", "Algebra Series"]);
+});
+
+test("with no document open, the page says what to do, and remembers what was open", async ({ page }) => {
+  await openWorkspace(page);
+  await page.keyboard.press("Escape");
+
+  const empty = page.locator(".dn-empty");
+  await expect(empty.locator("h1")).toHaveText("No document open");
+  // Nothing opened yet, so nothing to list.
+  await expect(empty.locator(".dn-empty-recent")).toHaveCount(0);
+
+  await empty.getByRole("button", { name: /Open a document/ }).click();
+  await expect(page.locator(".dn-wp-overlay")).toBeVisible();
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
+  await expect(page.locator(".dn-empty")).toHaveCount(0);
+
+  // Next time, it is listed, and one click opens it.
+  await openWorkspace(page);
+  await page.keyboard.press("Escape");
+  const recent = page.locator(".dn-empty-recent button");
+  await expect(recent).toHaveCount(1);
+  await expect(recent).toContainText("Storing and Computing");
+  await recent.click();
+  await expect(page.locator(".milkdown h1")).toHaveText("Storing and Computing");
 });

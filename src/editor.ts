@@ -16,19 +16,25 @@
 //      into a fence. Measured: 18 files in the dewlab corpus.
 
 import { Crepe } from "@milkdown/crepe";
-import { bulletListSchema, codeBlockSchema, remarkPreserveEmptyLinePlugin } from "@milkdown/kit/preset/commonmark";
+import { bulletListSchema, codeBlockSchema, htmlSchema, remarkPreserveEmptyLinePlugin } from "@milkdown/kit/preset/commonmark";
+import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
+import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
-import { $nodeSchema, $remark } from "@milkdown/kit/utils";
+import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
+import { foldLine, siteGroups, sitePage, type SiteGroup } from "./fences.ts";
+import { extractFrontMatter } from "./frontmatter.ts";
+import { setYamlField } from "./authoring.ts";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import remarkFrontmatter from "remark-frontmatter";
 import { python } from "@codemirror/lang-python";
 import { sql } from "@codemirror/lang-sql";
 import { LanguageDescription } from "@codemirror/language";
-import { cellLanguage, isRunnable, parseCell, wrapSqlCode, type CellOutput } from "./cells.ts";
+import { cellLanguage, codeOnItsLines, isRunnable, parseCell, wrapSqlCode, type CellOutput } from "./cells.ts";
 import { uploadConfig } from "@milkdown/kit/plugin/upload";
 import { imageInlineComponent, inlineImageConfig } from "@milkdown/kit/component/image-inline";
 import { isImageName, isLocalAsset } from "./images.ts";
 import { canonicaliseDisplayMath, unmathPlainDollars } from "./maths.ts";
+import { pythonHelp, type PythonHelpHost } from "./python-help.ts";
 import { idMaker, SNIPPETS } from "./slash-menu.ts";
 import { insert } from "@milkdown/kit/utils";
 import { commandsCtx } from "@milkdown/kit/core";
@@ -161,6 +167,317 @@ export const frontMatterSchema = $nodeSchema("front_matter", () => ({
 
 export const frontMatterRemark = $remark("frontMatter", () => remarkFrontmatter, ["yaml"]);
 
+const STATUSES = ["draft", "beta", "live", "archived"];
+
+/** Whether the YAML is showing, kept outside the view: ProseMirror
+ * rebuilds a node view whenever it likes (a click that moves the
+ * selection is enough), and a rebuild must not close what the author
+ * opened. One document is open at a time, so one flag will do. */
+let frontMatterRawShown = false;
+
+/** Front matter as the fields an author changes most, over the YAML it
+ * is. Title and status are fields; a change rewrites that one line of
+ * the YAML (setYamlField) and nothing else, so key order and quoting
+ * survive as they always have. Version is shown and set only by a
+ * release. The YAML itself stays editable under "Show all fields". */
+export const frontMatterView = $view(frontMatterSchema.node, () => (initial, view, getPos) => {
+  let node = initial;
+  const dom = document.createElement("div");
+  dom.className = "dn-front";
+  dom.dataset["frontMatter"] = "true";
+
+  const form = document.createElement("div");
+  form.className = "dn-front-fields";
+  form.contentEditable = "false";
+
+  const field = (labelText: string, control: HTMLElement): HTMLLabelElement => {
+    const label = document.createElement("label");
+    const name = document.createElement("span");
+    name.textContent = labelText;
+    label.append(name, control);
+    return label;
+  };
+
+  const title = document.createElement("input");
+  title.type = "text";
+  title.className = "dn-front-title";
+  const status = document.createElement("select");
+  const version = document.createElement("span");
+  version.className = "dn-front-version";
+  version.title = "Set by Release a new version.";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "dn-front-toggle";
+
+  form.append(field("Title", title), field("Status", status), field("Version", version), toggle);
+
+  const raw = document.createElement("pre");
+  raw.className = "dn-front-raw";
+  dom.append(form, raw);
+
+  const drawToggle = () => {
+    toggle.textContent = frontMatterRawShown ? "Hide all fields" : "Show all fields";
+    raw.hidden = !frontMatterRawShown;
+  };
+  // On mousedown, and with the default prevented: a click arrives after
+  // the selection has moved, by which time this view may have been
+  // rebuilt and the button it lands on is gone.
+  toggle.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    frontMatterRawShown = !frontMatterRawShown;
+    drawToggle();
+  });
+  toggle.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    frontMatterRawShown = !frontMatterRawShown;
+    drawToggle();
+  });
+
+  const yaml = () => node.textContent;
+  const fields = () => extractFrontMatter(`---\n${yaml()}\n---\n`).fields;
+
+  function draw(): void {
+    const values = fields();
+    if (document.activeElement !== title) title.value = typeof values["title"] === "string" ? values["title"] : "";
+    const current = typeof values["status"] === "string" ? values["status"] : "live";
+    const options = STATUSES.includes(current) ? STATUSES : [...STATUSES, current];
+    status.replaceChildren(...options.map((value) => new Option(value, value, false, value === current)));
+    version.textContent = values["version"] === undefined ? "none yet" : String(values["version"]);
+  }
+
+  /** Replaces the node's YAML with `next`, as one undoable step. */
+  function write(next: string): void {
+    const pos = typeof getPos === "function" ? getPos() : undefined;
+    if (pos === undefined || next === yaml()) return;
+    const from = pos + 1;
+    const to = from + node.content.size;
+    view.dispatch(view.state.tr.replaceWith(from, to, next ? view.state.schema.text(next) : []));
+  }
+
+  title.addEventListener("change", () => write(setYamlField(yaml(), "title", title.value.trim())));
+  title.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") title.blur();
+  });
+  status.addEventListener("change", () => write(setYamlField(yaml(), "status", status.value)));
+
+  draw();
+  drawToggle();
+
+  return {
+    dom,
+    contentDOM: raw,
+    update(next) {
+      if (next.type !== node.type) return false;
+      node = next;
+      draw();
+      return true;
+    },
+    // The form's own events and changes are the form's: ProseMirror
+    // leaves them alone. Only the YAML under it is document.
+    stopEvent: (event) => form.contains(event.target as Node),
+    ignoreMutation: (mutation) => form.contains(mutation.target),
+  };
+});
+
+/** A fold's opening and closing lines, drawn as what they are. dewlab
+ * writes a hint or an answer as `<details class="dl-hint"><summary>…</summary>`,
+ * markdown, then `</details>`; the editor holds the two lines as inline
+ * HTML atoms, which it draws as their source by default. Only the
+ * drawing changes here: the node, and so the file, stay as written.
+ * Any other inline HTML is drawn the default way. */
+export const foldLineView = $view(htmlSchema.node, () => (node) => {
+  const value = String(node.attrs["value"] ?? "");
+  const fold = foldLine(value);
+  const dom = document.createElement("span");
+  dom.dataset["type"] = "html";
+  dom.dataset["value"] = value;
+  dom.contentEditable = "false";
+  if (!fold) {
+    dom.textContent = value;
+  } else if (fold.kind === "open") {
+    dom.className = "dn-fold-open";
+    const label = document.createElement("span");
+    label.className = "dn-fold-label";
+    label.textContent = fold.label;
+    const summary = document.createElement("span");
+    summary.className = "dn-fold-summary";
+    summary.textContent = fold.summary;
+    dom.append(label, summary);
+    dom.title = "Readers see this line, and open it to read what is below. Edit the summary in the markdown (Ctrl+/).";
+  } else {
+    dom.className = "dn-fold-close";
+    dom.textContent = "end";
+  }
+  return { dom };
+});
+
+/** Marks the top-level blocks inside a fold, so they can be drawn as
+ * belonging to it. */
+export const foldBodies = $prose(
+  () =>
+    new Plugin({
+      props: {
+        decorations(state) {
+          const marks: Decoration[] = [];
+          let inside = false;
+          state.doc.forEach((block, offset) => {
+            const only = block.type.name === "paragraph" && block.childCount === 1 ? block.firstChild : null;
+            const fold = only?.type.name === "html" ? foldLine(String(only.attrs["value"] ?? "")) : null;
+            if (fold?.kind === "open") {
+              inside = true;
+              marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-head" }));
+            } else if (fold?.kind === "close" && inside) {
+              inside = false;
+              marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-foot" }));
+            } else if (inside) {
+              marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-body" }));
+            }
+          });
+          return DecorationSet.create(state.doc, marks);
+        },
+      },
+    }),
+);
+
+/** The site editors in a document, from its top-level blocks, with each
+ * pane's position so decorations can find it. */
+function sitesIn(state: EditorState): { group: SiteGroup; from: number[]; to: number[] }[] {
+  const blocks: ({ info: string; body: string } | null)[] = [];
+  const from: number[] = [];
+  const to: number[] = [];
+  state.doc.forEach((block, offset) => {
+    from.push(offset);
+    to.push(offset + block.nodeSize);
+    blocks.push(
+      block.type.name === "code_block"
+        ? { info: `${block.attrs["language"] ?? ""} ${block.attrs["meta"] ?? ""}`, body: block.textContent }
+        : null,
+    );
+  });
+  return siteGroups(blocks).map((group) => ({
+    group,
+    from: group.panes.map((pane) => from[pane.at]!),
+    to: group.panes.map((pane) => to[pane.at]!),
+  }));
+}
+
+const TAB_NAMES: Record<string, string> = { html: "HTML", css: "CSS", js: "JavaScript" };
+const siteKey = new PluginKey<Map<number, string>>("dewnoteSites");
+
+/** A site editor's panes as one editor: a tab bar over them, one pane
+ * showing at a time, and the page they make, live, under them. The file
+ * keeps three fences, as dewlab writes and builds them; only the drawing
+ * changes. Which tab is showing is per editor, by its place among the
+ * document's site editors, and is the editor's own state, not the file's. */
+export const siteEditors = $prose(
+  () =>
+    new Plugin<Map<number, string>>({
+      key: siteKey,
+      state: {
+        init: () => new Map(),
+        apply(transaction, chosen) {
+          const choice = transaction.getMeta(siteKey) as { editor: number; language: string } | undefined;
+          if (!choice) return chosen;
+          return new Map(chosen).set(choice.editor, choice.language);
+        },
+      },
+      props: {
+        decorations(state) {
+          const chosen = siteKey.getState(state) ?? new Map<number, string>();
+          const marks: Decoration[] = [];
+          sitesIn(state).forEach(({ group, from, to }, editor) => {
+            const languages = group.panes.map((pane) => pane.language);
+            const showing = chosen.has(editor) && languages.includes(chosen.get(editor)!)
+              ? chosen.get(editor)!
+              : languages[0]!;
+
+            marks.push(
+              Decoration.widget(
+                from[0]!,
+                (view) => {
+                  const bar = document.createElement("div");
+                  bar.className = "dn-site-tabs";
+                  bar.contentEditable = "false";
+                  const name = document.createElement("span");
+                  name.className = "dn-site-name";
+                  name.textContent = group.site;
+                  bar.appendChild(name);
+                  for (const language of languages) {
+                    const tab = document.createElement("button");
+                    tab.type = "button";
+                    tab.textContent = TAB_NAMES[language] ?? language;
+                    tab.classList.toggle("is-showing", language === showing);
+                    tab.setAttribute("aria-pressed", String(language === showing));
+                    // On mousedown, with the default prevented, like the
+                    // front-matter toggle: a click would move the
+                    // selection first and may land on a rebuilt bar.
+                    tab.addEventListener("mousedown", (event) => {
+                      event.preventDefault();
+                      view.dispatch(view.state.tr.setMeta(siteKey, { editor, language }));
+                    });
+                    bar.appendChild(tab);
+                  }
+                  return bar;
+                },
+                { side: -1, key: `dn-site-tabs-${editor}-${group.site}-${showing}-${languages.join(",")}` },
+              ),
+            );
+
+            group.panes.forEach((pane, at) => {
+              marks.push(
+                Decoration.node(from[at]!, to[at]!, {
+                  class: pane.language === showing ? "dn-site-pane" : "dn-site-pane dn-site-hidden",
+                }),
+              );
+            });
+
+            const page = sitePage(group);
+            marks.push(
+              Decoration.widget(
+                to[to.length - 1]!,
+                () => {
+                  const frame = document.createElement("iframe");
+                  frame.className = "dn-site-preview";
+                  frame.title = `The page ${group.site} makes`;
+                  frame.dataset["dnSite"] = String(editor);
+                  // Scripts run; nothing else. It cannot reach the editor.
+                  frame.setAttribute("sandbox", "allow-scripts");
+                  frame.srcdoc = page;
+                  return frame;
+                },
+                { side: 1, key: `dn-site-preview-${editor}-${group.site}` },
+              ),
+            );
+          });
+          return DecorationSet.create(state.doc, marks);
+        },
+      },
+      /** The preview widget keeps its iframe between keystrokes, so it
+       * does not flash; this refreshes what it shows, a moment after the
+       * typing stops. */
+      view() {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        return {
+          update(view, previous) {
+            if (view.state.doc.eq(previous.doc)) return;
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+              sitesIn(view.state).forEach(({ group }, editor) => {
+                const frame = view.dom.querySelector<HTMLIFrameElement>(`iframe[data-dn-site="${editor}"]`);
+                const page = sitePage(group);
+                if (frame && frame.srcdoc !== page) frame.srcdoc = page;
+              });
+            }, 400);
+          },
+          destroy() {
+            clearTimeout(timer);
+          },
+        };
+      },
+    }),
+);
+
 /** Runs after Crepe's own maths pass, so a `$…$` span it claimed but
  * dewlab would read as prose is put back as the text it was written as. */
 export const plainDollars = $remark("dewnotePlainDollars", () => unmathPlainDollars);
@@ -234,6 +551,10 @@ export interface EditorOptions {
    * rare mistake — it is the first thing a class writes — so the button
    * that starts one has to be able to stop it. */
   stopCell?(): void;
+  /** Asks Jedi for help while a Python cell is written: completion, a
+   * name's documentation, the signature of the call being typed. Absent
+   * means none, which is right for an export or a test. */
+  askPython?: PythonHelpHost["ask"];
   /** Turns a `src` the document owns into something a browser can draw.
    * Null where nothing is at that path, which is ordinary for a document
    * being written. Absent means images stay as written. */
@@ -310,6 +631,19 @@ export async function mountEditor(
       return true;
     });
     return found;
+  }
+
+  /** The code of every runnable Python cell above the one holding
+   * `source`, in order: what the page will have run by the time this
+   * one runs. Header lines are blanked, not removed, for the same reason
+   * as in the cell itself. */
+  function pythonAbove(source: string): string {
+    const above: string[] = [];
+    for (const cell of runnableCells()) {
+      if (cell.content === source) break;
+      if (cellLanguage(cell.language) === "python") above.push(codeOnItsLines(cell.content));
+    }
+    return above.length ? `${above.join("\n")}\n` : "";
   }
 
   const results = new Map<string, RunRecord>();
@@ -457,11 +791,15 @@ export async function mountEditor(
         },
       },
       [Crepe.Feature.CodeMirror]: {
+        extensions: options.askPython
+          ? [pythonHelp({ ask: options.askPython, contextFor: (source) => pythonAbove(source) })]
+          : [],
         languages: [
           LanguageDescription.of({ name: "python", support: python() }),
           LanguageDescription.of({ name: "sql", support: sql() }),
         ],
         previewToggleButton: (showingPreview: boolean) => (showingPreview ? "Hide" : "Run"),
+        // Hidden in style.css: the Run button heads the panel.
         previewLabel: "Output",
         previewLoading: "Running…",
         renderPreview: (language: string, content: string, apply: (value: string | HTMLElement | null) => void) => {
@@ -518,7 +856,11 @@ export async function mountEditor(
     .use(codeBlockWithMeta)
     .use(frontMatterRemark)
     .use(frontMatterSchema)
-    .use(plainDollars);
+    .use(frontMatterView)
+    .use(plainDollars)
+    .use(foldLineView)
+    .use(foldBodies)
+    .use(siteEditors);
   crepe.editor.use(tightBulletLists).use(tightListItems);
 
   // Milkdown's "preserve empty line" plugin does two things, both wrong

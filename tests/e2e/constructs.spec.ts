@@ -267,3 +267,216 @@ test("Run on a SQL cell sends the query wrapped for the page's database", async 
   await expect(output).toContainText("run_sql_cell(db,");
   await expect(output).toContainText("SELECT 1;");
 });
+
+test.describe("help while writing a Python cell", () => {
+  const TWO_CELLS = "```python exec\nid: a\ndef area(width, height):\n    return width * height\n```\n\n```python exec\nid: b\nar\n```\n";
+
+  async function openWithJedi(page: import("@playwright/test").Page, answers: Record<string, unknown>) {
+    await page.goto(BUILT_APP);
+    await page.evaluate((canned) => {
+      (globalThis as any).__dewnoteJedi = canned;
+      document.querySelector(".dn-gate")?.remove();
+    }, answers);
+    await page.evaluate((md) => (globalThis as any).__dewnote.open(md), TWO_CELLS);
+    await expect(page.locator(".milkdown .cm-content")).toHaveCount(2);
+  }
+
+  /** Puts the cursor at the end of the second cell's last line. */
+  async function typeInSecondCell(page: import("@playwright/test").Page, text: string) {
+    const second = page.locator(".milkdown .cm-content").nth(1);
+    await second.locator(".cm-line").last().click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(text);
+  }
+
+  test("completion offers Jedi's names, and asks with the cells above as context", async ({ page }) => {
+    await openWithJedi(page, { complete: [{ label: "area", type: "function" }, { label: "arbitrary_name", type: "variable" }] });
+    await typeInSecondCell(page, "b");
+    await page.keyboard.press("Control+Space");
+
+    const options = page.locator(".cm-tooltip-autocomplete .cm-completionLabel");
+    await expect(options.filter({ hasText: "arbitrary_name" })).toHaveCount(1);
+
+    const asked: any[] = await page.evaluate(() => (globalThis as any).__dewnoteJediAsked);
+    const question = asked.find((one) => one.kind === "complete");
+    // The cell above, header blanked; this cell's header blanked too, on
+    // the same lines, so the position still points at "arb".
+    expect(question.context).toBe("\ndef area(width, height):\n    return width * height\n");
+    expect(question.source).toBe("\narb");
+    expect(question).toMatchObject({ line: 2, column: 3 });
+  });
+
+  test("hovering a name shows its documentation", async ({ page }) => {
+    await openWithJedi(page, { hover: "area(width, height)\n\nThe area of a rectangle." });
+    const name = page.locator(".milkdown .cm-content").first().getByText("area", { exact: false }).first();
+    await name.hover();
+    await expect(page.locator(".dn-help-doc")).toContainText("The area of a rectangle.");
+  });
+
+  test("typing a call shows its signature, with the argument being typed in bold", async ({ page }) => {
+    await openWithJedi(page, { signature: { label: "area(width, height)", index: 1 } });
+    await typeInSecondCell(page, "ea(3, ");
+    const signature = page.locator(".dn-help-signature");
+    await expect(signature).toContainText("area(width, height)");
+    await expect(signature.locator("strong")).toHaveText("height");
+
+    // Closing the call puts it away.
+    await page.keyboard.type("4)");
+    await expect(signature).toHaveCount(0);
+  });
+
+  test("a block in another language asks nothing", async ({ page }) => {
+    await page.goto(BUILT_APP);
+    await page.evaluate(() => {
+      (globalThis as any).__dewnoteJedi = { signature: { label: "nope()", index: 0 } };
+      document.querySelector(".dn-gate")?.remove();
+    });
+    await page.evaluate(() => (globalThis as any).__dewnote.open("```sql\nSELECT max(\n```\n"));
+    await page.locator(".milkdown .cm-line").first().click();
+    await page.keyboard.press("End");
+    await page.keyboard.type("x, ");
+    await page.waitForTimeout(500);
+    const asked: any[] = await page.evaluate(() => (globalThis as any).__dewnoteJediAsked);
+    expect(asked.filter((one) => one.kind !== "complete")).toEqual([]);
+    await expect(page.locator(".dn-help-signature")).toHaveCount(0);
+  });
+});
+
+test("a hint is drawn as a fold, and saved exactly as written", async ({ page }) => {
+  const source =
+    'Before.\n\n<details class="dl-hint"><summary>stuck? here are some steps</summary>\n\n1. Read the error.\n\n</details>\n\nAfter.\n';
+  await page.goto(BUILT_APP);
+  const out = await page.evaluate(async (md) => {
+    await (globalThis as any).__dewnote.open(md);
+    return (globalThis as any).__dewnote.markdown() as string;
+  }, source);
+  expect(out).toBe(source);
+
+  // The opening line reads as a labelled fold, not as its HTML.
+  const head = page.locator(".milkdown .dn-fold-open");
+  await expect(head.locator(".dn-fold-label")).toHaveText("Hint");
+  await expect(head.locator(".dn-fold-summary")).toHaveText("stuck? here are some steps");
+  await expect(page.locator(".milkdown")).not.toContainText("<details");
+  // What the fold holds is marked as inside it; what follows is not.
+  await expect(page.locator(".milkdown .dn-fold-body")).toContainText("Read the error.");
+  await expect(page.locator(".milkdown .dn-fold-body")).not.toContainText("After.");
+});
+
+test("Run is drawn as a button heading the panel, and output reads from the left", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    (globalThis as any).__dewnoteRunCell = true;
+    document.querySelector(".dn-gate")?.remove();
+  });
+  await page.evaluate(() => (globalThis as any).__dewnote.open("```python exec\nid: a\nprint(1)\n```\n"));
+  const run = page.locator(".dn-cell-run");
+  // Crepe's reset strips borders from buttons in the editor; Run keeps its own.
+  expect(await run.evaluate((el) => getComputedStyle(el).borderTopStyle)).toBe("solid");
+  // No "Output" heading above the button.
+  await expect(page.locator(".milkdown .preview-label")).toBeHidden();
+
+  await run.click();
+  const output = page.locator(".dn-cell-output");
+  await expect(output).toBeVisible();
+  expect(await output.evaluate((el) => getComputedStyle(el.closest(".preview")!).textAlign)).toBe("left");
+});
+
+test.describe("front matter as fields", () => {
+  const SOURCE = '---\ntitle: A Page\nyear: "2026-2027"\nstatus: draft\nversion: 2026.09.22.1\n---\n\n# A Page\n';
+
+  async function openPage(page: import("@playwright/test").Page) {
+    await page.goto(BUILT_APP);
+    await page.evaluate(() => document.querySelector(".dn-gate")?.remove());
+    const out = await page.evaluate(async (md) => {
+      await (globalThis as any).__dewnote.open(md);
+      return (globalThis as any).__dewnote.markdown() as string;
+    }, SOURCE);
+    // Drawing it as a form changes nothing in the file.
+    expect(out).toBe(SOURCE);
+  }
+  const markdown = (page: import("@playwright/test").Page) =>
+    page.evaluate(() => (globalThis as any).__dewnote.markdown() as string);
+
+  test("shows title, status and version, and hides the YAML until asked", async ({ page }) => {
+    await openPage(page);
+    await expect(page.locator(".dn-front-title")).toHaveValue("A Page");
+    await expect(page.locator(".dn-front-fields select")).toHaveValue("draft");
+    await expect(page.locator(".dn-front-version")).toHaveText("2026.09.22.1");
+    await expect(page.locator(".dn-front-raw")).toBeHidden();
+  });
+
+  test("changing the status rewrites that one line", async ({ page }) => {
+    await openPage(page);
+    await page.selectOption(".dn-front-fields select", "live");
+    expect(await markdown(page)).toBe(SOURCE.replace("status: draft", "status: live"));
+  });
+
+  test("changing the title rewrites that one line, quoted where YAML needs it", async ({ page }) => {
+    await openPage(page);
+    await page.fill(".dn-front-title", "Yes: a Page");
+    await page.keyboard.press("Enter");
+    expect(await markdown(page)).toBe(SOURCE.replace("title: A Page", 'title: "Yes: a Page"'));
+  });
+
+  test("Show all fields opens the YAML, which stays editable", async ({ page }) => {
+    await openPage(page);
+    await page.click(".dn-front-toggle");
+    const raw = page.locator(".dn-front-raw");
+    await expect(raw).toBeVisible();
+    await raw.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type("\npackages: [sympy]");
+    // Wherever the click put it, the new line is inside the front matter.
+    await expect.poll(() => markdown(page)).toMatch(/^---\n[^]*packages: \[sympy\][^]*\n---\n\n# A Page/);
+  });
+});
+
+test.describe("a web page's panes as one editor", () => {
+  const SOURCE = [
+    "```html site", "id: page-html", "site: demo", "<p class=\"note\">Hello.</p>", "```", "",
+    "```css site", "id: page-css", "site: demo", ".note { color: rgb(1, 2, 3); }", "```", "",
+    "```js site", "id: page-js", "site: demo", "document.querySelector('p').dataset.ran = 'yes';", "```", "",
+  ].join("\n");
+
+  async function openSite(page: import("@playwright/test").Page) {
+    await page.goto(BUILT_APP);
+    await page.evaluate(() => document.querySelector(".dn-gate")?.remove());
+    const out = await page.evaluate(async (md) => {
+      await (globalThis as any).__dewnote.open(md);
+      return (globalThis as any).__dewnote.markdown() as string;
+    }, SOURCE);
+    // Still three fences in the file.
+    expect(out).toBe(SOURCE);
+  }
+
+  test("has a tab per pane, and shows one pane at a time", async ({ page }) => {
+    await openSite(page);
+    const tabs = page.locator(".dn-site-tabs button");
+    await expect(tabs).toHaveText(["HTML", "CSS", "JavaScript"]);
+    await expect(page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden)")).toHaveCount(1);
+    await expect(page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden)")).toContainText("Hello.");
+
+    await tabs.filter({ hasText: "CSS" }).dispatchEvent("mousedown");
+    await expect(page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden)")).toContainText("color: rgb(1, 2, 3)");
+    await expect(page.locator(".dn-site-tabs button.is-showing")).toHaveText("CSS");
+  });
+
+  test("previews the page the panes make, CSS and JavaScript applied", async ({ page }) => {
+    await openSite(page);
+    const preview = page.frameLocator(".dn-site-preview");
+    const paragraph = preview.locator("p");
+    await expect(paragraph).toHaveText("Hello.");
+    await expect(paragraph).toHaveAttribute("data-ran", "yes");
+    expect(await paragraph.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(1, 2, 3)");
+  });
+
+  test("the preview follows an edit", async ({ page }) => {
+    await openSite(page);
+    const pane = page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden) .cm-line").last();
+    await pane.click();
+    await page.keyboard.press("End");
+    // Plain text: the HTML pane closes a typed tag by itself.
+    await page.keyboard.type(" And more.");
+    await expect(page.frameLocator(".dn-site-preview").locator("body")).toContainText("And more.");
+  });
+});
