@@ -341,3 +341,23 @@ test.describe("help while writing a Python cell", () => {
     await expect(page.locator(".dn-help-signature")).toHaveCount(0);
   });
 });
+
+test("a hint is drawn as a fold, and saved exactly as written", async ({ page }) => {
+  const source =
+    'Before.\n\n<details class="dl-hint"><summary>stuck? here are some steps</summary>\n\n1. Read the error.\n\n</details>\n\nAfter.\n';
+  await page.goto(BUILT_APP);
+  const out = await page.evaluate(async (md) => {
+    await (globalThis as any).__dewnote.open(md);
+    return (globalThis as any).__dewnote.markdown() as string;
+  }, source);
+  expect(out).toBe(source);
+
+  // The opening line reads as a labelled fold, not as its HTML.
+  const head = page.locator(".milkdown .dn-fold-open");
+  await expect(head.locator(".dn-fold-label")).toHaveText("Hint");
+  await expect(head.locator(".dn-fold-summary")).toHaveText("stuck? here are some steps");
+  await expect(page.locator(".milkdown")).not.toContainText("<details");
+  // What the fold holds is marked as inside it; what follows is not.
+  await expect(page.locator(".milkdown .dn-fold-body")).toContainText("Read the error.");
+  await expect(page.locator(".milkdown .dn-fold-body")).not.toContainText("After.");
+});

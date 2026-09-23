@@ -464,9 +464,13 @@ First step.
 </details>
 ```
 
-Change the summary line and replace *First step.* with your hint. On the
-dewlab site this shows as a closed fold. In dewnote it currently shows as
-the HTML above.
+In dewnote it shows as a fold: a **HINT** label and its summary, what
+the fold holds marked with a rule down its left side, and a small *end*
+where it closes. Write the hint under the label as ordinary text. To
+change the summary, use **Edit the markdown** (Ctrl+/). On the dewlab
+site, readers see the summary and open the fold to read the hint. An
+answer fold, `class="dl-answer"`, shows the same way, labelled
+**ANSWER**.
 
 ## Checking for problems
 
@@ -687,7 +691,6 @@ These are planned but not built yet (see `planning/ROADMAP.md`):
 
 - Web page panes show as three code blocks rather than one editor with
   tabs.
-- Hints show as HTML in the editor rather than as a fold.
 - Files cannot be renamed, moved or deleted from dewnote.
 - There is no find and replace across the workspace.
 - A save conflict keeps one version or the other; it cannot combine them.

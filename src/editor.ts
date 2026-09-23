@@ -16,9 +16,12 @@
 //      into a fence. Measured: 18 files in the dewlab corpus.
 
 import { Crepe } from "@milkdown/crepe";
-import { bulletListSchema, codeBlockSchema, remarkPreserveEmptyLinePlugin } from "@milkdown/kit/preset/commonmark";
+import { bulletListSchema, codeBlockSchema, htmlSchema, remarkPreserveEmptyLinePlugin } from "@milkdown/kit/preset/commonmark";
+import { Plugin } from "@milkdown/kit/prose/state";
+import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
-import { $nodeSchema, $remark } from "@milkdown/kit/utils";
+import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
+import { foldLine } from "./fences.ts";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import remarkFrontmatter from "remark-frontmatter";
 import { python } from "@codemirror/lang-python";
@@ -161,6 +164,66 @@ export const frontMatterSchema = $nodeSchema("front_matter", () => ({
 }));
 
 export const frontMatterRemark = $remark("frontMatter", () => remarkFrontmatter, ["yaml"]);
+
+/** A fold's opening and closing lines, drawn as what they are. dewlab
+ * writes a hint or an answer as `<details class="dl-hint"><summary>…</summary>`,
+ * markdown, then `</details>`; the editor holds the two lines as inline
+ * HTML atoms, which it draws as their source by default. Only the
+ * drawing changes here: the node, and so the file, stay as written.
+ * Any other inline HTML is drawn the default way. */
+export const foldLineView = $view(htmlSchema.node, () => (node) => {
+  const value = String(node.attrs["value"] ?? "");
+  const fold = foldLine(value);
+  const dom = document.createElement("span");
+  dom.dataset["type"] = "html";
+  dom.dataset["value"] = value;
+  dom.contentEditable = "false";
+  if (!fold) {
+    dom.textContent = value;
+  } else if (fold.kind === "open") {
+    dom.className = "dn-fold-open";
+    const label = document.createElement("span");
+    label.className = "dn-fold-label";
+    label.textContent = fold.label;
+    const summary = document.createElement("span");
+    summary.className = "dn-fold-summary";
+    summary.textContent = fold.summary;
+    dom.append(label, summary);
+    dom.title = "Readers see this line, and open it to read what is below. Edit the summary in the markdown (Ctrl+/).";
+  } else {
+    dom.className = "dn-fold-close";
+    dom.textContent = "end";
+  }
+  return { dom };
+});
+
+/** Marks the top-level blocks inside a fold, so they can be drawn as
+ * belonging to it. */
+export const foldBodies = $prose(
+  () =>
+    new Plugin({
+      props: {
+        decorations(state) {
+          const marks: Decoration[] = [];
+          let inside = false;
+          state.doc.forEach((block, offset) => {
+            const only = block.type.name === "paragraph" && block.childCount === 1 ? block.firstChild : null;
+            const fold = only?.type.name === "html" ? foldLine(String(only.attrs["value"] ?? "")) : null;
+            if (fold?.kind === "open") {
+              inside = true;
+              marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-head" }));
+            } else if (fold?.kind === "close" && inside) {
+              inside = false;
+              marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-foot" }));
+            } else if (inside) {
+              marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-body" }));
+            }
+          });
+          return DecorationSet.create(state.doc, marks);
+        },
+      },
+    }),
+);
 
 /** Runs after Crepe's own maths pass, so a `$…$` span it claimed but
  * dewlab would read as prose is put back as the text it was written as. */
@@ -539,7 +602,9 @@ export async function mountEditor(
     .use(codeBlockWithMeta)
     .use(frontMatterRemark)
     .use(frontMatterSchema)
-    .use(plainDollars);
+    .use(plainDollars)
+    .use(foldLineView)
+    .use(foldBodies);
   crepe.editor.use(tightBulletLists).use(tightListItems);
 
   // Milkdown's "preserve empty line" plugin does two things, both wrong

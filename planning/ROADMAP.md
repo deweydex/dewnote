@@ -15,17 +15,6 @@ every pull request) is done.
 
 ## Phase 3: The editor shows what the site shows
 
-### 3.1 Show hints as a fold
-
-**Problem.** The block menu's **Hint** inserts
-`<details class="dl-hint">…</details>`, and the editor shows it as that
-raw HTML. The one construct the menu inserts looks broken.
-
-**Approach.** A Milkdown node for `<details>`/`<summary>` that renders as
-a fold with an editable summary and body, and serialises back to the
-same HTML. The round-trip test already covers `<details>`, so it will
-catch a regression.
-
 ### 3.2 One editor for web page panes
 
 **Problem.** The `html site`, `css site` and `js site` blocks show as

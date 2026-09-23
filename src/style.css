@@ -1366,3 +1366,45 @@ div.dn-report-row:hover { background: none; }
   color: var(--dl-orange);
   font-weight: 600;
 }
+
+/* A hint or answer fold: its opening line as a labelled header, what it
+   holds ruled on the left, and its close as a quiet end mark. */
+.milkdown .ProseMirror .dn-fold-head,
+.milkdown .ProseMirror .dn-fold-body,
+.milkdown .ProseMirror .dn-fold-foot {
+  border-left: 3px solid color-mix(in srgb, var(--dl-orange) 45%, transparent);
+  padding-left: 0.9rem;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.milkdown .ProseMirror .dn-fold-head { padding-top: 0.2rem; }
+.milkdown .ProseMirror .dn-fold-body { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+.milkdown .ProseMirror .dn-fold-foot { line-height: 1; padding-bottom: 0.3rem; }
+
+.dn-fold-open {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  cursor: default;
+}
+
+.dn-fold-label {
+  font-family: var(--dl-mono);
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dl-orange);
+}
+
+.dn-fold-summary {
+  font-style: italic;
+  color: var(--dl-muted);
+}
+
+.dn-fold-close {
+  font-family: var(--dl-mono);
+  font-size: 0.7em;
+  color: var(--dl-muted);
+  opacity: 0.7;
+}

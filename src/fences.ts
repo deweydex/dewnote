@@ -143,3 +143,25 @@ export function cardIn(info: string, body: string): Card | null {
     heading: heading ? heading[1]! : null,
   };
 }
+
+/** What a line of raw HTML is, as a fold: the opening of a
+ * `<details>`, with its kind (from dewlab's class) and summary, or its
+ * close. dewlab writes a fold as `<details class="dl-hint"><summary>…</summary>`
+ * on one line and `</details>` on another, with ordinary markdown
+ * between, which is how the editor holds it: two inline HTML atoms and
+ * the blocks between them. */
+export type FoldLine =
+  | { kind: "open"; label: string; summary: string }
+  | { kind: "close" };
+
+const FOLD_LABELS: Record<string, string> = { "dl-hint": "Hint", "dl-answer": "Answer" };
+
+export function foldLine(html: string): FoldLine | null {
+  const text = html.trim();
+  if (/^<\/details>$/i.test(text)) return { kind: "close" };
+  const open = /^<details\b([^>]*)>\s*<summary>([\s\S]*?)<\/summary>$/i.exec(text);
+  if (!open) return null;
+  const classes = /\bclass="([^"]*)"/.exec(open[1]!)?.[1]?.split(/\s+/) ?? [];
+  const known = classes.map((name) => FOLD_LABELS[name]).find(Boolean);
+  return { kind: "open", label: known ?? "Fold", summary: open[2]!.trim() };
+}
