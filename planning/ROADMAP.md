@@ -25,12 +25,6 @@ bringing `planning/DIALECTS.md` up to date) is done.
 dewlab's build reads constructs dewnote only shows as raw text. Each is
 listed, with what dewlab does with it, in `planning/DIALECTS.md` §5.
 
-### 6.3 App panes
-
-`html app`, `css app` and `js app` are shown as code. Group them as the
-site editor groups site panes; running one needs the page's `db`, which
-the Worker already has.
-
 ### 6.4 Pages: cards, generated blocks, wrappers
 
 On `pages/`, a card shows as code, `[[search-box]]` as text, and a

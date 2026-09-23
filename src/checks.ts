@@ -19,6 +19,7 @@ import {
   hasGap,
   questionIn,
   sitePaneIn,
+  appPaneIn,
   type Card,
   type Question,
 } from "./fences.ts";
@@ -138,7 +139,7 @@ export function checkDocument(source: string, around: Around): Problem[] {
   const claim = (id: string | null, what: string, line: number): void => {
     if (!id) {
       problems.push({
-        message: `A ${what} with no \`id:\`. Add an \`id:\` line at its top; without one, a reader's work in it cannot be saved.`,
+        message: `${/^[aeiou]/.test(what) ? "An" : "A"} ${what} with no \`id:\`. Add an \`id:\` line at its top; without one, a reader's work in it cannot be saved.`,
         line,
         severity: "blocking",
       });
@@ -170,6 +171,7 @@ export function checkDocument(source: string, around: Around): Problem[] {
       const question = questionIn(info, body);
       const card = cardIn(info, body);
       const hint = hintIn(info, body);
+      const app = appPaneIn(info, body);
 
       if (isRunnable(languageOf(info), info)) {
         const id = parseCell(body).id;
@@ -199,6 +201,15 @@ export function checkDocument(source: string, around: Around): Problem[] {
         if (!pane.site) {
           problems.push({
             message: "A web page pane with no `site:` line. Add one naming its page; panes with the same `site:` become one editor.",
+            line,
+            severity: "blocking",
+          });
+        }
+      } else if (app) {
+        claim(app.id, "app pane", line);
+        if (!app.site) {
+          problems.push({
+            message: "An app pane with no `app:` line. Add one naming its page; panes with the same `app:` become one editor.",
             line,
             severity: "blocking",
           });

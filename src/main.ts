@@ -269,8 +269,23 @@ let held: Document | null = null;
     const jedi = hooks["__dewnoteJedi"] as Record<string, unknown> | undefined;
     const asked: unknown[] = [];
     hooks["__dewnoteJediAsked"] = asked;
+    // A test sets `__dewnoteRows` to the rows an app page's `dlQuery`
+    // should get back (or an Error's message, as `{ error }`), and every
+    // query asked is recorded in `__dewnoteQueries`.
+    const rows = hooks["__dewnoteRows"] as unknown[] | { error: string } | undefined;
+    const queries: unknown[] = [];
+    hooks["__dewnoteQueries"] = queries;
     held = await mountEditor(page, {
       markdown,
+      ...(rows
+        ? {
+            queryRows: async (sql: string, params: unknown[]) => {
+              queries.push({ sql, params });
+              if (!Array.isArray(rows)) throw new Error(rows.error);
+              return rows;
+            },
+          }
+        : {}),
       ...(jedi
         ? {
             askPython: async (kind: string, source: string, context: string, line: number, column: number) => {

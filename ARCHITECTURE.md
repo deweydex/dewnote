@@ -210,13 +210,20 @@ still guards the file:
   blocks between. A node view (`foldLineView`) draws the atoms as a
   labelled header and an end mark; a decoration plugin (`foldBodies`)
   rules the blocks between.
-- **Site editors.** Consecutive `html site`/`css site`/`js site` fences
-  naming one site, grouped as dewlab's build groups them (`siteGroups`
-  in `fences.ts`), get a tab bar widget, a class hiding every pane but
-  the chosen one, and a sandboxed preview iframe (`sitePage`). The
-  chosen tab is plugin state. The iframe widget keeps its key between
-  keystrokes so it does not flash; a plugin view refreshes its
-  `srcdoc` 400ms after typing stops.
+- **Site and app editors.** Consecutive `html site`/`css site`/`js site`
+  fences naming one site, grouped as dewlab's build groups them
+  (`paneGroups` in `fences.ts`), get a tab bar widget, a class hiding
+  every pane but the chosen one, and a sandboxed preview iframe
+  (`sitePage`). The chosen tab is plugin state. The iframe widget keeps
+  its key between keystrokes so it does not flash; a plugin view
+  refreshes its `srcdoc` 400ms after typing stops. `app` fences use the
+  same plugin (`paneEditors` in `editor.ts`) with a Run button: the
+  frame's script (`appPage`) gets a `dlQuery` that posts to the editor,
+  which checks the message came from a frame it drew and answers from
+  the Worker (`queryRows`). Run records the panes' code, not a flag,
+  because Milkdown appends a paragraph after a closing code block in a
+  transaction of its own, and "any change undoes the run" undid every
+  run at once.
 - **Front matter.** A node view draws Title and Status as fields over
   the YAML, which stays the node's content, editable under Show all
   fields. A field change rewrites only its own line.

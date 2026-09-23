@@ -271,6 +271,7 @@ has a **Tutorial** group:
 | **Multiple choice** | A question with options and one correct answer. |
 | **Fill in the blank** | A question with a gap for the reader to fill. |
 | **Web page** | An HTML, CSS and JavaScript editor that shows a live page. |
+| **Page that reads the database** | A web page whose JavaScript reads the tables the SQL cells made. See [Pages that read the database](#pages-that-read-the-database). |
 | **Hint** | A fold the reader opens when stuck. |
 | **Staged hint** | A hint that stays hidden until the reader has got stuck on the cell above. See [Staged hints](#staged-hints). |
 
@@ -483,6 +484,37 @@ one pane showing at a time, and the page they make, live, underneath.
 The preview updates a moment after you stop typing, and runs the page's
 JavaScript. Drag its bottom corner to make it taller. In the file, they
 stay three code blocks.
+
+### Pages that read the database
+
+An **app** is a web page whose JavaScript reads the tables the page's SQL
+cells made. The **Page that reads the database** item inserts one: an
+`html app` and a `js app` block with the same `app:` name (add a
+`css app` block for styles). The script gets two things:
+
+- `root`, the element holding the app's HTML;
+- `dlQuery(sql, params)`, which runs one query against the page's
+  database and gives back its rows, each an object of column name to
+  value. Put a `?` in the SQL for each value and pass the values in
+  `params`, so a value a reader typed is never read as SQL.
+
+````
+```js app
+id: list-js
+app: readings
+const rows = await dlQuery("select name from readings where hour > ?", [12]);
+root.querySelector("ul").innerHTML = rows.map((row) => `<li>${row.name}</li>`).join("");
+```
+````
+
+dewnote shows an app like a web page, with a tab per pane and the page
+underneath, and a **Run** button in the tab bar. The HTML and CSS show
+at once; the JavaScript runs only when you press **Run**, as on the
+dewlab site. Run the SQL cells that make the tables first: until one
+has run there is no database, and the page says so. An edit to any pane
+puts the page back to its HTML and CSS until you press **Run** again.
+An error in the script, or in a query, is shown in red at the foot of
+the page.
 
 ## Hints
 

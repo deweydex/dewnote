@@ -558,3 +558,56 @@ test("a question with no type the site knows says so where it is drawn", async (
   });
   await expect(page.locator(".dn-question-kind")).toContainText("needs a `type:`");
 });
+
+const APP =
+  "```html app\nid: list-html\napp: readings\n<ul id=\"out\"></ul>\n```\n\n" +
+  "```css app\nid: list-css\napp: readings\nli { color: rgb(0, 128, 0); }\n```\n\n" +
+  "```js app\nid: list-js\napp: readings\nconst rows = await dlQuery(\"select name from readings where hour > ?\", [12]);\nroot.querySelector(\"#out\").innerHTML = rows.map((row) => `<li>${row.name}</li>`).join(\"\");\n```\n";
+
+test("an app's panes are one editor, and Run reads the page's database through dlQuery", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    (globalThis as any).__dewnoteRows = [{ name: "evening" }, { name: "night" }];
+    return (globalThis as any).__dewnote.open(text);
+  }, APP);
+
+  const bar = page.locator(".dn-site-tabs");
+  await expect(bar.locator("button")).toHaveText(["HTML", "CSS", "JavaScript", "Run"]);
+  await expect(page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden)")).toHaveCount(1);
+
+  // Before Run, the page is its HTML and CSS; the script has not asked anything.
+  const frame = page.frameLocator("iframe[data-dn-app]");
+  await expect(frame.locator("#out li")).toHaveCount(0);
+
+  await bar.locator("button", { hasText: "Run" }).dispatchEvent("mousedown");
+  await expect(frame.locator("#out li")).toHaveText(["evening", "night"]);
+  await expect(frame.locator("#out li").first()).toHaveCSS("color", "rgb(0, 128, 0)");
+  expect(await page.evaluate(() => (globalThis as any).__dewnoteQueries)).toEqual([
+    { sql: "select name from readings where hour > ?", params: [12] },
+  ]);
+  await expect(page.locator(".dn-site-tabs button", { hasText: "Run again" })).toHaveCount(1);
+  expect(await page.evaluate(() => (globalThis as any).__dewnote.markdown())).toBe(APP);
+
+  // An edit to the script puts the page back to its HTML and CSS, as
+  // dewlab does, until Run is pressed again.
+  await bar.locator("button", { hasText: "JavaScript" }).dispatchEvent("mousedown");
+  await page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden) .cm-content").click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("\n// changed");
+  await expect(page.locator(".dn-site-tabs button", { hasText: /^Run$/ })).toHaveCount(1);
+  await expect(frame.locator("#out li")).toHaveCount(0, { timeout: 3000 });
+});
+
+test("a query that fails shows its reason in the app's page", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    (globalThis as any).__dewnoteRows = { error: "There is no database yet. Run the SQL cells that make the tables first." };
+    return (globalThis as any).__dewnote.open(text);
+  }, APP);
+  await page.locator(".dn-site-tabs button", { hasText: "Run" }).dispatchEvent("mousedown");
+  await expect(page.frameLocator("iframe[data-dn-app]").locator(".dn-app-error")).toHaveText(
+    "There is no database yet. Run the SQL cells that make the tables first.",
+  );
+});

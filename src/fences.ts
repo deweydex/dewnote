@@ -34,55 +34,65 @@ export function infoWords(info: string): string[] {
   return info.trim().split(/\s+/).filter(Boolean);
 }
 
-// ── site panes ─────────────────────────────────────────────────────────
+// ── site and app panes ─────────────────────────────────────────────────
 
-const SITE_LANGUAGES = new Set(["html", "css", "js"]);
+const PANE_LANGUAGES = new Set(["html", "css", "js"]);
+
+/** A site pane is one language of a live web page in a sandbox; an app
+ * pane is one language of a page whose script reads the page's own
+ * database (dewlab's `SitePane` and `AppPane`). The same shape, keyed by
+ * a different header word. */
+export type PaneKind = "site" | "app";
 
 export interface SitePane {
   id: string | null;
-  /** The editor this pane belongs to. Consecutive panes naming the same
-   * site become one editor with a tab per language. */
+  /** The editor this pane belongs to: its `site:` or `app:` line.
+   * Consecutive panes naming the same one become one editor with a tab
+   * per language. */
   site: string | null;
   language: string;
 }
 
-/** `html site`, `css site`, `js site` — and nothing else. */
-export function sitePaneIn(info: string, body: string): SitePane | null {
+/** `html site`, `css app` and the like, as `kind` says, and nothing else. */
+export function paneIn(kind: PaneKind, info: string, body: string): SitePane | null {
   const words = infoWords(info);
-  if (words.length < 2 || words[1] !== "site" || !SITE_LANGUAGES.has(words[0]!.toLowerCase())) {
+  if (words.length < 2 || words[1] !== kind || !PANE_LANGUAGES.has(words[0]!.toLowerCase())) {
     return null;
   }
-  const { header } = splitHeader(body, ["id", "site"]);
+  const { header } = splitHeader(body, ["id", kind]);
   return {
     id: header.get("id") ?? null,
-    site: header.get("site") ?? null,
+    site: header.get(kind) ?? null,
     language: words[0]!.toLowerCase(),
   };
 }
 
-/** One live editor: consecutive panes naming the same site, in the
- * order they are written. `at` is each pane's place in the list of
+export const sitePaneIn = (info: string, body: string) => paneIn("site", info, body);
+export const appPaneIn = (info: string, body: string) => paneIn("app", info, body);
+
+/** One live editor: consecutive panes naming the same site or app, in
+ * the order they are written. `at` is each pane's place in the list of
  * blocks it was found in. */
 export interface SiteGroup {
   site: string;
   panes: { at: number; language: string; code: string }[];
 }
 
-/** The site editors among a document's top-level blocks, grouped the way
- * dewlab's build groups them: panes naming the same site, with nothing
- * but other such panes between them. A block that is not a pane is
- * `null`, and ends any group running up to it. A pane with no `site:`
+/** The editors of `kind` among a document's top-level blocks, grouped
+ * the way dewlab's build groups them: panes naming the same one, with
+ * nothing but other such panes between them. A block that is not a pane
+ * is `null`, and ends any group running up to it. A pane with no name
  * belongs to no editor (the checker reports it). */
-export function siteGroups(blocks: readonly ({ info: string; body: string } | null)[]): SiteGroup[] {
+export function paneGroups(kind: PaneKind, blocks: readonly ({ info: string; body: string } | null)[]): SiteGroup[] {
   const groups: SiteGroup[] = [];
   let current: SiteGroup | null = null;
   blocks.forEach((block, at) => {
-    const pane = block ? sitePaneIn(block.info, block.body) : null;
+    const pane = block ? paneIn(kind, block.info, block.body) : null;
     if (!pane?.site) {
       current = null;
       return;
     }
-    const code = splitHeader(block!.body, ["id", "site"]).rest;
+    const code = splitHeader(block!.body, ["id", kind]).rest;
     if (current && current.site === pane.site) {
       current.panes.push({ at, language: pane.language, code });
     } else {
@@ -93,17 +103,72 @@ export function siteGroups(blocks: readonly ({ info: string; body: string } | nu
   return groups;
 }
 
+export const siteGroups = (blocks: readonly ({ info: string; body: string } | null)[]) => paneGroups("site", blocks);
+
+function codeOf(group: SiteGroup, language: string): string {
+  return group.panes.filter((pane) => pane.language === language).map((pane) => pane.code).join("\n");
+}
+
+/** A `</script>` inside JavaScript would close the tag early. */
+const scriptSafe = (js: string) => js.replace(/<\/script/gi, "<\\/script");
+
 /** The page a site editor previews, put together the way dewlab's
  * site-relay.js does: the CSS in the head, the HTML as the body, the
- * JavaScript last. A `</script>` inside the JavaScript would close the
- * tag early, so it is escaped. */
+ * JavaScript last. */
 export function sitePage(group: SiteGroup): string {
-  const of = (language: string) =>
-    group.panes.filter((pane) => pane.language === language).map((pane) => pane.code).join("\n");
-  const script = of("js").replace(/<\/script/gi, "<\\/script");
+  const script = scriptSafe(codeOf(group, "js"));
   return (
-    `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${of("css")}</style></head>` +
-    `<body>${of("html")}${script ? `<script>${script}</script>` : ""}</body></html>`
+    `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${codeOf(group, "css")}</style></head>` +
+    `<body>${codeOf(group, "html")}${script ? `<script>${script}</script>` : ""}</body></html>`
+  );
+}
+
+/** What an app page's script has instead of dewlab's page: `dlQuery`,
+ * which asks the editor holding the frame to run a query against the
+ * page's database and answers with its rows, and a place to see an
+ * error, since there is no console to read. */
+const APP_BRIDGE = `
+const dnPending = new Map();
+let dnNext = 0;
+function dlQuery(sql, params) {
+  return new Promise((resolve, reject) => {
+    const id = ++dnNext;
+    dnPending.set(id, { resolve, reject });
+    parent.postMessage({ type: "dn-app-query", id, sql: String(sql), params: params ?? [] }, "*");
+  });
+}
+addEventListener("message", (event) => {
+  const answer = event.data;
+  if (!answer || answer.type !== "dn-app-answer") return;
+  const waiting = dnPending.get(answer.id);
+  if (!waiting) return;
+  dnPending.delete(answer.id);
+  if (answer.error) waiting.reject(new Error(answer.error));
+  else waiting.resolve(answer.rows);
+});
+function dnShowError(error) {
+  const box = document.createElement("pre");
+  box.className = "dn-app-error";
+  box.style.cssText = "color:#b3461a;white-space:pre-wrap;font:13px monospace;margin:8px 0 0";
+  box.textContent = String(error && error.message ? error.message : error);
+  document.body.appendChild(box);
+}
+addEventListener("error", (event) => dnShowError(event.error ?? event.message));
+addEventListener("unhandledrejection", (event) => dnShowError(event.reason));
+`;
+
+/** The page an app editor previews: dewlab renders its HTML into a
+ * root element, scopes its CSS to it, and on Run calls the JavaScript
+ * with that root and `dlQuery`. Here the frame is the scope. Without
+ * `run`, the JavaScript is left out, as dewlab leaves it until Run. */
+export function appPage(group: SiteGroup, run: boolean): string {
+  const js = scriptSafe(codeOf(group, "js"));
+  const call = run && js
+    ? `<script>(async function (root, dlQuery) {\n${js}\n})(document.getElementById("dn-app-root"), dlQuery).catch(dnShowError);</script>`
+    : "";
+  return (
+    `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${codeOf(group, "css")}</style></head>` +
+    `<body><div id="dn-app-root">${codeOf(group, "html")}</div><script>${APP_BRIDGE}</script>${call}</body></html>`
   );
 }
 

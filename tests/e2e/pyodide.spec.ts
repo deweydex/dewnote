@@ -108,6 +108,25 @@ test("a SQL cell runs against the page's database", async ({ page }) => {
   await expect(output).not.toHaveClass(/is-error/);
 });
 
+test("an app's script reads the table a SQL cell made", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((body) => (globalThis as any).__dewnote.useStubStore({
+    "pages/app.md": `---\ntitle: App\n---\n\n# App\n\n${body}`,
+  }), [
+    cell("make", "create table readings (name text, hour int);\ninsert into readings values ('morning', 9), ('evening', 19);\nselect * from readings;", "sql"),
+    "```html app\nid: app-html\napp: list\n<ul id=\"out\"></ul>\n```",
+    "```js app\nid: app-js\napp: list\nconst rows = await dlQuery(\"select name from readings where hour > ?\", [12]);\nroot.querySelector(\"#out\").innerHTML = rows.map((row) => `<li>${row.name}</li>`).join(\"\");\n```",
+  ].join("\n\n") + "\n");
+  await page.locator(".dn-wp-input").fill("app");
+  await page.keyboard.press("Enter");
+
+  await page.locator(".dn-cell-run").click();
+  await expect(page.locator(".dn-cell-output")).toContainText("evening", { timeout: BOOT });
+
+  await page.locator(".dn-site-tabs button", { hasText: "Run" }).dispatchEvent("mousedown");
+  await expect(page.frameLocator("iframe[data-dn-app]").locator("#out li")).toHaveText(["evening"], { timeout: BOOT });
+});
+
 test.describe("Jedi, for help while writing a cell", () => {
   const cells = [
     cell("define", 'def area(width, height):\n    """The area of a rectangle."""\n    return width * height'),

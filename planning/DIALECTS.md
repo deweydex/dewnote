@@ -270,8 +270,16 @@ Unlike a site pane it is not sandboxed: its HTML and CSS render into the
 page, its CSS scoped with `@scope`, and its JavaScript runs on the page
 with `root` and `dlQuery(sql, params)` in scope.
 
-*dewnote:* shown as code blocks. Nothing runs them, and the checker does
-not read them.
+*dewnote:* drawn like a site editor, a tab per pane over one editor
+(`paneGroups("app", …)` in `fences.ts`), with a **Run** button. The
+preview is a sandboxed frame rather than the page itself, so no `@scope`
+is needed: HTML and CSS show at once, and Run adds the script, called
+with `root` and a `dlQuery` that posts each query to the editor, which
+answers only the frame it drew, from the Worker's `db`
+(`query_rows` in `dewnote_tools.py`, as `_query_rows` in dewlab's
+`tutorial_tools.py`). An edit to the panes undoes the run. The checker
+reports a pane with no `id:` or no `app:` line. The `/` menu inserts
+one.
 
 ### Notes
 
@@ -393,10 +401,9 @@ What dewlab's build reads and dewnote shows only as raw text, in the
 order an author would notice it. Each is planned in
 `planning/ROADMAP.md`, Phases 6 and 7.
 
-1. App panes: shown as code; nothing runs them.
-2. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
+1. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
    when run in dewnote.
-3. Cards, generated blocks and page wrappers: shown as code, text and
+2. Cards, generated blocks and page wrappers: shown as code, text and
    loose tags.
-4. The checker does not report footnotes inside fences, or `tutorial:`
+3. The checker does not report footnotes inside fences, or `tutorial:`
    anchors that name no heading.

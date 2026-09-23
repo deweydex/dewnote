@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { foldLine } from "./fences.ts";
+import { appPage, foldLine, paneGroups } from "./fences.ts";
 
 describe("foldLine", () => {
   test("reads a hint's opening line", () => {
@@ -76,5 +76,37 @@ describe("sitePage", () => {
   test("a closing script tag in the JavaScript cannot end the script early", () => {
     const page = sitePage({ site: "d", panes: [{ at: 0, language: "js", code: 'x = "</script>";' }] });
     expect(page.match(/<\/script>/g)).toHaveLength(1);
+  });
+});
+
+describe("app panes", () => {
+  const pane = (language: string, app: string | null, code: string) => ({
+    info: `${language} app`,
+    body: `id: ${language}-pane\n${app ? `app: ${app}\n` : ""}${code}`,
+  });
+
+  test("group by their app: line, as site panes group by site:, and never with site panes", () => {
+    const groups = paneGroups("app", [pane("html", "list", "<ul></ul>"), pane("js", "list", "go()"), { info: "css site", body: "id: s\nsite: list\np {}" }]);
+    expect(groups).toEqual([{ site: "list", panes: [
+      { at: 0, language: "html", code: "<ul></ul>" },
+      { at: 1, language: "js", code: "go()" },
+    ] }]);
+    expect(paneGroups("site", [pane("html", "list", "x")])).toEqual([]);
+  });
+
+  test("the page leaves the script out until Run, then calls it with root and dlQuery", () => {
+    const group = { site: "list", panes: [{ at: 0, language: "html", code: "<ul></ul>" }, { at: 1, language: "js", code: "go(\"</script>\")" }] };
+    expect(appPage(group, false)).toContain('<div id="dn-app-root"><ul></ul></div>');
+    expect(appPage(group, false)).not.toContain("go(");
+    const ran = appPage(group, true);
+    expect(ran).toContain('(async function (root, dlQuery) {\ngo("<\\/script>")\n})(document.getElementById("dn-app-root"), dlQuery)');
+  });
+
+  test("the checker wants an id and an app: line, as dewlab's build does", async () => {
+    const { checkDocument } = await import("./checks.ts");
+    const messages = checkDocument("---\ntitle: T\n---\n\n```js app\nid: j\ngo()\n```\n\n```css app\napp: a\np {}\n```\n", { ids: new Set() })
+      .map((problem) => problem.message);
+    expect(messages[0]).toContain("An app pane with no `app:` line");
+    expect(messages[1]).toContain("An app pane with no `id:`");
   });
 });

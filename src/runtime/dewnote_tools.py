@@ -268,3 +268,26 @@ def signature(source: str, context: str, line: int, column: int) -> str:
         return "null"
     first = found[0]
     return json.dumps({"label": first.to_string(), "index": first.index})
+
+
+def query_rows(sql: str, params_json: str) -> str:
+    """What an app page's `dlQuery(sql, params)` gets back: the rows of one
+    query against the page's shared `db`, each a dict of column to value,
+    as JSON. dewlab's own `_query_rows()`, which this mirrors: `params`
+    fills `?` placeholders, so a value a reader typed is bound as a value
+    and never pasted into the query's text.
+
+    The database is the one the page's `sql exec` cells make, so there is
+    none until one of them has run; that is said in so many words rather
+    than as a `KeyError`.
+    """
+    import json
+
+    conn = _page_globals.get("db")
+    if conn is None:
+        raise RuntimeError(
+            "There is no database yet. Run the SQL cells that make the tables first."
+        )
+    cursor = conn.execute(sql, json.loads(params_json) or [])
+    columns = [description[0] for description in cursor.description or []]
+    return json.dumps([dict(zip(columns, row)) for row in cursor.fetchall()], default=str)
