@@ -21,6 +21,7 @@ import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
 import { mountFindPanel } from "./find-panel.ts";
+import { describeChanges, suggestTitle, titleFrom } from "./pull-request.ts";
 import { findAll, replaceAll } from "./find.ts";
 import { mountConflict } from "./conflict.ts";
 import { draftFor, dropDraft, keepDraft } from "./drafts.ts";
@@ -845,7 +846,23 @@ export function mountShell(page: HTMLElement): Shell {
    * — but not enforced: opening a pull request on work that is not
    * finished is a reasonable thing to do, and a reviewer is the point of
    * one. */
-  async function publish(open: () => Promise<string>): Promise<void> {
+  /** A draft pull request for the working branch, named by the author.
+   * Checks the workspace first, since a reviewer should hear about a
+   * fault from dewnote before the build tells them. */
+  async function publish(): Promise<void> {
+    if (!store?.publish) return;
+    if (isDirty()) {
+      const choice = await asker.choose(
+        "This document has unsaved changes",
+        [
+          { value: "save", label: "Save them first", note: "They go into the pull request." },
+          { value: "leave", label: "Leave them out", note: "They stay on screen, unsaved." },
+        ],
+      );
+      if (choice === null) return;
+      if (choice === "save" && !(await saveNow())) return;
+    }
+
     const all = [...files].map(([path, content]) => ({ path, content }));
     const blocking = checkWorkspace(all, around())
       .filter((problem) => problem.severity === "blocking");
@@ -865,7 +882,36 @@ export function mountShell(page: HTMLElement): Shell {
         return;
       }
     }
-    window.open(await open(), "_blank", "noopener");
+
+    try {
+      const existing = await store.existingPullRequest?.();
+      if (existing) {
+        spine.setProblem(null);
+        window.open(existing, "_blank", "noopener");
+        return;
+      }
+      const changes = (await store.branchChanges?.()) ?? [];
+      if (changes.length === 0) {
+        spine.setProblem({
+          message: "There is nothing to review yet: the working branch has no changes the main branch does not. Save something first.",
+        });
+        return;
+      }
+      const titleOf = (path: string) => titleFrom(path, files.get(path) ?? opened.get(path));
+      const title = await asker.ask("Open a pull request", {
+        label:
+          `Title, for the reviewer. ${changes.length} file${changes.length === 1 ? "" : "s"} changed; ` +
+          "the description lists them.",
+        value: suggestTitle(changes, titleOf),
+        confirm: "Open pull request",
+      });
+      if (!title) return;
+      const url = await store.publish(title, describeChanges(changes, titleOf));
+      spine.setProblem(null);
+      window.open(url, "_blank", "noopener");
+    } catch (error) {
+      spine.setProblem({ message: `The pull request was not opened: ${messageOf(error)}` });
+    }
   }
 
   /** Every page in the workspace, not only the one that is open — a
@@ -1358,8 +1404,8 @@ export function mountShell(page: HTMLElement): Shell {
               label: "Open a pull request…",
               section: "GitHub" as const,
               keywords: ["pr", "github", "review", "publish"],
-              detail: "Asks for your working branch to be merged. Checks every document first.",
-              run: () => void publish(next.publish!),
+              detail: "Checks every document, then opens a draft pull request under a title you choose. Shows the one already open, if there is one.",
+              run: () => void publish(),
             }]
           : []),
       ]);

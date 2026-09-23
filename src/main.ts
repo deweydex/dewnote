@@ -16,6 +16,7 @@ import {
 } from "./github.ts";
 import { messageOf, saveProblem } from "./save-problem.ts";
 import { applyToFiles, type Change } from "./rename.ts";
+import type { BranchChange } from "./pull-request.ts";
 import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
 import { applyTokens } from "./theme/tokens.ts";
 
@@ -317,6 +318,7 @@ let held: Document | null = null;
     published?: Record<string, string>,
   ): Promise<void> {
     const held_ = new Map(Object.entries(files));
+    const initial = new Map(held_);
     const written: { path: string; text: string }[] = [];
     const applied: { changes: Change[]; message: string }[] = [];
     const hooks = globalThis as unknown as Record<string, unknown>;
@@ -327,9 +329,24 @@ let held: Document | null = null;
     await shell?.useStore({
       ...(canPublish
         ? {
-            publish: async () => {
-              hooks["__dewnotePublished"] = true;
+            async publish(title: string, body: string) {
+              hooks["__dewnotePublished"] = { title, body };
               return "about:blank";
+            },
+            existingPullRequest: async () => (hooks["__dewnoteOpenPullRequest"] as string | undefined) ?? null,
+            // What a compare against the base would show: every file that
+            // differs from what the workspace opened with.
+            async branchChanges() {
+              const changed: BranchChange[] = [];
+              for (const [path, text] of held_) {
+                const was = initial.get(path);
+                if (was === undefined) changed.push({ path, status: "added" });
+                else if (was !== text) changed.push({ path, status: "modified" });
+              }
+              for (const path of initial.keys()) {
+                if (!held_.has(path)) changed.push({ path, status: "removed" });
+              }
+              return changed;
             },
           }
         : {}),

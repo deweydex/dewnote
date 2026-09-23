@@ -13,17 +13,11 @@ every pull request) is done. Phase 3 (the editor shows what the site
 shows: hint folds, one editor for web page panes, the Run button, the
 empty page, front matter fields, the margin) is done, as is Jedi help in
 Python cells. In Phase 4, renaming, moving and deleting (4.1), new practice pages
-(4.2) and find and replace (4.3) are done.
+(4.2), find and replace (4.3) and named pull requests (4.4) are done.
 
 ---
 
 ## Phase 4: Missing features
-
-### 4.4 Fewer, better-named commits
-
-Every save is a commit named `Edit <path>`. Either ask for a message when
-opening the pull request and squash-merge, or batch saves into one commit
-per session using the Git Data API.
 
 ### 4.5 Combine both sides of a save conflict
 

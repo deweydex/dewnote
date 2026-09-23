@@ -292,10 +292,20 @@ export interface Store {
   readBytes(path: string): Promise<Uint8Array<ArrayBuffer> | null>;
   write(path: string, text: string, message: string): Promise<void>;
   apply(changes: readonly Change[], message: string): Promise<void>;
-  publish?(): Promise<string>;
+  publish?(title: string, body: string): Promise<string>;
+  existingPullRequest?(): Promise<string | null>;
+  branchChanges?(): Promise<BranchChange[]>;
   readPublished?(path: string): Promise<string | null>;
 }
 ```
+
+Every save is a commit, and the pull request is where they get a name:
+`branchChanges` is GitHub's compare of the working branch against the
+base, from which `pull-request.ts` suggests a title and writes a
+description listing each document by title. A squash merge then lands
+the branch as one commit named by that title. Rewriting the branch's
+history into fewer commits was the alternative, and would mean force
+pushes to a branch an author may have open in two tabs.
 
 `readPublished` is the file as readers have it: the base branch, for a
 repository. A release freezes that, not the last save, since a save on

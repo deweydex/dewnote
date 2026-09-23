@@ -11,6 +11,7 @@ import * as github from "./github.ts";
 import * as folder from "./folder.ts";
 import { saveProblem, messageOf, type SaveProblem } from "./save-problem.ts";
 import type { Change } from "./rename.ts";
+import type { BranchChange } from "./pull-request.ts";
 
 export interface StoreFile {
   path: string;
@@ -79,9 +80,15 @@ export interface Store {
    * there each change is made in turn, removals last, and a failure
    * part-way is reported with what was left undone. */
   apply(changes: readonly Change[], message: string): Promise<void>;
-  /** Repository only: opens (or finds) the draft pull request for the
-   * working branch, and answers with its URL. */
-  publish?(): Promise<string>;
+  /** Repository only: opens a draft pull request for the working
+   * branch, and answers with its URL. */
+  publish?(title: string, body: string): Promise<string>;
+  /** Repository only: the pull request already open for the working
+   * branch, by URL, or null. */
+  existingPullRequest?(): Promise<string | null>;
+  /** Repository only: every file the working branch changes against the
+   * base branch, which is what a pull request would show. */
+  branchChanges?(): Promise<BranchChange[]>;
   /** Repository only: the file as readers have it, on the base branch.
    * `null` where the base branch has no such file. A release freezes
    * this rather than the last save, which on a repository is only the
@@ -319,9 +326,13 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
       }
     },
 
-    publish: async () =>
-      (await github.openPullRequest(repo, branch, base, `Edits from dewnote (${branch})`, token))
-        .html_url,
+    publish: async (title, body) =>
+      (await github.openPullRequest(repo, branch, base, title, body, token)).html_url,
+
+    existingPullRequest: async () =>
+      (await github.findPullRequest(repo, branch, base, token))?.html_url ?? null,
+
+    branchChanges: () => github.compareBranches(repo, base, branch, token),
 
     async readPublished(path) {
       try {

@@ -136,9 +136,10 @@ saves the course file.
 
 Open the palette and run **Open a pull request…**. dewnote first checks
 every document in the workspace. If it finds problems that would stop the
-site building, it tells you and offers to show them. Otherwise, it opens
-the pull request on GitHub in a new tab, where a reviewer can read your
-changes and merge them into the main branch.
+site building, it tells you and offers to show them. Then it asks for a
+title, suggesting one from what you changed, and opens the pull request
+on GitHub in a new tab, where a reviewer can read your changes and merge
+them into the main branch.
 
 That is the whole cycle. The rest of this guide explains each part in
 more detail.
@@ -229,7 +230,7 @@ appear while a document is open.
 | **Download as HTML** | Import and export | Downloads the page as one self-contained file. |
 | **Download as a Jupyter notebook** | Import and export | Downloads the document as an `.ipynb` file. |
 | **Import a Jupyter notebook…** | Import and export | Replaces the open document's content with a notebook's. |
-| **Open a pull request…** | GitHub | Asks for your working branch to be merged. GitHub workspaces only. |
+| **Open a pull request…** | GitHub | Opens a draft pull request for your working branch, under a title you choose. GitHub workspaces only. See [Pull requests](#pull-requests). |
 | **Appearance…** | Appearance | Changes how dewnote looks to you. |
 
 A command whose name ends in **…** asks you something before it acts.
@@ -562,6 +563,28 @@ The suggested branch name includes today's date, so each day's edits go
 into their own pull request. If you choose your own branch name, do not
 reuse a branch whose pull request has already been merged; start a new
 one.
+
+### Pull requests
+
+Every save is its own commit on the working branch, named `Edit <path>`,
+so a day's work can be dozens of commits. They are named when they are
+reviewed instead: **Open a pull request…** asks for a title, suggesting
+one from what the branch changes ("Edit "Lists" and 2 other documents"),
+and writes a description listing every document added, edited, moved or
+deleted, by title. Change the title to say what the edits are for; it is
+what a reviewer reads first.
+
+Merge the pull request with GitHub's **Squash and merge**. The main
+branch then gets one commit, named by the title, instead of every save.
+
+- If the document you have open has unsaved changes, dewnote asks
+  whether to save them first or leave them out.
+- If a pull request for the working branch is already open, dewnote
+  shows it instead of opening another. Later saves go into it.
+- If the working branch has nothing the main branch does not, there is
+  nothing to review, and dewnote says so.
+- The pull request opens as a draft. Mark it ready for review on GitHub
+  when it is.
 
 ### When a save fails
 

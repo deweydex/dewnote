@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   blobSha,
   commitChanges,
+  compareBranches,
   CommitRefused,
   ensureBranch,
   fromBase64,
@@ -415,5 +416,33 @@ describe("commitChanges", () => {
     await expect(
       commitChanges(repo, "work", [{ kind: "remove", path: "tutorials/a/a.svg" }], new Map(), "Delete", "tok"),
     ).rejects.toThrow("moved on while dewnote was committing");
+  });
+});
+
+describe("compareBranches", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  test("reads GitHub's statuses as the four a reviewer cares about", async () => {
+    let asked = "";
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      asked = String(input);
+      return new Response(JSON.stringify({
+        files: [
+          { filename: "a.md", status: "added" },
+          { filename: "b.md", status: "changed" },
+          { filename: "c.md", status: "renamed", previous_filename: "old/c.md" },
+          { filename: "d.md", status: "unchanged" },
+          { filename: "e.md", status: "removed" },
+        ],
+      }), { status: 200 });
+    }) as typeof fetch;
+    expect(await compareBranches({ owner: "o", repo: "r" }, "main", "dewnote/2026-09-23", "tok")).toEqual([
+      { path: "a.md", status: "added" },
+      { path: "b.md", status: "modified" },
+      { path: "c.md", status: "renamed", previous: "old/c.md" },
+      { path: "e.md", status: "removed" },
+    ]);
+    expect(asked).toEndWith("/repos/o/r/compare/main...dewnote%2F2026-09-23");
   });
 });

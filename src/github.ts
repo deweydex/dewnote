@@ -549,6 +549,17 @@ export interface PullRequest {
   number: number;
 }
 
+/** The open pull request from `head` into `base`, if there is one. */
+export async function findPullRequest(repo: RepoRef, head: string, base: string, token: string): Promise<PullRequest | null> {
+  const existing = await apiJson<PullRequest[]>(
+    token,
+    "GET",
+    `/repos/${repo.owner}/${repo.repo}/pulls?head=${encodeURIComponent(`${repo.owner}:${head}`)}` +
+      `&base=${encodeURIComponent(base)}&state=open`,
+  );
+  return existing[0] ?? null;
+}
+
 /** Opens a draft PR from `head` to `base`; if one already exists for that
  * branch pair, finds and returns it instead of failing — GitHub's own
  * 422 for "already exists" names the PR number in prose, not a field, so
@@ -558,24 +569,48 @@ export async function openPullRequest(
   head: string,
   base: string,
   title: string,
+  body: string,
   token: string,
 ): Promise<PullRequest> {
   try {
     return await apiJson<PullRequest>(token, "POST", `/repos/${repo.owner}/${repo.repo}/pulls`, {
       title,
+      body,
       head,
       base,
       draft: true,
     });
   } catch (error) {
     if (!(error instanceof GithubApiError) || error.status !== 422) throw error;
-    const existing = await apiJson<PullRequest[]>(
-      token,
-      "GET",
-      `/repos/${repo.owner}/${repo.repo}/pulls?head=${encodeURIComponent(`${repo.owner}:${head}`)}&state=open`,
-    );
-    const [pr] = existing;
-    if (!pr) throw error;
-    return pr;
+    const existing = await findPullRequest(repo, head, base, token);
+    if (!existing) throw error;
+    return existing;
   }
+}
+
+/** Every file `head` changes against `base`, as GitHub's compare view
+ * lists them: what a pull request between the two would show. */
+export async function compareBranches(
+  repo: RepoRef,
+  base: string,
+  head: string,
+  token: string,
+): Promise<{ path: string; status: "added" | "modified" | "removed" | "renamed"; previous?: string }[]> {
+  const data = await apiJson<{ files?: { filename: string; status: string; previous_filename?: string }[] }>(
+    token,
+    "GET",
+    `/repos/${repo.owner}/${repo.repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+  );
+  return (data.files ?? []).flatMap((file) => {
+    const status =
+      file.status === "added" || file.status === "removed" || file.status === "renamed"
+        ? file.status
+        : file.status === "unchanged" ? null : "modified";
+    if (!status) return [];
+    return [{
+      path: file.filename,
+      status,
+      ...(file.previous_filename ? { previous: file.previous_filename } : {}),
+    }];
+  });
 }
