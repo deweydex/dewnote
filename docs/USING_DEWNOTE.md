@@ -71,7 +71,9 @@ reason to change it (see [Saving](#saving) for why).
 
 Choose **Connect**. dewnote reads the files, which can take a few seconds
 for a large repository, and remembers the token and repository in this
-browser for next time.
+browser for next time. On a shared or borrowed computer, run
+**Disconnect from GitHub…** when you finish, so the next person cannot
+use your token.
 
 ### Step 2: Create a tutorial
 
@@ -136,9 +138,10 @@ saves the course file.
 
 Open the palette and run **Open a pull request…**. dewnote first checks
 every document in the workspace. If it finds problems that would stop the
-site building, it tells you and offers to show them. Otherwise, it opens
-the pull request on GitHub in a new tab, where a reviewer can read your
-changes and merge them into the main branch.
+site building, it tells you and offers to show them. Then it asks for a
+title, suggesting one from what you changed, and opens the pull request
+on GitHub in a new tab, where a reviewer can read your changes and merge
+them into the main branch.
 
 That is the whole cycle. The rest of this guide explains each part in
 more detail.
@@ -217,13 +220,20 @@ appear while a document is open.
 | **Restart Python** | Cells | Clears every variable, as if no cell had run. |
 | **Add to a series…** | Tutorial | Lists the tutorial in a series on a course. |
 | **Remove from a series…** | Tutorial | Takes the tutorial out of a series. The tutorial itself is not deleted. |
+| **New practice page** | Tutorial | Creates the tutorial's practice page, as a draft, and opens it. Once it exists, **Open the practice page** takes its place. |
+| **Rename this tutorial…** | Tutorial | Changes the tutorial's id, and every file that names it. See [Renaming a tutorial](#renaming-a-tutorial). |
+| **Delete this tutorial…** | Tutorial | Deletes the tutorial's folder and takes it out of every course. See [Deleting](#deleting). |
+| **Move or rename this file…** | Document | Gives a page outside `tutorials/` a new path. |
+| **Delete this document…** | Document | Deletes a file that is not a tutorial's own, such as a practice page. |
 | **Release a new version…** | Tutorial | Keeps a copy of the current version and makes your edits the next one. See [Releasing a new version](#releasing-a-new-version). |
 | **New tutorial…** | Workspace | Creates a draft tutorial. |
+| **Find and replace in every document…** | Workspace | Searches every document, and replaces every match at once. Same as Ctrl+Shift+F. See [Finding and replacing](#finding-and-replacing). |
 | **Check every document** | Workspace | Runs the same checks on every document in the workspace. |
 | **Download as HTML** | Import and export | Downloads the page as one self-contained file. |
 | **Download as a Jupyter notebook** | Import and export | Downloads the document as an `.ipynb` file. |
 | **Import a Jupyter notebook…** | Import and export | Replaces the open document's content with a notebook's. |
-| **Open a pull request…** | GitHub | Asks for your working branch to be merged. GitHub workspaces only. |
+| **Disconnect from GitHub…** | GitHub | Forgets the token this browser keeps, and goes back to the opening screen. The token still works on GitHub until you delete it there. |
+| **Open a pull request…** | GitHub | Opens a draft pull request for your working branch, under a title you choose. GitHub workspaces only. See [Pull requests](#pull-requests). |
 | **Appearance…** | Appearance | Changes how dewnote looks to you. |
 
 A command whose name ends in **…** asks you something before it acts.
@@ -542,8 +552,8 @@ not kept for the sample document.
 
 The first time dewnote saves a file, it may change how the markdown is
 written without changing what the page shows: bullet markers become `-`,
-blank lines are made consistent, and a maths block is written over three
-lines. This happens once. After that, saving writes exactly what you
+blank lines are made consistent, the file ends in exactly one newline,
+and a maths block is written over three lines. This happens once. After that, saving writes exactly what you
 see.
 
 ### The working branch
@@ -557,6 +567,28 @@ into their own pull request. If you choose your own branch name, do not
 reuse a branch whose pull request has already been merged; start a new
 one.
 
+### Pull requests
+
+Every save is its own commit on the working branch, named `Edit <path>`,
+so a day's work can be dozens of commits. They are named when they are
+reviewed instead: **Open a pull request…** asks for a title, suggesting
+one from what the branch changes ("Edit "Lists" and 2 other documents"),
+and writes a description listing every document added, edited, moved or
+deleted, by title. Change the title to say what the edits are for; it is
+what a reviewer reads first.
+
+Merge the pull request with GitHub's **Squash and merge**. The main
+branch then gets one commit, named by the title, instead of every save.
+
+- If the document you have open has unsaved changes, dewnote asks
+  whether to save them first or leave them out.
+- If a pull request for the working branch is already open, dewnote
+  shows it instead of opening another. Later saves go into it.
+- If the working branch has nothing the main branch does not, there is
+  nothing to review, and dewnote says so.
+- The pull request opens as a draft. Mark it ready for review on GitHub
+  when it is.
+
 ### When a save fails
 
 If a save fails, an orange warning appears in the left margin and stays
@@ -564,14 +596,19 @@ there until you open another document. It says what went wrong and what to do. T
 
 - **The file was changed on the branch after you opened it**, for example
   from another tab or by someone else. dewnote shows what differs between
-  the saved version and yours, and asks which to keep:
+  the saved version and yours, and asks what to keep:
+  - **Keep both** saves one version with your changes and the other ones
+    in it. It is offered only when the two sets of changes are on
+    different lines, for example when you each edited a different
+    paragraph.
   - **Keep mine** saves your version over the other one.
   - **Keep the saved version** discards your changes and opens the other
     one.
   - **Cancel** leaves your changes on screen, unsaved. Save again when you
     are ready to choose.
 
-  Whichever you keep, the other version's changes are lost, so if both
+  When both of you changed the same lines, **Keep both** is not offered,
+  and whichever version you keep, the other's changes are lost. If both
   matter, copy the parts you need before choosing.
 - **GitHub refused the token.** It may have expired. Reload dewnote and
   connect with a new token.
@@ -598,6 +635,18 @@ Run **New tutorial…** and give it a title. dewnote creates
 other tutorials, `status: draft`, today's version,
 a heading, and one empty Python cell, and opens it.
 
+### Adding a practice page
+
+With a tutorial open, run **New practice page**. dewnote creates
+`tutorials/<id>/<id>-practice.md` beside it, titled "<tutorial title> —
+Practice", with `practice_for: <id>` so dewlab links the two, the
+tutorial's `year:`, `status: draft`, and one empty cell, and opens it.
+A practice page is never listed in a course: readers reach it from its
+tutorial.
+
+When the tutorial already has one, the palette offers **Open the
+practice page** instead.
+
 ### Adding a tutorial to a series
 
 Run **Add to a series…**. The list shows every series the tutorial is not
@@ -606,6 +655,48 @@ the tutorial to the end of that series in the course file and saves it.
 
 **Remove from a series…** does the reverse. It only appears when the
 tutorial is in at least one series.
+
+### Renaming a tutorial
+
+A tutorial's id is the name of its folder and its file, and it is the
+page's web address. To change it, run **Rename this tutorial…**. dewnote
+suggests an id made from the title, which is usually what you want after
+changing the title. Type another if you like: lower-case letters, digits
+and single hyphens.
+
+Before anything changes, dewnote lists what it will do:
+
+- Move the tutorial's folder, renaming its file, its practice page and
+  their glossaries. Images and old versions keep their names.
+- Update every course list that includes the tutorial.
+- Update every link to it (`tutorial:<id>`) and every `practice_for:`,
+  `practice_across:` or `context_for:` that names it, in every page.
+- Add a line to `courses/redirects.yaml` so the old address still leads
+  to the page. A draft gets no line, because no reader has its address.
+
+On GitHub all of this is one commit. Rename a live tutorial only when
+you need to: readers' saved answers are stored under the id, so anyone
+part-way through it will find their answers gone.
+
+To move or rename any other page, such as one in `pages/`, run **Move or
+rename this file…** and type its new path.
+
+### Deleting
+
+**Delete this tutorial…** deletes the tutorial's whole folder (its
+practice page, glossary, images and old versions) and takes it out of
+every course. **Delete this document…** deletes any other file, such as a
+practice page on its own.
+
+dewnote refuses to delete a page while another file still points at it,
+and says which files do. Change those first. A deleted live tutorial
+breaks every reader's link to it, so for a tutorial that is no longer
+taught, setting its status to `archived` is usually better: it stays on
+the site and its links keep working, but the course shows it in its
+Archive rather than in the reading order.
+
+On GitHub the deleted files stay in the repository's history. In a
+folder they are gone.
 
 ### Releasing a new version
 
@@ -639,6 +730,26 @@ the main branch yet has no published version either; merge it first.
 
 If a tutorial folder holds several versions, dewnote opens the one dewlab
 would show: the newest `live` version, or if none is live, the newest.
+
+## Finding and replacing
+
+**Find and replace in every document…** (Ctrl+Shift+F) opens a panel
+that searches every markdown document in the workspace, front matter
+included. Course files are not searched; change those with **Add to a
+series…** and **Remove from a series…**.
+
+- Type in **Find**. The matches appear as you type, each with its file
+  and line. Click one to open that document.
+- The search is for the text exactly as typed: `f(x)` finds those four
+  characters. It ignores case unless you tick **Match case**.
+- To replace, type in **Replace with**. **Replace all** replaces every
+  match the panel shows, in every document, and saves them. On GitHub
+  that is one commit, so it can be reviewed, or reverted, as one change.
+- If the open document has unsaved changes, dewnote asks about them
+  first, as it does before opening another document.
+
+Replacing with nothing (deleting every match) is not offered: an empty
+**Replace with** means you are only finding.
 
 ## Import and export
 
@@ -690,6 +801,7 @@ enough room, the margin moves to a strip across the top.
 | Ctrl+K | Open or close the palette |
 | Ctrl+S | Save |
 | Ctrl+/ | Edit the markdown |
+| Ctrl+Shift+F | Find and replace in every document |
 | Ctrl+Enter | Apply changes, in Edit the markdown |
 | / | Open the block menu, in an empty line |
 | ↑ ↓ | Move through a list |
@@ -698,11 +810,8 @@ enough room, the margin moves to a strip across the top.
 
 ## Known limitations
 
-These are planned but not built yet (see `planning/ROADMAP.md`):
-
-- Files cannot be renamed, moved or deleted from dewnote.
-- There is no find and replace across the workspace.
-- A save conflict keeps one version or the other; it cannot combine them.
+- When a save conflict has both sides changing the same lines, you keep
+  one version or the other. There is no way to pick line by line.
 
 ---
 

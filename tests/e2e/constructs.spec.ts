@@ -97,10 +97,21 @@ test("a task list shows which items are done, and a click ticks one", async ({ p
 
   await boxes.nth(0).click();
   const out = await page.evaluate(() => (globalThis as any).__dewnote.markdown() as string);
-  // Trailing blank lines aside: clicking into a list at the end of a
-  // document leaves Milkdown's empty trailing paragraph behind (see
-  // planning/ROADMAP.md).
-  expect(out.trimEnd()).toBe("- [x] to do\n- [x] done");
+  // Exactly: the empty paragraph Milkdown keeps after a closing list is
+  // not written as a blank line.
+  expect(out).toBe("- [x] to do\n- [x] done\n");
+});
+
+test("a document ending in a table or a list ends in one newline, not a blank line", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  for (const source of ["# T\n\n| a | b |\n| - | - |\n| 1 | 2 |\n", "# L\n\n1. one\n2. two\n"]) {
+    const out = await page.evaluate(async (text) => {
+      document.querySelector(".dn-gate")?.remove();
+      await (globalThis as any).__dewnote.open(text);
+      return (globalThis as any).__dewnote.markdown() as string;
+    }, source);
+    expect(out).toMatch(/[^\n]\n$/);
+  }
 });
 
 test("a price is prose, not a formula", async ({ page }) => {

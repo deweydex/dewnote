@@ -3,6 +3,7 @@ import { checkDocument } from "./checks.ts";
 import {
   academicYear,
   idFromTitle,
+  newPracticePage,
   newTutorial,
   nextVersion,
   prepareRelease,
@@ -176,5 +177,35 @@ describe("setYamlField", () => {
 
   test("adds a field that is missing, at the end", () => {
     expect(setYamlField("title: A", "status", "live")).toBe("title: A\nstatus: live");
+  });
+});
+
+describe("newPracticePage", () => {
+  const tutorial = '---\ntitle: "Lists: in order"\nyear: "2025-2026"\nstatus: live\n---\n\n# Lists\n';
+  const made = newPracticePage("tutorials/lists/lists.md", tutorial, new Date("2026-09-20T10:00:00"));
+  if ("error" in made) throw new Error(made.error);
+
+  test("sits beside the tutorial and points back at it", () => {
+    expect(made.path).toBe("tutorials/lists/lists-practice.md");
+    expect(made.content).toContain("practice_for: lists\n");
+  });
+
+  test("is titled the way dewlab's practice pages are, quoted where YAML needs it", () => {
+    expect(made.content).toContain('title: "Lists: in order — Practice"');
+    expect(made.content).toContain("# Lists: in order — Practice");
+  });
+
+  test("takes the tutorial's year, and starts as a draft with a version", () => {
+    expect(made.content).toContain('year: "2025-2026"');
+    expect(made.content).toContain("status: draft");
+    expect(made.content).toContain("version: 2026.09.20.1");
+  });
+
+  test("passes the checker as written", () => {
+    expect(checkDocument(made.content, { ids: new Set(["lists"]), path: made.path })).toEqual([]);
+  });
+
+  test("is refused for anything but a tutorial's own file", () => {
+    expect("error" in newPracticePage("tutorials/lists/lists-practice.md", tutorial)).toBe(true);
   });
 });

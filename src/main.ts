@@ -8,6 +8,7 @@ import { canOpenFolder, openFolder, openRepo } from "./store.ts";
 import {
   listRepositories,
   loadLastRepo,
+  forgetToken,
   loadToken,
   saveLastRepo,
   saveToken,
@@ -15,6 +16,8 @@ import {
   type RepoChoice,
 } from "./github.ts";
 import { messageOf, saveProblem } from "./save-problem.ts";
+import { applyToFiles, type Change } from "./rename.ts";
+import type { BranchChange } from "./pull-request.ts";
 import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
 import { applyTokens } from "./theme/tokens.ts";
 
@@ -316,17 +319,36 @@ let held: Document | null = null;
     published?: Record<string, string>,
   ): Promise<void> {
     const held_ = new Map(Object.entries(files));
+    const initial = new Map(held_);
     const written: { path: string; text: string }[] = [];
+    const applied: { changes: Change[]; message: string }[] = [];
     const hooks = globalThis as unknown as Record<string, unknown>;
     hooks["__dewnoteWrites"] = written;
+    hooks["__dewnoteApplied"] = applied;
     hooks["__dewnotePublished"] = false;
     document.querySelector(".dn-gate")?.remove();
     await shell?.useStore({
       ...(canPublish
         ? {
-            publish: async () => {
-              hooks["__dewnotePublished"] = true;
+            async publish(title: string, body: string) {
+              hooks["__dewnotePublished"] = { title, body };
               return "about:blank";
+            },
+            disconnect: () => forgetToken(),
+            existingPullRequest: async () => (hooks["__dewnoteOpenPullRequest"] as string | undefined) ?? null,
+            // What a compare against the base would show: every file that
+            // differs from what the workspace opened with.
+            async branchChanges() {
+              const changed: BranchChange[] = [];
+              for (const [path, text] of held_) {
+                const was = initial.get(path);
+                if (was === undefined) changed.push({ path, status: "added" });
+                else if (was !== text) changed.push({ path, status: "modified" });
+              }
+              for (const path of initial.keys()) {
+                if (!held_.has(path)) changed.push({ path, status: "removed" });
+              }
+              return changed;
             },
           }
         : {}),
@@ -338,8 +360,23 @@ let held: Document | null = null;
       list: async () => [...held_].map(([path, content]) => ({ path, content })),
       read: async (path: string) => held_.get(path) ?? "",
       readBytes: async () => null,
-      listFolder: async () => [],
+      listFolder: async (folder: string) =>
+        [...held_.keys(), ...images]
+          .filter((path) => path.startsWith(`${folder}/`))
+          .map((path) => path.slice(folder.length + 1))
+          .filter((name) => !name.includes("/")),
       imagePaths: async () => images,
+      async apply(changes: readonly Change[], message: string) {
+        applied.push({ changes: [...changes], message });
+        for (const change of changes) {
+          if (change.kind === "move" && images.includes(change.from)) {
+            images = images.map((path) => (path === change.from ? change.to : path));
+          } else if (change.kind === "remove") {
+            images = images.filter((path) => path !== change.path);
+          }
+        }
+        applyToFiles(held_, changes);
+      },
       async write(path: string, text: string) {
         // A test sets `__dewnoteConflict` to have the next write to that
         // path refused as a repository would refuse it: somebody else's

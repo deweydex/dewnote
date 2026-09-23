@@ -47,6 +47,8 @@ them makes anything public, which is what a reader hears in the word.
 | **Practice page** | `tutorials/<id>/<id>-practice.md`. |
 | **Site page** | One of dewlab's own pages in `pages/`. |
 | **Add to a series… / Remove from a series…** | Edit a course file's list. |
+| **Id** | A tutorial's folder name, file name and address. **Rename this tutorial…** changes it. |
+| **Rename / Move / Delete** | *Rename* changes a tutorial's id; *Move or rename this file* changes any other page's path; *Delete* removes a file. A tutorial is never *moved*: where it sits is the course files' business. |
 
 *Retired:* **Place this tutorial…**, which also silently removed a
 tutorial when the chosen series already listed it. Adding and removing

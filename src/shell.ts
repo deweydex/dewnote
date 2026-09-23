@@ -20,9 +20,14 @@ import type { Progress, Store, StoreFile } from "./store.ts";
 import { mountSettingsPanel } from "./settings-panel.ts";
 import { mountSourceView } from "./source-view.ts";
 import { mountAsk } from "./ask.ts";
+import { mountFindPanel } from "./find-panel.ts";
+import { describeChanges, suggestTitle, titleFrom } from "./pull-request.ts";
+import { findAll, replaceAll } from "./find.ts";
 import { mountConflict } from "./conflict.ts";
+import { mergeLines } from "./diff.ts";
 import { draftFor, dropDraft, keepDraft } from "./drafts.ts";
-import { newTutorial, prepareRelease } from "./authoring.ts";
+import { idFromTitle, newPracticePage, newTutorial, prepareRelease } from "./authoring.ts";
+import { applyToFiles, planDeleteFile, planDeleteTutorial, planMove, planRename, tutorialIdOf, type Plan } from "./rename.ts";
 import { addToSeries, placementsOf, removeFromSeries } from "./placement.ts";
 import { checkDocument, checkWorkspace, type Problem } from "./checks.ts";
 import { distinctValues } from "./workspace.ts";
@@ -162,13 +167,37 @@ export function mountShell(page: HTMLElement): Shell {
     if (!store) return;
     if (!(await readyToLeave())) return;
     const title = await asker.ask("New tutorial", {
-      label: "Title. It also sets the tutorial's folder and web address, which are hard to change later.",
+      label: "Title. It also makes the tutorial's id: the name of its folder and its web address.",
       confirm: "Create tutorial",
     });
     if (!title) return;
     const made = newTutorial(title, new Date(), workspaceYear());
     if (files.has(made.path)) {
       spine.setProblem({ message: `There is already a tutorial at ${made.path}.` });
+      return;
+    }
+    try {
+      await store.write(made.path, made.content, `Add ${made.path}`);
+    } catch (error) {
+      spine.setProblem({ message: messageOf(error) });
+      return;
+    }
+    files.set(made.path, made.content);
+    reindex();
+    await showPath(made.path);
+  }
+
+  /** A practice page beside the open tutorial, written and opened. */
+  async function createPracticePage(): Promise<void> {
+    if (!store || !open) return;
+    if (!(await readyToLeave())) return;
+    const made = newPracticePage(open.path, files.get(open.path) ?? "");
+    if ("error" in made) {
+      spine.setProblem({ message: made.error });
+      return;
+    }
+    if (files.has(made.path)) {
+      await showPath(made.path);
       return;
     }
     try {
@@ -262,6 +291,171 @@ export function mountShell(page: HTMLElement): Shell {
     files.set(module.path, changed);
     reindex();
     refreshSpine();
+  }
+
+  // ── find and replace ───────────────────────────────────────────────
+
+  const finder = mountFindPanel({
+    search: (query, options) => findAll(files, query, options),
+    open: (path) => void openPath(path),
+    async replace(query, replacement, options) {
+      if (!store) return null;
+      // The open document's unsaved edits are not in `files`, and a
+      // replacement written over them would lose them.
+      if (!(await readyToLeave())) return null;
+      const { changes, count } = replaceAll(files, query, replacement, options);
+      if (changes.length === 0) return 0;
+      const plan: Plan = { changes, summary: [], moves: new Map() };
+      if (!(await carryOut(plan, `Replace "${query}" with "${replacement}"`))) return null;
+      spine.setProblem(null);
+      if (open && changes.some((change) => change.kind === "write" && change.path === open!.path)) {
+        await showPath(open.path);
+      }
+      return count;
+    },
+  });
+
+  // ── renaming, moving and deleting ──────────────────────────────────
+
+  /** A plan applied: the store first, as one commit where it has
+   * commits, then dewnote's own copies of what moved. */
+  async function carryOut(plan: Plan, message: string): Promise<boolean> {
+    if (!store) return false;
+    try {
+      await store.apply(plan.changes, message);
+    } catch (error) {
+      spine.setProblem({ message: messageOf(error) });
+      return false;
+    }
+    applyToFiles(files, plan.changes);
+    for (const change of plan.changes) {
+      if (change.kind === "remove") images.delete(change.path);
+      if (change.kind === "move" && images.delete(change.from)) images.add(change.to);
+    }
+    for (const [from, to] of plan.moves) {
+      if (opened.has(from)) opened.set(to, opened.get(from)!);
+      opened.delete(from);
+    }
+    for (const change of plan.changes) {
+      if (change.kind === "remove") void dropDraft(draftKey(change.path));
+    }
+    try {
+      const recent = JSON.parse(localStorage.getItem(recentKey()) ?? "[]") as unknown;
+      if (Array.isArray(recent)) {
+        localStorage.setItem(recentKey(), JSON.stringify(recent.map((path) => plan.moves.get(path) ?? path)));
+      }
+    } catch {
+      // A convenience; storage that refuses loses nothing.
+    }
+    reindex();
+    return true;
+  }
+
+  function closeDocument(): void {
+    clearTimeout(draftTimer);
+    open?.document.destroy();
+    open = null;
+    spine.setFile(null);
+    spine.setLocation({ module: "", series: "", page: "" });
+    spine.refreshOutline();
+    refreshHealth();
+    showEmptyPage();
+  }
+
+  /** A tutorial's id changed: its folder, its files, and everything
+   * that names it. Asks for the new id, then shows what will change. */
+  async function renameTutorial(): Promise<void> {
+    if (!store || !open) return;
+    const from = tutorialIdOf(open.path);
+    if (!from) return;
+    if (!(await readyToLeave())) return;
+    const content = files.get(open.path) ?? "";
+    const title = extractFrontMatter(content).fields["title"];
+    const suggested = typeof title === "string" && idFromTitle(title) !== from ? idFromTitle(title) : from;
+    const to = await asker.ask("Rename this tutorial", {
+      label: "New id. It names the tutorial's folder and files, and it is the page's web address.",
+      value: suggested,
+      confirm: "Next",
+    });
+    if (!to) return;
+    const plan = planRename({ files, folderNames: await store.listFolder(`tutorials/${from}`), from, to: to.trim() });
+    if ("error" in plan) {
+      spine.setProblem({ message: plan.error });
+      return;
+    }
+    const draft = extractFrontMatter(content).fields["status"] === "draft";
+    const going = await asker.choose(
+      `Rename ${from} to ${to.trim()}`,
+      [
+        { value: "go", label: "Rename", note: plan.summary.join(" ") },
+        { value: "stay", label: "Keep the old id" },
+      ],
+      draft
+        ? "It is a draft, so no reader has it yet."
+        : "Old links keep working. Readers' saved answers are kept under the old id, so anyone part-way through it starts again.",
+    );
+    if (going !== "go") return;
+    if (!(await carryOut(plan, `Rename ${from} to ${to.trim()}`))) return;
+    spine.setProblem(null);
+    await showPath(plan.moves.get(open.path) ?? open.path);
+  }
+
+  /** A page outside tutorials/ to another path. */
+  async function moveDocument(): Promise<void> {
+    if (!store || !open) return;
+    if (!(await readyToLeave())) return;
+    const from = open.path;
+    const to = await asker.ask("Move or rename this file", {
+      label: "New path, from the top of the workspace.",
+      value: from,
+      confirm: "Move",
+    });
+    if (!to) return;
+    const plan = planMove(files, from, to);
+    if ("error" in plan) {
+      spine.setProblem({ message: plan.error });
+      return;
+    }
+    if (!(await carryOut(plan, `Move ${from} to ${plan.moves.get(from)}`))) return;
+    spine.setProblem(null);
+    await showPath(plan.moves.get(from)!);
+  }
+
+  /** The open document gone: a tutorial with its whole folder, anything
+   * else on its own. Refused while anything still points at it. */
+  async function deleteDocument(): Promise<void> {
+    if (!store || !open) return;
+    const path = open.path;
+    const id = tutorialIdOf(path);
+    const folder = path.split("/").slice(0, -1).join("/");
+    const names = folder ? await store.listFolder(folder) : [];
+    const plan = id
+      ? planDeleteTutorial({ files, folderNames: names, id })
+      : planDeleteFile(files, names, path);
+    if ("error" in plan) {
+      spine.setProblem({ message: plan.error });
+      return;
+    }
+    const status = extractFrontMatter(files.get(path) ?? "").fields["status"];
+    const notes = [
+      id && status !== "draft" && status !== "archived"
+        ? "It is published, so readers' links to it stop working. Setting its status to archived keeps them working instead."
+        : "",
+      isDirty() ? "Its unsaved changes go with it." : "",
+      store.kind === "repo" ? "It stays in the repository's history." : "A folder keeps no copy.",
+    ].filter(Boolean);
+    const going = await asker.choose(
+      id ? `Delete the tutorial ${id}` : `Delete ${path}`,
+      [
+        { value: "go", label: "Delete", note: plan.summary.join(" ") },
+        { value: "stay", label: "Keep it" },
+      ],
+      notes.join(" "),
+    );
+    if (going !== "go") return;
+    if (!(await carryOut(plan, id ? `Delete ${id}` : `Delete ${path}`))) return;
+    spine.setProblem(null);
+    closeDocument();
   }
 
   /** dewlab's two-file release: the bytes on the branch are frozen under
@@ -653,7 +847,23 @@ export function mountShell(page: HTMLElement): Shell {
    * — but not enforced: opening a pull request on work that is not
    * finished is a reasonable thing to do, and a reviewer is the point of
    * one. */
-  async function publish(open: () => Promise<string>): Promise<void> {
+  /** A draft pull request for the working branch, named by the author.
+   * Checks the workspace first, since a reviewer should hear about a
+   * fault from dewnote before the build tells them. */
+  async function publish(): Promise<void> {
+    if (!store?.publish) return;
+    if (isDirty()) {
+      const choice = await asker.choose(
+        "This document has unsaved changes",
+        [
+          { value: "save", label: "Save them first", note: "They go into the pull request." },
+          { value: "leave", label: "Leave them out", note: "They stay on screen, unsaved." },
+        ],
+      );
+      if (choice === null) return;
+      if (choice === "save" && !(await saveNow())) return;
+    }
+
     const all = [...files].map(([path, content]) => ({ path, content }));
     const blocking = checkWorkspace(all, around())
       .filter((problem) => problem.severity === "blocking");
@@ -673,7 +883,57 @@ export function mountShell(page: HTMLElement): Shell {
         return;
       }
     }
-    window.open(await open(), "_blank", "noopener");
+
+    try {
+      const existing = await store.existingPullRequest?.();
+      if (existing) {
+        spine.setProblem(null);
+        window.open(existing, "_blank", "noopener");
+        return;
+      }
+      const changes = (await store.branchChanges?.()) ?? [];
+      if (changes.length === 0) {
+        spine.setProblem({
+          message: "There is nothing to review yet: the working branch has no changes the main branch does not. Save something first.",
+        });
+        return;
+      }
+      const titleOf = (path: string) => titleFrom(path, files.get(path) ?? opened.get(path));
+      const title = await asker.ask("Open a pull request", {
+        label:
+          `Title, for the reviewer. ${changes.length} file${changes.length === 1 ? "" : "s"} changed; ` +
+          "the description lists them.",
+        value: suggestTitle(changes, titleOf),
+        confirm: "Open pull request",
+      });
+      if (!title) return;
+      const url = await store.publish(title, describeChanges(changes, titleOf));
+      spine.setProblem(null);
+      window.open(url, "_blank", "noopener");
+    } catch (error) {
+      spine.setProblem({ message: `The pull request was not opened: ${messageOf(error)}` });
+    }
+  }
+
+  /** Forgets the GitHub token this browser keeps, and closes the
+   * workspace by reloading, which is the only way to be sure nothing
+   * holds it in memory either. */
+  async function disconnect(): Promise<void> {
+    if (!store?.disconnect) return;
+    if (!(await readyToLeave())) return;
+    const going = await asker.choose(
+      "Disconnect from GitHub",
+      [
+        { value: "go", label: "Forget the token and disconnect", note: "Connecting again needs the token." },
+        { value: "stay", label: "Stay connected" },
+      ],
+      "dewnote keeps your GitHub token in this browser so you do not paste it each time. " +
+        "Disconnect on a shared or borrowed computer. The token itself still works until you delete it on GitHub.",
+    );
+    if (going !== "go") return;
+    store.disconnect();
+    window.removeEventListener("beforeunload", onBeforeUnload);
+    window.location.reload();
   }
 
   /** Every page in the workspace, not only the one that is open — a
@@ -860,7 +1120,24 @@ export function mountShell(page: HTMLElement): Shell {
       return false;
     }
 
-    const choice = await conflict.resolve(path, theirs, mine);
+    // What both sides started from: what the editor made of the file as
+    // last saved. The editor's form rather than the bytes, so that the
+    // tidying it does when a file opens is not read as an edit of mine.
+    const base = open?.path === path ? open.saved : files.get(path);
+    const combined = base === undefined ? null : mergeLines(base, theirs, mine);
+    const choice = await conflict.resolve(path, theirs, mine, combined);
+    if (choice === "both" && combined !== null) {
+      try {
+        await store.write(path, combined, `Edit ${path}`);
+      } catch (error) {
+        spine.setProblem({ message: messageOf(error) });
+        return false;
+      }
+      spine.setProblem(null);
+      markSaved(path, combined);
+      if (open?.path === path) await showPath(path);
+      return true;
+    }
     if (choice === "mine") {
       try {
         await store.write(path, mine, `Edit ${path}`);
@@ -905,6 +1182,11 @@ export function mountShell(page: HTMLElement): Shell {
     if (meta && event.key === "/") {
       event.preventDefault();
       showSource();
+      return;
+    }
+    if (meta && event.shiftKey && event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      if (store) finder.open();
       return;
     }
     if (meta && event.key.toLowerCase() === "s") {
@@ -995,6 +1277,69 @@ export function mountShell(page: HTMLElement): Shell {
           run: () => void placeTutorial("remove"),
         },
         {
+          id: "new-practice",
+          label: "New practice page",
+          section: "Tutorial",
+          keywords: ["create", "add", "exercises", "problems", "practice"],
+          detail: "Creates this tutorial's practice page as a draft, beside it, and opens it.",
+          available: () => {
+            const id = open ? tutorialIdOf(open.path) : undefined;
+            return id !== undefined && !files.has(`tutorials/${id}/${id}-practice.md`);
+          },
+          run: () => void createPracticePage(),
+        },
+        {
+          id: "open-practice",
+          label: "Open the practice page",
+          section: "Tutorial",
+          keywords: ["exercises", "problems", "practice"],
+          detail: "Opens the practice page that goes with this tutorial.",
+          available: () => {
+            const id = open ? tutorialIdOf(open.path) : undefined;
+            return id !== undefined && files.has(`tutorials/${id}/${id}-practice.md`);
+          },
+          run: () => {
+            const id = tutorialIdOf(open!.path)!;
+            void openPath(`tutorials/${id}/${id}-practice.md`);
+          },
+        },
+        {
+          id: "rename-tutorial",
+          label: "Rename this tutorial…",
+          section: "Tutorial",
+          keywords: ["id", "address", "url", "folder", "move", "slug"],
+          detail: "Changes its id, folder and web address, and every course list, link and redirect that names it.",
+          available: () => open !== null && tutorialIdOf(open.path) !== undefined,
+          run: () => void renameTutorial(),
+        },
+        {
+          id: "move-document",
+          label: "Move or rename this file…",
+          section: "Document",
+          keywords: ["path", "rename", "folder", "move"],
+          detail: "Gives the file a new path. For pages outside tutorials/; a tutorial is renamed by its id.",
+          available: () => open !== null && !open.path.startsWith("tutorials/"),
+          run: () => void moveDocument(),
+        },
+        {
+          id: "delete-tutorial",
+          label: "Delete this tutorial…",
+          section: "Tutorial",
+          keywords: ["remove", "trash", "folder"],
+          detail: "Removes its folder and its place in every course. Refused while other pages link to it.",
+          available: () => open !== null && tutorialIdOf(open.path) !== undefined,
+          run: () => void deleteDocument(),
+        },
+        {
+          id: "delete-document",
+          label: "Delete this document…",
+          section: "Document",
+          keywords: ["remove", "trash"],
+          detail: "Removes the file. Refused while other pages link to it.",
+          available: () => open !== null && tutorialIdOf(open.path) === undefined,
+          run: () => void deleteDocument(),
+        },
+        {
           id: "release",
           label: "Release a new version…",
           section: "Tutorial",
@@ -1068,6 +1413,14 @@ export function mountShell(page: HTMLElement): Shell {
           run: () => void runEveryCell(),
         },
         {
+          id: "find",
+          label: "Find and replace in every document…",
+          section: "Workspace",
+          keywords: ["search", "find", "replace", "text", "grep", "everywhere"],
+          detail: `${shortcut("Shift+F")}. Every match in every document, and replace them all at once.`,
+          run: () => finder.open(),
+        },
+        {
           id: "check-workspace",
           label: "Check every document",
           section: "Workspace",
@@ -1084,14 +1437,24 @@ export function mountShell(page: HTMLElement): Shell {
           available: () => isDirty(),
           run: () => void saveNow(),
         },
+        ...(next.disconnect
+          ? [{
+              id: "disconnect",
+              label: "Disconnect from GitHub…",
+              section: "GitHub" as const,
+              keywords: ["token", "log out", "sign out", "forget", "logout", "security"],
+              detail: "Forgets the token this browser keeps, and closes the workspace.",
+              run: () => void disconnect(),
+            }]
+          : []),
         ...(next.publish
           ? [{
               id: "publish",
               label: "Open a pull request…",
               section: "GitHub" as const,
               keywords: ["pr", "github", "review", "publish"],
-              detail: "Asks for your working branch to be merged. Checks every document first.",
-              run: () => void publish(next.publish!),
+              detail: "Checks every document, then opens a draft pull request under a title you choose. Shows the one already open, if there is one.",
+              run: () => void publish(),
             }]
           : []),
       ]);
@@ -1108,6 +1471,7 @@ export function mountShell(page: HTMLElement): Shell {
       settings.destroy();
       sourceView.destroy();
       asker.destroy();
+      finder.destroy();
       conflict.destroy();
       reportOverlay.remove();
       spine.destroy();

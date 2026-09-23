@@ -402,9 +402,162 @@ export async function putFileContent(
   return { sha: data.content.sha };
 }
 
+/** One file's part in a commit: new text, a file moved whole, or a file
+ * removed. */
+export type TreeChange =
+  | { kind: "write"; path: string; text: string }
+  | { kind: "move"; from: string; to: string }
+  | { kind: "remove"; path: string };
+
+/** Why a commit was not made, in terms the store can put to the author:
+ * a file changed on the branch since it was read, a file that should
+ * be new already exists, or the branch moved while committing. */
+export class CommitRefused extends Error {
+  constructor(message: string, readonly conflict: boolean) {
+    super(message);
+  }
+}
+
+/** Git's own name for a blob of text, computed rather than fetched: the
+ * SHA-1 of `blob <length>\0<bytes>`. What the store remembers a file by
+ * after a commit, so the next save of it can name the version it
+ * replaces without a request to find out. */
+export async function blobSha(text: string): Promise<string> {
+  const body = new TextEncoder().encode(text);
+  const head = new TextEncoder().encode(`blob ${body.length}\0`);
+  const whole = new Uint8Array(head.length + body.length);
+  whole.set(head);
+  whole.set(body, head.length);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", whole));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+interface FullTreeEntry {
+  path: string;
+  mode: string;
+  type: string;
+  sha: string;
+}
+
+/**
+ * Several changes as one commit on `branch`, through the Git Data API:
+ * read the branch's tree, build a new one over it, commit it, and move
+ * the branch to the commit. A rename touches a dozen files, and as one
+ * commit it either happens or does not; as a dozen writes, a failure
+ * half-way leaves the build broken.
+ *
+ * `known` is the blob sha each file was read at. A file whose sha on the
+ * branch differs has been changed by someone else since, and the commit
+ * is refused rather than overwriting it — the same check a single save
+ * gets from the contents API. A written path the store has never read
+ * has to be new. Moving the branch without force refuses too, if
+ * anything was pushed between the read and the commit.
+ *
+ * Answers with the blob sha of every file the commit leaves in place.
+ */
+export async function commitChanges(
+  repo: RepoRef,
+  branch: string,
+  changes: readonly TreeChange[],
+  known: ReadonlyMap<string, string>,
+  message: string,
+  token: string,
+): Promise<Map<string, string>> {
+  const base = `/repos/${repo.owner}/${repo.repo}`;
+  const head = await branchSha(repo, branch, token);
+  if (!head) throw new GithubApiError(404, `There is no branch called "${branch}".`);
+  const commit = await apiJson<{ tree: { sha: string } }>(token, "GET", `${base}/git/commits/${head}`);
+
+  const touched = new Set(changes.flatMap((change) => (change.kind === "move" ? [change.from, change.to] : [change.path])));
+  const entries = new Map<string, FullTreeEntry>();
+  const tree = await apiJson<{ tree: FullTreeEntry[]; truncated?: boolean }>(
+    token, "GET", `${base}/git/trees/${commit.tree.sha}?recursive=1`,
+  );
+  if (!tree.truncated) {
+    for (const entry of tree.tree) if (touched.has(entry.path)) entries.set(entry.path, entry);
+  } else {
+    // Too big for one listing: ask after each path this commit touches.
+    for (const path of touched) {
+      const response = await api(token, "GET", `${base}/contents/${path}?ref=${encodeURIComponent(head)}`);
+      if (response.status === 404) continue;
+      if (!response.ok) throw new GithubApiError(response.status, await messageFrom(response));
+      const data = (await response.json()) as { sha: string; type: string };
+      if (data.type === "file") entries.set(path, { path, mode: "100644", type: "blob", sha: data.sha });
+    }
+  }
+
+  const unchanged = (path: string) => {
+    const read = known.get(path);
+    const now = entries.get(path)?.sha;
+    if (read !== undefined && now !== read) {
+      throw new CommitRefused(
+        `${path} was changed on ${branch} after you opened it, probably from another tab or by someone else.`,
+        true,
+      );
+    }
+  };
+
+  const shas = new Map<string, string>();
+  const items: { path: string; mode: string; type: "blob"; sha?: string | null; content?: string }[] = [];
+  for (const change of changes) {
+    if (change.kind === "write") {
+      unchanged(change.path);
+      if (!known.has(change.path) && entries.has(change.path)) {
+        throw new CommitRefused(`${change.path} already exists on ${branch}.`, false);
+      }
+      items.push({ path: change.path, mode: entries.get(change.path)?.mode ?? "100644", type: "blob", content: change.text });
+      shas.set(change.path, await blobSha(change.text));
+    } else if (change.kind === "remove") {
+      unchanged(change.path);
+      if (!entries.has(change.path)) continue;
+      items.push({ path: change.path, mode: entries.get(change.path)!.mode, type: "blob", sha: null });
+    } else {
+      unchanged(change.from);
+      const entry = entries.get(change.from);
+      if (!entry) throw new CommitRefused(`${change.from} is no longer on ${branch}.`, true);
+      if (entries.has(change.to)) throw new CommitRefused(`${change.to} already exists on ${branch}.`, false);
+      items.push(
+        { path: change.to, mode: entry.mode, type: "blob", sha: entry.sha },
+        { path: change.from, mode: entry.mode, type: "blob", sha: null },
+      );
+      shas.set(change.to, entry.sha);
+    }
+  }
+
+  const made = await apiJson<{ sha: string }>(token, "POST", `${base}/git/trees`, {
+    base_tree: commit.tree.sha,
+    tree: items,
+  });
+  const next = await apiJson<{ sha: string }>(token, "POST", `${base}/git/commits`, {
+    message,
+    tree: made.sha,
+    parents: [head],
+  });
+  const moved = await api(token, "PATCH", `${base}/git/refs/heads/${encodeURIComponent(branch)}`, {
+    sha: next.sha,
+    force: false,
+  });
+  if (moved.status === 422) {
+    throw new CommitRefused(`${branch} moved on while dewnote was committing. Try again.`, false);
+  }
+  if (!moved.ok) throw new GithubApiError(moved.status, await messageFrom(moved));
+  return shas;
+}
+
 export interface PullRequest {
   html_url: string;
   number: number;
+}
+
+/** The open pull request from `head` into `base`, if there is one. */
+export async function findPullRequest(repo: RepoRef, head: string, base: string, token: string): Promise<PullRequest | null> {
+  const existing = await apiJson<PullRequest[]>(
+    token,
+    "GET",
+    `/repos/${repo.owner}/${repo.repo}/pulls?head=${encodeURIComponent(`${repo.owner}:${head}`)}` +
+      `&base=${encodeURIComponent(base)}&state=open`,
+  );
+  return existing[0] ?? null;
 }
 
 /** Opens a draft PR from `head` to `base`; if one already exists for that
@@ -416,24 +569,48 @@ export async function openPullRequest(
   head: string,
   base: string,
   title: string,
+  body: string,
   token: string,
 ): Promise<PullRequest> {
   try {
     return await apiJson<PullRequest>(token, "POST", `/repos/${repo.owner}/${repo.repo}/pulls`, {
       title,
+      body,
       head,
       base,
       draft: true,
     });
   } catch (error) {
     if (!(error instanceof GithubApiError) || error.status !== 422) throw error;
-    const existing = await apiJson<PullRequest[]>(
-      token,
-      "GET",
-      `/repos/${repo.owner}/${repo.repo}/pulls?head=${encodeURIComponent(`${repo.owner}:${head}`)}&state=open`,
-    );
-    const [pr] = existing;
-    if (!pr) throw error;
-    return pr;
+    const existing = await findPullRequest(repo, head, base, token);
+    if (!existing) throw error;
+    return existing;
   }
+}
+
+/** Every file `head` changes against `base`, as GitHub's compare view
+ * lists them: what a pull request between the two would show. */
+export async function compareBranches(
+  repo: RepoRef,
+  base: string,
+  head: string,
+  token: string,
+): Promise<{ path: string; status: "added" | "modified" | "removed" | "renamed"; previous?: string }[]> {
+  const data = await apiJson<{ files?: { filename: string; status: string; previous_filename?: string }[] }>(
+    token,
+    "GET",
+    `/repos/${repo.owner}/${repo.repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+  );
+  return (data.files ?? []).flatMap((file) => {
+    const status =
+      file.status === "added" || file.status === "removed" || file.status === "renamed"
+        ? file.status
+        : file.status === "unchanged" ? null : "modified";
+    if (!status) return [];
+    return [{
+      path: file.filename,
+      status,
+      ...(file.previous_filename ? { previous: file.previous_filename } : {}),
+    }];
+  });
 }

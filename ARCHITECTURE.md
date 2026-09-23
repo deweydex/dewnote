@@ -291,10 +291,21 @@ export interface Store {
   read(path: string): Promise<string>;
   readBytes(path: string): Promise<Uint8Array<ArrayBuffer> | null>;
   write(path: string, text: string, message: string): Promise<void>;
-  publish?(): Promise<string>;
+  apply(changes: readonly Change[], message: string): Promise<void>;
+  publish?(title: string, body: string): Promise<string>;
+  existingPullRequest?(): Promise<string | null>;
+  branchChanges?(): Promise<BranchChange[]>;
   readPublished?(path: string): Promise<string | null>;
 }
 ```
+
+Every save is a commit, and the pull request is where they get a name:
+`branchChanges` is GitHub's compare of the working branch against the
+base, from which `pull-request.ts` suggests a title and writes a
+description listing each document by title. A squash merge then lands
+the branch as one commit named by that title. Rewriting the branch's
+history into fewer commits was the alternative, and would mean force
+pushes to a branch an author may have open in two tabs.
 
 `readPublished` is the file as readers have it: the base branch, for a
 repository. A release freezes that, not the last save, since a save on
@@ -320,7 +331,47 @@ and the shell answers it with `conflict.ts`: it reads the file again
 offers **Keep mine** (an ordinary write, now against the new SHA, and
 refused again if the file has moved again), **Keep the saved version**
 (reopen from what was read) or **Cancel** (the refusal stays in the
-margin).
+margin). Where the two sides changed different lines it first offers
+**Keep both**: `mergeLines` is a three-way merge by lines against what
+the editor made of the file as last saved (not the bytes, so the
+editor's tidying on open is not read as an edit). Lines neither side
+changed hold the versions in step; between them, a stretch one side
+changed takes that side, and a stretch both changed differently refuses
+the whole merge, since a file saved with conflict markers in it would
+stop the build.
+
+### Renaming, moving and deleting
+
+A tutorial's id is its folder's name, its file's name, its address and
+the key readers' saved work is kept under, and other files name it:
+course lists, `tutorial:` links, `practice_for:`, `practice_across:`,
+`context_for:` and `courses/redirects.yaml`. `rename.ts` plans a rename
+over the workspace's text: the folder moves whole (only the names dewlab
+derives from the id change; an image or a frozen release keeps its
+name, since the markdown names it), every reference is rewritten, and a
+redirect is added from each old address that was ever served (not a
+draft's, since a redirect to a page the build does not write stops the
+build). A delete is refused while anything still points at the tutorial,
+and the refusal names each file.
+
+A plan is a list of changes (write, move, remove) that `Store.apply`
+carries out together. On a repository that is one commit through the Git
+Data API (`commitChanges` in `github.ts`): the branch's tree is read,
+each file the plan touches is checked against the blob SHA it was read
+at, a new tree is built over the old one (a moved image reuses its blob,
+so nothing is downloaded), and the branch is moved to the new commit
+without force. Any of those failing leaves the branch as it was. A
+folder has no transactions, so it writes everything new first and
+removes last: a failure part-way leaves a copy too many, never a file
+lost, and the message says the folder needs a look.
+
+**Replace all** (`find.ts`, `find-panel.ts`) goes the same way: one
+write per document that changes, applied together, so a replacement
+across forty files is one commit.
+
+The rename was checked against dewlab itself: two heavily linked
+tutorials renamed in a copy of the repository, and `build.py` still
+builds, with four more pages (the redirect stubs).
 
 ### Unsaved changes
 

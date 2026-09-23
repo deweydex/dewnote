@@ -108,6 +108,43 @@ export function newTutorial(title: string, now: Date = new Date(), year = academ
   return { path: `tutorials/${id}/${id}.md`, content, id };
 }
 
+/** A practice page for the tutorial at `tutorialPath`: beside it, named
+ * `<id>-practice.md`, pointing back with `practice_for:`, and titled the
+ * way dewlab's own practice pages are. A draft, like any new page, in
+ * the tutorial's own year. */
+export function newPracticePage(
+  tutorialPath: string,
+  tutorial: string,
+  now: Date = new Date(),
+): NewTutorial | { error: string } {
+  const match = /^tutorials\/([^/]+)\/\1\.md$/.exec(tutorialPath);
+  if (!match) return { error: "Only a tutorial's own file can have a practice page." };
+  const id = match[1]!;
+  const fields = extractFrontMatter(tutorial).fields;
+  const title = `${typeof fields["title"] === "string" ? fields["title"] : id} — Practice`;
+  const year = fields["year"] === undefined || fields["year"] === null ? academicYear(now) : String(fields["year"]);
+  const content = [
+    "---",
+    `title: ${asYamlScalar(title)}`,
+    `practice_for: ${id}`,
+    `year: ${JSON.stringify(year)}`,
+    "status: draft",
+    `version: ${nextVersion([], now)}`,
+    "---",
+    "",
+    `# ${title}`,
+    "",
+    "",
+    "",
+    "```python exec",
+    "id: practice-1",
+    "",
+    "```",
+    "",
+  ].join("\n");
+  return { path: `tutorials/${id}/${id}-practice.md`, content, id: `${id}-practice` };
+}
+
 /** dewlab's `year:` is an academic year, "2026-2027", which turns over
  * in September. Only the fallback: a workspace that already has
  * tutorials says which year it is using. */

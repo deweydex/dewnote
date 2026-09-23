@@ -2,16 +2,19 @@
 //
 // Both versions exist, and only the author can say which wins. The
 // dialog shows what separates them, as changed lines with a little
-// context, and offers the three honest answers: keep mine, take theirs,
-// or decide later.
+// context, and offers the answers: keep both, where the two changed
+// different lines; keep mine; take theirs; or decide later.
 
 import { diffLines, hunks } from "./diff.ts";
 
-export type ConflictChoice = "mine" | "theirs";
+export type ConflictChoice = "both" | "mine" | "theirs";
 
 export interface Conflict {
-  /** Resolves with the author's choice, or null if they left it. */
-  resolve(path: string, theirs: string, mine: string): Promise<ConflictChoice | null>;
+  /** Resolves with the author's choice, or null if they left it.
+   * `combined` is both sets of changes together (diff.ts `mergeLines`),
+   * or null where they touch the same lines; only with it is "both" on
+   * offer. */
+  resolve(path: string, theirs: string, mine: string, combined: string | null): Promise<ConflictChoice | null>;
   destroy(): void;
 }
 
@@ -31,12 +34,13 @@ export function mountConflict(): Conflict {
 
   // Escape closes the dialog without going through `finish`.
   overlay.addEventListener("close", () => {
+    if (overlay.open) return;
     settle?.(null);
     settle = null;
   });
 
   return {
-    resolve(path, theirs, mine) {
+    resolve(path, theirs, mine, combined) {
       return new Promise<ConflictChoice | null>((resolve) => {
         settle = resolve;
 
@@ -50,7 +54,10 @@ export function mountConflict(): Conflict {
         const note = document.createElement("p");
         note.textContent =
           `${path} was saved somewhere else, probably from another tab or by someone else, ` +
-          "after you opened it. Choose which version to keep. The other is lost.";
+          "after you opened it. " +
+          (combined === null
+            ? "Both versions change the same lines, so they cannot be combined here. Choose which to keep; the other is lost."
+            : "The two sets of changes are on different lines, so dewnote can keep both. Or choose one; the other is lost.");
 
         const legend = document.createElement("p");
         legend.className = "dn-conflict-legend";
@@ -106,12 +113,22 @@ export function mountConflict(): Conflict {
         later.textContent = "Cancel";
         later.title = "Keep your changes on screen, unsaved.";
         later.addEventListener("click", () => finish(null));
+        const keepBoth = document.createElement("button");
+        keepBoth.type = "button";
+        keepBoth.className = "dn-ask-go";
+        keepBoth.textContent = "Keep both";
+        keepBoth.title = "Save one version with your changes and the other ones in it.";
+        keepBoth.addEventListener("click", () => finish("both"));
+        if (combined !== null) {
+          keepMine.className = "";
+          actions.append(keepBoth);
+        }
         actions.append(keepMine, takeTheirs, later);
 
         box.append(heading, note, legend, changes, actions);
         overlay.replaceChildren(box);
         overlay.showModal();
-        keepMine.focus();
+        (combined === null ? keepMine : keepBoth).focus();
       });
     },
 
