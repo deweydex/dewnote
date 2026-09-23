@@ -115,7 +115,7 @@ describe("keywords against labels", () => {
 
   test("a slug does not drag in every row that shares it", () => {
     // Every hyphen in a slug reads as a word start, so before the
-    // discount "matri" pulled in every series of that module.
+    // discount "matri" pulled in every series of that course.
     expect(rankRows(CORPUS, "matri").rows.map((item) => item.label)).toEqual([
       "What a Matrix Does to a Picture",
       "Matrices",

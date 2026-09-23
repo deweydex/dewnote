@@ -8,7 +8,7 @@ import {
   fromBase64,
   listMarkdownFiles,
   listRepositories,
-  listModuleFiles,
+  listCourseFiles,
   putFileContent,
   suggestedBranch,
   toBase64,
@@ -111,7 +111,7 @@ describe("listMarkdownFiles", () => {
   });
 });
 
-describe("listModuleFiles", () => {
+describe("listCourseFiles", () => {
   const originalFetch = globalThis.fetch;
   afterEach(() => {
     globalThis.fetch = originalFetch;
@@ -136,7 +136,7 @@ describe("listModuleFiles", () => {
         ],
       })) as typeof fetch;
 
-    const files = await listModuleFiles({ owner: "dewlab", repo: "dewlab" }, "main", "tok");
+    const files = await listCourseFiles({ owner: "dewlab", repo: "dewlab" }, "main", "tok");
     expect(files).toEqual([
       { path: "modules/computational-methods.yaml", sha: "s1" },
       { path: "courses/web-authoring.yaml", sha: "s5" },

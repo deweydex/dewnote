@@ -9,11 +9,11 @@
 //
 // A page's id comes from its path — dewlab's `id_of()`, "from where its
 // file is and nothing else" — so `id` is derived, never read from a
-// field, and `modules` is a join against the course descriptors.
+// field, and `courses` is a join against the course files.
 // `module`/`series` stay because dewstack places a tutorial from its
 // front matter.
 
-import type { Module } from "./modules.ts";
+import type { Course } from "./courses.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 
 export interface FileIndexEntry {
@@ -31,18 +31,18 @@ export interface FileIndexEntry {
   slug?: string;
   module?: string;
   series?: string;
-  /** A practice page follows this tutorial onto every module that lists it;
-   * it is deliberately not listed in the module file itself. */
+  /** A practice page follows this tutorial onto every course that lists
+   * it; it is deliberately not listed in the course file itself. */
   practiceFor?: string;
   /** A mixed practice page draws on several tutorials and is placed by a
-   * module's top-level `mixed:` list rather than inside a series. */
+   * course's top-level `mixed:` list rather than inside a series. */
   practiceAcross?: string[];
-  /** Ids of the modules whose own `contents` list this entry's id, filled
-   * in by `buildFileIndex` when it's given the module files. Empty (not
-   * absent) for an indexed dewlab tutorial no module lists — which is a
-   * real and buildable state, "published but on no module", and worth
+  /** Ids of the courses whose own `contents` list this entry's id, filled
+   * in by `buildFileIndex` when it's given the course files. Empty (not
+   * absent) for an indexed dewlab tutorial no course lists — which is a
+   * real and buildable state, "published but on no course", and worth
    * telling apart from a file that was never cross-referenced at all. */
-  modules?: string[];
+  courses?: string[];
   /** dewlab's own `status` (`draft`/`beta`/`live`/`archived`, `build.py`'s
    * own `STATUSES`) and `version` (a `YYYY.MM.DD.N` release date,
    * `build.py`'s own `VERSION_RE`) — read here only so `defaultEntryFor`
@@ -108,46 +108,46 @@ export function indexEntryFor(path: string, content: string): FileIndexEntry {
   return entry;
 }
 
-/** Which modules list each tutorial id — one pass over the module files,
- * so the join below is a lookup rather than a scan per entry. A module
- * listing the same id in two of its own series names that module once. */
-export function moduleMembership(modules: Module[]): Map<string, string[]> {
+/** Which courses list each tutorial id — one pass over the course files,
+ * so the join below is a lookup rather than a scan per entry. A course
+ * listing the same id in two of its own series names that course once. */
+export function courseMembership(courses: Course[]): Map<string, string[]> {
   const listedBy = new Map<string, string[]>();
-  for (const module of modules) {
-    for (const series of module.contents) {
+  for (const course of courses) {
+    for (const series of course.contents) {
       for (const id of series.tutorials) {
         const already = listedBy.get(id);
-        if (!already) listedBy.set(id, [module.id]);
-        else if (!already.includes(module.id)) already.push(module.id);
+        if (!already) listedBy.set(id, [course.id]);
+        else if (!already.includes(course.id)) already.push(course.id);
       }
     }
-    for (const id of module.mixed ?? []) {
+    for (const id of course.mixed ?? []) {
       const already = listedBy.get(id);
-      if (!already) listedBy.set(id, [module.id]);
-      else if (!already.includes(module.id)) already.push(module.id);
+      if (!already) listedBy.set(id, [course.id]);
+      else if (!already.includes(course.id)) already.push(course.id);
     }
   }
   return listedBy;
 }
 
 /**
- * The index, optionally cross-referenced against the module files the
- * same store just read. Without them every entry's `modules` is absent —
+ * The index, optionally cross-referenced against the course files the
+ * same store just read. Without them every entry's `courses` is absent —
  * "nothing was cross-referenced" — rather than empty, which means "cross-
- * referenced, and no module lists this."
+ * referenced, and no course lists this."
  */
 export function buildFileIndex(
   files: { path: string; content: string }[],
-  modules: Module[] = [],
+  courses: Course[] = [],
 ): FileIndexEntry[] {
   const index = files.map(({ path, content }) => indexEntryFor(path, content));
-  if (modules.length === 0) return index;
-  const listedBy = moduleMembership(modules);
+  if (courses.length === 0) return index;
+  const listedBy = courseMembership(courses);
   for (const entry of index) {
     // A focused practice page inherits its tutorial's placement. Mixed
-    // practice is listed explicitly in a module's top-level `mixed:` list.
+    // practice is listed explicitly in a course's top-level `mixed:` list.
     const membershipId = entry.practiceFor ?? entry.id;
-    entry.modules = membershipId ? (listedBy.get(membershipId) ?? []) : [];
+    entry.courses = membershipId ? (listedBy.get(membershipId) ?? []) : [];
   }
   return index;
 }
@@ -217,14 +217,14 @@ export function distinctValues(index: FileIndexEntry[], field: "module" | "serie
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Where the open document sits: module › series › page.
+// Where the open document sits: course › series › page.
 //
 // A pure function of path, index and course descriptors.
 
-import type { ModuleSeries } from "./modules.ts";
+import type { CourseSeries } from "./courses.ts";
 
 export interface WorkspaceLocation {
-  module: string;
+  course: string;
   series: string;
   page: string;
 }
@@ -235,39 +235,39 @@ function titleOf(entry: FileIndexEntry): string {
   return entry.title ?? entry.id ?? entry.path;
 }
 
-/** Which series inside `module` lists `id`, treating a practice page as
+/** Which series inside `course` lists `id`, treating a practice page as
  * following the tutorial it is for. dewlab's `mixed:` list places a
- * practice page that draws on several tutorials at module level, with no
+ * practice page that draws on several tutorials at course level, with no
  * series of its own. */
-function seriesFor(module: Module, id: string, practiceFor: string | undefined): ModuleSeries | "mixed" | null {
+function seriesFor(course: Course, id: string, practiceFor: string | undefined): CourseSeries | "mixed" | null {
   const membershipId = practiceFor ?? id;
-  for (const series of module.contents) {
+  for (const series of course.contents) {
     if (series.tutorials.includes(membershipId)) return series;
   }
-  if ((module.mixed ?? []).includes(id)) return "mixed";
+  if ((course.mixed ?? []).includes(id)) return "mixed";
   return null;
 }
 
 /** The breadcrumb for `path`, or `null` when the index has nothing to
- * say about it — an unplaced file, a frozen release, a module descriptor.
+ * say about it — an unplaced file, a frozen release, a course file.
  * Returning null rather than a row of empty strings is deliberate: the
  * spine shows the path alone in that case, which is true, where three
  * blank rungs would not be. */
 export function locationOf(
   path: string,
   index: FileIndexEntry[],
-  modules: Module[],
+  courses: Course[],
 ): WorkspaceLocation | null {
   const entry = index.find((item) => item.path === path);
   if (!entry) return null;
   const id = entry.id;
   if (!id) return null;
 
-  for (const module of modules) {
-    const series = seriesFor(module, id, entry.practiceFor);
+  for (const course of courses) {
+    const series = seriesFor(course, id, entry.practiceFor);
     if (!series) continue;
     return {
-      module: module.title ?? module.id,
+      course: course.title ?? course.id,
       series: series === "mixed" ? "Mixed practice" : series.title,
       page: titleOf(entry),
     };
@@ -275,10 +275,10 @@ export function locationOf(
   return null;
 }
 
-/** Every page in `series`, in the order the module lists them, each
+/** Every page in `series`, in the order the course lists them, each
  * tutorial followed by its own practice page. The palette opens a series
  * at the first of these. */
-export function pagesOfSeries(series: ModuleSeries, index: FileIndexEntry[]): { path: string; label: string }[] {
+export function pagesOfSeries(series: CourseSeries, index: FileIndexEntry[]): { path: string; label: string }[] {
   const pages: { path: string; label: string }[] = [];
   for (const id of series.tutorials) {
     const tutorial = defaultEntryFor(index, id);

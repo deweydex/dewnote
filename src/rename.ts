@@ -15,7 +15,7 @@
 
 import { extractFrontMatter } from "./frontmatter.ts";
 import { idFromPath } from "./workspace.ts";
-import { isModuleFile } from "./modules.ts";
+import { isCourseFile } from "./courses.ts";
 
 import type { TreeChange } from "./github.ts";
 
@@ -136,7 +136,7 @@ function isRedirects(path: string): boolean {
 }
 
 function isCourse(path: string): boolean {
-  return isModuleFile(path);
+  return isCourseFile(path);
 }
 
 const address = (id: string) => `tutorials/${id}.html`;

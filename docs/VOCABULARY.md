@@ -41,7 +41,7 @@ them makes anything public, which is what a reader hears in the word.
 
 | Word | Means |
 |---|---|
-| **Course** | A file in `courses/` listing series. The code calls this a `Module` (`modules.ts`) for historical reasons; the interface always says *course*. |
+| **Course** | A file in `courses/` listing series. The code says *course* too (`courses.ts`, `Course`). The one *module* left is a dewstack page's `module:` front-matter field, which is data dewnote reads, not a name it chose. |
 | **Series** | An ordered list of tutorial ids inside a course. |
 | **Tutorial** | A page in `tutorials/<id>/<id>.md`. |
 | **Practice page** | `tutorials/<id>/<id>-practice.md`. |

@@ -15,27 +15,46 @@ empty page, front matter fields, the margin) is done, as is Jedi help in
 Python cells. Phase 4 (renaming, moving and deleting; new practice
 pages; find and replace; named pull requests; keeping both sides of a
 conflict; no trailing blank line; disconnecting from GitHub) is done.
+Phase 5 (splitting `shell.ts`, calling a course a course in code,
+bringing `planning/DIALECTS.md` up to date) is done.
 
 ---
 
-## Phase 5: Code structure
+## Phase 6: The rest of dewlab's format
 
-### 5.1 Split `shell.ts`
+dewlab's build reads constructs dewnote only shows as raw text. Each is
+listed, with what dewlab does with it, in `planning/DIALECTS.md` §5; in
+the order an author would notice them:
 
-At nearly 1,500 lines, it holds opening and saving, every command's
-registration, the problem report, authoring flows (new tutorial,
-practice page, series, release, rename, delete, find and replace, pull
-request) and export. Move the command list, the report overlay, and the
-authoring flows into their own modules; `shell.ts` keeps opening,
-saving and the state they share.
+### 6.1 Staged hints as hints
 
-### 5.2 Call a course a course in code
+A ```` ```hint ```` fence is shown as code. Draw it as the hint it is,
+with `for:`, `after:` and `title:` as fields, the way front matter is.
 
-The interface says *course*; the code says `Module` (`modules.ts`,
-`SpineLocation.module`). Rename, now that dewlab itself uses `courses/`.
+### 6.2 Questions as questions
 
-### 5.3 Review `planning/DIALECTS.md`
+A ```` ```question ```` fence is checked but shown as code. Draw a
+multiple-choice question with its options and the correct one marked,
+and a fill-in-the-blank one with its gaps.
 
-Parts describe dewlab before its 2026-09 refactor, and it was written
-against earlier dewnote modules. Check each section against the current
-`build.py` and mark or remove what is historical.
+### 6.3 App panes
+
+`html app`, `css app` and `js app` are shown as code. Group them as the
+site editor groups site panes; running one needs the page's `db`, which
+the Worker already has.
+
+### 6.4 `{{include: …}}` in a cell
+
+Kept but not expanded, so a cell that depends on one fails when run in
+dewnote. Read the named file from the workspace and splice it in at run
+time, as the build does at build time.
+
+### 6.5 Pages: cards, generated blocks, wrappers
+
+On `pages/`, a card shows as code, `[[search-box]]` as text, and a
+`dl-hero` wrapper as loose tags around its paragraphs.
+
+### 6.6 Two checks the build makes and dewnote does not
+
+A footnote inside a `hint`, `question` or `card` fence, and a
+`tutorial:<id>#anchor` whose anchor names no heading.

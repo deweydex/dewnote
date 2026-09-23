@@ -51,7 +51,7 @@ export interface Store {
   readonly keepsDrafts?: boolean;
   /** What the spine says: a folder's name, or `owner/repo · base → branch`. */
   readonly label: string;
-  /** Every markdown file and module descriptor, read once when the
+  /** Every markdown file and course file, read once when the
    * workspace opens and refreshed on save. `onProgress` is called as
    * files arrive, because reading a repository is hundreds of requests
    * and silence for that long is indistinguishable from a hang. */
@@ -128,7 +128,7 @@ export async function openFolder(): Promise<Store | null> {
     async list(onProgress) {
       const [markdown, descriptors] = await Promise.all([
         folder.listMarkdownFiles(root),
-        folder.listModuleFiles(root),
+        folder.listCourseFiles(root),
       ]);
       const found = [...markdown, ...descriptors];
       for (const file of found) handles.set(file.path, file.handle);
@@ -236,7 +236,7 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
     async list(onProgress) {
       const [markdown, descriptors] = await Promise.all([
         github.listMarkdownFiles(repo, branch, token),
-        github.listModuleFiles(repo, branch, token),
+        github.listCourseFiles(repo, branch, token),
       ]);
       return inParallel([...markdown, ...descriptors], 8, async (file) => {
         const { content, sha } = await github.getFileContent(repo, file.path, branch, token);

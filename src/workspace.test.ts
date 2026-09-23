@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { parseModuleFile } from "./modules.ts";
+import { parseCourseFile } from "./courses.ts";
 import {
   buildFileIndex,
-  moduleMembership,
+  courseMembership,
   defaultEntryFor,
   distinctValues,
   idFromPath,
@@ -100,13 +100,13 @@ contents:
   - first-steps
 `;
 
-describe("moduleMembership", () => {
+describe("courseMembership", () => {
   test("maps each id to the modules that list it", () => {
     const modules = [
-      parseModuleFile("modules/computational-methods.yaml", MODULE)!,
-      parseModuleFile("modules/programming-design-principles.yaml", OTHER_MODULE)!,
+      parseCourseFile("modules/computational-methods.yaml", MODULE)!,
+      parseCourseFile("modules/programming-design-principles.yaml", OTHER_MODULE)!,
     ];
-    const listedBy = moduleMembership(modules);
+    const listedBy = courseMembership(modules);
     // A tutorial can be listed by more than one module — dewlab's own
     // Programming and Design Principles is built from the integrated
     // module's own tutorials.
@@ -128,7 +128,7 @@ contents:
   tutorials:
   - shared
 `;
-    const listedBy = moduleMembership([parseModuleFile("modules/a.yaml", twice)!]);
+    const listedBy = courseMembership([parseCourseFile("modules/a.yaml", twice)!]);
     expect(listedBy.get("shared")).toEqual(["a"]);
   });
 });
@@ -139,11 +139,11 @@ describe("buildFileIndex", () => {
     // "Nothing was cross-referenced" is a different fact from "cross-
     // referenced, and no module lists this."
     const index = buildFileIndex([{ path: "tutorials/x/x.md", content: "---\ntitle: X\n---\n" }]);
-    expect(index[0]!.modules).toBeUndefined();
+    expect(index[0]!.courses).toBeUndefined();
   });
 
   test("given module files, each entry carries the modules that list it", () => {
-    const modules = [parseModuleFile("modules/computational-methods.yaml", MODULE)!];
+    const modules = [parseCourseFile("modules/computational-methods.yaml", MODULE)!];
     const index = buildFileIndex(
       [
         { path: "tutorials/first-steps/first-steps.md", content: "---\ntitle: First Steps\n---\n" },
@@ -151,22 +151,22 @@ describe("buildFileIndex", () => {
       ],
       modules,
     );
-    expect(index[0]!.modules).toEqual(["computational-methods"]);
+    expect(index[0]!.courses).toEqual(["computational-methods"]);
     // Published but on no module — a real, buildable state.
-    expect(index[1]!.modules).toEqual([]);
+    expect(index[1]!.courses).toEqual([]);
   });
 
   test("a frozen release is listed by the same modules as its live file", () => {
-    const modules = [parseModuleFile("modules/computational-methods.yaml", MODULE)!];
+    const modules = [parseCourseFile("modules/computational-methods.yaml", MODULE)!];
     const index = buildFileIndex(
       [{ path: "tutorials/first-steps/v2026.08.23.1.md", content: "---\ntitle: Frozen\n---\n" }],
       modules,
     );
-    expect(index[0]!.modules).toEqual(["computational-methods"]);
+    expect(index[0]!.courses).toEqual(["computational-methods"]);
   });
 
   test("a focused practice page inherits its tutorial's module", () => {
-    const modules = [parseModuleFile("modules/computational-methods.yaml", MODULE)!];
+    const modules = [parseCourseFile("modules/computational-methods.yaml", MODULE)!];
     const index = buildFileIndex(
       [{
         path: "tutorials/first-steps/first-steps-practice.md",
@@ -175,13 +175,13 @@ describe("buildFileIndex", () => {
       modules,
     );
     expect(index[0]!.practiceFor).toBe("first-steps");
-    expect(index[0]!.modules).toEqual(["computational-methods"]);
+    expect(index[0]!.courses).toEqual(["computational-methods"]);
   });
 
   test("mixed practice is placed by a module's top-level mixed list", () => {
     const source = `${MODULE}mixed:\n- cumulative-practice\n`;
-    const modules = [parseModuleFile("modules/computational-methods.yaml", source)!];
-    expect(moduleMembership(modules).get("cumulative-practice")).toEqual(["computational-methods"]);
+    const modules = [parseCourseFile("modules/computational-methods.yaml", source)!];
+    expect(courseMembership(modules).get("cumulative-practice")).toEqual(["computational-methods"]);
     const index = buildFileIndex(
       [{
         path: "tutorials/cumulative-practice/cumulative-practice.md",
@@ -189,7 +189,7 @@ describe("buildFileIndex", () => {
       }],
       modules,
     );
-    expect(index[0]!.modules).toEqual(["computational-methods"]);
+    expect(index[0]!.courses).toEqual(["computational-methods"]);
   });
 });
 

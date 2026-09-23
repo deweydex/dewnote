@@ -33,7 +33,7 @@ export interface SpineFile {
 }
 
 export interface SpineLocation {
-  module: string;
+  course: string;
   series: string;
   page: string;
 }
@@ -85,7 +85,7 @@ export function mountSpine(host: SpineHost): Spine {
   /** Null until a document opens: before then there is nothing to be
    * saved, and saying "Saved" would be a claim about nothing. */
   let file: SpineFile | null = null;
-  let location: SpineLocation = { module: "", series: "", page: "" };
+  let location: SpineLocation = { course: "", series: "", page: "" };
   let workspace: SpineWorkspace = { label: "", detail: "" };
   let problem: { message: string; action?: { label: string; run(): void } } | null = null;
   let headings: Heading[] = [];
@@ -159,7 +159,7 @@ export function mountSpine(host: SpineHost): Spine {
     fileName.title = file?.name ?? "";
     fileName.hidden = file === null;
     fileName.classList.toggle("is-dirty", file?.dirty ?? false);
-    const parts = [location.module, location.series, location.page].filter(Boolean);
+    const parts = [location.course, location.series, location.page].filter(Boolean);
     breadcrumb.textContent = parts.length
       ? parts.join(" › ")
       : `${file === null ? "Open a document" : "Open another document"} (${shortcut("K")})`;
