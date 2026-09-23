@@ -1,81 +1,119 @@
-# The dialects dewnote opens and saves
+# The file formats dewnote opens and saves
 
-What the files look like, read from `build.py` in each site and from the
-tutorials themselves. Each dialect declares its front matter, its block
-kinds, and which runtime a cell needs. This is the reference the editor
-is written against; when a build script changes, this file changes first.
+What dewlab's files look like, read from its `build.py`, and what dewnote
+does with each part. Checked against dewlab at `0335c46` (2026-09-23).
+When `build.py` changes, this file changes first; each section names the
+constant or function in `build.py` it was read from, so the check can be
+repeated.
 
-Everything is CommonMark underneath. A dialect is the set of additions.
+Everything is CommonMark underneath, with GFM tables and task lists.
+dewlab adds the constructs below. dewnote saves every construct, including
+ones it does not understand, as the bytes it read: the round-trip tests
+(`tests/e2e/roundtrip.spec.ts`) hold it to that across dewlab's own
+tutorials.
 
 ---
 
 ## 1. dewlab
 
-**File layout.** `tutorials/<id>/<id>.md`, flat — every tutorial sits
-directly under `tutorials/`, whatever course it's on — with optional
-`<id>-practice.md`, `<id>.glossary.yaml`, frozen `v<version>.md`
-releases, and images beside it.
+### Where files live
 
-**A page's id is its path, and nothing else.** `build.py`'s own
-`id_of()`: a tutorial's id is its file's stem, which is also its folder;
-a practice page `<id>-practice.md` has an id of its own; a frozen release
-`v<version>.md` takes the *folder's* id, since it is a version of that
-folder's tutorial rather than a page of its own. Nothing is read from the
-front matter, for the reason dewlab gives — the id is the address of the
-page and the key every reader's saved work lives under, so a field that
-could disagree with the folder would be a way to break both. An id is
-site-wide and unique per page, which is not the same as unique per file:
-a live tutorial and the frozen releases beside it all share one id, which
-is why `workspace.ts`'s `defaultEntryFor` exists.
+A tutorial is `tutorials/<id>/<id>.md`, flat: every tutorial sits directly
+under `tutorials/`, whatever course it is on. Beside it can be a practice
+page `<id>-practice.md`, glossaries `<id>.glossary.yaml` and
+`<id>-practice.glossary.yaml`, frozen releases `v<version>.md`, and
+images.
 
-**Placement is `courses/`, never a front matter field.** As of dewlab's
-own 2026-09 refactor (its `refactor/PLAN.md`, and the spec it wrote for
-this editor in `refactor/EDITOR.md` §2 — that folder is deleted now, so
-it lives at `git show b7c5a6d:refactor/EDITOR.md` in dewlab), a tutorial
-no longer says where it lives; a course says what it holds.
-`courses/<course-id>.yaml` is `{title, code, status, card, description,
-contents: [{title, tutorials: [<id>, ...]}, ...]}` — series with human
-titles, each an ordered list of tutorial ids. `courses/index.yaml`
-(`order:` a list of course ids) orders the courses themselves, and
-`courses/redirects.yaml` maps every old address to its new one so links
-into the pre-refactor layout still land. A tutorial may be listed by more
-than one course, and one listed by none still builds — "published but on
-no course" is a real state. `courses.ts` reads all of this, and the
-shell's **Add to a series…** and **Remove from a series…** edit it.
+**A page's id is its path** (`id_of()`): a tutorial's id is its file's
+stem, which is also its folder; a practice page has its own id,
+`<id>-practice`; a frozen release takes the folder's id. Nothing is read
+from the front matter, because the id is the page's address and the key
+readers' saved work is kept under. A live tutorial and the frozen
+releases beside it share one id, which is why `workspace.ts` has
+`defaultEntryFor`.
 
-**Front matter.** Required: `title`, `year`, `version` (`2026.09.04.1`
-form). Optional: `status` (`draft`, `beta`, `live` or `archived`; absent
-means `live`, `draft` is left out of the build, anything else stops it —
-`STATUSES` in `build.py`), `packages` (a list,
-e.g. `[sympy]`), `practice_for` (a single tutorial id — a practice page
-names the one tutorial it practises), `practice_across` (a list of ids,
-for a mixed set spanning several tutorials instead), `covers` (sections
-mapped to learning outcomes). A practice page is a tutorial in every
-other mechanical sense — same required fields, same cells — and dewlab's
-own `build.py` forbids one from also setting `covers`, or from naming
-another practice page as what it practises.
+*dewnote:* **New tutorial…**, **New practice page** and **Rename this
+tutorial…** write these paths (`authoring.ts`, `rename.ts`). A rename
+moves the glossaries with the files and leaves images and releases their
+names.
 
-`slug`, `module`, `module_title` and `series` were all required here
-before the refactor and are all gone. dewnote's own form has no row for
-any of them: a field for something the build ignores is worse than no
-field, since it looks like it still places the tutorial.
+### Courses
 
-The front-matter form (decision 11) has a row for `practice_for` —
-scalar, and decision 33 gave the "+ field" mechanism its first optional
-*text* field to handle — with autocomplete over every real id the open
-folder or repository's own index knows. `practice_across`, `covers`, and
-`packages` stay raw-YAML-only: each is a list or mapping, not the single
-value a form row edits directly.
+A tutorial does not say where it appears; a course says what it holds
+(`read_course()`, `COURSE_INDEX_FILE`, `REDIRECTS_FILE`).
 
-**Links.** `tutorial:<id>` is the only link scheme `build.py` resolves
-(`resolve_links()`), and an id being site-wide is what makes it work from
-any page without a module to qualify it. dewnote once also checked
-`module:` and `series:` links; neither was ever real in either site's
-build, and no tutorial in dewlab or dewstack has ever used one — see
-`link-check.ts`'s own header.
+- `courses/<course-id>.yaml`: `title`, `code`, `status` (`draft`, `beta`
+  or `live`), `card`, `description`, and `contents`, a list of series,
+  each a `title` and a `tutorials` list of ids in reading order. A
+  top-level `mixed:` lists mixed practice pages.
+- `courses/index.yaml`: `order:`, the course ids in the order they are
+  shown.
+- `courses/redirects.yaml`: `old address: new address`, one per line.
+  The build writes a stub page at each old address, and stops if a line
+  points at a page it did not write, or from one it did.
 
-**Cells.** Two cell languages as of `d2a21ed` (2026-09-10), both exec
-fences sharing one header grammar: `python exec` and `sql exec`.
+A tutorial can be on several courses, or on none and still build. A
+course listing a draft is skipped with a note, so a course can name next
+week's tutorial early. A practice page and a context page cannot be
+listed.
+
+*dewnote:* `courses.ts` reads these, and still accepts the older
+`modules/` directory. **Add to a series…** and **Remove from a series…**
+edit a course's lists line by line. A rename rewrites course lists and
+adds redirects for anything that was ever served (not a draft); a delete
+removes the tutorial from course lists and refuses while a redirect
+points at it.
+
+### Front matter
+
+Required for a tutorial (`REQUIRED_FRONTMATTER`): `title`, `year` (an
+academic year such as `"2026-2027"`), and `version` (`VERSION_RE`,
+`2026.09.23.1`).
+
+Optional:
+
+- `status` (`STATUSES`): `draft` (left out of the build), `beta`, `live`
+  (the default) or `archived` (built, and shown in the course's Archive
+  rather than its reading order).
+- `packages`: Pyodide packages beyond the baseline, a list.
+- `datasets`: the names the cells load with `load_csv()` or
+  `load_text()`, declared rather than scraped.
+- `practice_for`: on a practice page, the one tutorial it practises.
+- `practice_across`: on a mixed practice page, the tutorials it draws on.
+- `context_for`: on a context page, the tutorials it gives background
+  to. One id or a list.
+- `covers`: sections mapped to learning outcomes. Not on a practice page.
+- `supersedes`: the version a release replaced. Written by a release
+  (dewlab's own editor and dewnote both write it); `build.py` does not
+  read it.
+
+Refused (`MOVED_FRONTMATTER`): `order`, `slug`, `module`, `module_title`
+and `series`. Each was a placement field before placement moved to
+`courses/`, and the build stops on any of them with a sentence saying
+where the information lives now.
+
+*dewnote:* the editor shows **Title**, **Status** and **Version** as
+fields; everything else is under **Show all fields** as YAML, edited as
+text. A field change rewrites only its own line. The checker reports a
+missing `title`, `year` or `version`, a malformed version, an unknown
+status and each refused field. A rename rewrites `practice_for`,
+`practice_across` and `context_for`.
+
+### Links
+
+`[text](tutorial:<id>)` and `[text](tutorial:<id>#anchor)` are the only
+links the build resolves (`TUTORIAL_HREF_RE`); a dead id or anchor stops
+it. An id is site-wide, so the link works from any page.
+
+*dewnote:* the checker reports a link to an id the workspace does not
+have (not anchors). A rename rewrites every link to the id, and also any
+`tutorials/<id>.html` address in the text.
+
+### Cells
+
+Two runnable fence languages (`CELL_TYPES`), `python exec` and
+`sql exec`, with the same header lines at the top of the body
+(`HEADER_RE`), in any order:
 
 ````markdown
 ```python exec
@@ -83,50 +121,36 @@ id: filter-evening
 hint: Try printing readings["evening"] > 14 on its own first.
 readings[readings["evening"] > 14]
 ```
-
-```sql exec
-id: total-readings
-expect: len(_) > 0
-select count(*) from readings;
-```
 ````
 
-The `id:` line is required and is a contract: saved student work is keyed
-on it, so renaming one throws that work away. The editor must warn before
-a rename and never generate ids that could collide. Header lines, in the
-order dewlab's own `HEADER_RE` accepts them: `id:` (required), `hint:`,
-`expect:`, `name:` (all optional) — the cell reader must recognise and preserve
-all four verbatim, not just `id`/`hint`; a real dewlab tutorial using
-`expect:` or `name:` currently has that line swallowed into the cell's
-own *code* by dewnote's header parser, which then fails to run (§8 has
-the fix). `expect:` is a Python expression checked after a run, driving a
-staged hint's trigger (`planning/CELL_HINTS.md` in dewlab); `name:` is
-reserved there for a related feature dewnote does not need to act on yet,
-only preserve. A fence without `exec` is illustrative, read-only code.
-Counted across the repository as of 2026-09-06: 806 `python exec`, 252
-plain `python`, nothing else — `sql exec` and the newer headers postdate
-that count.
+- `id:` is required. A reader's saved work is kept under it, so renaming
+  one throws that work away. Cells, questions, site panes and app panes
+  share one set of ids on a page; the build stops on a repeat.
+- `hint:` is a one-line hint for the cell.
+- `expect:` is a Python expression checked after a run, which can trigger
+  a staged hint.
+- `name:` is reserved; preserve it.
 
-A `sql exec` cell's body is SQL text, not Python, and runs against one
-shared, page-wide SQLite connection (`tutorial-runtime.js`'s
-`SEED_SQL_DB_SOURCE`, seeded into the same shared namespace every
-`python exec` cell already uses, under the name `db`) — not a per-cell
-named database the way dewstack's SQL cells work (§2). Running it means
-wrapping the fence's raw SQL as
-`tutorial_tools._run_sql_cell(db, <script>)` before handing it to the
-same Python-exec pipeline every other cell already uses, exactly the way
-`tutorial-runtime.js`'s own `wrapSqlCode()` does — not a second execution
-path. `_run_sql_cell` is already dewmini's own SQL cell function
-(`tutorial_tools.py`), which is also what dewnote's existing
-`dewnote_sql_tools.py` was trimmed from for dewstack's cells, so the
-runtime work is a second call site, not new plumbing.
+A fence without `exec` is illustrative code and never runs.
 
-**Shared setup.** `{{include: setup/load_readings.py}}` inside a cell,
-spliced in at build time. Preserve verbatim; optionally show the included
-text greyed beneath it.
+A `sql exec` cell runs against the page's one shared SQLite connection,
+`db`, in the same Python namespace every `python exec` cell uses: the
+build wraps its SQL as `tutorial_tools._run_sql_cell(db, <script>)`.
 
-**Folds.** Raw HTML, and the build fails on any `<details>` whose class is
-not one of two:
+`{{include: setup/load_readings.py}}` inside a cell (`INCLUDE_RE`) is
+replaced with that file at build time.
+
+*dewnote:* cells run in Pyodide in a Worker (`src/runtime/`), top to
+bottom in one namespace; SQL goes through the same wrapper
+(`dewnote_sql_tools.py`). The header lines are parsed and kept
+(`cells.ts`); the checker reports a missing or repeated id. Jedi gives
+completion, hover docs and signatures. An `{{include: …}}` line is kept
+but not expanded, so a cell that depends on one fails in dewnote.
+
+### Folds
+
+Raw HTML, and the build stops on any `<details>` whose class is not one
+of `FOLD_CLASSES`, `dl-hint` or `dl-answer`:
 
 ```markdown
 <details class="dl-hint"><summary>hint</summary>
@@ -136,17 +160,17 @@ Name the columns you want, separated by commas, in place of `*`.
 </details>
 ```
 
-`dl-answer` is the other. The blank lines inside are required for the
-markdown within to render. These are the whole of the practice-problem
-syntax; a problem is `**2.**` followed by prose, then a fold.
+The blank lines inside are required for the markdown in it to render. A
+practice problem is `**2.**` and prose, followed by folds.
 
-**Staged hints — a second, fence-based fold**, added `5b4bfaa`
-(2026-09-07) and reworked into its final fence form by `d2a21ed`
-(2026-09-10). Not the same thing as the `dl-hint` fold above, and not a
-replacement for it — a staged hint waits for a real attempt (errors, a
-repeated identical error, an unchanged run, or a failing `expect:`)
-before it appears at all, where a hand-written `dl-hint` fold is always
-there to open. Its own fence:
+*dewnote:* drawn as a fold, labelled Hint or Answer, with the markdown
+inside it editable (`foldLine` in `fences.ts`). The `/` menu inserts one.
+
+### Staged hints
+
+A hint that waits for a real attempt before it appears, unlike a
+`dl-hint` fold, which is always there to open. Its own fence
+(`HINT_HEADER_RE`):
 
 ````markdown
 ```hint
@@ -157,69 +181,46 @@ Check that every column name matches the table exactly, including case.
 ```
 ````
 
-`for:` is optional (defaults to the exec cell immediately above it in
-the source — `for:` names one explicitly, needed only when a hint
-doesn't directly follow its cell); `after:` and `title:` are each
-optional too, defaulting to `errors:5` and "Let's slow down a moment…".
-Everything after the header lines is the hint's own markdown body. It
-compiles to `<details class="dl-hint dl-hint-staged" data-cell="..."
-data-after="..." hidden>` — a third fold shape, alongside `dl-hint` and
-`dl-answer`, that dewnote's block splitter already passes through safely
-as an opaque fence (its round-trip guarantee never depended on knowing
-what a fence's info string means), but that the editor currently
-shows as a plain, unstyled code block rather than a fold, since nothing
-reads the fence's `hint` info word yet (§8 has the plan).
+`for:` names the cell it belongs to (default: the exec cell just above
+it); `after:` is the trigger (`TRIGGER_KEYS`: errors, identical errors,
+unchanged runs, runs, failed checks, empty results, minutes; default
+`errors:5`); `title:` defaults to "Let's slow down a moment…". The rest is
+markdown.
 
-**Notes.** `<aside class="dl-note" id="...">`, lifted out of the body into
-the reference panel by the build. Built, currently unused by any tutorial.
+*dewnote:* shown as a code block. Not drawn as a hint, and the checker
+does not read it.
 
-**Links.** `[text](tutorial:<id>#anchor)`, resolved at build time; a dead
-id or anchor fails the build. The editor offers a picker over real ids
-and anchors and checks links on request.
+### Questions
 
-decision 33 also added `module:name` and `series:name` to the editor's
-own picker and link checker, ahead of a `build.py` resolver for them — a
-home page linking to "the whole Computational Methods module" needed
-somewhere to put that link first, and the passage here said plainly that
-nothing in dewlab's build knew what to do with one.
+A marked exercise (`QUESTION_HEADER_RE`, `QUESTION_TYPES`):
 
-**That resolver never arrived, and both kinds are now removed.** Two
-years of content later, `tutorial:` is used 38 times as a real link
-target across dewlab and dewstack and the other two are used zero times;
-their only appearances anywhere were dewnote's own fixtures and tests.
-Building ahead of a consumer is a reasonable bet and this one did not
-pay: what it actually produced was a picker offering an author a link
-that would ship as literal text, and a checker reporting such a link as
-fine. dewlab's own spec for the courses refactor proposed renaming
-`module:` to `course:`; that would have carried the same bet forward
-under a new name, so it wasn't taken. A course page does have a real
-address (`courses/<id>.html`), so the scheme could be built for real —
-starting in `resolve_links()`, not here.
+````markdown
+```question
+id: which-loop
+type: multiple-choice
+correct: 2
+Which loop runs at least once?
+- for
+- while
+```
+````
 
-**Images.** `![alt](name.png)`, a bare file name resolved against the
-tutorial's folder; `alt` is required. Built, currently unused.
+`type:` is `multiple-choice` or `fill-in-the-blank`. A multiple-choice
+question's options are its bullet lines (`OPTION_LINE_RE`), and
+`correct:` is the 1-based number of the right one. A fill-in-the-blank
+question marks each gap as `{answer}`, or `{right|wrong|wrong}` for a
+drop-down, the first item being correct (`GAP_RE`).
 
-**Maths.** `$…$` and `$$…$$`, extracted before markdown runs. `\$`
-escapes. Inline maths does not match across a newline or against
-whitespace on either side, so prices survive; the editor's renderer must
-use the same rule or previews will differ from the site.
+*dewnote:* shown as a code block. The checker reports a missing id or
+type, a question with no text, a multiple-choice question with fewer
+than two options or no `correct:`, and a fill-in-the-blank question with
+no gap or one that does not close (`questionIn` in `fences.ts`). The `/`
+menu inserts both kinds.
 
-**Generated, never authored.** Table of contents (a closed `<details
-class="dl-toc">`, emitted only with two or more sections), previous and
-next, series navigation, the reference panel.
+### Site panes
 
-**Runtime.** Pyodide 0.28.3 in a module Worker; `numpy`, `pandas`,
-`matplotlib` baseline; `packages:` adds more. Output rendering lives in
-`assets/tutorial_tools.py`.
-
-**Live-preview site cells**, added `4ac0176`/later commits through
-2026-09-11 as dewlab's own answer to the web track dewstack's merge is
-retiring (see §2's new header) — not a copy of dewstack's `site=name`
-spelling, and deliberately so: dewlab's own authoring editor keeps only
-the *first word* of a fence's info string on a round trip, so an
-identity carried in the info string (`site=hero`) would come back inert.
-The grouping key instead lives on a header line, the same place every
-other exec-family fence already keeps its own identity:
+One live web page, written as consecutive fences (`SITE_LANGS`,
+`SITE_HEADER_RE`):
 
 ````markdown
 ```html site
@@ -231,203 +232,167 @@ site: hero
 ```css site
 id: hero-style
 site: hero
-.btn { padding: 0.5rem 1rem; }
+button { padding: 0.5rem 1rem; }
 ```
 ````
 
-Fence language is one of `html`, `css`, `js` (`SITE_LANGS`); `id:` is
-required (cells and panes share one id namespace — a build fails if any
-two collide) and `site:` is the grouping key. Panes are grouped by
-*consecutive* fences sharing the same `site:` value — nothing else may
-sit between them, and the same `site:` name may not reappear later in
-the document once its run has ended (the same "keep it together" rule
-dewstack's own `site=` enforced). At most one pane per language per
-site; panes are otherwise optional (an HTML+CSS site with no JS pane is
-normal). A `js site` pane gets a Run button and a console; `html site`
-and `css site` panes stay live, rebuilding the preview on every edit.
-This is exactly the block-model gap plan §6 step 3 named and deliberately
-deferred ("`site=`/`app=` cells... need consecutive-fence grouping
-dewnote's block model doesn't have yet") — now with a real, stable target
-grammar to build it against, since dewlab settled its own spelling rather
-than dewstack's (§8 has the plan).
+Languages are `html`, `css` and `js`. `site:` groups the panes, which
+must be consecutive; at most one pane per language per site. The page
+renders in a sandboxed iframe, CSS in the head, HTML as the body,
+JavaScript last.
 
-**Hand-written pages (`pages/`)**, added 2026-09-13 across three of
-dewlab's own decisions (7.159, 7.161, 7.162) that moved the About, home,
-and features pages out of hardcoded HTML strings in `build.py` and into
-real markdown. A page is `pages/<name>.md` — no module, series, or
-version, since it isn't part of the curriculum — with a `title`-only
-front matter block:
+*dewnote:* drawn as one editor with a tab per language and a live
+preview in a sandboxed iframe (`siteGroups`, `sitePage` in `fences.ts`).
+The checker reports a pane with no `site:` or no `id:`.
 
-```markdown
----
-title: About this project
----
+### App panes
 
-# About this project
-
-dewlab is an open educational project...
-```
-
-`read_page()` there converts the body through the same markdown pipeline
-a tutorial's own prose uses, plus two things ordinary prose doesn't have:
-
-A ` ```card ` fence — the header-line idiom every other exec-family fence
-already uses, applied to a fourth, non-runnable kind:
+A full-stack page that reads the database the page's `sql exec` cells
+built (`APP_LANGS`, `APP_HEADER_RE`, dewlab decision 7.180). The same
+shape as a site pane, with `app:` in place of `site:`:
 
 ````markdown
-```card
-url: computational-methods.html
-status: beta
-meta: 5N0554 · QQI Level 5
-### Computational Methods and Problem Solving
-We work through matrices, simulation, algorithms and debugging, in Python.
+```js app
+id: list-js
+app: list
+const rows = await dlQuery("select * from readings");
 ```
 ````
 
-`url:` (required by dewlab's own build; parsed as `null` here rather than
-thrown on, an editor reading a fence mid-edit), `status:`, `meta:`, and
-`wide:` (`true`/`yes`) are all optional header lines, then a markdown
-heading and an optional paragraph. This is the markup for a home-page module
-tile (`.dl-module-card`); adjacent
-cards share one `.dl-module-grid` wrapper automatically on dewlab's own
-build, a purely cosmetic grouping this editor's own preview doesn't
-reproduce — each card previews on its own.
+Unlike a site pane it is not sandboxed: its HTML and CSS render into the
+page, its CSS scoped with `@scope`, and its JavaScript runs on the page
+with `root` and `dlQuery(sql, params)` in scope.
 
-**Not a cell.** dewlab's own `Cell`/`CELL_TYPES`/`render_cell()` already
-reserve that word for something that runs, with a real saved-progress
-contract behind it (a cell id is a contract — renaming one throws away a
-student's saved work). A card has no output and nothing to save, so it
-stays a **card** throughout dewnote's own code and this document too —
-"cell" is free here for dewnote's own broader sense of the word (any
-boxed, focusable unit, plan §3's own "a cell is a box; a paragraph is
-not"), and a course maintainer is free to call the rendered result a
-"card cell" in conversation without either use stepping on the other.
+*dewnote:* shown as code blocks. Nothing runs them, and the checker does
+not read them.
 
-A `[[name]]` marker is the second new piece — infrastructure a page can
-point at but never author directly, dewlab's own `GENERATED_BLOCKS`
-registry (today: `[[search-box]]`, the site-wide search widget). A
-bracketed marker rather than an HTML comment in the source, specifically
-so a markdown editor renders it as a real, visible, clickable line rather
-than an invisible comment node — dewnote's block splitter has never had
-to render one specially, since a fence's own placeholder convention
-(`<!--dewlab-cell-N-->` and friends) is a build-time-only concern that
-never reaches a page's own source text; a `[[name]]` marker does, and
-today dewnote's block splitter treats it as ordinary prose text — it
-round-trips correctly (nothing here breaks decision 1's guarantee) but
-renders as the literal bracketed text, not a preview of what it stands
-for. Giving it one is real, separate scope, not attempted here.
+### Notes
 
-A `<div class="dl-hero">`/`<div class="dl-audience">`/`<div
-class="dl-attribution">`/`<ul class="dl-feature-list">` section or list
-wrapper is the third — dewlab's own `convert_page_wrapper_bodies()`
-re-converts the markdown inside one a second time, since Python-Markdown
-treats a raw HTML block as opaque through to its closing tag. dewnote's
-own block splitter (the document model) has no equivalent special case for these
-wrappers today: a `<div class="dl-audience">` spanning several
-blank-line-separated paragraphs splits into several ordinary prose
-blocks, one of which is just the bare opening tag on its own line and
-another just the closing tag — round-trips byte for byte (the round-trip suite's
-own guarantee doesn't depend on understanding what wraps a block), but
-reads as several odd, meaningless one-line "paragraphs" in the editor
-rather than one cohesive section. Documented as a known gap rather than
-worked around, since giving these wrappers their own block kind is real
-design work of its own, not a one-line fix.
+`<aside class="dl-note" id="…">`, lifted out of the body into the
+reference panel by the build (`NOTE_RE`).
+
+*dewnote:* kept as raw HTML, shown as written.
+
+### Images
+
+`![alt](name.svg)`, a file name resolved against the tutorial's folder.
+The build stops on an `<img>` without `alt` (`IMG_RE`, `ALT_RE`).
+
+*dewnote:* drawn from the store; a pasted image is written beside the
+document. The checker reports an image with no file behind it.
+
+### Maths
+
+`$…$` and `$$…$$`, taken out before markdown runs (`INLINE_MATH_RE`,
+`DISPLAY_MATH_RE`). `\$` is a literal dollar. Inline maths never spans a
+line and never has a space just inside either dollar, so "$5 and $10"
+stays prose.
+
+*dewnote:* the same rule (`maths.ts`), so the editor typesets what the
+site will. A display formula is saved over three lines.
+
+### Footnotes
+
+`[^label]` and its definition work in prose, folds and notes. The build
+stops on one inside a `hint`, `question` or `card` fence
+(`no_footnotes_in()`): each is converted on its own, so the footnote
+could not reach the foot of the page.
+
+*dewnote:* footnotes are kept as written; the checker does not report
+one inside a fence.
+
+### Hand-written pages
+
+`pages/<name>.md` (`read_page()`): the About, home and features pages.
+`title` is the only front matter; no course, series or version.
+
+Three things a page has that a tutorial does not:
+
+- **Cards** (`CARD_HEADER_RE`): a ```` ```card ```` fence with `url:`
+  (required), `status:`, `meta:` and `wide:` header lines, then a
+  heading and an optional line or two. Adjacent cards share one grid.
+- **Generated blocks** (`GENERATED_BLOCKS`): a line holding only
+  `[[search-box]]` or `[[course-cards]]`, replaced by the build. Any
+  other name stops it.
+- **Wrappers** (`MARKDOWN_WRAPPER_RE`): `<div class="dl-hero">`,
+  `dl-audience`, `dl-attribution` and `<ul class="dl-feature-list">`,
+  whose markdown inside the build converts.
+
+*dewnote:* the palette lists pages separately from tutorials. The checker
+reports a card with no `url:` or no heading. A card shows as a code
+block, a generated block as a line of text, and a wrapper as its opening
+and closing tags around the paragraphs inside.
+
+### Written by the build, never by an author
+
+The table of contents, previous and next, series navigation, the
+reference panel, breadcrumbs.
+
+### The runtime
+
+Pyodide 0.28.3 in a Worker, with `numpy`, `pandas` and `matplotlib`
+loaded; `packages:` adds more. Output rendering lives in
+`assets/tutorial_tools.py`.
+
+*dewnote:* the same Pyodide version, in its own Worker; output
+rendering is `src/runtime/dewnote_tools.py`.
 
 ## 2. dewstack
 
-dewstack's own grammar, which dewnote reads so a dewstack tutorial can be
-opened and converted (§5). dewlab's spelling in §1 is what to write new
-tutorials in; where both answer the same problem — SQL cells, site cells
-— §1 is the one that counts.
+dewnote opens and saves dewstack's tutorials as markdown, byte for byte,
+but runs none of their cells and has no converter to dewlab's spelling.
+The converter (`dialect-convert.ts`) went with the rewrite onto Milkdown
+(#72). dewstack is being merged into dewlab, and dewlab's spelling is the
+one to write in.
 
-**File layout.** `tutorials/<module>/<slug>/<slug>.md`, optional
-`<slug>.glossary.yaml`. Same `order.yaml` convention as dewlab.
+What dewnote still has to keep intact:
 
-**Front matter.** Required: `title`, `slug`, `module`, `module_title`,
-`series`, `version`. Optional: `status` (`live` or `draft`). No `year`,
-no `covers`. Detection rule between the two sites: `year` present means
-dewlab; `module_title` without `year` means dewstack.
+- **Front matter** carries `slug`, `module`, `module_title` and `series`,
+  which dewlab now refuses. The index reads `module` and `series`, and
+  the palette shows them beside a dewstack tutorial.
+- **Fences carry everything in the info string**: `html site=name`,
+  `sql cell=name persist`, `py cell=name`, `sql-check db=name task=…`,
+  `html app=name`. There are no header lines. This is the case that once
+  broke Milkdown, and why the editor keeps a fence's info string whole
+  (`editor.ts`).
+- **No maths.** A dewstack document with `$` in it means a dollar sign.
 
-**Cells.** Five fence forms, all pulled out before markdown sees them.
+## 3. Plain markdown
 
-| Fence | Meaning |
-|---|---|
-| ` ```html site=name `, ` ```css site=name `, ` ```js site=name ` | Web track. Panes sharing a name form one site with a live preview in a sandboxed iframe. JS runs on Run only. |
-| ` ```sql cell=name ` and ` ```sql cell=name persist ` | Data track. Cells sharing a name share one SQLite connection; `persist` keeps the script across visits. |
-| ` ```sql-check db=name task=check_foo ` | An empty fence that renders a self-check button. |
-| ` ```py cell=name ` | pandas and matplotlib, sharing a namespace by name; `read_sql("name", …)` reaches a SQL cell's connection. |
-| ` ```html app=name `, ` ```css app=name `, ` ```js app=name ` | Full-stack track, rendered into the page, with `window.dlQuery(db, sql, params)`. |
+Anything else: YAML front matter with any keys, kept in their order and
+quoting (a YAML re-dump would unquote a quoted date); CommonMark with GFM
+tables and task lists; inline HTML passed through; `$…$` maths on. No
+fence runs.
 
-The info string carries everything; the body has no header lines. This
-is the case that broke Milkdown in dewlab and it is why the block
-splitter keeps the info string whole.
+## 4. Jupyter (import and export)
 
-**Folds.** Same two classes as dewlab, same spelling.
+nbformat 4.5 (`notebook.ts`).
 
-**Links.** Same `tutorial:` scheme.
+- A run of prose becomes one markdown cell. Front matter becomes a raw
+  cell.
+- A fence becomes a code cell holding its body, header lines included;
+  an illustrative one is marked `dewnote_illustrative`.
+- Every cell keeps the exact text it came from in `metadata.dewnote.raw`,
+  with its kind and fence info. Importing a notebook dewnote exported
+  gives back the same bytes; a cell edited in Jupyter is rebuilt from its
+  new source.
+- A notebook written in Jupyter, with no `metadata.dewnote`, becomes
+  markdown with its code cells as plain `python` fences, which do not
+  run until `exec` and an `id:` line are added.
 
-**Images.** `<img>` without `alt` fails the build. No tutorial uses one.
+## 5. Not yet handled
 
-**Maths.** None. No KaTeX, no `$` anywhere. A dewstack document with `$`
-in it should render the dollar signs as text.
+What dewlab's build reads and dewnote shows only as raw text, in the
+order an author would notice it. Each is planned in
+`planning/ROADMAP.md`, Phase 6.
 
-**Markdown extensions in the build.** `fenced_code`, `tables`, `toc`,
-`sane_lists`, `attr_list`. No tutorial uses `attr_list` syntax
-(`{: .class }`) as of 2026-09-06, so the renderer needs no plugin for it
-until one does.
-
-**Runtime.** One Pyodide interpreter per page serves SQL (`sqlite3`),
-Python and app cells; the HTML/CSS/JS preview is an iframe with
-`sandbox="allow-scripts"` and no `allow-same-origin`.
-
-**Look.** Same tokens as dewlab, measure 30rem instead of 34rem.
-
-## 3. Plain markdown (writing-content, and anything else)
-
-YAML front matter with arbitrary keys, preserved in order and quoting
-(`created`/`updated` are quoted ISO-8601 strings; a YAML re-dump would
-unquote them). CommonMark with GFM tables and task lists, inline HTML
-passed through, `$…$` maths on. No cells run; fences are highlighted.
-The prompt-deck fields in writing-content (`prompt: 62`) are that app's
-business and dewnote leaves them alone.
-
-## 4. Jupyter (import and export only)
-
-nbformat 4.5. Mapping from the block model:
-
-- A run of prose blocks → one markdown cell, joined by blank lines.
-- A code cell → a code cell. `id` from the dewlab `id:` line where there
-  is one, else generated. The full fence info string, the `hint:` line,
-  and the dialect name go in `metadata.dewnote` so import can rebuild the
-  fence exactly.
-- Illustrative (non-exec) fences stay inside markdown cells.
-- Folds stay as raw HTML inside markdown cells; Jupyter renders
-  `<details>` natively.
-- Outputs, if included: `stream` for text, `display_data` with
-  `image/png` for figures, taken from the last run.
-
-Import inverts this. A notebook without `metadata.dewnote` becomes a plain
-markdown document with `python exec` fences in the dewlab dialect if the
-user chose dewlab as the target, else plain `python` fences.
-
-## 5. Conversions between dialects
-
-Block by block, with a report of what did not map:
-
-| From | To | Rule |
-|---|---|---|
-| dewlab `python exec` with `id: x` | dewstack | `py cell=x`; `hint:`, `expect:`, `name:` have no home, report each |
-| dewstack `py cell=x` | dewlab | `python exec` with `id: x` |
-| dewstack `sql cell=x` | dewlab | `sql exec` with a fresh `id:` (dewstack's per-cell named database has no dewlab equivalent — dewlab's cells all share one `db` — report the name lost); `persist` has no home either, report it |
-| dewstack `sql-check` | dewlab | no equivalent; keep as illustrative fence, report |
-| dewstack `html/css/js site=name` | dewlab | `html/css/js site`, each pane getting its own fresh `id: <name>-<language>` and `site: <name>` |
-| dewstack `html/css/js app=name` | dewlab | no equivalent (dewlab has no full-stack track yet — `planning/DEWSTACK_MERGE.md` §2 in dewlab defers this); keep as illustrative fences, report |
-| dewlab `sql exec` | dewstack | no equivalent (dewstack's SQL cells are per-name databases dewlab's shared-`db` model can't address as one); keep as illustrative fence, report |
-| dewlab `hint` fence | dewstack | no equivalent (dewstack has no staged-hint mechanism); keep as illustrative fence, report |
-| dewlab `html/css/js site` | dewstack | `html/css/js site=<name>` (`id:` has no home — `site=name`'s own info string is the whole identity there — dropped, reported); a pane with no `site:` at all has nothing to carry over, kept as illustrative, reported |
-| either | plain | drop attributes, keep language |
-| dewlab front matter | dewstack | drop `year`, `covers`, `practice_*`; keep the rest |
-| dewstack front matter | dewlab | add `year` (ask), `covers` empty |
-
-All of the above is implemented in `dialect-convert.ts` as of plan §8's
-own items 1-3.
+1. Staged `hint` fences: shown as code, not as the hint they are.
+2. `question` fences: checked, but shown as code rather than as the
+   question a reader sees.
+3. App panes: shown as code; nothing runs them.
+4. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
+   when run in dewnote.
+5. Cards, generated blocks and page wrappers: shown as code, text and
+   loose tags.
+6. The checker does not report footnotes inside fences, or `tutorial:`
+   anchors that name no heading.
