@@ -135,10 +135,42 @@ export const SNIPPETS: SnippetItem[] = [
     },
   },
   {
+    key: "app",
+    label: "Page that reads the database",
+    icon: DATABASE_ICON,
+    // An app's script reads the tables the page's SQL cells made, through
+    // dlQuery, and runs only when Run is pressed.
+    markdown: (free) => {
+      const app = free("app");
+      return [
+        "```html app",
+        `id: ${free("pane")}`,
+        `app: ${app}`,
+        "<ul class=\"rows\"></ul>",
+        "```",
+        "",
+        "```js app",
+        `id: ${free("pane")}`,
+        `app: ${app}`,
+        "const rows = await dlQuery(\"select name from sqlite_master where type = 'table'\");",
+        "root.querySelector(\".rows\").innerHTML = rows.map((row) => `<li>${row.name}</li>`).join(\"\");",
+        "```",
+      ].join("\n");
+    },
+  },
+  {
     key: "hint",
     label: "Hint",
     icon: HINT_ICON,
     markdown: () =>
       '<details class="dl-hint"><summary>stuck? here are some steps</summary>\n\nFirst step.\n\n</details>',
+  },
+  {
+    // Belongs to the cell above it, which is where the menu is usually
+    // opened: just under the cell it helps with.
+    key: "staged-hint",
+    label: "Staged hint",
+    icon: HINT_ICON,
+    markdown: () => "```hint\nafter: 3 errors\ntitle: Stuck? Try this\n\nWhat to look at first.\n```",
   },
 ];

@@ -187,8 +187,12 @@ unchanged runs, runs, failed checks, empty results, minutes; default
 `errors:5`); `title:` defaults to "Let's slow down a moment…". The rest is
 markdown.
 
-*dewnote:* shown as a code block. Not drawn as a hint, and the checker
-does not read it.
+*dewnote:* the lines stay editable, and under them the hint is drawn as
+a reader meets it, with a line saying when it appears and for which cell
+(`hintIn`, `parseTrigger`, `describeTrigger` in `fences.ts`). The
+checker reports a hint with no cell to belong to, one with no text, an
+`after:` line the build cannot read, and a `for:` naming no cell on the
+page. The `/` menu inserts one.
 
 ### Questions
 
@@ -211,7 +215,10 @@ question's options are its bullet lines (`OPTION_LINE_RE`), and
 question marks each gap as `{answer}`, or `{right|wrong|wrong}` for a
 drop-down, the first item being correct (`GAP_RE`).
 
-*dewnote:* shown as a code block. The checker reports a missing id or
+*dewnote:* the lines stay editable, and under them the question is
+drawn with its answer marked: the correct option ticked, or each gap
+filled in with its answer (`questionPreview` in `editor.ts`, built the
+way `render_question()` builds it). The checker reports a missing id or
 type, a question with no text, a multiple-choice question with fewer
 than two options or no `correct:`, and a fill-in-the-blank question with
 no gap or one that does not close (`questionIn` in `fences.ts`). The `/`
@@ -263,8 +270,16 @@ Unlike a site pane it is not sandboxed: its HTML and CSS render into the
 page, its CSS scoped with `@scope`, and its JavaScript runs on the page
 with `root` and `dlQuery(sql, params)` in scope.
 
-*dewnote:* shown as code blocks. Nothing runs them, and the checker does
-not read them.
+*dewnote:* drawn like a site editor, a tab per pane over one editor
+(`paneGroups("app", …)` in `fences.ts`), with a **Run** button. The
+preview is a sandboxed frame rather than the page itself, so no `@scope`
+is needed: HTML and CSS show at once, and Run adds the script, called
+with `root` and a `dlQuery` that posts each query to the editor, which
+answers only the frame it drew, from the Worker's `db`
+(`query_rows` in `dewnote_tools.py`, as `_query_rows` in dewlab's
+`tutorial_tools.py`). An edit to the panes undoes the run. The checker
+reports a pane with no `id:` or no `app:` line. The `/` menu inserts
+one.
 
 ### Notes
 
@@ -318,10 +333,15 @@ Three things a page has that a tutorial does not:
   `dl-audience`, `dl-attribution` and `<ul class="dl-feature-list">`,
   whose markdown inside the build converts.
 
-*dewnote:* the palette lists pages separately from tutorials. The checker
-reports a card with no `url:` or no heading. A card shows as a code
-block, a generated block as a line of text, and a wrapper as its opening
-and closing tags around the paragraphs inside.
+*dewnote:* the palette lists pages separately from tutorials. A card is
+drawn as its tile, under its lines (`cardPreview`, as `render_card()`).
+A generated block's line is kept as written and labelled with what the
+site puts there (`generatedBlocks` in `editor.ts`); the serialiser's
+escaping of its brackets, which would have made the build pass it over,
+is undone on save. A wrapper is drawn as a labelled section, with the
+fold drawing (`foldLine` reads it, with the tag that closes it). The
+checker reports a card with no `url:` or no heading, and a generated
+block the build does not know.
 
 ### Written by the build, never by an author
 
@@ -384,15 +404,9 @@ nbformat 4.5 (`notebook.ts`).
 
 What dewlab's build reads and dewnote shows only as raw text, in the
 order an author would notice it. Each is planned in
-`planning/ROADMAP.md`, Phase 6.
+`planning/ROADMAP.md`, Phase 7.
 
-1. Staged `hint` fences: shown as code, not as the hint they are.
-2. `question` fences: checked, but shown as code rather than as the
-   question a reader sees.
-3. App panes: shown as code; nothing runs them.
-4. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
+1. `{{include: …}}` in a cell: kept, not expanded, so the cell fails
    when run in dewnote.
-5. Cards, generated blocks and page wrappers: shown as code, text and
-   loose tags.
-6. The checker does not report footnotes inside fences, or `tutorial:`
+2. The checker does not report footnotes inside fences, or `tutorial:`
    anchors that name no heading.

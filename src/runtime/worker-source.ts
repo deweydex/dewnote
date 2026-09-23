@@ -150,6 +150,18 @@ async function resetSql(message) {
   return true;
 }
 
+// An app page's query. Python's error arrives as a whole traceback; a
+// page wants its last line, which says what went wrong.
+function queryRows(message) {
+  if (!tools) throw new Error("Python is still starting. Try again in a moment.");
+  try {
+    return JSON.parse(tools.query_rows(message.sql, JSON.stringify(message.params ?? [])));
+  } catch (error) {
+    const lines = String((error && error.message) || error).trim().split("\\n");
+    throw new Error(lines[lines.length - 1].replace(/^\\w+(Error|Exception): /, ""));
+  }
+}
+
 self.onmessage = async (event) => {
   const message = event.data;
   if (message.type === "set-interrupt-buffer") {
@@ -169,6 +181,8 @@ self.onmessage = async (event) => {
       result = await resetSql(message);
     } else if (message.type === "help") {
       result = help(message);
+    } else if (message.type === "query-rows") {
+      result = queryRows(message);
     } else {
       throw new Error("unknown message type: " + message.type);
     }

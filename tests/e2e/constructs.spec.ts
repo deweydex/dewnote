@@ -37,6 +37,9 @@ const IDENTICAL: Record<string, string> = {
   // edit. dewlab does not write them yet; this says dewnote is ready if
   // it starts to.
   "footnote": "A claim[^1] and another[^b].\n\n[^1]: The first note.\n\n[^b]: The second.\n",
+  // A page's request for a block the build makes. Escaped as `\[\[`, it
+  // is no longer one, and the page shows the brackets instead.
+  "generated block": "Search:\n\n[[search-box]]\n\nOr browse:\n\n[[course-cards]]\n",
 };
 
 for (const [name, source] of Object.entries(IDENTICAL)) {
@@ -490,4 +493,169 @@ test.describe("a web page's panes as one editor", () => {
     await page.keyboard.type(" And more.");
     await expect(page.frameLocator(".dn-site-preview").locator("body")).toContainText("And more.");
   });
+});
+
+test("a staged hint shows as the hint a reader meets, and when it appears", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const source =
+    "```python exec\nid: totals\nx = 1\n```\n\n```hint\nafter: 3 errors and 2 minutes\ntitle: Look again\n\nCheck the **spelling**.\n```\n";
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open(text);
+  }, source);
+
+  const hint = page.locator(".dn-hint");
+  await expect(hint.locator(".dn-hint-when")).toHaveText("Staged hint. Appears after 3 errors and 2 minutes in totals.");
+  await expect(hint.locator(".dn-hint-title")).toHaveText("Look again");
+  await expect(hint.locator("strong")).toHaveText("spelling");
+  // Drawing it changes nothing in the file.
+  expect(await page.evaluate(() => (globalThis as any).__dewnote.markdown())).toBe(source);
+});
+
+test("a staged hint whose trigger the build would refuse says so where it is drawn", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open("```hint\nfor: somewhere\nafter: soon\n\nLook.\n```\n");
+  });
+  await expect(page.locator(".dn-hint-when")).toContainText("cannot be read");
+});
+
+test("a multiple-choice question shows its options, with the correct one marked", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const source = "```question\nid: loops\ntype: multiple-choice\ncorrect: 2\nWhich loop runs **at least** once?\n- `for`\n- `while` with the test at the end\n```\n";
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open(text);
+  }, source);
+
+  const question = page.locator(".dn-question");
+  await expect(question.locator(".dn-question-kind")).toHaveText("Multiple choice. The answer is option 2.");
+  await expect(question.locator(".dn-question-prompt strong")).toHaveText("at least");
+  await expect(question.locator(".dn-question-option")).toHaveCount(2);
+  await expect(question.locator(".dn-question-option.is-correct")).toContainText("with the test at the end");
+  expect(await page.evaluate(() => (globalThis as any).__dewnote.markdown())).toBe(source);
+});
+
+test("a fill-in-the-blank question shows each gap's answer in its sentence", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open(
+      "```question\nid: lists\ntype: fill-in-the-blank\nA list uses {square} brackets and {is|is not} ordered. It costs $5.\n```\n",
+    );
+  });
+  const prompt = page.locator(".dn-question-prompt");
+  await expect(page.locator(".dn-question-gap")).toHaveCount(2);
+  await expect(page.locator(".dn-question-gap").first()).toHaveText("square");
+  await expect(page.locator(".dn-question-gap").nth(1)).toHaveText("is / is not");
+  // The dollar sign outside a gap is a price, as on the site.
+  await expect(prompt).toContainText("It costs $5.");
+});
+
+test("a question with no type the site knows says so where it is drawn", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open("```question\nid: q\ntype: essay\nWrite.\n```\n");
+  });
+  await expect(page.locator(".dn-question-kind")).toContainText("needs a `type:`");
+});
+
+const APP =
+  "```html app\nid: list-html\napp: readings\n<ul id=\"out\"></ul>\n```\n\n" +
+  "```css app\nid: list-css\napp: readings\nli { color: rgb(0, 128, 0); }\n```\n\n" +
+  "```js app\nid: list-js\napp: readings\nconst rows = await dlQuery(\"select name from readings where hour > ?\", [12]);\nroot.querySelector(\"#out\").innerHTML = rows.map((row) => `<li>${row.name}</li>`).join(\"\");\n```\n";
+
+test("an app's panes are one editor, and Run reads the page's database through dlQuery", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    (globalThis as any).__dewnoteRows = [{ name: "evening" }, { name: "night" }];
+    return (globalThis as any).__dewnote.open(text);
+  }, APP);
+
+  const bar = page.locator(".dn-site-tabs");
+  await expect(bar.locator("button")).toHaveText(["HTML", "CSS", "JavaScript", "Run"]);
+  await expect(page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden)")).toHaveCount(1);
+
+  // Before Run, the page is its HTML and CSS; the script has not asked anything.
+  const frame = page.frameLocator("iframe[data-dn-app]");
+  await expect(frame.locator("#out li")).toHaveCount(0);
+
+  await bar.locator("button", { hasText: "Run" }).dispatchEvent("mousedown");
+  await expect(frame.locator("#out li")).toHaveText(["evening", "night"]);
+  await expect(frame.locator("#out li").first()).toHaveCSS("color", "rgb(0, 128, 0)");
+  expect(await page.evaluate(() => (globalThis as any).__dewnoteQueries)).toEqual([
+    { sql: "select name from readings where hour > ?", params: [12] },
+  ]);
+  await expect(page.locator(".dn-site-tabs button", { hasText: "Run again" })).toHaveCount(1);
+  expect(await page.evaluate(() => (globalThis as any).__dewnote.markdown())).toBe(APP);
+
+  // An edit to the script puts the page back to its HTML and CSS, as
+  // dewlab does, until Run is pressed again.
+  await bar.locator("button", { hasText: "JavaScript" }).dispatchEvent("mousedown");
+  await page.locator(".milkdown .dn-site-pane:not(.dn-site-hidden) .cm-content").click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("\n// changed");
+  await expect(page.locator(".dn-site-tabs button", { hasText: /^Run$/ })).toHaveCount(1);
+  await expect(frame.locator("#out li")).toHaveCount(0, { timeout: 3000 });
+});
+
+test("a query that fails shows its reason in the app's page", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    (globalThis as any).__dewnoteRows = { error: "There is no database yet. Run the SQL cells that make the tables first." };
+    return (globalThis as any).__dewnote.open(text);
+  }, APP);
+  await page.locator(".dn-site-tabs button", { hasText: "Run" }).dispatchEvent("mousedown");
+  await expect(page.frameLocator("iframe[data-dn-app]").locator(".dn-app-error")).toHaveText(
+    "There is no database yet. Run the SQL cells that make the tables first.",
+  );
+});
+
+
+test("a hand-written page's sections, cards and generated blocks are drawn as the site uses them", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const source = [
+    '<div class="dl-hero">',
+    "",
+    "Learn in your browser.",
+    "",
+    "```card",
+    "url: features.html",
+    "status: beta",
+    "meta: 5N0554",
+    "### What dewlab can do",
+    "The tools on every page,",
+    "and how it works offline.",
+    "```",
+    "",
+    "</div>",
+    "",
+    "[[search-box]]",
+    "",
+    "[[search-bar]]",
+    "",
+  ].join("\n");
+  await page.evaluate((text) => {
+    document.querySelector(".dn-gate")?.remove();
+    return (globalThis as any).__dewnote.open(text);
+  }, source);
+
+  await expect(page.locator(".dn-fold-open.is-wrapper .dn-fold-label")).toHaveText("Hero");
+  await expect(page.locator(".milkdown .dn-fold-body")).toHaveCount(2);
+
+  const card = page.locator(".dn-card");
+  await expect(card.locator(".dn-card-heading")).toContainText("What dewlab can do");
+  await expect(card.locator(".dn-card-badge")).toHaveText("beta");
+  await expect(card.locator(".dn-card-meta")).toHaveText("5N0554");
+  // A line break in the card's markdown is a space, as on the site.
+  await expect(card).toContainText("The tools on every page, and how it works offline.");
+  await expect(page.locator(".dn-card-where")).toContainText("Opens features.html");
+
+  await expect(page.locator(".dn-generated").first()).toContainText("The site-wide search box, put here by the site:");
+  await expect(page.locator(".dn-generated.is-unknown")).toContainText("it will not build this");
+  expect(await page.evaluate(() => (globalThis as any).__dewnote.markdown())).toBe(source);
 });

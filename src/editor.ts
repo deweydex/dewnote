@@ -21,7 +21,8 @@ import { Plugin, PluginKey, type EditorState } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
-import { foldLine, siteGroups, sitePage, type SiteGroup } from "./fences.ts";
+import { appPage, cardIn, describeTrigger, foldLine, generatedBlockIn, GENERATED_BLOCKS, hintIn, paneGroups, parseTrigger, questionIn, sitePage, type PaneKind, type Question, type SiteGroup, type StagedHint } from "./fences.ts";
+import { renderFragment } from "./export-html.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 import { setYamlField } from "./authoring.ts";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
@@ -304,7 +305,12 @@ export const foldLineView = $view(htmlSchema.node, () => (node) => {
     summary.className = "dn-fold-summary";
     summary.textContent = fold.summary;
     dom.append(label, summary);
-    dom.title = "Readers see this line, and open it to read what is below. Edit the summary in the markdown (Ctrl+/).";
+    if (fold.wrapper) {
+      dom.classList.add("is-wrapper");
+      dom.title = "A section of the page, styled by the site from here to its end. Change it in the markdown (Ctrl+/).";
+    } else {
+      dom.title = "Readers see this line, and open it to read what is below. Edit the summary in the markdown (Ctrl+/).";
+    }
   } else {
     dom.className = "dn-fold-close";
     dom.textContent = "end";
@@ -320,17 +326,19 @@ export const foldBodies = $prose(
       props: {
         decorations(state) {
           const marks: Decoration[] = [];
-          let inside = false;
+          // The tag the open fold is waiting for, so a wrapper's `</div>`
+          // never ends a hint, nor a hint's `</details>` a wrapper.
+          let inside: string | null = null;
           state.doc.forEach((block, offset) => {
             const only = block.type.name === "paragraph" && block.childCount === 1 ? block.firstChild : null;
             const fold = only?.type.name === "html" ? foldLine(String(only.attrs["value"] ?? "")) : null;
-            if (fold?.kind === "open") {
-              inside = true;
+            if (fold?.kind === "open" && inside === null) {
+              inside = fold.tag;
               marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-head" }));
-            } else if (fold?.kind === "close" && inside) {
-              inside = false;
+            } else if (fold?.kind === "close" && inside === fold.tag) {
+              inside = null;
               marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-foot" }));
-            } else if (inside) {
+            } else if (inside !== null) {
               marks.push(Decoration.node(offset, offset + block.nodeSize, { class: "dn-fold-body" }));
             }
           });
@@ -340,9 +348,42 @@ export const foldBodies = $prose(
     }),
 );
 
-/** The site editors in a document, from its top-level blocks, with each
- * pane's position so decorations can find it. */
-function sitesIn(state: EditorState): { group: SiteGroup; from: number[]; to: number[] }[] {
+/** A line holding only `[[search-box]]` or `[[course-cards]]`: on a
+ * hand-written page, dewlab's build puts something there no author
+ * writes. The line stays as it is written; a label beside it says what
+ * readers get, or that the build knows no such block. */
+export const generatedBlocks = $prose(
+  () =>
+    new Plugin({
+      props: {
+        decorations(state) {
+          const marks: Decoration[] = [];
+          state.doc.forEach((block, offset) => {
+            if (block.type.name !== "paragraph") return;
+            const generated = generatedBlockIn(block.textContent);
+            if (!generated) return;
+            marks.push(Decoration.node(offset, offset + block.nodeSize, {
+              class: generated.description ? "dn-generated" : "dn-generated is-unknown",
+            }));
+            marks.push(Decoration.widget(offset + 1, () => {
+              const label = document.createElement("span");
+              label.className = "dn-generated-label";
+              label.contentEditable = "false";
+              label.textContent = generated.description
+                ? `${generated.description}, put here by the site:`
+                : `The site knows ${Object.keys(GENERATED_BLOCKS).map((name) => `[[${name}]]`).join(" and ")}; it will not build this:`;
+              return label;
+            }, { side: -1, key: `dn-generated-${generated.name}` }));
+          });
+          return DecorationSet.create(state.doc, marks);
+        },
+      },
+    }),
+);
+
+/** The site or app editors in a document, from its top-level blocks,
+ * with each pane's position so decorations can find it. */
+function editorsIn(kind: PaneKind, state: EditorState): { group: SiteGroup; from: number[]; to: number[] }[] {
   const blocks: ({ info: string; body: string } | null)[] = [];
   const from: number[] = [];
   const to: number[] = [];
@@ -355,7 +396,7 @@ function sitesIn(state: EditorState): { group: SiteGroup; from: number[]; to: nu
         : null,
     );
   });
-  return siteGroups(blocks).map((group) => ({
+  return paneGroups(kind, blocks).map((group) => ({
     group,
     from: group.panes.map((pane) => from[pane.at]!),
     to: group.panes.map((pane) => to[pane.at]!),
@@ -363,120 +404,185 @@ function sitesIn(state: EditorState): { group: SiteGroup; from: number[]; to: nu
 }
 
 const TAB_NAMES: Record<string, string> = { html: "HTML", css: "CSS", js: "JavaScript" };
-const siteKey = new PluginKey<Map<number, string>>("dewnoteSites");
 
-/** A site editor's panes as one editor: a tab bar over them, one pane
- * showing at a time, and the page they make, live, under them. The file
- * keeps three fences, as dewlab writes and builds them; only the drawing
- * changes. Which tab is showing is per editor, by its place among the
- * document's site editors, and is the editor's own state, not the file's. */
-export const siteEditors = $prose(
-  () =>
-    new Plugin<Map<number, string>>({
-      key: siteKey,
-      state: {
-        init: () => new Map(),
-        apply(transaction, chosen) {
-          const choice = transaction.getMeta(siteKey) as { editor: number; language: string } | undefined;
-          if (!choice) return chosen;
-          return new Map(chosen).set(choice.editor, choice.language);
-        },
+interface PaneEditorState {
+  /** The tab showing in each editor, by its place among the document's
+   * editors of this kind. */
+  chosen: Map<number, string>;
+  /** App editors whose JavaScript has been run, with the panes' code as
+   * it was then. An edit to the panes makes it differ, and the page goes
+   * back to its HTML and CSS; any other change to the document, such as
+   * the paragraph Milkdown keeps after a closing code block, leaves it. */
+  ran: Map<number, string>;
+}
+
+type PaneEditorMeta = { editor: number; language: string } | { editor: number; run: string };
+
+/** What an app's panes hold, to tell whether they changed since Run. */
+const codeOfGroup = (group: SiteGroup) => JSON.stringify(group.panes.map((pane) => [pane.language, pane.code]));
+
+/** Answers an app page's `dlQuery`: rows, or why there are none. */
+export type QueryRows = (sql: string, params: unknown[]) => Promise<unknown[]>;
+
+/**
+ * An editor's panes as one editor: a tab bar over them, one pane showing
+ * at a time, and the page they make, live, under them. The file keeps
+ * one fence per language, as dewlab writes and builds them; only the
+ * drawing changes. Which tab is showing is the editor's own state, not
+ * the file's.
+ *
+ * A site page runs its script as it is typed, in a sandbox, as dewlab's
+ * site editor does. An app page's script reads the page's database, so,
+ * as on dewlab, it runs only when Run is pressed, and an edit puts the
+ * page back to its HTML and CSS until Run is pressed again. It runs in
+ * the same sandbox; its `dlQuery` asks this editor, which answers only
+ * the frame it drew, through `queryRows`.
+ */
+function paneEditors(kind: PaneKind, queryRows?: QueryRows) {
+  const key = new PluginKey<PaneEditorState>(kind === "site" ? "dewnoteSites" : "dewnoteApps");
+  const page = (group: SiteGroup, ran: boolean) => (kind === "site" ? sitePage(group) : appPage(group, ran));
+  return new Plugin<PaneEditorState>({
+    key,
+    state: {
+      init: () => ({ chosen: new Map(), ran: new Map() }),
+      apply(transaction, value) {
+        const meta = transaction.getMeta(key) as PaneEditorMeta | undefined;
+        if (meta && "language" in meta) return { ...value, chosen: new Map(value.chosen).set(meta.editor, meta.language) };
+        if (meta && "run" in meta) return { ...value, ran: new Map(value.ran).set(meta.editor, meta.run) };
+        return value;
       },
-      props: {
-        decorations(state) {
-          const chosen = siteKey.getState(state) ?? new Map<number, string>();
-          const marks: Decoration[] = [];
-          sitesIn(state).forEach(({ group, from, to }, editor) => {
-            const languages = group.panes.map((pane) => pane.language);
-            const showing = chosen.has(editor) && languages.includes(chosen.get(editor)!)
-              ? chosen.get(editor)!
-              : languages[0]!;
+    },
+    props: {
+      decorations(state) {
+        const { chosen, ran } = key.getState(state) ?? { chosen: new Map(), ran: new Map<number, string>() };
+        const marks: Decoration[] = [];
+        editorsIn(kind, state).forEach(({ group, from, to }, editor) => {
+          const code = codeOfGroup(group);
+          const hasRun = ran.get(editor) === code;
+          const languages = group.panes.map((pane) => pane.language);
+          const showing = chosen.has(editor) && languages.includes(chosen.get(editor)!)
+            ? chosen.get(editor)!
+            : languages[0]!;
+          const hasScript = kind === "app" && languages.includes("js");
 
+          marks.push(
+            Decoration.widget(
+              from[0]!,
+              (view) => {
+                const bar = document.createElement("div");
+                bar.className = "dn-site-tabs";
+                bar.contentEditable = "false";
+                const name = document.createElement("span");
+                name.className = "dn-site-name";
+                name.textContent = group.site;
+                bar.appendChild(name);
+                // On mousedown, with the default prevented, like the
+                // front-matter toggle: a click would move the selection
+                // first and may land on a rebuilt bar.
+                const button = (label: string, meta: PaneEditorMeta, className = "") => {
+                  const made = document.createElement("button");
+                  made.type = "button";
+                  made.textContent = label;
+                  if (className) made.className = className;
+                  made.addEventListener("mousedown", (event) => {
+                    event.preventDefault();
+                    view.dispatch(view.state.tr.setMeta(key, meta));
+                  });
+                  return made;
+                };
+                for (const language of languages) {
+                  const tab = button(TAB_NAMES[language] ?? language, { editor, language });
+                  tab.classList.toggle("is-showing", language === showing);
+                  tab.setAttribute("aria-pressed", String(language === showing));
+                  bar.appendChild(tab);
+                }
+                if (hasScript) {
+                  const run = button(hasRun ? "Run again" : "Run", { editor, run: code }, "dn-app-run");
+                  run.title = "Runs the JavaScript, which can read the tables the SQL cells above made.";
+                  bar.appendChild(run);
+                }
+                return bar;
+              },
+              { side: -1, key: `dn-${kind}-tabs-${editor}-${group.site}-${showing}-${languages.join(",")}-${hasRun}` },
+            ),
+          );
+
+          group.panes.forEach((pane, at) => {
             marks.push(
-              Decoration.widget(
-                from[0]!,
-                (view) => {
-                  const bar = document.createElement("div");
-                  bar.className = "dn-site-tabs";
-                  bar.contentEditable = "false";
-                  const name = document.createElement("span");
-                  name.className = "dn-site-name";
-                  name.textContent = group.site;
-                  bar.appendChild(name);
-                  for (const language of languages) {
-                    const tab = document.createElement("button");
-                    tab.type = "button";
-                    tab.textContent = TAB_NAMES[language] ?? language;
-                    tab.classList.toggle("is-showing", language === showing);
-                    tab.setAttribute("aria-pressed", String(language === showing));
-                    // On mousedown, with the default prevented, like the
-                    // front-matter toggle: a click would move the
-                    // selection first and may land on a rebuilt bar.
-                    tab.addEventListener("mousedown", (event) => {
-                      event.preventDefault();
-                      view.dispatch(view.state.tr.setMeta(siteKey, { editor, language }));
-                    });
-                    bar.appendChild(tab);
-                  }
-                  return bar;
-                },
-                { side: -1, key: `dn-site-tabs-${editor}-${group.site}-${showing}-${languages.join(",")}` },
-              ),
-            );
-
-            group.panes.forEach((pane, at) => {
-              marks.push(
-                Decoration.node(from[at]!, to[at]!, {
-                  class: pane.language === showing ? "dn-site-pane" : "dn-site-pane dn-site-hidden",
-                }),
-              );
-            });
-
-            const page = sitePage(group);
-            marks.push(
-              Decoration.widget(
-                to[to.length - 1]!,
-                () => {
-                  const frame = document.createElement("iframe");
-                  frame.className = "dn-site-preview";
-                  frame.title = `The page ${group.site} makes`;
-                  frame.dataset["dnSite"] = String(editor);
-                  // Scripts run; nothing else. It cannot reach the editor.
-                  frame.setAttribute("sandbox", "allow-scripts");
-                  frame.srcdoc = page;
-                  return frame;
-                },
-                { side: 1, key: `dn-site-preview-${editor}-${group.site}` },
-              ),
+              Decoration.node(from[at]!, to[at]!, {
+                class: pane.language === showing ? "dn-site-pane" : "dn-site-pane dn-site-hidden",
+              }),
             );
           });
-          return DecorationSet.create(state.doc, marks);
+
+          const made = page(group, hasRun);
+          marks.push(
+            Decoration.widget(
+              to[to.length - 1]!,
+              () => {
+                const frame = document.createElement("iframe");
+                frame.className = "dn-site-preview";
+                frame.title = `The page ${group.site} makes`;
+                frame.dataset[kind === "site" ? "dnSite" : "dnApp"] = String(editor);
+                // Scripts run; nothing else. It cannot reach the editor,
+                // only post it a message.
+                frame.setAttribute("sandbox", "allow-scripts");
+                frame.srcdoc = made;
+                return frame;
+              },
+              // A run gets a fresh frame; typing keeps the one there.
+              { side: 1, key: `dn-${kind}-preview-${editor}-${group.site}-${hasRun}` },
+            ),
+          );
+        });
+        return DecorationSet.create(state.doc, marks);
+      },
+    },
+    /** The preview widget keeps its iframe between keystrokes, so it
+     * does not flash; this refreshes what it shows, a moment after the
+     * typing stops. For an app, it also answers the frames' queries. */
+    view(view) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const frames = () => [...view.dom.querySelectorAll<HTMLIFrameElement>(`iframe[data-dn-${kind}]`)];
+      const onMessage = async (event: MessageEvent) => {
+        const asked = event.data as { type?: string; id?: number; sql?: string; params?: unknown[] } | null;
+        if (kind !== "app" || asked?.type !== "dn-app-query") return;
+        const frame = frames().find((each) => each.contentWindow === event.source);
+        if (!frame) return;
+        let answer: { rows?: unknown[]; error?: string };
+        try {
+          if (!queryRows) throw new Error("There is no database here to read.");
+          answer = { rows: await queryRows(String(asked.sql ?? ""), Array.isArray(asked.params) ? asked.params : []) };
+        } catch (error) {
+          answer = { error: error instanceof Error ? error.message : String(error) };
+        }
+        frame.contentWindow?.postMessage({ type: "dn-app-answer", id: asked.id, ...answer }, "*");
+      };
+      if (kind === "app") window.addEventListener("message", onMessage);
+      return {
+        update(view, previous) {
+          if (view.state.doc.eq(previous.doc)) return;
+          clearTimeout(timer);
+          timer = setTimeout(() => {
+            const { ran } = key.getState(view.state) ?? { ran: new Map<number, string>() };
+            editorsIn(kind, view.state).forEach(({ group }, editor) => {
+              const frame = view.dom.querySelector<HTMLIFrameElement>(`iframe[data-dn-${kind}="${editor}"]`);
+              const made = page(group, ran.get(editor) === codeOfGroup(group));
+              if (frame && frame.srcdoc !== made) frame.srcdoc = made;
+            });
+          }, 400);
         },
-      },
-      /** The preview widget keeps its iframe between keystrokes, so it
-       * does not flash; this refreshes what it shows, a moment after the
-       * typing stops. */
-      view() {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        return {
-          update(view, previous) {
-            if (view.state.doc.eq(previous.doc)) return;
-            clearTimeout(timer);
-            timer = setTimeout(() => {
-              sitesIn(view.state).forEach(({ group }, editor) => {
-                const frame = view.dom.querySelector<HTMLIFrameElement>(`iframe[data-dn-site="${editor}"]`);
-                const page = sitePage(group);
-                if (frame && frame.srcdoc !== page) frame.srcdoc = page;
-              });
-            }, 400);
-          },
-          destroy() {
-            clearTimeout(timer);
-          },
-        };
-      },
-    }),
-);
+        destroy() {
+          clearTimeout(timer);
+          window.removeEventListener("message", onMessage);
+        },
+      };
+    },
+  });
+}
+
+/** Consecutive `html site`/`css site`/`js site` panes as one editor. */
+export const siteEditors = $prose(() => paneEditors("site"));
 
 /** Runs after Crepe's own maths pass, so a `$…$` span it claimed but
  * dewlab would read as prose is put back as the text it was written as. */
@@ -502,6 +608,122 @@ function metaOf(view: { state: { doc: { descendants(fn: (node: any) => boolean):
     return true;
   });
   return found;
+}
+
+/** The runnable cell above the code block holding `content`: the one a
+ * staged hint with no `for:` line belongs to. Found the same way
+ * `metaOf` finds a block, by its text. */
+function cellAbove(view: { state: { doc: { forEach(fn: (node: any) => void): void } } } | null, content: string): string | null {
+  if (!view) return null;
+  let above: string | null = null;
+  let found: string | null | undefined;
+  view.state.doc.forEach((node: any) => {
+    if (found !== undefined || node.type.name !== "code_block") return;
+    if (node.textContent === content && node.attrs.language === "hint") {
+      found = above;
+      return;
+    }
+    if (isRunnable(String(node.attrs.language ?? ""), String(node.attrs.meta ?? ""))) {
+      above = parseCell(node.textContent).id;
+    }
+  });
+  return found ?? null;
+}
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** A staged hint as a reader meets it: its title and text in a hint
+ * box, under a line saying which cell it belongs to and what makes it
+ * appear. A string, so Crepe's own sanitiser sees the body's HTML. */
+function hintPreview(hint: StagedHint, cell: string | null): string {
+  const trigger = parseTrigger(hint.after);
+  const when = "error" in trigger
+    ? `<span class="dn-hint-fault">The <code>after:</code> line cannot be read. ${escapeHtml(trigger.error.replace(/`/g, ""))}</span>`
+    : `Appears ${escapeHtml(describeTrigger(trigger))} in ${cell ? `<code>${escapeHtml(cell)}</code>` : "the cell above"}.`;
+  return (
+    `<div class="dn-hint">` +
+    `<p class="dn-hint-when">Staged hint. ${when}</p>` +
+    `<div class="dn-hint-box"><p class="dn-hint-title">${escapeHtml(hint.title)}</p>` +
+    `${hint.text.trim() ? renderFragment(hint.text) : `<p class="dn-hint-fault">No text yet.</p>`}</div>` +
+    `</div>`
+  );
+}
+
+/** One paragraph's markdown as inline HTML: an option sits on a line of
+ * its own, not in a paragraph. */
+function inlineFragment(markdown: string): string {
+  const html = renderFragment(markdown).trim();
+  return /^<p>[\s\S]*<\/p>$/.test(html) && html.indexOf("<p>", 1) === -1 ? html.slice(3, -4) : html;
+}
+
+/** A question as its author needs to see it: what the reader is asked,
+ * and the answer marked, which a reader has to find for themselves.
+ * Built the way dewlab's `render_question()` builds it; a string, like a
+ * hint, so Crepe's sanitiser sees it. */
+function questionPreview(question: Question): string {
+  if (question.type === "multiple-choice") {
+    const correct = Number(question.correct);
+    const options = question.options
+      .map((option, at) => {
+        const right = at + 1 === correct;
+        return (
+          `<li class="dn-question-option${right ? " is-correct" : ""}">` +
+          `<span class="dn-question-mark" aria-label="${right ? "correct" : "wrong"}">${right ? "✓" : ""}</span>` +
+          `<span>${inlineFragment(option)}</span></li>`
+        );
+      })
+      .join("");
+    const noted = Number.isInteger(correct) && correct >= 1 && correct <= question.options.length
+      ? `Multiple choice. The answer is option ${correct}.`
+      : `<span class="dn-hint-fault">Multiple choice, with no correct option marked.</span>`;
+    return (
+      `<div class="dn-question"><p class="dn-question-kind">${noted}</p>` +
+      `<div class="dn-question-prompt">${question.prompt ? renderFragment(question.prompt) : ""}</div>` +
+      `<ol class="dn-question-options">${options}</ol></div>`
+    );
+  }
+  if (question.type === "fill-in-the-blank") {
+    // Each gap stands aside while the sentence around it becomes HTML,
+    // as dewlab's build does it, then comes back as the answer.
+    const gaps: string[] = [];
+    const tokenised = question.text.replace(/\{([^{}]*)\}/g, (_whole, raw: string) => `dngap${gaps.push(raw) - 1}z`);
+    let html = renderFragment(tokenised);
+    gaps.forEach((raw, at) => {
+      const choices = raw.includes("|") ? raw.split("|").map((choice) => choice.trim()) : null;
+      const shown = choices
+        ? `${escapeHtml(choices[0] ?? "")}<span class="dn-question-others"> / ${choices.slice(1).map(escapeHtml).join(" / ")}</span>`
+        : escapeHtml(raw.trim());
+      html = html.replace(`dngap${at}z`, `<span class="dn-question-gap">${shown}</span>`);
+    });
+    const count = gaps.length;
+    return (
+      `<div class="dn-question"><p class="dn-question-kind">Fill in the blank. ` +
+      `${count} gap${count === 1 ? "" : "s"}, answers shown; in a drop-down the first choice is right.</p>` +
+      `<div class="dn-question-prompt">${html}</div></div>`
+    );
+  }
+  return `<div class="dn-question"><p class="dn-question-kind dn-hint-fault">A question needs a \`type:\` of multiple-choice or fill-in-the-blank.</p></div>`;
+}
+
+/** A card as the tile a reader clicks: its heading, status and meta
+ * line, and its text, with where it goes underneath. dewlab's
+ * `render_card()`; a string, through Crepe's sanitiser. */
+function cardPreview(content: string): string {
+  const card = cardIn("card", content)!;
+  const badge = card.status ? `<span class="dn-card-badge">${escapeHtml(card.status)}</span>` : "";
+  const meta = card.meta ? `<span class="dn-card-meta">${escapeHtml(card.meta)}</span>` : "";
+  const heading = card.heading
+    ? `<p class="dn-card-heading">${escapeHtml(card.heading)}${badge}</p>`
+    : `<p class="dn-card-heading dn-hint-fault">No heading. The first line under the settings has to be one, like ### Title.</p>`;
+  const where = card.url
+    ? `Opens <code>${escapeHtml(card.url)}</code>${card.wide ? ". Wide: spans the row." : "."}`
+    : `<span class="dn-hint-fault">No <code>url:</code> line, so it goes nowhere.</span>`;
+  return (
+    `<div class="dn-card-preview"><p class="dn-card-where">${where}</p>` +
+    `<div class="dn-card${card.wide ? " is-wide" : ""}">${heading}${meta}` +
+    `${card.text ? renderFragment(card.text) : ""}</div></div>`
+  );
 }
 
 /** A cell's own output, as an element rather than a string: the panel
@@ -542,6 +764,9 @@ export interface Document {
 export interface EditorOptions {
   markdown: string;
   onChange?(markdown: string): void;
+  /** Answers an app page's `dlQuery` from the page's database. Absent,
+   * an app page's queries are refused with a sentence saying so. */
+  queryRows?: QueryRows;
   /** Runs one cell and answers with what it produced. Absent means no
    * interpreter is available, and a cell then shows its code and no Run
    * button — which is the right state for an export or a test, not an
@@ -798,7 +1023,8 @@ export async function mountEditor(
           LanguageDescription.of({ name: "python", support: python() }),
           LanguageDescription.of({ name: "sql", support: sql() }),
         ],
-        previewToggleButton: (showingPreview: boolean) => (showingPreview ? "Hide" : "Run"),
+        // Hides the code, leaving what it makes; then brings it back.
+        previewToggleButton: (codeShowing: boolean) => (codeShowing ? "Hide" : "Edit"),
         // Hidden in style.css: the Run button heads the panel.
         previewLabel: "Output",
         previewLoading: "Running…",
@@ -807,6 +1033,12 @@ export async function mountEditor(
           // fires on every keystroke. It must therefore never start a
           // run of its own: all it does is build the panel, and the
           // panel's own button is what runs anything.
+          if (language === "question") return questionPreview(questionIn("question", content)!);
+          if (language === "card") return cardPreview(content);
+          if (language === "hint") {
+            const hint = hintIn("hint", content)!;
+            return hintPreview(hint, hint.cell ?? cellAbove(view(), content));
+          }
           if (!options.runCell) return null;
           if (!isRunnable(language, metaOf(view(), content))) return null;
           return cellPanel(language, content, apply);
@@ -860,7 +1092,9 @@ export async function mountEditor(
     .use(plainDollars)
     .use(foldLineView)
     .use(foldBodies)
-    .use(siteEditors);
+    .use(generatedBlocks)
+    .use(siteEditors)
+    .use($prose(() => paneEditors("app", options.queryRows)));
   crepe.editor.use(tightBulletLists).use(tightListItems);
 
   // Milkdown's "preserve empty line" plugin does two things, both wrong
@@ -879,11 +1113,21 @@ export async function mountEditor(
    * markdown file needs one, and it is churn in every diff. */
   const oneFinalNewline = (markdown: string) => markdown.replace(/\n{2,}$/, "\n");
 
+  /** A line holding only `[[search-box]]` is where a hand-written page
+   * asks dewlab's build for a generated block. The serialiser escapes
+   * its brackets, since `[` can open a link, and `\[\[search-box]]` is
+   * no longer something the build recognises: the page would show the
+   * text instead of the search box. A whole line of `[[name]]` is never
+   * a link, so it goes back as written. */
+  const generatedBlocksAsWritten = (markdown: string) =>
+    markdown.replace(/^\\\[\\\[([a-z-]+)\]\](\s*)$/gm, "[[$1]]$2");
+  const asSaved = (markdown: string) => oneFinalNewline(generatedBlocksAsWritten(markdown));
+
   let hydrated = false;
   if (options.onChange) {
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
-        if (hydrated) options.onChange!(oneFinalNewline(markdown));
+        if (hydrated) options.onChange!(asSaved(markdown));
       });
     });
   }
@@ -904,7 +1148,7 @@ export async function mountEditor(
   return {
     cellIds: () => runnableCells().map((cell) => cell.id),
     runCell: (id) => runCellById(id),
-    markdown: () => oneFinalNewline(crepe.getMarkdown()),
+    markdown: () => asSaved(crepe.getMarkdown()),
     headings() {
       const found: Heading[] = [];
       crepe.editor.action((ctx) => {

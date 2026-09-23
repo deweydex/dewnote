@@ -920,15 +920,181 @@ body {
 /* Crepe heads its preview panel with a label, "Output", which put the
  * Run button under a heading that made it read as output. The panel
  * heads itself. */
-.milkdown .milkdown-code-block .preview-panel:has(.dn-cell) .preview-label {
+.milkdown .milkdown-code-block .preview-panel:has(:is(.dn-cell, .dn-hint, .dn-question, .dn-card-preview)) .preview-label {
   display: none;
 }
 
 /* Crepe centres its preview; output reads from the left, like the code
  * above it. */
-.milkdown .milkdown-code-block .preview-panel .preview:has(.dn-cell) {
+.milkdown .milkdown-code-block .preview-panel .preview:has(:is(.dn-cell, .dn-hint, .dn-question, .dn-card-preview)) {
   text-align: left;
 }
+
+/* A staged hint, as a reader meets it: a line saying when it appears,
+ * then the hint in the same orange-edged box a hint fold has. */
+.dn-hint {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.milkdown .dn-hint .dn-hint-when {
+  margin: 0;
+  font-family: var(--dl-mono);
+  font-size: 0.78rem;
+  color: var(--dl-muted);
+}
+
+.dn-hint-box {
+  border-left: 3px solid color-mix(in srgb, var(--dl-orange) 45%, transparent);
+  padding: 0.2rem 0 0.2rem 0.9rem;
+}
+
+.dn-hint-box > :first-child { margin-top: 0; }
+.dn-hint-box > :last-child { margin-bottom: 0; }
+
+.dn-hint-title {
+  font-style: italic;
+  color: var(--dl-muted);
+}
+
+.dn-hint-fault {
+  color: var(--dl-orange);
+}
+
+/* A question, with its answer marked: what a reader is asked, and what
+ * they have to find. */
+.dn-question {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.milkdown .dn-question .dn-question-kind {
+  margin: 0;
+  font-family: var(--dl-mono);
+  font-size: 0.78rem;
+  color: var(--dl-muted);
+}
+
+.dn-question-prompt > :first-child { margin-top: 0; }
+.dn-question-prompt > :last-child { margin-bottom: 0; }
+
+.dn-question-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.dn-question-option {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 5px;
+}
+
+.dn-question-option.is-correct {
+  border-color: var(--dl-orange);
+}
+
+.dn-question-mark {
+  width: 1em;
+  color: var(--dl-orange);
+  font-weight: 600;
+}
+
+.dn-question-gap {
+  padding: 0 0.35rem;
+  border-bottom: 2px solid var(--dl-orange);
+  font-family: var(--dl-mono);
+  font-size: 0.9em;
+}
+
+.dn-question-others {
+  color: var(--dl-muted);
+}
+
+/* What a hint, question or card draws is prose: a line break in its
+ * markdown is a space, as on the site, not the preview's own pre-wrap. */
+.dn-hint, .dn-question, .dn-card-preview { white-space: normal; }
+
+/* A card, as the tile a reader clicks. */
+.dn-card-preview {
+  display: grid;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.milkdown .dn-card-preview .dn-card-where {
+  margin: 0;
+  font-family: var(--dl-mono);
+  font-size: 0.78rem;
+  color: var(--dl-muted);
+}
+
+.dn-card {
+  max-width: 22rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 8px;
+}
+
+.dn-card.is-wide { max-width: none; }
+
+.dn-card > :last-child { margin-bottom: 0; }
+
+.milkdown .dn-card .dn-card-heading {
+  margin: 0 0 0.3rem;
+  font-weight: 600;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.dn-card-badge {
+  font-family: var(--dl-mono);
+  font-size: 0.7rem;
+  font-weight: 400;
+  text-transform: capitalize;
+  color: var(--dl-orange);
+}
+
+.dn-card-meta {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--dl-muted);
+}
+
+/* A wrapper on a hand-written page is a section, not something a reader
+ * opens: the same rule down its side as a fold, in the page's own grey. */
+.dn-fold-open.is-wrapper .dn-fold-label { color: var(--dl-muted); }
+
+/* `[[search-box]]`: kept as written, with what the site puts there. */
+/* A tint rather than a border, so a block inside a wrapper keeps the
+ * wrapper's rule down its side. */
+.milkdown .ProseMirror p.dn-generated {
+  font-family: var(--dl-mono);
+  font-size: 0.85rem;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
+  background: color-mix(in srgb, var(--dl-rule) 35%, transparent);
+}
+
+.milkdown .ProseMirror p.dn-generated.is-unknown {
+  background: color-mix(in srgb, var(--dl-orange) 12%, transparent);
+}
+
+.dn-generated-label {
+  margin-right: 0.5rem;
+  font-style: italic;
+  color: var(--dl-muted);
+}
+
+.dn-generated.is-unknown .dn-generated-label { color: var(--dl-orange); }
 
 .dn-cell-run:disabled {
   opacity: 0.6;

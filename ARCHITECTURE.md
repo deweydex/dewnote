@@ -201,7 +201,7 @@ comes from typing starts Python.
 
 ### Drawn over the document, not in it
 
-Three constructs are drawn differently from how the file holds them,
+Seven constructs are drawn differently from how the file holds them,
 and in each case only the drawing changes, so the round-trip suite
 still guards the file:
 
@@ -210,16 +210,44 @@ still guards the file:
   blocks between. A node view (`foldLineView`) draws the atoms as a
   labelled header and an end mark; a decoration plugin (`foldBodies`)
   rules the blocks between.
-- **Site editors.** Consecutive `html site`/`css site`/`js site` fences
-  naming one site, grouped as dewlab's build groups them (`siteGroups`
-  in `fences.ts`), get a tab bar widget, a class hiding every pane but
-  the chosen one, and a sandboxed preview iframe (`sitePage`). The
-  chosen tab is plugin state. The iframe widget keeps its key between
-  keystrokes so it does not flash; a plugin view refreshes its
-  `srcdoc` 400ms after typing stops.
+- **Site and app editors.** Consecutive `html site`/`css site`/`js site`
+  fences naming one site, grouped as dewlab's build groups them
+  (`paneGroups` in `fences.ts`), get a tab bar widget, a class hiding
+  every pane but the chosen one, and a sandboxed preview iframe
+  (`sitePage`). The chosen tab is plugin state. The iframe widget keeps
+  its key between keystrokes so it does not flash; a plugin view
+  refreshes its `srcdoc` 400ms after typing stops. `app` fences use the
+  same plugin (`paneEditors` in `editor.ts`) with a Run button: the
+  frame's script (`appPage`) gets a `dlQuery` that posts to the editor,
+  which checks the message came from a frame it drew and answers from
+  the Worker (`queryRows`). Run records the panes' code, not a flag,
+  because Milkdown appends a paragraph after a closing code block in a
+  transaction of its own, and "any change undoes the run" undid every
+  run at once.
 - **Front matter.** A node view draws Title and Status as fields over
   the YAML, which stays the node's content, editable under Show all
   fields. A field change rewrites only its own line.
+- **Staged hints.** A ```` ```hint ```` fence stays a code block, and
+  Crepe's own preview panel under it (the one a cell's output uses)
+  draws the hint as a reader meets it. `renderPreview` fires on every
+  keystroke, so the hint's markdown goes through `renderFragment`,
+  which is synchronous, and is handed over as a string, so Crepe's
+  DOMPurify pass sees any HTML a hint's author wrote.
+- **Questions.** The same, for a ```` ```question ````: drawn as its
+  author needs it, with the answer marked, built the way dewlab's
+  `render_question()` builds the reader's version. A fill-in-the-blank's
+  gaps stand aside as tokens while the sentence becomes HTML, so a price
+  in the sentence stays a price.
+- **Cards**, the same again, drawn as the tile a reader clicks.
+- **A hand-written page's sections and generated blocks.** A wrapper
+  (`<div class="dl-hero">` … `</div>`) is a fold to `foldLine`, which
+  records the tag each opening waits for, so a wrapper's `</div>` never
+  closes a hint. A `[[search-box]]` line gets a node class and a label
+  widget. Its brackets needed one more fix, on save: the serialiser
+  escapes `[` as `\[` in case it opens a link, which the round-trip
+  suite could not see (it compares structure, and the text is the
+  same) but dewlab's build could, since `\[\[search-box]]` is not a
+  generated block. A whole line of `[[name]]` is put back as written.
 
 Two things learned doing it. ProseMirror rebuilds a node view or widget
 whenever the selection moves into it, which a click does before its

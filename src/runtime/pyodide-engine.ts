@@ -122,6 +122,14 @@ export async function runSql(dbName: string, sql: string): Promise<{ html: strin
   return (await request("run-sql", { dbName, sql })) as { html: string };
 }
 
+/** The rows of one query against the page's shared `db`, for an app
+ * page's `dlQuery`. Rejects with Python's own message when the query
+ * fails, or when no SQL cell has run yet to make the database. */
+export async function queryRows(sql: string, params: unknown[]): Promise<unknown[]> {
+  await ensureBooted();
+  return (await request("query-rows", { sql, params })) as unknown[];
+}
+
 /** A SQL cell's own Reset — closes and discards `dbName`'s connection, so
  * a `CREATE TABLE` can run again from scratch. Does nothing to any other
  * name's connection. */

@@ -13,10 +13,15 @@ import { assetPathFor, isLocalAsset } from "./images.ts";
 import {
   QUESTION_TYPES,
   cardIn,
+  generatedBlockIn,
+  GENERATED_BLOCKS,
+  hintIn,
+  parseTrigger,
   gapsBalanced,
   hasGap,
   questionIn,
   sitePaneIn,
+  appPaneIn,
   type Card,
   type Question,
 } from "./fences.ts";
@@ -84,6 +89,9 @@ export function checkDocument(source: string, around: Around): Problem[] {
   // of these. Site pages go through a different reader and are only
   // held to the title.
   const tutorial = path !== undefined && /^tutorials\/[^/]+\/[^/]+\.md$/.test(path);
+  /** One of dewlab's hand-written pages (`read_page()`), the only place
+   * `[[name]]` is read. */
+  const sitePage = path !== undefined && /(^|\/)pages\/[^/]+\.md$/.test(path);
 
   if (!present) {
     problems.push({ message: "No front matter. Add a `---` block at the top with at least a `title:` line; the site cannot build the page without it.", severity: "blocking" });
@@ -136,7 +144,7 @@ export function checkDocument(source: string, around: Around): Problem[] {
   const claim = (id: string | null, what: string, line: number): void => {
     if (!id) {
       problems.push({
-        message: `A ${what} with no \`id:\`. Add an \`id:\` line at its top; without one, a reader's work in it cannot be saved.`,
+        message: `${/^[aeiou]/.test(what) ? "An" : "A"} ${what} with no \`id:\`. Add an \`id:\` line at its top; without one, a reader's work in it cannot be saved.`,
         line,
         severity: "blocking",
       });
@@ -153,6 +161,12 @@ export function checkDocument(source: string, around: Around): Problem[] {
     seen.add(id);
   };
 
+  // A staged hint belongs to a cell: the one its `for:` names, or the
+  // runnable cell above it. Which cells exist is only known at the end.
+  const cells = new Set<string>();
+  let cellAbove: string | null = null;
+  const hints: { cell: string; line: number }[] = [];
+
   let line = 1;
   for (const part of segments(source)) {
     const info = part.info ?? "";
@@ -161,14 +175,46 @@ export function checkDocument(source: string, around: Around): Problem[] {
       const pane = sitePaneIn(info, body);
       const question = questionIn(info, body);
       const card = cardIn(info, body);
+      const hint = hintIn(info, body);
+      const app = appPaneIn(info, body);
 
       if (isRunnable(languageOf(info), info)) {
-        claim(parseCell(body).id, "runnable cell", line);
+        const id = parseCell(body).id;
+        claim(id, "runnable cell", line);
+        if (id) cells.add(id);
+        cellAbove = id;
+      } else if (hint) {
+        const cell = hint.cell ?? cellAbove;
+        if (!cell) {
+          problems.push({
+            message: "A staged hint with no cell above it and no `for:` line. Move it under the cell it helps with, or add `for:` naming that cell's id.",
+            line,
+            severity: "blocking",
+          });
+        } else {
+          hints.push({ cell, line });
+        }
+        if (!hint.text.trim()) {
+          problems.push({ message: "A staged hint with no text. Write the hint below its settings lines.", line, severity: "blocking" });
+        }
+        const trigger = parseTrigger(hint.after);
+        if ("error" in trigger) {
+          problems.push({ message: `This hint's \`after:\` line: ${trigger.error}`, line, severity: "blocking" });
+        }
       } else if (pane) {
         claim(pane.id, "web page pane", line);
         if (!pane.site) {
           problems.push({
             message: "A web page pane with no `site:` line. Add one naming its page; panes with the same `site:` become one editor.",
+            line,
+            severity: "blocking",
+          });
+        }
+      } else if (app) {
+        claim(app.id, "app pane", line);
+        if (!app.site) {
+          problems.push({
+            message: "An app pane with no `app:` line. Add one naming its page; panes with the same `app:` become one editor.",
             line,
             severity: "blocking",
           });
@@ -179,8 +225,33 @@ export function checkDocument(source: string, around: Around): Problem[] {
       } else if (card) {
         checkCard(card, line, problems);
       }
+    } else if (sitePage) {
+      // `[[name]]` on a line of its own asks the build for a block it
+      // makes; one it does not know stops the build.
+      part.text.split("\n").forEach((text, at) => {
+        const generated = generatedBlockIn(text);
+        if (generated && !generated.description) {
+          problems.push({
+            message:
+              `\`[[${generated.name}]]\` is not a block the site knows how to build. ` +
+              `Use ${Object.keys(GENERATED_BLOCKS).map((name) => `\`[[${name}]]\``).join(" or ")}.`,
+            line: line + at,
+            severity: "blocking",
+          });
+        }
+      });
     }
     line += linesOf(part.text);
+  }
+
+  for (const hint of hints) {
+    if (!cells.has(hint.cell)) {
+      problems.push({
+        message: `A staged hint for \`${hint.cell}\`, which is not the id of any runnable cell on this page. Check the \`for:\` line.`,
+        line: hint.line,
+        severity: "blocking",
+      });
+    }
   }
 
   if (images && path !== undefined) {

@@ -271,7 +271,9 @@ has a **Tutorial** group:
 | **Multiple choice** | A question with options and one correct answer. |
 | **Fill in the blank** | A question with a gap for the reader to fill. |
 | **Web page** | An HTML, CSS and JavaScript editor that shows a live page. |
+| **Page that reads the database** | A web page whose JavaScript reads the tables the SQL cells made. See [Pages that read the database](#pages-that-read-the-database). |
 | **Hint** | A fold the reader opens when stuck. |
+| **Staged hint** | A hint that stays hidden until the reader has got stuck on the cell above. See [Staged hints](#staged-hints). |
 
 Every item is inserted with a unique `id:` already filled in, and passes
 **Check this document** as inserted.
@@ -454,6 +456,16 @@ Each pair of braces `{…}` is a gap.
 - Without `|`, the gap is a box the reader types into.
 - Either way, the **first** item is the correct answer.
 
+### How dewnote shows a question
+
+Under the lines you type, dewnote draws the question: the question
+itself, then either the options, with the correct one ticked and
+outlined, or the sentence with each gap filled in with its answer (a
+drop-down's other choices in grey after it). A reader sees neither
+answer; they are there so you can check you marked the right one.
+**Hide** in the block's corner leaves only the drawn question; **Edit**
+brings the lines back.
+
 ### Ids are shared
 
 Cells, questions and web page panes all share one set of ids on a page,
@@ -472,6 +484,37 @@ one pane showing at a time, and the page they make, live, underneath.
 The preview updates a moment after you stop typing, and runs the page's
 JavaScript. Drag its bottom corner to make it taller. In the file, they
 stay three code blocks.
+
+### Pages that read the database
+
+An **app** is a web page whose JavaScript reads the tables the page's SQL
+cells made. The **Page that reads the database** item inserts one: an
+`html app` and a `js app` block with the same `app:` name (add a
+`css app` block for styles). The script gets two things:
+
+- `root`, the element holding the app's HTML;
+- `dlQuery(sql, params)`, which runs one query against the page's
+  database and gives back its rows, each an object of column name to
+  value. Put a `?` in the SQL for each value and pass the values in
+  `params`, so a value a reader typed is never read as SQL.
+
+````
+```js app
+id: list-js
+app: readings
+const rows = await dlQuery("select name from readings where hour > ?", [12]);
+root.querySelector("ul").innerHTML = rows.map((row) => `<li>${row.name}</li>`).join("");
+```
+````
+
+dewnote shows an app like a web page, with a tab per pane and the page
+underneath, and a **Run** button in the tab bar. The HTML and CSS show
+at once; the JavaScript runs only when you press **Run**, as on the
+dewlab site. Run the SQL cells that make the tables first: until one
+has run there is no database, and the page says so. An edit to any pane
+puts the page back to its HTML and CSS until you press **Run** again.
+An error in the script, or in a query, is shown in red at the foot of
+the page.
 
 ## Hints
 
@@ -492,6 +535,71 @@ change the summary, use **Edit the markdown** (Ctrl+/). On the dewlab
 site, readers see the summary and open the fold to read the hint. An
 answer fold, `class="dl-answer"`, shows the same way, labelled
 **ANSWER**.
+
+### Staged hints
+
+A hint fold is always there to open. A **staged hint** stays hidden
+until the reader has tried and got stuck: after a number of errors, say.
+The **Staged hint** item inserts one, just under the cell it helps with:
+
+````
+```hint
+after: 3 errors
+title: Stuck? Try this
+
+What to look at first.
+```
+````
+
+- `after:` is what makes it appear. Count errors, identical errors,
+  unchanged runs, runs, failed checks, empty results or minutes, for
+  example `3 errors` or `2 identical errors and 5 minutes`. With more
+  than one, all have to be reached. Leave the line out and it appears
+  after 5 errors.
+- `title:` is what the reader sees first. Leave it out and dewlab uses
+  "Let's slow down a moment…".
+- `for:` names the cell it belongs to, by its `id:`. Leave it out and
+  the hint belongs to the cell just above it.
+- Everything after those lines is the hint, in ordinary markdown.
+
+Under the lines you type, dewnote shows the hint as the reader will see
+it, and a line saying when it appears and for which cell. **Hide** in
+the block's corner hides the lines and leaves only that; **Edit** brings
+them back. If the `after:` line is something dewlab would refuse, the
+line says so in orange, and **Check this document** lists it.
+
+## Site pages
+
+dewlab's own pages, such as Home and About, live in `pages/`. They are
+ordinary markdown with three additions, and dewnote draws each the way
+the site uses it. In the file, each stays exactly as written.
+
+- **Sections.** A line such as `<div class="dl-hero">`, then markdown,
+  then `</div>`, makes a styled section of the page. dewnote labels it
+  (**HERO**, **AUDIENCE**, **ATTRIBUTION** or **FEATURE LIST**) with a
+  rule down the side of what is in it, and an *end* where it closes.
+  Leave a blank line after the opening line and before the closing one,
+  or the site shows the markdown inside as plain text.
+- **Cards.** A ```` ```card ```` block is a tile readers click:
+
+  ````
+  ```card
+  url: features.html
+  status: beta
+  meta: 5N0554
+  ### What dewlab can do
+  The tools on every page, and how it works offline.
+  ```
+  ````
+
+  `url:` is where it goes, and the first line under the settings has to
+  be a heading. `status:`, `meta:` and `wide: true` are optional. Under
+  the lines, dewnote draws the tile, and says where it goes.
+- **Generated blocks.** A line holding only `[[search-box]]` or
+  `[[course-cards]]` is replaced by the site with its search box, or a
+  card for each course. dewnote shows the line in a grey band with what
+  the site puts there. Any other name stops the site building, and
+  dewnote says so in orange.
 
 ## Checking for problems
 
