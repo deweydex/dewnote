@@ -361,3 +361,22 @@ test("a hint is drawn as a fold, and saved exactly as written", async ({ page })
   await expect(page.locator(".milkdown .dn-fold-body")).toContainText("Read the error.");
   await expect(page.locator(".milkdown .dn-fold-body")).not.toContainText("After.");
 });
+
+test("Run is drawn as a button heading the panel, and output reads from the left", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => {
+    (globalThis as any).__dewnoteRunCell = true;
+    document.querySelector(".dn-gate")?.remove();
+  });
+  await page.evaluate(() => (globalThis as any).__dewnote.open("```python exec\nid: a\nprint(1)\n```\n"));
+  const run = page.locator(".dn-cell-run");
+  // Crepe's reset strips borders from buttons in the editor; Run keeps its own.
+  expect(await run.evaluate((el) => getComputedStyle(el).borderTopStyle)).toBe("solid");
+  // No "Output" heading above the button.
+  await expect(page.locator(".milkdown .preview-label")).toBeHidden();
+
+  await run.click();
+  const output = page.locator(".dn-cell-output");
+  await expect(output).toBeVisible();
+  expect(await output.evaluate((el) => getComputedStyle(el.closest(".preview")!).textAlign)).toBe("left");
+});

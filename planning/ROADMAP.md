@@ -24,14 +24,6 @@ a live preview.
 **Approach.** Group adjacent panes with the same `site:` into one node
 view with three tabs and an iframe preview. The file keeps three fences.
 
-### 3.3 Make Run look like a button
-
-**Problem.** The Run button is plain text under Crepe's "OUTPUT" label,
-so it reads as output rather than as a control.
-
-**Approach.** Style it as a button, and put it on the cell's own toolbar
-beside Crepe's copy control rather than in the output area.
-
 ### 3.4 Say something when no document is open
 
 **Problem.** Pressing Esc on the palette when a workspace first opens

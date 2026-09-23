@@ -546,6 +546,7 @@ export async function mountEditor(
           LanguageDescription.of({ name: "sql", support: sql() }),
         ],
         previewToggleButton: (showingPreview: boolean) => (showingPreview ? "Hide" : "Run"),
+        // Hidden in style.css: the Run button heads the panel.
         previewLabel: "Output",
         previewLoading: "Running…",
         renderPreview: (language: string, content: string, apply: (value: string | HTMLElement | null) => void) => {

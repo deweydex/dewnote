@@ -833,15 +833,44 @@ body {
   font-family: var(--dl-font-family);
 }
 
-.dn-cell-run {
+/* Scoped under .milkdown, which is what it sits in: Crepe's reset clears
+ * border and background from `.milkdown button`, and a bare class loses
+ * to that, leaving Run as plain text under a heading that said Output. */
+.milkdown .dn-cell-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font: inherit;
   font-size: 0.85rem;
-  padding: 0.25rem 0.75rem;
-  border: 1px solid var(--dl-rule);
+  padding: 0.25rem 0.85rem;
+  border: 1px solid var(--dl-orange);
   border-radius: 999px;
   background: var(--dl-panel-bg, transparent);
-  color: inherit;
+  color: var(--dl-orange);
   cursor: pointer;
+}
+
+/* A play mark on Run and Run again; Stop has its own pulse. */
+.milkdown .dn-cell-run:not(.is-running)::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0.3rem 0 0.3rem 0.5rem;
+  border-color: transparent transparent transparent currentColor;
+}
+
+/* Crepe heads its preview panel with a label, "Output", which put the
+ * Run button under a heading that made it read as output. The panel
+ * heads itself. */
+.milkdown .milkdown-code-block .preview-panel:has(.dn-cell) .preview-label {
+  display: none;
+}
+
+/* Crepe centres its preview; output reads from the left, like the code
+ * above it. */
+.milkdown .milkdown-code-block .preview-panel .preview:has(.dn-cell) {
+  text-align: left;
 }
 
 .dn-cell-run:disabled {
@@ -958,20 +987,20 @@ body {
  * label changing, which on a slow connect is several seconds away. */
 .dn-gate button:hover:not(:disabled),
 .dn-settings button:hover:not(:disabled),
-.dn-cell-run:hover:not(:disabled) {
+.milkdown .dn-cell-run:hover:not(:disabled) {
   border-color: var(--dl-orange);
 }
 
 .dn-gate button:active:not(:disabled),
 .dn-settings button:active:not(:disabled),
-.dn-cell-run:active:not(:disabled) {
+.milkdown .dn-cell-run:active:not(:disabled) {
   transform: translateY(1px);
   background: color-mix(in srgb, var(--dl-orange) 14%, transparent);
 }
 
 .dn-gate button:focus-visible,
 .dn-settings button:focus-visible,
-.dn-cell-run:focus-visible,
+.milkdown .dn-cell-run:focus-visible,
 .dn-gate input:focus-visible,
 .dn-settings input:focus-visible,
 .dn-settings select:focus-visible {
@@ -1233,12 +1262,12 @@ button.dn-report-row:focus-visible {
 
 /* A cell that is running says so, and the button that started it is the
  * one that stops it. */
-.dn-cell-run.is-running {
+.milkdown .dn-cell-run.is-running {
   border-color: var(--dl-orange);
   color: var(--dl-orange);
 }
 
-.dn-cell-run.is-running::before {
+.milkdown .dn-cell-run.is-running::before {
   content: "";
   display: inline-block;
   width: 0.5rem;
@@ -1255,7 +1284,7 @@ button.dn-report-row:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dn-cell-run.is-running::before { animation: none; }
+  .milkdown .dn-cell-run.is-running::before { animation: none; }
 }
 
 .dn-report-row.is-blocking .dn-report-what::before,
