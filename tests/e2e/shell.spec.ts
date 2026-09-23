@@ -1045,6 +1045,22 @@ test("a pull request already open is shown, not asked about again", async ({ pag
   expect(await page.evaluate(() => (globalThis as any).__dewnotePublished)).toBe(false);
 });
 
+test("Disconnect from GitHub forgets the token and goes back to the start", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(() => localStorage.setItem("dewnote:github-token", "github_pat_example"));
+  await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files, true), { "tutorials/a/a.md": SOUND });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("disconnect");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(".dn-ask-choices")).toContainText("shared or borrowed computer");
+  await page.locator(".dn-ask-choice", { hasText: "Forget the token and disconnect" }).click();
+
+  await expect(page.locator(".dn-gate")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("dewnote:github-token"))).toBeNull();
+});
+
 test("Preview opens the page in a tab, with its stylesheet and maths inside it", async ({ page, context }) => {
   await page.goto(BUILT_APP);
   await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), {

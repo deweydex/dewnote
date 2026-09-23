@@ -71,7 +71,9 @@ reason to change it (see [Saving](#saving) for why).
 
 Choose **Connect**. dewnote reads the files, which can take a few seconds
 for a large repository, and remembers the token and repository in this
-browser for next time.
+browser for next time. On a shared or borrowed computer, run
+**Disconnect from GitHub…** when you finish, so the next person cannot
+use your token.
 
 ### Step 2: Create a tutorial
 
@@ -230,6 +232,7 @@ appear while a document is open.
 | **Download as HTML** | Import and export | Downloads the page as one self-contained file. |
 | **Download as a Jupyter notebook** | Import and export | Downloads the document as an `.ipynb` file. |
 | **Import a Jupyter notebook…** | Import and export | Replaces the open document's content with a notebook's. |
+| **Disconnect from GitHub…** | GitHub | Forgets the token this browser keeps, and goes back to the opening screen. The token still works on GitHub until you delete it there. |
 | **Open a pull request…** | GitHub | Opens a draft pull request for your working branch, under a title you choose. GitHub workspaces only. See [Pull requests](#pull-requests). |
 | **Appearance…** | Appearance | Changes how dewnote looks to you. |
 
@@ -549,8 +552,8 @@ not kept for the sample document.
 
 The first time dewnote saves a file, it may change how the markdown is
 written without changing what the page shows: bullet markers become `-`,
-blank lines are made consistent, and a maths block is written over three
-lines. This happens once. After that, saving writes exactly what you
+blank lines are made consistent, the file ends in exactly one newline,
+and a maths block is written over three lines. This happens once. After that, saving writes exactly what you
 see.
 
 ### The working branch
@@ -806,8 +809,6 @@ enough room, the margin moves to a strip across the top.
 | Esc | Close whatever is open, without changing anything |
 
 ## Known limitations
-
-These are planned but not built yet (see `planning/ROADMAP.md`):
 
 - When a save conflict has both sides changing the same lines, you keep
   one version or the other. There is no way to pick line by line.

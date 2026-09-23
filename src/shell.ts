@@ -915,6 +915,27 @@ export function mountShell(page: HTMLElement): Shell {
     }
   }
 
+  /** Forgets the GitHub token this browser keeps, and closes the
+   * workspace by reloading, which is the only way to be sure nothing
+   * holds it in memory either. */
+  async function disconnect(): Promise<void> {
+    if (!store?.disconnect) return;
+    if (!(await readyToLeave())) return;
+    const going = await asker.choose(
+      "Disconnect from GitHub",
+      [
+        { value: "go", label: "Forget the token and disconnect", note: "Connecting again needs the token." },
+        { value: "stay", label: "Stay connected" },
+      ],
+      "dewnote keeps your GitHub token in this browser so you do not paste it each time. " +
+        "Disconnect on a shared or borrowed computer. The token itself still works until you delete it on GitHub.",
+    );
+    if (going !== "go") return;
+    store.disconnect();
+    window.removeEventListener("beforeunload", onBeforeUnload);
+    window.location.reload();
+  }
+
   /** Every page in the workspace, not only the one that is open — a
    * fault is found on the day somebody opens the page it is written on,
    * which is too late. */
@@ -1416,6 +1437,16 @@ export function mountShell(page: HTMLElement): Shell {
           available: () => isDirty(),
           run: () => void saveNow(),
         },
+        ...(next.disconnect
+          ? [{
+              id: "disconnect",
+              label: "Disconnect from GitHub…",
+              section: "GitHub" as const,
+              keywords: ["token", "log out", "sign out", "forget", "logout", "security"],
+              detail: "Forgets the token this browser keeps, and closes the workspace.",
+              run: () => void disconnect(),
+            }]
+          : []),
         ...(next.publish
           ? [{
               id: "publish",

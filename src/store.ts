@@ -83,6 +83,9 @@ export interface Store {
   /** Repository only: opens a draft pull request for the working
    * branch, and answers with its URL. */
   publish?(title: string, body: string): Promise<string>;
+  /** Repository only: forgets the token this browser keeps for the
+   * next session. The workspace itself is closed by reloading. */
+  disconnect?(): void;
   /** Repository only: the pull request already open for the working
    * branch, by URL, or null. */
   existingPullRequest?(): Promise<string | null>;
@@ -328,6 +331,8 @@ export async function openRepo(options: RepoOptions): Promise<Store> {
 
     publish: async (title, body) =>
       (await github.openPullRequest(repo, branch, base, title, body, token)).html_url,
+
+    disconnect: () => github.forgetToken(),
 
     existingPullRequest: async () =>
       (await github.findPullRequest(repo, branch, base, token))?.html_url ?? null,

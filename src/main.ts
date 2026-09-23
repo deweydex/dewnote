@@ -8,6 +8,7 @@ import { canOpenFolder, openFolder, openRepo } from "./store.ts";
 import {
   listRepositories,
   loadLastRepo,
+  forgetToken,
   loadToken,
   saveLastRepo,
   saveToken,
@@ -333,6 +334,7 @@ let held: Document | null = null;
               hooks["__dewnotePublished"] = { title, body };
               return "about:blank";
             },
+            disconnect: () => forgetToken(),
             existingPullRequest: async () => (hooks["__dewnoteOpenPullRequest"] as string | undefined) ?? null,
             // What a compare against the base would show: every file that
             // differs from what the workspace opened with.

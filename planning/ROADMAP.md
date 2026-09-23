@@ -5,32 +5,16 @@ item says what is wrong, why it matters, and the proposed approach. When
 an item is done, delete it here and describe the result in
 `ARCHITECTURE.md` or the user guide.
 
-Last reviewed: 2026-09-22. Phase 1 (things that could lose or corrupt
+Last reviewed: 2026-09-23. Phase 1 (things that could lose or corrupt
 work) is done: unsaved-changes prompts, kept drafts, save conflicts,
 releases that freeze the published version, and new tutorials the
 build accepts. Phase 2 (the browser tests, and real Python, run in CI on
 every pull request) is done. Phase 3 (the editor shows what the site
 shows: hint folds, one editor for web page panes, the Run button, the
 empty page, front matter fields, the margin) is done, as is Jedi help in
-Python cells. In Phase 4, renaming, moving and deleting (4.1), new practice pages
-(4.2), find and replace (4.3), named pull requests (4.4) and
-keeping both sides of a conflict (4.5) are done.
-
----
-
-## Phase 4: Missing features
-
-### 4.6 No trailing blank line after editing at the end of a document
-
-Clicking into a list or table that ends the document leaves Milkdown's
-empty trailing paragraph in place, and the file is saved ending in a
-blank line. Content is unchanged, but it is churn in a diff. Trim
-trailing empty paragraphs on save.
-
-### 4.7 A way to forget the token
-
-The GitHub token stays in localStorage until the browser's site data is
-cleared. Add a **Disconnect from GitHub** command that removes it.
+Python cells. Phase 4 (renaming, moving and deleting; new practice
+pages; find and replace; named pull requests; keeping both sides of a
+conflict; no trailing blank line; disconnecting from GitHub) is done.
 
 ---
 
@@ -38,10 +22,11 @@ cleared. Add a **Disconnect from GitHub** command that removes it.
 
 ### 5.1 Split `shell.ts`
 
-At over 800 lines, it holds opening and saving, every command's
-registration, the problem report, authoring flows and export. Move the
-command list, the report overlay, and the authoring flows (new tutorial,
-series, release) into their own modules; `shell.ts` keeps opening,
+At nearly 1,500 lines, it holds opening and saving, every command's
+registration, the problem report, authoring flows (new tutorial,
+practice page, series, release, rename, delete, find and replace, pull
+request) and export. Move the command list, the report overlay, and the
+authoring flows into their own modules; `shell.ts` keeps opening,
 saving and the state they share.
 
 ### 5.2 Call a course a course in code
