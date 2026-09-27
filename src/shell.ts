@@ -12,7 +12,7 @@ import { mountEditor } from "./editor.ts";
 import { mountSpine, type Spine } from "./spine.ts";
 import { mountWorkspacePalette, type WorkspacePalette } from "./workspace-palette.ts";
 import { registerCommands, clearCommands } from "./commands.ts";
-import { buildFileIndex, locationOf, type FileIndexEntry } from "./workspace.ts";
+import { buildFileIndex, hasDewlabLayout, locationOf, type FileIndexEntry } from "./workspace.ts";
 import { parseCourseFiles, parseCourseIndex, isCourseFile } from "./courses.ts";
 import type { Course } from "./courses.ts";
 import { messageOf, type SaveProblem } from "./save-problem.ts";
@@ -258,8 +258,13 @@ export function mountShell(page: HTMLElement): Shell {
 
     const heading = document.createElement("h1");
     heading.textContent = "No document open";
+    // dewlab's words and dewlab's button in a dewlab workspace; a folder
+    // of notes gets its own.
+    const dewlab = hasDewlabLayout(index.map((entry) => entry.path), courses.length);
     const note = document.createElement("p");
-    note.textContent = `Open a tutorial or a page from the workspace, or start a new tutorial.`;
+    note.textContent = dewlab
+      ? "Open a tutorial or a page from the workspace, or start a new tutorial."
+      : "Open a document from the workspace, or start a new one.";
 
     const actions = document.createElement("div");
     actions.className = "dn-empty-actions";
@@ -270,8 +275,8 @@ export function mountShell(page: HTMLElement): Shell {
     find.addEventListener("click", () => palette.open());
     const create = document.createElement("button");
     create.type = "button";
-    create.textContent = "New tutorial…";
-    create.addEventListener("click", () => void authoring.createTutorial());
+    create.textContent = dewlab ? "New tutorial…" : "New document…";
+    create.addEventListener("click", () => void (dewlab ? authoring.createTutorial() : fileChanges.newDocument()));
     actions.append(find, create);
     box.append(heading, note, actions);
 

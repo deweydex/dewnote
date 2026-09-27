@@ -22,6 +22,8 @@ thing.
 | **Download** | Make a file in the browser's downloads folder: **Download as HTML**, **Download as a Jupyter notebook**, and **Download dewnote** (the application itself, as one HTML file). | Anything that touches the workspace. |
 | **Import** | Replace the open document's content with a file from elsewhere: **Import a Jupyter notebook…**. | Opening a workspace document. |
 | **Open** | Show a document from the workspace, or open a folder or repository. | Import. |
+| **New** | Make a file in the workspace that was not there: **New tutorial…**, **New practice page**, **New document…**. | A copy. |
+| **Duplicate** | Make a copy of the open document in the workspace, under a new name: **Duplicate this document…**. | Download, which leaves the workspace. |
 
 *Retired:* "Save as an HTML page" and "Save as a Jupyter notebook" (both
 were downloads), "Open a Jupyter notebook…" (an import).

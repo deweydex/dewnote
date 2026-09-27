@@ -4,7 +4,8 @@
 // built app, the same split outline-panel.ts and settings-panel.ts use.
 
 import { describe, expect, test } from "bun:test";
-import { isTutorialPath, rankRows } from "./workspace-palette.ts";
+import { rankRows } from "./workspace-palette.ts";
+import { isTutorialPath } from "./workspace.ts";
 
 type Row = Parameters<typeof rankRows>[0][number];
 

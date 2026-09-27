@@ -8,6 +8,7 @@ import { placementsOf } from "./placement.ts";
 import { tutorialIdOf } from "./rename.ts";
 import { shortcut } from "./keys.ts";
 import { messageOf } from "./save-problem.ts";
+import { hasDewlabLayout, isTutorialPath } from "./workspace.ts";
 import { canDownloadDewnote, downloadDewnote } from "./self-copy.ts";
 import type { ShellContext } from "./shell-context.ts";
 import type { AuthoringFlows } from "./authoring-flows.ts";
@@ -75,11 +76,8 @@ export function shellCommands(
       section: "Workspace",
       keywords: ["create", "add", "write", "start"],
       detail: "Creates a draft tutorial with its own folder, front matter and one cell.",
-      // dewlab's, so offered where dewlab's layout is (course files,
-      // tutorials, or its site pages), and not in a folder of notes.
-      available: () =>
-        ctx.courses().length > 0 ||
-        ctx.index().some((entry) => /(?:^|\/)(?:tutorials\/|pages\/[^/]+\.md$)/.test(entry.path)),
+      // dewlab's, so not offered in a folder of notes.
+      available: () => hasDewlabLayout(ctx.index().map((entry) => entry.path), ctx.courses().length),
       run: () => void authoring.createTutorial(),
     },
     {
@@ -139,6 +137,28 @@ export function shellCommands(
       detail: "Changes its id, folder and web address, and every course list, link and redirect that names it.",
       available: () => tutorialId() !== undefined,
       run: () => void files.renameTutorial(),
+    },
+    {
+      id: "new-document",
+      label: "New document…",
+      section: "Workspace",
+      keywords: ["create", "add", "file", "note", "blank", "empty", "markdown", "start"],
+      detail: "An empty markdown file beside the open one, under a name you choose, opened.",
+      run: () => void files.newDocument(),
+    },
+    {
+      id: "duplicate-document",
+      label: "Duplicate this document…",
+      section: "Document",
+      keywords: ["copy", "save as", "version", "draft", "next", "clone"],
+      detail: "A copy of this file as last saved, under a new name beside it. The copy opens; this file is left as it is.",
+      // A tutorial's versions are releases, and a second page in its
+      // folder is one more page dewlab builds.
+      available: () => {
+        const open = ctx.open();
+        return open !== null && !isTutorialPath(open.path);
+      },
+      run: () => void files.duplicateDocument(),
     },
     {
       id: "move-document",
