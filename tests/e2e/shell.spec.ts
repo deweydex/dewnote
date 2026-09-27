@@ -83,6 +83,23 @@ test("served from a site, the gate downloads dewnote as the one file the build w
   const saved = await download.path();
   expect(readFileSync(saved!)).toEqual(readFileSync(resolve(DIST, "dewnote.html")));
   await expect(page.locator(".dn-gate-problem")).toHaveText("");
+
+  // Opened from disk it cannot be installed, but Chrome makes a shortcut
+  // to it, and draws that shortcut from a PNG icon in the page: from the
+  // SVG favicon alone it drew a letter. The copy carries its PNGs inside.
+  const head = readFileSync(saved!, "utf8").slice(0, 60_000);
+  const pngOf = (rel: string) =>
+    new RegExp(`<link rel="${rel}"[^>]*href="(data:image/png;base64,[^"]+)"`).exec(head)?.[1];
+  const sizeOf = (src: string | undefined) =>
+    page.evaluate(async (url) => {
+      if (!url) return 0;
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      return image.naturalWidth;
+    }, src);
+  expect(await sizeOf(pngOf("icon"))).toBe(512);
+  expect(await sizeOf(pngOf("apple-touch-icon"))).toBe(180);
 });
 
 test("opening a workspace offers the palette, because choosing a document is next", async ({ page }) => {

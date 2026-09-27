@@ -52,6 +52,12 @@ with its own icon in the Dock or taskbar, install it from the site:
 An installed dewnote still loads from the site each time you open it,
 so it needs a connection, as the site does.
 
+A downloaded copy can go in the Dock as a shortcut instead. In Chrome,
+open the file and choose **Cast, save and share › Create shortcut…**
+from the menu, with **Open as window** ticked. It opens the file in a
+window of its own, with dewnote's icon. It is a shortcut to that file,
+so moving or renaming the file breaks it.
+
 ---
 
 # Part 1: Your first tutorial
