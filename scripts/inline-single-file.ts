@@ -86,11 +86,24 @@ html = html.replace(scriptMatch[0], () => `<script type="module">${inlineJs}</sc
 // the site offers exactly this file). It is the page with its icon
 // inside it, whichever way the page itself carries its icon: a copy
 // opened from disk has no favicon.svg beside it. Taken before the app
-// links below, which name files a downloaded copy does not have and a
-// page opened from disk cannot use: no browser installs a file:// page.
+// links below, which name files a downloaded copy does not have.
+//
+// No browser installs a page opened from disk, but Chrome will make a
+// shortcut to one that opens in a window of its own, and it draws that
+// shortcut's icon from the page's own icon links. It cannot draw one
+// from an SVG, so with only the favicon it drew the first letter of the
+// title. So the copy also carries two PNGs, as data URLs: the tile as a
+// PNG icon, for Chrome, and the full-bleed square as `apple-touch-icon`,
+// for Safari. They add about 20 KB to a 5 MB file.
 const ICON_LINK_RE = /<link\b(?=[^>]*\brel=["']icon["'])[^>]*>/i;
+const APP = join("assets", "branding", "app");
+const pngData = (name: string) => `data:image/png;base64,${readFileSync(join(APP, name)).toString("base64")}`;
+const fileIconLinks = [
+  `<link rel="icon" type="image/png" sizes="512x512" href="${pngData("icon-512.png")}" />`,
+  `<link rel="apple-touch-icon" href="${pngData("apple-touch-icon.png")}" />`,
+].join("\n    ");
 const selfCopyPath = join(DIST, "dewnote.html");
-const selfCopy = externalFavicon ? html.replace(ICON_LINK_RE, () => inlineIconLink) : html;
+const selfCopy = html.replace(ICON_LINK_RE, () => `${inlineIconLink}\n    ${fileIconLinks}`);
 
 // The site build (the one with its favicon beside it) is also the one a
 // browser can install as an app: Chrome from the manifest's icons,
@@ -99,7 +112,6 @@ const selfCopy = externalFavicon ? html.replace(ICON_LINK_RE, () => inlineIconLi
 // straight after the favicon's, which is at the top of <head>: the
 // bundle further down holds `</head>` in strings of its own.
 if (externalFavicon) {
-  const APP = join("assets", "branding", "app");
   for (const name of ["manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"]) {
     copyFileSync(join(APP, name), join(DIST, name));
   }

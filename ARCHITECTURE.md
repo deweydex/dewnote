@@ -665,7 +665,11 @@ The site build (`DEWNOTE_EXTERNAL_FAVICON=1`, as `deploy.yml` runs it)
 also makes the page installable: it copies `assets/branding/app/`'s
 manifest and icons beside the page and links them from `<head>`, and
 leaves them out of `dewnote.html`, since nothing installs a page opened
-from disk. There are two icon sources. `dewnote-app-icon.svg` is the
+from disk. What Chrome does offer for one is a shortcut, whose icon it
+draws from the page's icon links, and never from an SVG: with only the
+favicon it drew a letter. So `dewnote.html` carries two of the PNGs as
+data URLs, the tile as a PNG icon and the full-bleed square as
+`apple-touch-icon`. There are two icon sources. `dewnote-app-icon.svg` is the
 favicon with an app icon's margin, for a system that shows an icon as it
 is. `dewnote-app-icon-full.svg` is full bleed, for one that cuts its own
 shape: `apple-touch-icon` (iOS, and Safari's Add to Dock) and the
