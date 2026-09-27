@@ -20,7 +20,7 @@
 // commits to it: path, status, version, opening sentence, headings. A
 // list of paths says where a file is; this says what it says.
 
-import { defaultEntryFor, type FileIndexEntry } from "./workspace.ts";
+import { defaultEntryFor, isTutorialPath, type FileIndexEntry } from "./workspace.ts";
 import { availableCommands, fuzzyScore, type Command } from "./commands.ts";
 import type { Course } from "./courses.ts";
 import { headingsOf, openingOf, plainInline } from "./markdown.ts";
@@ -88,13 +88,6 @@ const SECTION_OF: Record<RowKind, string> = {
   command: "Commands",
   more: "",
 };
-
-/** A tutorial is dewlab's: a file under `tutorials/`. Anything else is a
- * document, and filing a folder of notes under "Tutorials" told its
- * owner the editor had mistaken it for something it is not. */
-export function isTutorialPath(path: string): boolean {
-  return /(?:^|\/)tutorials\//.test(path);
-}
 
 /** Paths in the order a person reads a folder: `2-notes` before
  * `10-notes`, and case ignored. */

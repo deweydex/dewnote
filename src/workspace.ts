@@ -53,6 +53,24 @@ export interface FileIndexEntry {
   version?: string;
 }
 
+/** A tutorial is dewlab's: a file under `tutorials/`. Anything else is a
+ * document, and filing a folder of notes under "Tutorials" told its
+ * owner the editor had mistaken it for something it is not. */
+export function isTutorialPath(path: string): boolean {
+  return /(?:^|\/)tutorials\//.test(path);
+}
+
+/** Whether a workspace is laid out as dewlab is: course files, tutorials,
+ * or dewlab's own site pages. Its commands (New tutorial…, the series)
+ * are offered there and not in a folder of notes. */
+export function hasDewlabLayout(paths: Iterable<string>, courseCount: number): boolean {
+  if (courseCount > 0) return true;
+  for (const path of paths) {
+    if (isTutorialPath(path) || /(?:^|\/)pages\/[^/]+\.md$/.test(path)) return true;
+  }
+  return false;
+}
+
 /** `v2026.08.23.1.md` — a frozen past release, sitting in the folder of
  * the tutorial it is a release of (`build.py`'s own `VERSION_FILE_RE`). */
 const VERSION_FILE_RE = /^v\d{4}\.\d{2}\.\d{2}\.\d+$/;

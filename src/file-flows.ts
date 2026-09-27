@@ -1,5 +1,6 @@
-// Changing several files at once: renaming a tutorial, moving or
-// deleting a document, replacing text across the workspace.
+// Changing the workspace's files: a new document or a copy of one,
+// renaming a tutorial, moving or deleting a document, replacing text
+// across the workspace.
 //
 // Each is planned over the workspace's text (rename.ts, find.ts),
 // confirmed, and applied as one change (`Store.apply`), after which the
@@ -11,9 +12,12 @@ import { findAll, replaceAll } from "./find.ts";
 import { mountFindPanel, type FindPanel } from "./find-panel.ts";
 import { extractFrontMatter } from "./frontmatter.ts";
 import { messageOf } from "./save-problem.ts";
+import { documentPath, folderForNew, folderOf, suggestName } from "./documents.ts";
 import type { ShellContext } from "./shell-context.ts";
 
 export interface FileFlows {
+  newDocument(): Promise<void>;
+  duplicateDocument(): Promise<void>;
   renameTutorial(): Promise<void>;
   moveDocument(): Promise<void>;
   deleteDocument(): Promise<void>;
@@ -53,6 +57,29 @@ export function fileFlows(ctx: ShellContext): FileFlows {
     return true;
   }
 
+  /** The names of the markdown files directly in `folder`. */
+  function namesIn(folder: string): string[] {
+    return [...ctx.files().keys()]
+      .filter((path) => folderOf(path) === folder)
+      .map((path) => path.slice(folder ? folder.length + 1 : 0));
+  }
+
+  /** One file written and opened. */
+  async function writeAndOpen(path: string, content: string, message: string): Promise<void> {
+    const store = ctx.store();
+    if (!store) return;
+    try {
+      await store.write(path, content, message);
+    } catch (error) {
+      spine.setProblem({ message: messageOf(error) });
+      return;
+    }
+    ctx.files().set(path, content);
+    ctx.reindex();
+    spine.setProblem(null);
+    await ctx.showPath(path);
+  }
+
   const finder = mountFindPanel({
     search: (query, options) => findAll(ctx.files(), query, options),
     open: (path) => void ctx.openPath(path),
@@ -76,6 +103,49 @@ export function fileFlows(ctx: ShellContext): FileFlows {
 
   return {
     finder,
+
+    /** An empty markdown file beside the open document, named by the
+     * author, and opened. */
+    async newDocument() {
+      if (!ctx.store()) return;
+      if (!(await ctx.readyToLeave())) return;
+      const folder = folderForNew(ctx.open()?.path ?? null);
+      const name = await asker.ask("New document", {
+        label: folder ? `Name, in ${folder}/. .md is added.` : "Name. .md is added.",
+        value: suggestName(namesIn(folder)),
+        confirm: "Create document",
+      });
+      if (name === null) return;
+      const made = documentPath(folder, name, ctx.files());
+      if ("error" in made) {
+        spine.setProblem({ message: made.error });
+        return;
+      }
+      await writeAndOpen(made.path, "", `Add ${made.path}`);
+    },
+
+    /** The open document as last saved, under a new name beside it, and
+     * the copy opened. Unsaved changes are asked about first, so a copy
+     * is of a file rather than of a moment. */
+    async duplicateDocument() {
+      const open = ctx.open();
+      if (!ctx.store() || !open) return;
+      if (!(await ctx.readyToLeave())) return;
+      const from = ctx.open()?.path ?? open.path;
+      const folder = folderOf(from);
+      const name = await asker.ask("Duplicate this document", {
+        label: `Name of the copy${folder ? `, in ${folder}/` : ""}. .md is added.`,
+        value: suggestName(namesIn(folder), from.slice(folder ? folder.length + 1 : 0)),
+        confirm: "Duplicate",
+      });
+      if (name === null) return;
+      const made = documentPath(folder, name, ctx.files());
+      if ("error" in made) {
+        spine.setProblem({ message: made.error });
+        return;
+      }
+      await writeAndOpen(made.path, ctx.files().get(from) ?? "", `Copy ${from} to ${made.path}`);
+    },
 
     /** A tutorial's id changed: its folder, its files, and everything
      * that names it. Asks for the new id, then shows what will change. */

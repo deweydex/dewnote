@@ -258,10 +258,12 @@ appear while a document is open.
 | **New practice page** | Tutorial | Creates the tutorial's practice page, as a draft, and opens it. Once it exists, **Open the practice page** takes its place. |
 | **Rename this tutorial…** | Tutorial | Changes the tutorial's id, and every file that names it. See [Renaming a tutorial](#renaming-a-tutorial). |
 | **Delete this tutorial…** | Tutorial | Deletes the tutorial's folder and takes it out of every course. See [Deleting](#deleting). |
+| **Duplicate this document…** | Document | Makes a copy of the file, as last saved, under a new name beside it, and opens the copy. In a folder of numbered drafts it suggests the next number: `23-for-josh` for a copy of `22-for-josh`. Not offered for a tutorial, whose versions are releases. |
 | **Move or rename this file…** | Document | Gives a page outside `tutorials/` a new path. |
 | **Delete this document…** | Document | Deletes a file that is not a tutorial's own, such as a practice page. |
 | **Release a new version…** | Tutorial | Keeps a copy of the current version and makes your edits the next one. See [Releasing a new version](#releasing-a-new-version). |
-| **New tutorial…** | Workspace | Creates a draft tutorial. |
+| **New tutorial…** | Workspace | Creates a draft tutorial. Offered in a dewlab workspace. |
+| **New document…** | Workspace | Creates an empty markdown file beside the open one, under a name you choose, and opens it. In a folder of numbered files it suggests the next number. |
 | **Find and replace in every document…** | Workspace | Searches every document, and replaces every match at once. Same as Ctrl+Shift+F. See [Finding and replacing](#finding-and-replacing). |
 | **Check every document** | Workspace | Runs the same checks on every document in the workspace. |
 | **Download as HTML** | Import and export | Downloads the page as one self-contained file. |

@@ -195,6 +195,79 @@ test("a folder of notes: the palette lists documents, recent first and in number
   await expect(page.locator('.dn-wp-row:has-text("New tutorial")')).toHaveCount(0);
 });
 
+test.describe("a new document, and a copy of one, in a folder of drafts", () => {
+  const DRAFTS = {
+    "papers/20-inertia.md": "# The Cost of Inertia\n\nAn earlier draft.\n",
+    "papers/22-for-josh.md": "# The Cost of Inertia\n\nThe draft for Josh.\n",
+    "README.md": "# About\n",
+  };
+
+  async function openDraft(page: import("@playwright/test").Page) {
+    await page.goto(BUILT_APP);
+    await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), DRAFTS);
+    await page.locator(".dn-wp-input").fill("22-for");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".dn-spine-file")).toHaveText("22-for-josh.md");
+  }
+
+  async function command(page: import("@playwright/test").Page, name: string) {
+    await page.keyboard.press("ControlOrMeta+k");
+    await page.locator(".dn-wp-input").fill(name);
+    await page.keyboard.press("Enter");
+  }
+
+  test("New document… offers the next number beside the open file, and opens what it makes", async ({ page }) => {
+    await openDraft(page);
+    await command(page, "new document");
+    const ask = page.locator(".dn-ask");
+    await expect(ask.locator("input")).toHaveValue("23-");
+    await ask.locator("input").fill("23-final");
+    await ask.locator(".dn-ask-go").click();
+
+    await expect(page.locator(".dn-spine-file")).toHaveText("23-final.md");
+    const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1));
+    expect(written).toEqual({ path: "papers/23-final.md", text: "" });
+  });
+
+  test("Duplicate this document… copies it under the next number, and leaves it as it was", async ({ page }) => {
+    await openDraft(page);
+    await command(page, "duplicate");
+    const ask = page.locator(".dn-ask");
+    await expect(ask.locator("input")).toHaveValue("23-for-josh");
+    await ask.locator(".dn-ask-go").click();
+
+    await expect(page.locator(".dn-spine-file")).toHaveText("23-for-josh.md");
+    await expect(page.locator(".milkdown p").first()).toHaveText("The draft for Josh.");
+    const writes = await page.evaluate(() => (globalThis as any).__dewnoteWrites);
+    expect(writes).toEqual([{ path: "papers/23-for-josh.md", text: DRAFTS["papers/22-for-josh.md"] }]);
+  });
+
+  test("a name that is taken is refused, and says so", async ({ page }) => {
+    await openDraft(page);
+    await command(page, "new document");
+    await page.locator(".dn-ask input").fill("20-inertia");
+    await page.locator(".dn-ask .dn-ask-go").click();
+    await expect(page.locator(".dn-spine-problem")).toContainText("Not created: there is already a document at papers/20-inertia.md.");
+    expect(await page.evaluate(() => (globalThis as any).__dewnoteWrites)).toEqual([]);
+  });
+
+  test("with nothing open, a folder of notes is offered a new document rather than a tutorial", async ({ page }) => {
+    await page.goto(BUILT_APP);
+    await page.evaluate((files) => (globalThis as any).__dewnote.useStubStore(files), DRAFTS);
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".dn-empty-actions button").nth(1)).toHaveText("New document…");
+  });
+});
+
+test("a tutorial is not offered Duplicate: its versions are releases", async ({ page }) => {
+  await openWorkspace(page);
+  await page.locator(".dn-wp-input").fill("storing");
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.locator(".dn-wp-input").fill("duplicate");
+  await expect(page.locator('.dn-wp-row:has-text("Duplicate this document")')).toHaveCount(0);
+});
+
 test("the margin has a button for the palette, not only a shortcut to read about", async ({ page }) => {
   await openWorkspace(page);
   await page.keyboard.press("Escape");

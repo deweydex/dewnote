@@ -39,6 +39,7 @@ src/courses.ts          course files: which series list which tutorials
 src/placement.ts        adding and removing a tutorial from a series
 src/authoring.ts        new tutorials, practice pages and releases
 src/rename.ts           renaming, moving and deleting, as plans
+src/documents.ts        what a new document or a copy is called, and where
 src/find.ts             finding and replacing text across documents
 src/pull-request.ts     a pull request's suggested title and description
 src/checks.ts           what would break the build or confuse a reader
@@ -49,7 +50,7 @@ src/self-copy.ts        dewnote itself, as one file to download
 src/shell.ts            the workspace's state: opening, saving, drafts
 src/shell-context.ts    what the shell lends the flows
 src/authoring-flows.ts  new tutorial, practice page, series, release
-src/file-flows.ts       rename, move, delete, find and replace
+src/file-flows.ts       new, duplicate, rename, move, delete, find and replace
 src/export-flows.ts     HTML, preview and notebook, out and in
 src/github-flows.ts     pull requests, and forgetting the token
 src/shell-commands.ts   every command the palette offers
