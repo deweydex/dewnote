@@ -445,6 +445,26 @@ test.describe("front matter as fields", () => {
   });
 });
 
+test.describe("a file that opens with a rule", () => {
+  // What an ordinary markdown file can hold: a rule, a line, a rule. It
+  // has the shape of front matter, and until this was checked the line
+  // vanished into a front-matter node under an empty Title field.
+  const SOURCE = "---\n\nAn opening line.\n\n---\n\nThe rest.\n";
+
+  test("shows the line between two rules, with no front-matter fields, and saves it as it was", async ({ page }) => {
+    await page.goto(BUILT_APP);
+    await page.evaluate(() => document.querySelector(".dn-gate")?.remove());
+    const out = await page.evaluate(async (md) => {
+      await (globalThis as any).__dewnote.open(md);
+      return (globalThis as any).__dewnote.markdown() as string;
+    }, SOURCE);
+    await expect(page.locator(".dn-front")).toHaveCount(0);
+    await expect(page.locator(".milkdown hr")).toHaveCount(2);
+    await expect(page.locator(".milkdown p").first()).toHaveText("An opening line.");
+    expect(out).toBe(SOURCE);
+  });
+});
+
 test.describe("a web page's panes as one editor", () => {
   const SOURCE = [
     "```html site", "id: page-html", "site: demo", "<p class=\"note\">Hello.</p>", "```", "",

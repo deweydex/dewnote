@@ -93,8 +93,13 @@ export function checkDocument(source: string, around: Around): Problem[] {
    * `[[name]]` is read. */
   const sitePage = path !== undefined && /(^|\/)pages\/[^/]+\.md$/.test(path);
 
+  // A file dewlab never builds (a README, notes, anything outside
+  // tutorials/ and pages/) needs no front matter. Without a path there is
+  // no telling, and the rule stays on.
+  const needsFrontMatter = path === undefined || sitePage || /(^|\/)tutorials\//.test(path);
+
   if (!present) {
-    problems.push({ message: "No front matter. Add a `---` block at the top with at least a `title:` line; the site cannot build the page without it.", severity: "blocking" });
+    if (needsFrontMatter) problems.push({ message: "No front matter. Add a `---` block at the top with at least a `title:` line; the site cannot build the page without it.", severity: "blocking" });
   } else {
     if (typeof fields["title"] !== "string" || !fields["title"].trim()) {
       problems.push({ message: "No `title:` in the front matter. Add one; the site cannot build the page without a title.", severity: "blocking" });

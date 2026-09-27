@@ -22,12 +22,17 @@ To try it without connecting anything, choose **try the sample document**
 on the opening screen. The sample holds one of every block dewnote
 supports, and nothing you do in it is saved.
 
+To keep dewnote on your computer, choose **Download dewnote** on the
+opening screen of the site. What arrives is the whole application as one
+HTML file; running Python in it still needs a connection.
+
 ## Developing it
 
 ```bash
 bun install
 bun run dev          # development server with hot reload
-bun run build        # builds dist/index.html, one self-contained file
+bun run build        # builds dist/index.html, one self-contained file, and
+                     # dist/dewnote.html, the copy "Download dewnote" hands out
 bun run test         # unit tests
 bun run typecheck
 bun run test:e2e     # builds, then runs the Playwright tests against dist/index.html

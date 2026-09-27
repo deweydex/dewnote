@@ -23,7 +23,7 @@ import { extendListItemSchemaForTask } from "@milkdown/kit/preset/gfm";
 import { $nodeSchema, $prose, $remark, $view } from "@milkdown/kit/utils";
 import { appPage, cardIn, describeTrigger, foldLine, generatedBlockIn, GENERATED_BLOCKS, hintIn, paneGroups, parseTrigger, questionIn, sitePage, type PaneKind, type Question, type SiteGroup, type StagedHint } from "./fences.ts";
 import { renderFragment } from "./export-html.ts";
-import { extractFrontMatter } from "./frontmatter.ts";
+import { extractFrontMatter, readableAsMarkdown } from "./frontmatter.ts";
 import { setYamlField } from "./authoring.ts";
 import { editorViewCtx, remarkStringifyOptionsCtx } from "@milkdown/kit/core";
 import remarkFrontmatter from "remark-frontmatter";
@@ -972,7 +972,7 @@ export async function mountEditor(
 
   const crepe = new Crepe({
     root,
-    defaultValue: canonicaliseDisplayMath(options.markdown),
+    defaultValue: readableAsMarkdown(canonicaliseDisplayMath(options.markdown)),
     features: {
       // Rewrites an image's alt text to its aspect ratio, which the probe
       // caught turning `![](x.svg)` into `![1.00](x.svg)`.

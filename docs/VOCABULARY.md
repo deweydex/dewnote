@@ -19,7 +19,7 @@ thing.
 | Word | Means | Never used for |
 |---|---|---|
 | **Save** | Write the open document to where it came from: the file in a folder, or a commit on the working branch. | Exports. |
-| **Download** | Make a file in the browser's downloads folder: **Download as HTML**, **Download as a Jupyter notebook**. | Anything that touches the workspace. |
+| **Download** | Make a file in the browser's downloads folder: **Download as HTML**, **Download as a Jupyter notebook**, and **Download dewnote** (the application itself, as one HTML file). | Anything that touches the workspace. |
 | **Import** | Replace the open document's content with a file from elsewhere: **Import a Jupyter notebook…**. | Opening a workspace document. |
 | **Open** | Show a document from the workspace, or open a folder or repository. | Import. |
 

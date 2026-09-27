@@ -5,15 +5,16 @@
 // of plain markdown. The only question that needs answering is which
 // parts of the text are prose, and that is a fence scanner.
 
+import { bodyOf } from "./frontmatter.ts";
+
 const FENCE_RE = /^(?:```|~~~)/;
-const FRONT_MATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
 
 /** Every run of prose in `source`, in order, with front matter and the
  * inside of every fence left out. A `#` inside a fence is a comment or a
  * shell prompt, never a heading — the one rule that matters here, and
  * the one a plain `/^#/gm` over the whole file gets wrong. */
 export function proseRuns(source: string): string[] {
-  const body = source.replace(FRONT_MATTER_RE, "");
+  const body = bodyOf(source);
   const runs: string[] = [];
   let current: string[] = [];
   let inFence = false;
