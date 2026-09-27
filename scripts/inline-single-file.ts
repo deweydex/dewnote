@@ -45,6 +45,8 @@ const faviconSource = join("assets", "branding", "dewnote-favicon.svg");
 const favicon = readFileSync(faviconSource);
 const externalFavicon = process.env.DEWNOTE_EXTERNAL_FAVICON === "1";
 
+const inlineIcon = `data:image/svg+xml;base64,${favicon.toString("base64")}`;
+const inlineIconLink = iconMatch[0].replace(iconHrefMatch[0], `href="${inlineIcon}"`);
 if (externalFavicon) {
   const deployedIconName = "favicon.svg";
   const deployedIconPath = join(DIST, deployedIconName);
@@ -53,8 +55,7 @@ if (externalFavicon) {
   copyFileSync(faviconSource, deployedIconPath);
   html = html.replace(iconMatch[0], () => iconMatch[0].replace(iconHrefMatch[0], `href="${deployedIconHref}"`));
 } else {
-  const inlineIcon = `data:image/svg+xml;base64,${favicon.toString("base64")}`;
-  html = html.replace(iconMatch[0], () => iconMatch[0].replace(iconHrefMatch[0], `href="${inlineIcon}"`));
+  html = html.replace(iconMatch[0], () => inlineIconLink);
 }
 
 if (emittedIconPath && emittedIconPath !== join(DIST, "favicon.svg") && existsSync(emittedIconPath)) {
@@ -83,4 +84,14 @@ writeFileSync(htmlPath, html);
 unlinkSync(cssFile);
 unlinkSync(jsFile);
 
-console.log(`inlined ${linkMatch[1]} and ${scriptMatch[1]} into ${htmlPath}`);
+// The copy someone downloads to keep (src/self-copy.ts fetches it, so
+// the site offers exactly this file). It is the page with its icon
+// inside it, whichever way the page itself carries its icon: a copy
+// opened from disk has no favicon.svg beside it.
+const selfCopyPath = join(DIST, "dewnote.html");
+const selfCopy = externalFavicon
+  ? html.replace(/<link\b(?=[^>]*\brel=["']icon["'])[^>]*>/i, () => inlineIconLink)
+  : html;
+writeFileSync(selfCopyPath, selfCopy);
+
+console.log(`inlined ${linkMatch[1]} and ${scriptMatch[1]} into ${htmlPath}, and wrote ${selfCopyPath}`);

@@ -21,7 +21,7 @@ import remarkFrontmatter from "remark-frontmatter";
 import remarkRehype from "remark-rehype";
 import rehypeKatex from "rehype-katex";
 import rehypeStringify from "rehype-stringify";
-import { extractFrontMatter } from "./frontmatter.ts";
+import { extractFrontMatter, readableAsMarkdown } from "./frontmatter.ts";
 import { isLocalAsset } from "./images.ts";
 import { unmathPlainDollars } from "./maths.ts";
 import { segments, joinSegments, fenceBody } from "./notebook.ts";
@@ -81,7 +81,7 @@ export async function renderBody(source: string): Promise<string> {
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(rehypeKatex)
     .use(rehypeStringify, { allowDangerousHtml: true })
-    .process(withoutCellHeaders(source));
+    .process(readableAsMarkdown(withoutCellHeaders(source)));
   return String(file);
 }
 

@@ -19,6 +19,7 @@ import { messageOf, saveProblem } from "./save-problem.ts";
 import { applyToFiles, type Change } from "./rename.ts";
 import type { BranchChange } from "./pull-request.ts";
 import { SAMPLE_TUTORIAL, sampleStore } from "./sample.ts";
+import { canDownloadDewnote, downloadDewnote } from "./self-copy.ts";
 import { applyTokens } from "./theme/tokens.ts";
 
 // dewlab's tokens, as a stylesheet. They arrive as text because the
@@ -59,6 +60,11 @@ function gate(): HTMLElement {
     <p class="dn-gate-aside">
       Or <button type="button" data-choice="sample">try the sample document</button>.
       Nothing you do in it is saved.
+    </p>
+    <p class="dn-gate-aside dn-gate-keep" hidden>
+      <button type="button" data-choice="download">Download dewnote</button>
+      to keep it on this computer as one HTML file. It opens in your browser
+      without this site; running Python still needs a connection.
     </p>
     <form class="dn-gate-repo" hidden>
       <label>GitHub token <input name="token" type="password" autocomplete="off" required></label>
@@ -148,6 +154,17 @@ function start(): void {
       done();
     } catch (error) { failed(error); } finally { state.restore(); }
   });
+
+  // Offered only where there is a site to download from. Opened from
+  // disk, this already is the downloaded copy.
+  if (canDownloadDewnote()) {
+    box.querySelector<HTMLElement>(".dn-gate-keep")!.hidden = false;
+    const downloadButton = box.querySelector<HTMLButtonElement>('[data-choice="download"]')!;
+    downloadButton.addEventListener("click", async () => {
+      problem.textContent = "";
+      try { await downloadDewnote(); } catch (error) { failed(error); }
+    });
+  }
 
   box.querySelector<HTMLButtonElement>('[data-choice="repo"]')!
     .addEventListener("click", () => {

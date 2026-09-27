@@ -32,6 +32,11 @@ dewnote runs entirely in your browser. There is no dewnote server: your
 files stay on your computer or in your GitHub repository, and Python runs
 inside the browser tab.
 
+The whole of dewnote is one HTML file. To keep a copy on your computer,
+choose **Download dewnote** on the opening screen, or the command of the
+same name. Open the file in your browser and it works as the site does,
+except that running Python still needs an internet connection.
+
 ---
 
 # Part 1: Your first tutorial
@@ -164,13 +169,13 @@ From top to bottom:
 | What you see | What it means |
 |---|---|
 | `name.md` | The file you are editing. Hover over it for its whole path. A dot after the name means it has unsaved changes. |
-| *Course › Series › Title* | Where this tutorial is listed. Click it to open the palette. If the tutorial is not in any series, this reads *Open another document*. |
+| *Course › Series › Title* | Where this tutorial is listed. Click it to open the palette. A file no series lists, such as a note or a README, shows the folders it is in instead, and nothing when it sits at the top of the workspace. |
 | `dewlab · main → dewnote/2026-09-22` | The workspace. For GitHub, this also shows the main branch and the working branch your saves go to. |
 | A list of headings | Every heading in the document. Click one to scroll to it. |
 | A warning in orange | Something failed, usually a save. It stays until you open another document; see [When a save fails](#when-a-save-fails). |
 | **3 problems** | How many problems **Check this document** would report. It has an orange dot if any would stop the site building. Click it to see them. It disappears when there are none. |
 | *Saved* or **Save (Ctrl+S)** | Whether your changes are saved. Click **Save** to save. |
-| *Ctrl+K to open or do anything* | A reminder of the palette shortcut. |
+| **Open or do anything** (Ctrl+K) | Opens the palette, the same as the shortcut. |
 
 On a narrow window the margin becomes a strip across the top, without the
 list of headings.
@@ -231,6 +236,7 @@ appear while a document is open.
 | **Check every document** | Workspace | Runs the same checks on every document in the workspace. |
 | **Download as HTML** | Import and export | Downloads the page as one self-contained file. |
 | **Download as a Jupyter notebook** | Import and export | Downloads the document as an `.ipynb` file. |
+| **Download dewnote** | Import and export | Downloads dewnote itself as one HTML file, to open from your computer. Offered only on the site, not in a downloaded copy. |
 | **Import a Jupyter notebook…** | Import and export | Replaces the open document's content with a notebook's. |
 | **Disconnect from GitHub…** | GitHub | Forgets the token this browser keeps, and goes back to the opening screen. The token still works on GitHub until you delete it there. |
 | **Open a pull request…** | GitHub | Opens a draft pull request for your working branch, under a title you choose. GitHub workspaces only. See [Pull requests](#pull-requests). |
@@ -343,6 +349,11 @@ version: 2026.09.22.1
 The site will not build if a tutorial is missing a required field or has
 any other `status`. dewlab reads other fields too; `planning/DIALECTS.md`
 lists them all.
+
+A markdown file from anywhere else needs no front matter, and dewnote
+does not ask for it outside `tutorials/` and `pages/`. A file that opens
+with a line of `---`, some text and another `---` is shown as what it is,
+a rule, the text and a rule, unless the text between them is fields.
 
 Some fields from older tutorials are no longer allowed: `slug`, `module`,
 `module_title`, `series` and `order`. Where a tutorial appears is now
@@ -634,7 +645,8 @@ What is checked:
 Only pages are checked: every `.md` file under `tutorials/`, and every
 other file with front matter. dewlab's build reads every `.md` file in a
 tutorial's folder as a page, so a note left there without front matter is
-reported; a README at the top of the repository is not.
+reported; a README at the top of the repository is not, and neither is a
+note open in the editor that sits outside `tutorials/` and `pages/`.
 
 ## Saving
 
@@ -872,6 +884,9 @@ Replacing with nothing (deleting every match) is not offered: an empty
   becomes markdown cells and code blocks become code cells. Each cell
   also keeps its original markdown, so importing the notebook back gives
   the same file exactly.
+- **Download dewnote** downloads dewnote itself as `dewnote.html`, the
+  same single file the site serves. Opened from your computer it needs no
+  site; Python cells still load Python from the internet.
 - **Import a Jupyter notebook…** replaces the open document's content
   with a notebook's. The document keeps its file name, and nothing is
   saved until you save.

@@ -297,9 +297,6 @@ body {
 :root[data-spine="folded"] .dn-spine-foot {
   margin-top: 0;
 }
-:root[data-spine="folded"] .dn-spine-hint {
-  display: none;
-}
 .dn-spine-identity {
   display: flex;
   flex-direction: column;
@@ -369,6 +366,9 @@ body {
 }
 :root[data-spine="folded"] .dn-spine-breadcrumb {
   -webkit-line-clamp: 1;
+}
+.dn-spine-breadcrumb[hidden] {
+  display: none;
 }
 .dn-spine-breadcrumb.is-empty {
   color: var(--dl-link);
@@ -462,7 +462,13 @@ body {
   margin-top: auto;
   padding-top: 1.2rem;
 }
+/* Folded, the foot is one line under the name rather than three: the
+   bar across the top is paid for in document, so it is kept short. */
 :root[data-spine="folded"] .dn-spine-foot {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+  align-items: center;
   padding-top: 0.35rem;
 }
 .dn-spine-state {
@@ -521,10 +527,38 @@ body {
   background: var(--dn-cell-bg, var(--dl-cell-bg));
   outline: none;
 }
-.dn-spine-hint {
+/* The way into the palette by pointer. Quiet, since it is always
+   there, and a button, since a shortcut alone is an answer only for
+   someone who has already read it. */
+.dn-spine-commands {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 1.9rem;
+  padding: 0.2rem 5px;
+  margin-inline-start: -5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--dl-muted);
+  text-align: start;
+  cursor: pointer;
+}
+.dn-spine-commands kbd {
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--dl-rule);
+  border-radius: 4px;
   font-family: var(--dl-mono);
   font-size: 0.66rem;
   color: var(--dl-muted);
+}
+.dn-spine-commands:hover,
+.dn-spine-commands:focus-visible {
+  background: var(--dn-cell-bg, var(--dl-cell-bg));
+  color: var(--dl-fg);
+  outline: none;
 }
 /* For a screen reader, not for the eye: a label the input needs named
    and the placeholder already says. Without this rule it renders, and
@@ -574,6 +608,9 @@ body {
    Top layer also means no z-index: the stack is the order things open
    in. Each dialog sets only how far down its panel sits. */
 .dn-overlay {
+  /* Border-box, or the padding is added to the full width and every
+     panel runs a rem off the right edge of a narrow window. */
+  box-sizing: border-box;
   width: 100vw;
   max-width: none;
   height: 100dvh;
@@ -1193,6 +1230,13 @@ body {
 
 .dn-gate-aside {
   font-size: 0.9rem;
+}
+/* Held to about the width of the lines above it. */
+.dn-gate .dn-gate-keep {
+  max-width: 30rem;
+  margin-top: 0.75rem;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .dn-gate-aside button {

@@ -7,6 +7,7 @@
 // when there were three surfaces to ask them of. There is one now.
 
 import { test, expect } from "@playwright/test";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -60,6 +61,28 @@ test("the gate is what a session opens on", async ({ page }) => {
   await page.goto(BUILT_APP);
   await expect(page.locator(".dn-gate")).toBeVisible();
   await expect(page.locator(".dn-gate-choices button")).toHaveCount(2);
+  // Opened from disk, this is already the downloaded copy.
+  await expect(page.locator('[data-choice="download"]')).toBeHidden();
+});
+
+test("served from a site, the gate downloads dewnote as the one file the build wrote beside it", async ({ page }) => {
+  const DIST = resolve(HERE, "../../dist");
+  await page.route("http://dewnote.test/**", (route) => {
+    const name = new URL(route.request().url()).pathname.split("/").pop() || "index.html";
+    const path = resolve(DIST, name);
+    if (!existsSync(path)) return route.fulfill({ status: 404, body: "" });
+    return route.fulfill({ body: readFileSync(path), contentType: "text/html" });
+  });
+  await page.goto("http://dewnote.test/dewnote/");
+
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.locator('[data-choice="download"]').click(),
+  ]);
+  expect(download.suggestedFilename()).toBe("dewnote.html");
+  const saved = await download.path();
+  expect(readFileSync(saved!)).toEqual(readFileSync(resolve(DIST, "dewnote.html")));
+  await expect(page.locator(".dn-gate-problem")).toHaveText("");
 });
 
 test("opening a workspace offers the palette, because choosing a document is next", async ({ page }) => {
@@ -82,6 +105,31 @@ test("the palette opens a document, and the spine says where it sits", async ({ 
   // Course › Series › Title, read from the course descriptor.
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("Maths for IT");
   await expect(page.locator(".dn-spine-breadcrumb")).toContainText("First Steps");
+});
+
+test("a file no course lists is placed by its folders, not told to open another", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    (files) => (globalThis as any).__dewnote.useStubStore(files),
+    { "notes/week one/plain.md": "# Plain notes\n\nNo front matter, and none needed.\n" },
+  );
+  await page.locator(".dn-wp-input").fill("plain");
+  await page.keyboard.press("Enter");
+
+  await expect(page.locator(".milkdown h1")).toHaveText("Plain notes");
+  await expect(page.locator(".dn-spine-breadcrumb")).toHaveText("notes › week one");
+  await expect(page.locator(".dn-spine-breadcrumb")).not.toHaveClass(/is-empty/);
+  // A note is not a page the site builds, so it owes nobody front matter.
+  await page.waitForTimeout(600);
+  await expect(page.locator(".dn-spine-health")).toBeHidden();
+});
+
+test("the margin has a button for the palette, not only a shortcut to read about", async ({ page }) => {
+  await openWorkspace(page);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".dn-wp-overlay")).toBeHidden();
+  await page.locator(".dn-spine-commands").click();
+  await expect(page.locator(".dn-wp-overlay")).toBeVisible();
 });
 
 test("the outline lists the document's own headings", async ({ page }) => {

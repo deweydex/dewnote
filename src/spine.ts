@@ -146,10 +146,18 @@ export function mountSpine(host: SpineHost): Spine {
   const state = document.createElement("button");
   state.type = "button";
   state.className = "dn-spine-state";
-  const hint = document.createElement("span");
-  hint.className = "dn-spine-hint";
-  hint.textContent = `${shortcut("K")} to open or do anything`;
-  foot.append(health, state, hint);
+  // A button, because a shortcut is only an answer for someone at a
+  // keyboard who has already read it: the palette is where every
+  // document and every command is, so it needs a way in by pointer too.
+  const commands = document.createElement("button");
+  commands.type = "button";
+  commands.className = "dn-spine-commands";
+  const commandsLabel = document.createElement("span");
+  commandsLabel.textContent = "Open or do anything";
+  const commandsKey = document.createElement("kbd");
+  commandsKey.textContent = shortcut("K");
+  commands.append(commandsLabel, commandsKey);
+  foot.append(health, state, commands);
 
   spine.append(identity, rule, problemBox, outline, foot);
   document.body.appendChild(spine);
@@ -160,16 +168,25 @@ export function mountSpine(host: SpineHost): Spine {
     fileName.hidden = file === null;
     fileName.classList.toggle("is-dirty", file?.dirty ?? false);
     const parts = [location.course, location.series, location.page].filter(Boolean);
-    breadcrumb.textContent = parts.length
-      ? parts.join(" › ")
-      : `${file === null ? "Open a document" : "Open another document"} (${shortcut("K")})`;
-    breadcrumb.classList.toggle("is-empty", parts.length === 0);
+    // A file no course lists (a note, a README, anything that is not a
+    // dewlab tutorial) is placed by its folders instead, which is as true
+    // an answer to "where am I". An instruction in the place an answer
+    // belongs read as a fault. A file at the top of the workspace has no
+    // folders, and the line stays empty.
+    const folders = file ? file.name.split("/").slice(0, -1) : [];
+    const trail = parts.length ? parts : folders;
+    breadcrumb.textContent = file === null ? `Open a document (${shortcut("K")})` : trail.join(" › ");
+    breadcrumb.hidden = file !== null && trail.length === 0;
+    breadcrumb.classList.toggle("is-empty", file === null);
     context.textContent = [workspace.label, workspace.detail].filter(Boolean).join(" · ");
     context.hidden = context.textContent === "";
     nameButton.setAttribute(
       "aria-label",
-      parts.length ? `${parts.join(", ")}. Open another document.` : "Choose a document to open",
+      file === null
+        ? "Choose a document to open"
+        : `${[...trail, workspace.label].filter(Boolean).join(", ")}. Open another document.`,
     );
+    nameButton.title = file === null ? "" : `Open another document (${shortcut("K")})`;
   }
 
   function renderOutline(): void {
@@ -237,6 +254,7 @@ export function mountSpine(host: SpineHost): Spine {
   }
 
   nameButton.addEventListener("click", host.openPalette);
+  commands.addEventListener("click", host.openPalette);
   state.addEventListener("click", () => { void host.save(); });
   problemAction.addEventListener("click", () => problem?.action?.run());
 

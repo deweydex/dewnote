@@ -7,6 +7,8 @@ import { canStop, requestStop, restartInterpreter } from "./runtime/pyodide-engi
 import { placementsOf } from "./placement.ts";
 import { tutorialIdOf } from "./rename.ts";
 import { shortcut } from "./keys.ts";
+import { messageOf } from "./save-problem.ts";
+import { canDownloadDewnote, downloadDewnote } from "./self-copy.ts";
 import type { ShellContext } from "./shell-context.ts";
 import type { AuthoringFlows } from "./authoring-flows.ts";
 import type { FileFlows } from "./file-flows.ts";
@@ -207,6 +209,21 @@ export function shellCommands(
       detail: "An .ipynb file. Importing it back gives the same markdown, exactly.",
       available: hasDocument,
       run: () => exports.saveAsNotebook(),
+    },
+    {
+      id: "download-dewnote",
+      label: "Download dewnote",
+      section: "Import and export",
+      keywords: ["offline", "copy", "keep", "install", "app", "editor", "self-contained", "html"],
+      detail: "The whole editor as one HTML file, to open from this computer without the site.",
+      available: canDownloadDewnote,
+      run: async () => {
+        try {
+          await downloadDewnote();
+        } catch (error) {
+          ctx.spine.setProblem({ message: messageOf(error) });
+        }
+      },
     },
     {
       id: "import-ipynb",

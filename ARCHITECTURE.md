@@ -44,6 +44,7 @@ src/pull-request.ts     a pull request's suggested title and description
 src/checks.ts           what would break the build or confuse a reader
 src/export-html.ts      the page as a reader sees it
 src/notebook.ts         Jupyter import and export
+src/self-copy.ts        dewnote itself, as one file to download
 
 src/shell.ts            the workspace's state: opening, saving, drafts
 src/shell-context.ts    what the shell lends the flows
@@ -227,6 +228,18 @@ still guards the file:
 - **Front matter.** A node view draws Title and Status as fields over
   the YAML, which stays the node's content, editable under Show all
   fields. A field change rewrites only its own line.
+
+  What counts as front matter is decided once, in `frontmatter.ts`, and
+  asked by the index, the checker, the palette's preview, the export and
+  the editor alike. remark-frontmatter takes any `---` block at the first
+  byte, so an ordinary file that opens with a rule, a sentence and a rule
+  lost the sentence into a node drawn as an empty Title field. A block
+  whose YAML is a mapping, is empty, or does not parse (a block being
+  written) is front matter; one that parses to anything else is not, and
+  `readableAsMarkdown` puts a blank line in front of the file before
+  Milkdown reads it, so it parses as CommonMark says. Markdown ignores a
+  leading blank line and the serialiser never writes one, so the file
+  comes back as it was.
 - **Staged hints.** A ```` ```hint ```` fence stays a code block, and
   Crepe's own preview panel under it (the one a cell's output uses)
   draws the hint as a reader meets it. `renderPreview` fires on every
@@ -631,7 +644,7 @@ is how a slider ends up moving nothing.
 ```bash
 bun install
 bun run dev                       # hot reload
-bun run build                     # dist/index.html, one file
+bun run build                     # dist/index.html, one file, and dist/dewnote.html
 bun run test                      # unit
 bun run typecheck
 bun run test:e2e                  # builds, then Playwright against the built file
@@ -639,6 +652,14 @@ bun run test:e2e                  # builds, then Playwright against the built fi
 
 `tests/e2e/roundtrip.spec.ts` is the one that matters. If it cannot be
 kept green, the document model is wrong.
+
+The build writes `dist/dewnote.html` beside the page: the same file with
+its icon inside it, since the site's copy links `favicon.svg` and a copy
+opened from disk has nothing beside it. **Download dewnote** fetches that
+file rather than serialising the page, so what someone keeps is what the
+build made, not the page after the application has run over it. It is
+offered only over http(s); opened from disk, dewnote already is the
+downloaded copy.
 
 CI (`tests.yml`) runs the unit tests, the type checker and the whole
 Playwright suite on every pull request.

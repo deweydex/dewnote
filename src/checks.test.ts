@@ -145,6 +145,21 @@ describe("tutorial front matter, as dewlab's build checks it", () => {
   });
 });
 
+describe("a file with no front matter", () => {
+  const source = "# Notes\n\nNothing the site builds.\n";
+  const found = (path: string) => checkDocument(source, { ids: new Set<string>(), path }).map((problem) => problem.message);
+
+  test("is a problem in a tutorial or a site page, which the site cannot build without it", () => {
+    expect(found("tutorials/grid/grid.md").join()).toContain("No front matter");
+    expect(found("pages/about.md").join()).toContain("No front matter");
+  });
+
+  test("is not a problem anywhere else: a note or a README needs none", () => {
+    expect(found("notes/plain.md")).toEqual([]);
+    expect(found("README.md")).toEqual([]);
+  });
+});
+
 describe("a fence at the very end of a file", () => {
   test("is read whole when the file has no final newline", () => {
     const source = [
