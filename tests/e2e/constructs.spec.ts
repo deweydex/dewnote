@@ -80,12 +80,23 @@ test("a table is editable, not raw pipes", async ({ page }) => {
   });
   await expect(page.locator(".milkdown td").first()).toHaveText("1");
 
-  // Typing into a cell changes that cell in the file.
+  // Typing into a cell changes that cell in the file. The click's
+  // selection reaches ProseMirror a moment after the click itself, and
+  // under a loaded run End and the keystroke could arrive first and land
+  // elsewhere; so the caret has to be in the cell before typing, and the
+  // file is read until the edit is in it.
   await page.locator(".milkdown td").first().click();
+  await expect
+    .poll(() => page.evaluate(() => {
+      const anchor = document.getSelection()?.anchorNode ?? null;
+      return document.querySelector(".milkdown td")?.contains(anchor) ?? false;
+    }))
+    .toBe(true);
   await page.keyboard.press("End");
   await page.keyboard.type("0");
-  const out = await page.evaluate(() => (globalThis as any).__dewnote.markdown() as string);
-  expect(out).toMatch(/^\| 10 +\| 2 \|$/m);
+  await expect
+    .poll(() => page.evaluate(() => (globalThis as any).__dewnote.markdown() as string))
+    .toMatch(/^\| 10 +\| 2 \|$/m);
 });
 
 test("a task list shows which items are done, and a click ticks one", async ({ page }) => {
