@@ -75,13 +75,13 @@ export const SNIPPETS: SnippetItem[] = [
     key: "multiple-choice",
     label: "Multiple choice",
     icon: QUESTION_ICON,
-    // `correct:` counts from 1, in the order the options are written.
+    // `answer:` counts from 1, in the order the options are written.
     markdown: (free) =>
       [
         "```question",
         `id: ${free("question")}`,
         "type: multiple-choice",
-        "correct: 1",
+        "answer: 1",
         "",
         "What is the question?",
         "",

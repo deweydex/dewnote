@@ -183,7 +183,7 @@ Check that every column name matches the table exactly, including case.
 
 `for:` names the cell it belongs to (default: the exec cell just above
 it); `after:` is the trigger (`TRIGGER_KEYS`: errors, identical errors,
-unchanged runs, runs, failed checks, empty results, minutes; default
+unchanged runs, runs, empty results, minutes, unsure, guess differed; default
 `errors:5`); `title:` defaults to "Let's slow down a moment…". The rest is
 markdown.
 
@@ -202,7 +202,7 @@ A marked exercise (`QUESTION_HEADER_RE`, `QUESTION_TYPES`):
 ```question
 id: which-loop
 type: multiple-choice
-correct: 2
+answer: 2
 Which loop runs at least once?
 - for
 - while
@@ -211,7 +211,8 @@ Which loop runs at least once?
 
 `type:` is `multiple-choice` or `fill-in-the-blank`. A multiple-choice
 question's options are its bullet lines (`OPTION_LINE_RE`), and
-`correct:` is the 1-based number of the right one. A fill-in-the-blank
+`answer:` (formerly `correct:`, which still reads) is the 1-based number
+of the page's own answer. A fill-in-the-blank
 question marks each gap as `{answer}`, or `{right|wrong|wrong}` for a
 drop-down, the first item being correct (`GAP_RE`).
 
@@ -220,7 +221,7 @@ drawn with its answer marked: the correct option ticked, or each gap
 filled in with its answer (`questionPreview` in `editor.ts`, built the
 way `render_question()` builds it). The checker reports a missing id or
 type, a question with no text, a multiple-choice question with fewer
-than two options or no `correct:`, and a fill-in-the-blank question with
+than two options or no `answer:`, and a fill-in-the-blank question with
 no gap or one that does not close (`questionIn` in `fences.ts`). The `/`
 menu inserts both kinds.
 

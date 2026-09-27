@@ -100,7 +100,7 @@ describe(`the dewlab checkout: ${DEWLAB}${CHECKED_OUT ? "" : " (not checked out 
     expect(checkDocument(sound, around)).toEqual([]);
 
     const breaks: [string, string, RegExp][] = [
-      ["correct: 2", "correct: 9", /names none of the 3 options/],
+      ["answer: 2", "answer: 9", /names none of the \d+ options/],
       ["type: multiple-choice", "type: essay", /`type: essay`/],
       ["id: permutation-or-combination\n", "", /question with no `id:`/],
     ];
