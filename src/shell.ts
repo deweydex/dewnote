@@ -182,6 +182,8 @@ export function mountShell(page: HTMLElement): Shell {
     openPath: (path) => openPath(path),
     hasDocument: () => open !== null,
     readPath: async (path) => files.get(path) ?? (store ? await store.read(path) : null),
+    recentPaths: () => recentPaths(),
+    currentPath: () => open?.path ?? null,
   });
 
   // ── opening and saving ─────────────────────────────────────────────

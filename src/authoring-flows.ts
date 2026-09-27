@@ -51,9 +51,14 @@ export function authoringFlows(ctx: ShellContext): AuthoringFlows {
     return [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
   }
 
+  /** The open document's id, when it is one of dewlab's tutorials or
+   * practice pages: a file under `tutorials/`. Every file has an id in
+   * the index, and asking for this one alone offered "Add to a
+   * series…" on a README. */
   function openTutorialId(): string | undefined {
     const open = ctx.open();
-    return open ? ctx.index().find((entry) => entry.path === open.path)?.id : undefined;
+    if (!open || !/(?:^|\/)tutorials\//.test(open.path)) return undefined;
+    return ctx.index().find((entry) => entry.path === open.path)?.id;
   }
 
   return {

@@ -189,6 +189,7 @@ From top to bottom:
 
 | What you see | What it means |
 |---|---|
+| The dewnote mark | dewnote's name, level with the first line of the document. |
 | `name.md` | The file you are editing. Hover over it for its whole path. A dot after the name means it has unsaved changes. |
 | *Course › Series › Title* | Where this tutorial is listed. Click it to open the palette. A file no series lists, such as a note or a README, shows the folders it is in instead, and nothing when it sits at the top of the workspace. |
 | `dewlab · main → dewnote/2026-09-22` | The workspace. For GitHub, this also shows the main branch and the working branch your saves go to. |
@@ -211,15 +212,23 @@ Press **Ctrl+K** to open the palette, and **Ctrl+K** or **Esc** to close it.
 It also opens by itself when you first connect, because choosing a document
 is the first thing to do.
 
-Type to search. The palette searches four kinds of thing, always shown in
+Type to search. The palette searches five kinds of thing, always shown in
 this order:
 
 | Section | What it lists |
 |---|---|
 | **Tutorials** | Every tutorial and practice page, by title. The note on the right says which series it is in and where, for example *First Steps · 2 of 5*. |
+| **Documents** | Every other markdown file: notes, a README, a paper. A file with a `title:` in its front matter is listed by that title, and any other by its file name. |
 | **Site pages** | dewlab's own pages from the `pages/` folder, such as About and Home. |
 | **Series** | Every series on every course. Choosing one opens its first tutorial. |
 | **Commands** | Everything dewnote can do. The note on the right says what kind of command it is. |
+
+With nothing typed, the documents you opened most recently come first,
+with the open one marked *open*, then the rest in the order of their
+paths, numbers counted as numbers (`9-draft` before `10-draft`). A section
+shows its first eight; the row after them says how many there are in all,
+**Show all 23 documents**, and choosing it lists every one. Typing finds
+any of them either way.
 
 You do not have to type whole words. Letters in order are enough:
 `wamat` finds *What a Matrix Does to a Picture*.
@@ -926,7 +935,7 @@ this browser. They do not change your files or what readers see.
 | Line width | 24–48 rem |
 | Line height | 1.2–2.2 |
 | Paragraph spacing | Tight, normal, loose |
-| Margins | Comfortable, compact |
+| Margins | Comfortable, compact. How much space is above the page and after it; the margin's first line moves with the document's. |
 | Shade code cells | On, off |
 | Code size | 11–20 px |
 | Code font | System mono, humanist, slab |

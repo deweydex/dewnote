@@ -141,6 +141,60 @@ test("a file no course lists is placed by its folders, not told to open another"
   await expect(page.locator(".dn-spine-health")).toBeHidden();
 });
 
+test("the document's first line is level with the margin's first line", async ({ page }) => {
+  // Four spacings used to stack above the document, and a file with no
+  // front-matter fields to fill them opened onto a gap of empty page.
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(BUILT_APP);
+  await page.evaluate(
+    (files) => (globalThis as any).__dewnote.useStubStore(files),
+    { "paper.md": "# The Cost of Inertia\n\nText.\n\n## Abstract\n\nMore.\n" },
+  );
+  await page.locator(".dn-wp-input").fill("paper");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".milkdown h1")).toHaveText("The Cost of Inertia");
+  const top = (selector: string) => page.locator(selector).first().evaluate((el) => el.getBoundingClientRect().top);
+  expect(Math.abs((await top(".milkdown h1")) - (await top(".dn-spine-brand")))).toBeLessThan(2);
+  // The outline's top level starts where the file name does.
+  const textLeft = (selector: string) => page.locator(selector).first().evaluate(
+    (el) => el.getBoundingClientRect().left + parseFloat(getComputedStyle(el).paddingInlineStart),
+  );
+  expect(Math.abs((await textLeft(".dn-spine-heading")) - (await textLeft(".dn-spine-file")))).toBeLessThan(1);
+});
+
+test("a folder of notes: the palette lists documents, recent first and in number order, and says how many", async ({ page }) => {
+  await page.goto(BUILT_APP);
+  const files: Record<string, string> = { "README.md": "# About\n" };
+  for (const n of [11, 12, 14, 16, 20, 22, 3, 5, 7, 9]) files[`${n}-draft.md`] = `# Draft ${n}\n`;
+  await page.evaluate((f) => (globalThis as any).__dewnote.useStubStore(f), files);
+  await page.locator(".dn-wp-input").fill("22-draft");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".dn-spine-file")).toHaveText("22-draft.md");
+
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator(".dn-wp-input")).toHaveAttribute("placeholder", "Find a document, or something to do…");
+  await expect(page.locator(".dn-wp-section").first()).toHaveText("Documents");
+  const labels = page.locator(".dn-wp-row:not(.is-more) .dn-wp-row-label");
+  // The open one first and marked; the rest as a person counts them.
+  await expect(page.locator(".dn-wp-row").first()).toContainText("open");
+  await expect(labels.nth(0)).toHaveText("22-draft");
+  await expect(labels.nth(1)).toHaveText("3-draft");
+  await expect(labels.nth(2)).toHaveText("5-draft");
+  await expect(page.locator(".dn-wp-row.is-more")).toHaveText("Show all 11 documents");
+  await expect(page.locator('.dn-wp-row:has-text("README")')).toHaveCount(0);
+
+  await page.locator(".dn-wp-row.is-more").click();
+  await expect(page.locator(".dn-wp-row.is-more")).toHaveCount(0);
+  await expect(page.locator('.dn-wp-row:has-text("README")')).toHaveCount(1);
+  await expect(page.locator(".dn-wp-overlay")).toBeVisible();
+
+  // dewlab's commands stay with dewlab's files.
+  await page.locator(".dn-wp-input").fill("series");
+  await expect(page.locator('.dn-wp-row:has-text("Add to a series")')).toHaveCount(0);
+  await page.locator(".dn-wp-input").fill("new tutorial");
+  await expect(page.locator('.dn-wp-row:has-text("New tutorial")')).toHaveCount(0);
+});
+
 test("the margin has a button for the palette, not only a shortcut to read about", async ({ page }) => {
   await openWorkspace(page);
   await page.keyboard.press("Escape");

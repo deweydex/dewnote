@@ -11,7 +11,8 @@
  * code editor's own size, the gap between blocks. */
 
 :root {
-  --dn-page-padding: 1rem;
+  --dn-page-top: 3.4rem;
+  --dn-page-end: 8rem;
   --dn-block-gap: 1.1em;
   --dn-code-font-size: 15px;
   --dn-cell-tint: 1;
@@ -44,19 +45,32 @@ body {
   line-height: var(--dl-line-height, 1.62);
 }
 
+/* The document's first line sits level with the margin's first line
+   (`.dn-spine`, which reads the same `--dn-page-top`). Four spacings
+   used to stack above it instead, a margin, a padding, Crepe's own and
+   the first heading's, about 150px of empty page more than the margin
+   had, and a document without front-matter fields to fill it opened
+   onto a gap. */
 .dn-page {
   max-width: var(--dl-line-width);
-  margin: 4rem auto;
-  padding: 0 var(--dn-page-padding);
+  margin: 0 auto;
+  padding: var(--dn-page-top) 1rem var(--dn-page-end);
 }
 
-/* Crepe pads the editing surface 120px each side for its own
-   full-width shell. dewnote puts the editor inside a measured page, so
-   that gutter only eats the column — 544px of measure read as 304px of
-   text. The block handle is positioned relative to the block and sits
-   outside the editor either way, so nothing is lost by removing it. */
+/* Crepe pads the editing surface 60px above and below and 120px each
+   side, for its own full-width shell. dewnote puts the editor inside a
+   measured page, which has its own space, so all of it goes: the sides
+   only ate the column (544px of measure read as 304px of text), and the
+   top and bottom doubled the page's. The block handle is positioned
+   relative to the block and sits outside the editor either way. */
 .milkdown .ProseMirror {
-  padding-inline: 0;
+  padding: 0;
+}
+/* The first block starts at the page's top. Crepe's drawn caret is the
+   editor's first child, so the first block can be its second. */
+.milkdown .ProseMirror > :first-child,
+.milkdown .ProseMirror > .prosemirror-virtual-cursor:first-child + * {
+  margin-block-start: 0;
 }
 
 /* Crepe sizes paragraphs itself, `16px/24px`, a fixed pair for an app
@@ -193,10 +207,12 @@ body {
   color: var(--dl-muted);
 }
 
+/* Labels in a line: aligned at the foot, a select (shorter than a text
+   field) pulled its label below the others. */
 .milkdown .dn-front-fields {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 0.5rem 1rem;
 }
 
@@ -233,6 +249,8 @@ body {
 }
 
 .milkdown .dn-front-toggle {
+  /* Level with the values, not the labels. */
+  align-self: flex-end;
   font: inherit;
   padding: 0.2rem 0;
   border: 0;
@@ -253,11 +271,10 @@ body {
    the text runs in. `--dn-spine-width` is measured in spine.ts from the
    real gutter, because `measure` and `margins` are reader settings and a
    media query cannot read a custom property. */
-:root[data-spine="margin"] .dn-page {
-  padding-top: 3.4rem;
-}
+/* Folded, the margin is a bar fixed across the top, as tall as its
+   lines make it; spine.ts measures it, and the page starts below it. */
 :root[data-spine="folded"] .dn-page {
-  padding-top: 1.4rem;
+  padding-top: calc(var(--dn-spine-height, 6rem) + 1.4rem);
 }
 .dn-spine[hidden] {
   display: none !important;
@@ -276,7 +293,7 @@ body {
   bottom: 0;
   left: 0;
   width: var(--dn-spine-width, 290px);
-  padding: 3.4rem 1.6rem 1.6rem 2.6rem;
+  padding: var(--dn-page-top) 1.6rem 1.6rem 2.6rem;
 }
 /* Folded: the same lines, in the same order, across the top. Not a
    desktop column squeezed until nothing in it is legible. */
@@ -296,6 +313,25 @@ body {
 }
 :root[data-spine="folded"] .dn-spine-foot {
   margin-top: 0;
+}
+/* Quieter than on the opening screen: a signature, not a title. Folded
+   across the top of a narrow window, the bar keeps its room for the
+   document. */
+.dn-spine .dn-spine-brand {
+  --dn-brand-size: 1.4rem;
+  gap: 0.45rem;
+  margin-bottom: 1.1rem;
+}
+.dn-spine .dn-spine-brand svg {
+  filter: none;
+}
+.dn-spine .dn-spine-brand .dn-brand-name {
+  color: var(--dl-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+:root[data-spine="folded"] .dn-spine .dn-spine-brand {
+  display: none;
 }
 .dn-spine-identity {
   display: flex;
@@ -733,6 +769,11 @@ body {
 }
 .dn-wp-row.is-active .dn-wp-row-label {
   color: var(--dl-heading);
+}
+/* "Show all 23 documents": an action on the list, not a file in it. */
+.dn-wp-row.is-more .dn-wp-row-label {
+  color: var(--dl-link);
+  font-size: 0.92em;
 }
 .dn-wp-row-note {
   flex-shrink: 1;

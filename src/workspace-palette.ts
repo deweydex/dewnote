@@ -1,15 +1,20 @@
 // One key, and it reaches the workspace. dewlab has 122 tutorials across
 // seven courses: three letters and Enter beats any menu.
 //
-// Four sections, in the order they are most often wanted:
+// Five sections, in the order they are most often wanted:
 //
-//   Tutorials — the file index by title, resolved through
+//   Tutorials — files under `tutorials/`, by title, resolved through
 //               `defaultEntryFor` so a slug with three versions offers
 //               the one dewlab's build would serve.
+//   Documents — every other markdown file: a note, a README, a paper.
 //   Pages     — dewlab's own `pages/` files.
 //   Series    — every series in every course, opening at its first
 //               tutorial.
-//   Do        — commands.ts's registry.
+//   Commands  — commands.ts's registry.
+//
+// A capped section ends with a row saying how many there are in all,
+// which shows the rest when chosen: eight names with nothing after them
+// read as the whole folder.
 //
 // The right-hand half says what the highlighted row is before Enter
 // commits to it: path, status, version, opening sentence, headings. A
@@ -34,6 +39,11 @@ export interface PaletteHost {
    * it — for the preview pane. Null when it cannot, which is ordinary
    * rather than an error: the pane then shows what the index knows. */
   readPath?(path: string): Promise<string | null>;
+  /** The documents opened most recently, newest first. They lead their
+   * section, so the one being worked on is always in view. */
+  recentPaths?(): string[];
+  /** The open document's path, marked as open in the list. */
+  currentPath?(): string | null;
 }
 
 export interface WorkspacePalette {
@@ -43,7 +53,7 @@ export interface WorkspacePalette {
   destroy(): void;
 }
 
-type RowKind = "tutorial" | "page" | "series" | "command";
+type RowKind = "tutorial" | "document" | "page" | "series" | "command" | "more";
 
 /** A hand-written site page rather than a tutorial — dewlab's own
  * `pages/about.md`, `pages/home.md`, `pages/features.md`, which its
@@ -72,10 +82,23 @@ interface Row {
 
 const SECTION_OF: Record<RowKind, string> = {
   tutorial: "Tutorials",
+  document: "Documents",
   page: "Site pages",
   series: "Series",
   command: "Commands",
+  more: "",
 };
+
+/** A tutorial is dewlab's: a file under `tutorials/`. Anything else is a
+ * document, and filing a folder of notes under "Tutorials" told its
+ * owner the editor had mistaken it for something it is not. */
+export function isTutorialPath(path: string): boolean {
+  return /(?:^|\/)tutorials\//.test(path);
+}
+
+/** Paths in the order a person reads a folder: `2-notes` before
+ * `10-notes`, and case ignored. */
+const byPath = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /** How many rows of each kind survive a query. A palette that lists
  * ninety tutorials is a file list with a text box on top — so the two
@@ -83,7 +106,21 @@ const SECTION_OF: Record<RowKind, string> = {
  * is the only place they exist, and a reader who opens the palette with
  * nothing typed is looking to find out what there is. Capping them would
  * hide the list from the one gesture meant to reveal it. */
-const LIMIT: Record<RowKind, number> = { tutorial: 8, page: 4, series: 6, command: Number.POSITIVE_INFINITY };
+const LIMIT: Record<RowKind, number> = {
+  tutorial: 8,
+  document: 8,
+  page: 4,
+  series: 6,
+  command: Number.POSITIVE_INFINITY,
+  more: Number.POSITIVE_INFINITY,
+};
+
+export interface RankOptions {
+  /** Sections showing every row rather than the first few. */
+  expanded?: ReadonlySet<RowKind>;
+  /** The row that ends a capped section, given how many it holds. */
+  more?(kind: RowKind, total: number): Row;
+}
 
 /** How much a match on a hidden keyword — a path, an id, a synonym — is
  * worth against a match on the words a reader can see. Enough to find a
@@ -116,7 +153,7 @@ function noteFor(entry: FileIndexEntry, courses: readonly Course[]): string {
  * tutorial whose letters contain a-p-p-e-a-r instead of on the
  * appearance settings.
  */
-export function rankRows(rows: readonly Row[], query: string): { rows: Row[]; best: number } {
+export function rankRows(rows: readonly Row[], query: string, options: RankOptions = {}): { rows: Row[]; best: number } {
   const scored: { row: Row; score: number }[] = [];
   for (const row of rows) {
     // A keyword is invisible, so a row matched only by one is a weaker
@@ -135,7 +172,7 @@ export function rankRows(rows: readonly Row[], query: string): { rows: Row[]; be
     }
     if (best !== null) scored.push({ row, score: best });
   }
-  const kinds: RowKind[] = ["tutorial", "page", "series", "command"];
+  const kinds: RowKind[] = ["tutorial", "document", "page", "series", "command"];
   const out: { row: Row; score: number }[] = [];
   // Subsequence matching says yes to far more than a reader means:
   // "matri" is inside "A Model That Corrects Itself" if you take the
@@ -150,8 +187,14 @@ export function rankRows(rows: readonly Row[], query: string): { rows: Row[]; be
     // which is what makes an empty query show the workspace in its own
     // order rather than an arbitrary one.
     ofKind.sort((a, b) => b.score - a.score);
-    out.push(...ofKind.slice(0, LIMIT[kind]));
+    const limit = options.expanded?.has(kind) ? Number.POSITIVE_INFINITY : LIMIT[kind];
+    out.push(...ofKind.slice(0, limit));
+    if (ofKind.length > limit && options.more) {
+      out.push({ row: options.more(kind, ofKind.length), score: Number.NEGATIVE_INFINITY });
+    }
   }
+  // A "show all" row is never what Enter takes by itself: it scores
+  // below anything, and the first row starts with nothing to beat.
   let best = 0;
   for (let at = 1; at < out.length; at += 1) {
     if (out[at]!.score > out[best]!.score) best = at;
@@ -208,25 +251,40 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 
+  /** Sections showing all their rows, until the palette closes. */
+  let expanded = new Set<RowKind>();
+
   function buildRows(): Row[] {
     const index = host.getIndex();
     const courses = host.getCourses();
     const built: Row[] = [];
+    const openNow = host.currentPath?.() ?? null;
+
+    // Recently opened first, newest first, then the rest by path, so a
+    // folder reads in its own order whatever order the disk listed it
+    // in. With nothing typed that is the list; with a query it breaks
+    // ties towards what was open last.
+    const recent = host.recentPaths?.() ?? [];
+    const rank = (path: string) => {
+      const at = recent.indexOf(path);
+      return at === -1 ? Number.POSITIVE_INFINITY : at;
+    };
+    const ordered = [...index].sort((a, b) => rank(a.path) - rank(b.path) || byPath.compare(a.path, b.path));
 
     // One row per *page*, not per file: a slug with a live version and
     // two frozen releases is one thing to open, and `defaultEntryFor`
     // already knows which file dewlab's own build would serve.
     const seen = new Set<string>();
-    for (const entry of index) {
+    for (const entry of ordered) {
       const id = entry.id ?? entry.path;
       if (seen.has(id)) continue;
       seen.add(id);
       const best = entry.id ? defaultEntryFor(index, entry.id) ?? entry : entry;
-      const page = isSitePage(best.path);
+      const kind: RowKind = isSitePage(best.path) ? "page" : isTutorialPath(best.path) ? "tutorial" : "document";
       built.push({
-        kind: page ? "page" : "tutorial",
+        kind,
         label: best.title ?? best.id ?? best.path,
-        note: page ? "site page" : noteFor(best, courses),
+        note: best.path === openNow ? "open" : kind === "page" ? "site page" : noteFor(best, courses),
         keywords: [best.path, best.id ?? ""].filter(Boolean),
         entry: best,
         path: best.path,
@@ -266,7 +324,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
     list.replaceChildren();
     let lastKind: RowKind | null = null;
     rows.forEach((row, at) => {
-      if (row.kind !== lastKind) {
+      if (row.kind !== lastKind && row.kind !== "more") {
         const heading = document.createElement("p");
         heading.className = "dn-wp-section";
         heading.textContent = SECTION_OF[row.kind];
@@ -275,7 +333,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
       }
       const item = document.createElement("button");
       item.type = "button";
-      item.className = "dn-wp-row";
+      item.className = row.kind === "more" ? "dn-wp-row is-more" : "dn-wp-row";
       item.setAttribute("role", "option");
       item.setAttribute("aria-selected", String(at === active));
       item.classList.toggle("is-active", at === active);
@@ -318,6 +376,13 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
     const row = rows[active];
     preview.replaceChildren();
     if (!row) return;
+
+    if (row.kind === "more") {
+      preview.append(previewLine(row.label, "dn-wp-preview-title"));
+      preview.append(previewLine("The list shows the first few. Typing finds any of them.", "dn-wp-preview-body"));
+      preview.append(previewLine("↵ show them", "dn-wp-preview-keys"));
+      return;
+    }
 
     if (row.kind === "command") {
       preview.append(previewLine(row.command?.section ?? "", "dn-wp-preview-kicker"));
@@ -370,10 +435,37 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
     preview.append(previewLine("↵ open", "dn-wp-preview-keys"));
   }
 
+  /** The row that ends a capped section. Choosing it shows the rest,
+   * with the highlight left where it was, on the first of them. */
+  function moreRow(kind: RowKind, total: number): Row {
+    const section = SECTION_OF[kind].toLowerCase();
+    return {
+      kind: "more",
+      label: `Show all ${total} ${section}`,
+      run: () => {
+        const at = active;
+        expanded.add(kind);
+        refresh();
+        active = Math.min(at, rows.length - 1);
+        renderList();
+        void renderPreview();
+      },
+    };
+  }
+
   function refresh(): void {
-    const ranked = rankRows(buildRows(), input.value.trim());
+    const built = buildRows();
+    const query = input.value.trim();
+    const ranked = rankRows(built, query, { expanded, more: moreRow });
     rows = ranked.rows;
     active = ranked.best;
+    // Nothing typed, and the open document at the top: the one before
+    // it is the likelier next move, as with switching windows.
+    const openNow = host.currentPath?.() ?? null;
+    if (!query && openNow && rows[0]?.path === openNow && rows[1]?.path) active = 1;
+    input.placeholder = built.some((row) => row.kind === "tutorial" || row.kind === "series")
+      ? "Find a tutorial, a series, or something to do…"
+      : "Find a document, or something to do…";
     renderList();
     void renderPreview();
   }
@@ -387,6 +479,12 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
     if (row.kind === "command") {
       close();
       await row.run();
+      return;
+    }
+    // Showing the rest of a section is not a destination.
+    if (row.kind === "more") {
+      await row.run();
+      input.focus();
       return;
     }
     await row.run();
@@ -403,6 +501,7 @@ export function mountWorkspacePalette(host: PaletteHost): WorkspacePalette {
   function open(): void {
     overlay.showModal();
     input.value = "";
+    expanded = new Set();
     refresh();
     input.focus();
   }
