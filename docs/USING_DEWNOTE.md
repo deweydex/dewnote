@@ -37,6 +37,21 @@ choose **Download dewnote** on the opening screen, or the command of the
 same name. Open the file in your browser and it works as the site does,
 except that running Python still needs an internet connection.
 
+### As an app in the Dock or taskbar
+
+A downloaded file always opens as a browser tab; no browser installs a
+file from your computer as an app. To have dewnote in its own window,
+with its own icon in the Dock or taskbar, install it from the site:
+
+- **Chrome or Edge**: the install icon at the right of the address bar,
+  or the menu's **Cast, save and share › Install page as app…**.
+  Opening a folder works in the installed app as it does in the browser.
+- **Safari on a Mac**: **File › Add to Dock…**. Safari cannot open
+  folders, so use **Connect a GitHub repository** there.
+
+An installed dewnote still loads from the site each time you open it,
+so it needs a connection, as the site does.
+
 ---
 
 # Part 1: Your first tutorial

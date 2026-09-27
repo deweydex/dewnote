@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Dewnote app icon</title>
+  <desc id="desc">The navy favicon, set on a transparent 1024 canvas with the margin an app icon keeps, so it sits at the size of its neighbours.</desc>
+  <g transform="translate(100 100) scale(1.609375)">
+    <rect width="512" height="512" rx="104" fill="#1b2a4a"/>
+    <path fill="#d4692a" d="M256 76c-67 68-111 132-111 210 0 65 41 111 88 132l23 31 23-31c47-21 88-67 88-132 0-78-44-142-111-210Z"/>
+    <circle cx="256" cy="256" r="22" fill="#1b2a4a"/>
+    <path d="M256 278v126" fill="none" stroke="#1b2a4a" stroke-width="18" stroke-linecap="round"/>
+  </g>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Dewnote app icon, full bleed</title>
+  <desc id="desc">The orange drop on a navy square with no corners or margin, for a system that cuts its own shape: iOS, the macOS Dock, and a maskable icon. The drop is scaled to sit inside the safe circle any mask keeps.</desc>
+  <rect width="512" height="512" fill="#1b2a4a"/>
+  <g transform="translate(256 256) scale(.8) translate(-256 -256)">
+    <path fill="#d4692a" d="M256 76c-67 68-111 132-111 210 0 65 41 111 88 132l23 31 23-31c47-21 88-67 88-132 0-78-44-142-111-210Z"/>
+    <circle cx="256" cy="256" r="22" fill="#1b2a4a"/>
+    <path d="M256 278v126" fill="none" stroke="#1b2a4a" stroke-width="18" stroke-linecap="round"/>
+  </g>
+</svg>

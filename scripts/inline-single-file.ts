@@ -7,7 +7,9 @@
 // bun build wrote, inlines both directly into index.html, and deletes the
 // now-unreferenced asset files — so what's left is the actual single-file
 // distributable the browser store and the Mac app's downloadable copy
-// both need.
+// both need. It also writes dist/dewnote.html, the copy "Download
+// dewnote" hands out, and for the site build the files that let a
+// browser install the page as an app.
 import { copyFileSync, existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 
@@ -80,18 +82,39 @@ html = html.replace(linkMatch[0], () => `<style>${css}</style>`);
 const inlineJs = js.replace(/<\/(script)/gi, "<\\/$1");
 html = html.replace(scriptMatch[0], () => `<script type="module">${inlineJs}</script>`);
 
-writeFileSync(htmlPath, html);
-unlinkSync(cssFile);
-unlinkSync(jsFile);
-
 // The copy someone downloads to keep (src/self-copy.ts fetches it, so
 // the site offers exactly this file). It is the page with its icon
 // inside it, whichever way the page itself carries its icon: a copy
-// opened from disk has no favicon.svg beside it.
+// opened from disk has no favicon.svg beside it. Taken before the app
+// links below, which name files a downloaded copy does not have and a
+// page opened from disk cannot use: no browser installs a file:// page.
+const ICON_LINK_RE = /<link\b(?=[^>]*\brel=["']icon["'])[^>]*>/i;
 const selfCopyPath = join(DIST, "dewnote.html");
-const selfCopy = externalFavicon
-  ? html.replace(/<link\b(?=[^>]*\brel=["']icon["'])[^>]*>/i, () => inlineIconLink)
-  : html;
+const selfCopy = externalFavicon ? html.replace(ICON_LINK_RE, () => inlineIconLink) : html;
+
+// The site build (the one with its favicon beside it) is also the one a
+// browser can install as an app: Chrome from the manifest's icons,
+// Safari's Add to Dock and iOS from `apple-touch-icon`. The sources and
+// how the PNGs are drawn are in scripts/app-icons.ts. The links go
+// straight after the favicon's, which is at the top of <head>: the
+// bundle further down holds `</head>` in strings of its own.
+if (externalFavicon) {
+  const APP = join("assets", "branding", "app");
+  for (const name of ["manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"]) {
+    copyFileSync(join(APP, name), join(DIST, name));
+  }
+  const appLinks = [
+    `<link rel="manifest" href="./manifest.webmanifest" />`,
+    `<link rel="apple-touch-icon" href="./apple-touch-icon.png" />`,
+    `<meta name="theme-color" content="#fdfcfa" media="(prefers-color-scheme: light)" />`,
+    `<meta name="theme-color" content="#14181f" media="(prefers-color-scheme: dark)" />`,
+  ].join("\n    ");
+  html = html.replace(ICON_LINK_RE, (link) => `${link}\n    ${appLinks}`);
+}
+
+writeFileSync(htmlPath, html);
 writeFileSync(selfCopyPath, selfCopy);
+unlinkSync(cssFile);
+unlinkSync(jsFile);
 
 console.log(`inlined ${linkMatch[1]} and ${scriptMatch[1]} into ${htmlPath}, and wrote ${selfCopyPath}`);

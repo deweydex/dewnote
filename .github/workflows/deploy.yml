@@ -49,6 +49,10 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
+      # DEWNOTE_EXTERNAL_FAVICON marks the site build: the favicon, the
+      # app manifest and the app icons go beside the page rather than
+      # inside it (scripts/inline-single-file.ts). dewnote.html, the copy
+      # "Download dewnote" hands out, stays one file either way.
       - name: Build
         run: |
           DEWNOTE_EXTERNAL_FAVICON=1 bun run build

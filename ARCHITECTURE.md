@@ -661,6 +661,19 @@ build made, not the page after the application has run over it. It is
 offered only over http(s); opened from disk, dewnote already is the
 downloaded copy.
 
+The site build (`DEWNOTE_EXTERNAL_FAVICON=1`, as `deploy.yml` runs it)
+also makes the page installable: it copies `assets/branding/app/`'s
+manifest and icons beside the page and links them from `<head>`, and
+leaves them out of `dewnote.html`, since nothing installs a page opened
+from disk. There are two icon sources. `dewnote-app-icon.svg` is the
+favicon with an app icon's margin, for a system that shows an icon as it
+is. `dewnote-app-icon-full.svg` is full bleed, for one that cuts its own
+shape: `apple-touch-icon` (iOS, and Safari's Add to Dock) and the
+manifest's maskable icon (Chrome on a Mac). `scripts/app-icons.ts`
+renders the PNGs with Playwright's Chromium; they are committed, because
+the deploy job has no browser to draw them with. There is no service
+worker, so an installed dewnote loads from the site like any visit.
+
 CI (`tests.yml`) runs the unit tests, the type checker and the whole
 Playwright suite on every pull request.
 
