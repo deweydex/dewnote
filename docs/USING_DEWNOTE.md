@@ -469,7 +469,7 @@ kinds. Insert them from the block menu, or write them by hand.
 ```question
 id: which-one
 type: multiple-choice
-correct: 2
+answer: 2
 
 Which counts this correctly?
 
@@ -479,8 +479,9 @@ Which counts this correctly?
 ````
 
 The text above the list is the question; each bullet is an option.
-`correct:` gives the number of the right option, counting from 1 in the
-order the options are written. Here, the right answer is *A combination*.
+`answer:` gives the number of the page's own answer, counting from 1 in
+the order the options are written. Here, it is *A combination*. (`correct:`,
+the older name for the same line, still works.)
 
 ### Fill in the blank
 
@@ -595,8 +596,10 @@ What to look at first.
 ````
 
 - `after:` is what makes it appear. Count errors, identical errors,
-  unchanged runs, runs, failed checks, empty results or minutes, for
-  example `3 errors` or `2 identical errors and 5 minutes`. With more
+  unchanged runs, runs, empty results or minutes, for example `3 errors`
+  or `2 identical errors and 5 minutes`. On a cell with a prediction,
+  `unsure` and `guess differed` wait for the reader to choose *I'm not
+  sure yet*, or for their guess and the output to differ. With more
   than one, all have to be reached. Leave the line out and it appears
   after 5 errors.
 - `title:` is what the reader sees first. Leave it out and dewlab uses

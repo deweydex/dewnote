@@ -1080,7 +1080,7 @@ test("the slash menu writes a question the build would accept", async ({ page })
   const written = await page.evaluate(() => (globalThis as any).__dewnoteWrites.at(-1).text as string);
   expect(written).toContain("```question");
   expect(written).toContain("type: multiple-choice");
-  expect(written).toContain("correct: 1");
+  expect(written).toContain("answer: 1");
   expect(written).not.toContain("/multiple");
 
   // And what it wrote is sound by the checker's own rules — the same

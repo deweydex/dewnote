@@ -184,12 +184,19 @@ const TRIGGER_KEYS: Record<string, string> = {
   "identical-errors": "same-errors",
   "unchanged runs": "unchanged", "unchanged run": "unchanged", "unchanged": "unchanged",
   "runs": "runs", "run": "runs",
-  "failed checks": "check-fails", "failed check": "check-fails",
-  "check-fails": "check-fails", "failed-checks": "check-fails",
   "empty results": "empty-results", "empty result": "empty-results",
   "empty-results": "empty-results", "empty-result": "empty-results",
   "minutes": "minutes", "minute": "minutes",
+  // The predict block's two moments: the reader says they are not sure
+  // yet, and a guess and the output differ. Either may be written bare.
+  "unsure": "unsure", "not sure": "unsure",
+  "guess differed": "guess-differed", "guesses differed": "guess-differed",
+  "guess-differed": "guess-differed",
 };
+
+/** Signals that read naturally with no number, meaning once: dewlab's
+ * `BARE_TRIGGERS`. */
+const BARE_TRIGGERS = new Set(["unsure", "not sure", "guess differed", "guess-differed"]);
 
 /** Each runtime key as a reader would say it, one and many. */
 const TRIGGER_WORDS: Record<string, [string, string]> = {
@@ -197,9 +204,10 @@ const TRIGGER_WORDS: Record<string, [string, string]> = {
   "same-errors": ["identical error", "identical errors"],
   "unchanged": ["unchanged run", "unchanged runs"],
   "runs": ["run", "runs"],
-  "check-fails": ["failed check", "failed checks"],
   "empty-results": ["empty result", "empty results"],
   "minutes": ["minute", "minutes"],
+  "unsure": ["\u201cnot sure\u201d", "\u201cnot sure\u201ds"],
+  "guess-differed": ["guess that differed", "guesses that differed"],
 };
 
 const TRIGGER_TERM_RE = /^(?:(\d+)\s+([a-z][a-z -]*[a-z])|([a-z][a-z-]*)\s*:\s*(\d+))$/;
@@ -220,6 +228,10 @@ export function parseTrigger(text: string): TriggerTerm[] | { error: string } {
   const terms: TriggerTerm[] = [];
   for (const raw of text.trim().toLowerCase().split(/\s*(?:,|\band\b|&)\s*/)) {
     if (!raw) continue;
+    if (BARE_TRIGGERS.has(raw)) {
+      terms.push({ key: TRIGGER_KEYS[raw]!, count: 1 });
+      continue;
+    }
     const match = TRIGGER_TERM_RE.exec(raw);
     if (!match) return { error: `\`${raw}\` cannot be read. Write it like \`5 errors\` or \`errors:5\`.` };
     const key = (match[2] ?? match[3])!.trim();
@@ -227,7 +239,7 @@ export function parseTrigger(text: string): TriggerTerm[] | { error: string } {
     const canonical = TRIGGER_KEYS[key];
     if (!canonical) {
       return {
-        error: `\`${key}\` is not something a hint can wait for. Use errors, identical errors, unchanged runs, runs, failed checks, empty results or minutes.`,
+        error: `\`${key}\` is not something a hint can wait for. Use errors, identical errors, unchanged runs, runs, empty results, minutes, unsure or guess differed.`,
       };
     }
     if (count < 1) return { error: `A hint waits for at least 1 of something, not ${count}.` };
@@ -301,14 +313,15 @@ const OPTION_LINE = /^[ \t]*[-*+]\s+(.*\S)\s*$/;
  * between them. */
 export function questionIn(info: string, body: string): Question | null {
   if (infoWords(info)[0] !== "question") return null;
-  const { header, rest } = splitHeader(body, ["id", "type", "correct"]);
+  // `answer:` is dewlab's name for it; `correct:`, the older one, still reads.
+  const { header, rest } = splitHeader(body, ["id", "type", "answer", "correct"]);
   const lines = rest.split("\n");
   const firstOption = lines.findIndex((line) => OPTION_LINE.test(line));
   const at = firstOption === -1 ? lines.length : firstOption;
   return {
     id: header.get("id") ?? null,
     type: header.get("type") ?? null,
-    correct: header.get("correct") ?? null,
+    correct: header.get("answer") ?? header.get("correct") ?? null,
     prompt: lines.slice(0, at).join("\n").trim(),
     options: lines.slice(at).flatMap((line) => {
       const match = OPTION_LINE.exec(line);

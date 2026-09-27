@@ -1,8 +1,10 @@
 # Every push to main and every pull request runs two jobs:
 #
 # - unit: the unit tests and the type checker. The corpus tests in
-#   checks.test.ts and modules.test.ts need dewlab checked out beside this
-#   repo and skip themselves here.
+#   checks.test.ts need dewlab checked out beside this repo and skip
+#   themselves here.
+# - dewlab-corpus: those corpus tests, against dewlab's main branch, as a
+#   report rather than a gate (see the job).
 # - e2e: the built single file, driven in Chromium by Playwright. This
 #   includes roundtrip.spec.ts, the test the README says the application
 #   stands on, and pyodide.spec.ts, which runs real Python fetched from
@@ -41,6 +43,40 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+  # The checker's rules are dewlab's build's rules written again, so they
+  # drift whenever dewlab's syntax moves: dewlab renamed `correct:` to
+  # `answer:` and added two hint signals, and the checker went on calling
+  # 279 sound questions blocking with nobody told. The corpus tests would
+  # have said so, and they skip in `unit`, where dewlab is not checked out.
+  # Here they run against dewlab's main branch. A failure is a warning, not
+  # a failed check, because it can come from a change to dewlab rather than
+  # from the pull request in front of it; it means the checker needs to
+  # catch up.
+  dewlab-corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: dewnote
+
+      - uses: actions/checkout@v7
+        with:
+          repository: deweydex/dewlab
+          path: dewlab
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        working-directory: dewnote
+        run: bun install --frozen-lockfile
+
+      - name: Check the checker against every page dewlab builds
+        working-directory: dewnote
+        run: |
+          bun test ./src/checks.test.ts || echo "::warning title=dewnote's checker and dewlab disagree::The corpus tests in src/checks.test.ts failed against dewlab's main branch. The log above names each page and rule; the checker in src/checks.ts and src/fences.ts needs to catch up with the build."
 
   e2e:
     runs-on: ubuntu-latest

@@ -13,13 +13,16 @@ describe("parseTrigger", () => {
       { key: "errors", count: 5 },
       { key: "unchanged", count: 2 },
     ]);
-    expect(parseTrigger("1 failed check")).toEqual([{ key: "check-fails", count: 1 }]);
+    expect(parseTrigger("unsure")).toEqual([{ key: "unsure", count: 1 }]);
+    expect(parseTrigger("2 guesses differed")).toEqual([{ key: "guess-differed", count: 2 }]);
   });
 
   test("refuses what the build refuses, and says why", () => {
     expect(parseTrigger("soon")).toEqual({ error: "`soon` cannot be read. Write it like `5 errors` or `errors:5`." });
     expect("error" in parseTrigger("3 mistakes")).toBe(true);
     expect("error" in parseTrigger("0 errors")).toBe(true);
+    // check() and its ticks were retired, and the build no longer knows the signal.
+    expect("error" in parseTrigger("1 failed check")).toBe(true);
     expect("error" in parseTrigger("")).toBe(true);
   });
 });

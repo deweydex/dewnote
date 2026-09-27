@@ -314,8 +314,8 @@ export function checkWorkspace(
 }
 
 /** A `question` fence's own rules, which are dewlab's: a type it knows,
- * something to answer, and — for multiple choice — options and a
- * `correct:` that names one of them. */
+ * something to answer, and — for multiple choice — options and an
+ * `answer:` (or the older `correct:`) that names one of them. */
 function checkQuestion(question: Question, line: number, problems: Problem[]): void {
   const blocking = (message: string) => problems.push({ message, line, severity: "blocking" as const });
 
@@ -337,10 +337,10 @@ function checkQuestion(question: Question, line: number, problems: Problem[]): v
     }
     const at = Number(question.correct);
     if (!question.correct) {
-      blocking("A multiple-choice question with no `correct:` line, so answers cannot be marked. Add `correct:` with the number of the right option.");
+      blocking("A multiple-choice question with no `answer:` line, so the page cannot show its own answer. Add `answer:` with the number of the option it gives.");
     } else if (!/^\d+$/.test(question.correct) || at < 1 || at > question.options.length) {
       blocking(
-        `\`correct: ${question.correct}\` names none of the ${question.options.length} options. ` +
+        `The answer \`${question.correct}\` names none of the ${question.options.length} options. ` +
           "Options are numbered from 1, in the order they are written.",
       );
     }
