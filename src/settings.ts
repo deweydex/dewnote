@@ -169,9 +169,13 @@ const CODE_FONT_STACKS: Record<CodeFont, string> = {
   slab: '"IBM Plex Mono", "Source Code Pro", "Courier New", monospace',
 };
 
-const MARGIN_PADDING: Record<Margins, string> = {
-  comfortable: "3rem 1.25rem 8rem",
-  compact: "1.25rem 1rem 4rem",
+/** Space above the page, which the margin's first line also sits at,
+ * and after it. The sides are fixed: the measure is what sets the
+ * column, and a margin setting that also moved it would be a second
+ * width control. */
+const PAGE_SPACE: Record<Margins, { top: string; end: string }> = {
+  comfortable: { top: "3.4rem", end: "8rem" },
+  compact: { top: "1.5rem", end: "4rem" },
 };
 
 /** `null` means "this property/attribute should be removed, not set to
@@ -186,7 +190,8 @@ export function settingsToRootProperties(settings: Settings): Record<string, str
     "--dl-font-family": mapDefault(BODY_FONT_STACKS[settings.bodyFont], BODY_FONT_STACKS.serif),
     "--dl-font-size": mapDefault(`${settings.textSize}px`, `${DEFAULT_SETTINGS.textSize}px`),
     "--dl-line-width": mapDefault(`${settings.measure}rem`, `${DEFAULT_SETTINGS.measure}rem`),
-    "--dn-page-padding": mapDefault(MARGIN_PADDING[settings.margins], MARGIN_PADDING.comfortable),
+    "--dn-page-top": mapDefault(PAGE_SPACE[settings.margins].top, PAGE_SPACE.comfortable.top),
+    "--dn-page-end": mapDefault(PAGE_SPACE[settings.margins].end, PAGE_SPACE.comfortable.end),
     "--dn-cell-tint": mapDefault(settings.cellTint ? "1" : "0", "1"),
     "--dn-code-font-size": mapDefault(`${settings.codeFontSize}px`, `${DEFAULT_SETTINGS.codeFontSize}px`),
     "--dl-line-height": mapDefault(String(settings.lineHeight), String(DEFAULT_SETTINGS.lineHeight)),

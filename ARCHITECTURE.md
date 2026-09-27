@@ -483,17 +483,37 @@ Two things on screen: the document, and a column of small text in the
 left margin.
 
 The **spine** (the code's name for the left margin; users never see the
-word) is that column — filename, breadcrumb, workspace, the
-document's own headings, save state, and a refusal that holds until it is
-resolved. Its width is measured with a `ResizeObserver` rather than a
+word) is that column — dewnote's mark, filename, breadcrumb, workspace,
+the document's own headings, save state, and a refusal that holds until
+it is resolved. Its first line and the document's first line are level:
+both start at `--dn-page-top`, which the Margins setting moves. Four
+spacings used to stack above the document instead (the page's margin
+and padding, Crepe's own 60px, the first heading's margin), so a file
+without front-matter fields to fill the space opened onto 150px of
+empty page. Crepe's drawn caret is the editor's first child, so "the
+first block" in `style.css` is the first child or the one after the
+caret. Folded, the spine is a bar fixed over the top of the page, and
+`measureLayout` writes its height to `--dn-spine-height` for the page to
+start below it. Its width is measured with a `ResizeObserver` rather than a
 media query, because the measure and the margins are reader settings that
 arrive as custom properties and a media query cannot read one. Too narrow
 for a legible column and it folds to a row across the top.
 
 The **palette** is ⌘K, and it indexes the workspace rather than the
-application: tutorials, dewlab's own site pages, series, and every
-command. A preview pane says what a row is — path, status, version,
-opening sentence, headings — before Enter commits to it.
+application: tutorials, other documents, dewlab's own site pages,
+series, and every command. A preview pane says what a row is — path,
+status, version, opening sentence, headings — before Enter commits to
+it.
+
+A file is a tutorial only under `tutorials/`; everything else is a
+document, so a folder of notes is not filed under dewlab's word for it.
+Rows are built recently-opened first, then by path with numbers counted
+as numbers, so an empty query shows the folder in the order its owner
+reads it, and a query breaks ties towards what was open last. A capped
+section ends with a "Show all N" row, because eight names with nothing
+after them read as the whole folder. dewlab's own commands (**New
+tutorial…**, the series commands) are offered only where dewlab's layout
+is.
 
 Its ranking answers two questions with two numbers. Sections are for the
 eye, which wants a tutorial where a tutorial always is; the highlight is

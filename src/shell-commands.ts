@@ -75,6 +75,11 @@ export function shellCommands(
       section: "Workspace",
       keywords: ["create", "add", "write", "start"],
       detail: "Creates a draft tutorial with its own folder, front matter and one cell.",
+      // dewlab's, so offered where dewlab's layout is (course files,
+      // tutorials, or its site pages), and not in a folder of notes.
+      available: () =>
+        ctx.courses().length > 0 ||
+        ctx.index().some((entry) => /(?:^|\/)(?:tutorials\/|pages\/[^/]+\.md$)/.test(entry.path)),
       run: () => void authoring.createTutorial(),
     },
     {
@@ -83,7 +88,8 @@ export function shellCommands(
       section: "Tutorial",
       keywords: ["course", "series", "module", "place", "contents", "list"],
       detail: "Lists this tutorial in a series on a course. Only the course file changes.",
-      available: () => authoring.openTutorialId() !== undefined,
+      // A workspace with no course files has no series to add it to.
+      available: () => authoring.openTutorialId() !== undefined && ctx.courses().length > 0,
       run: () => void authoring.placeTutorial("add"),
     },
     {

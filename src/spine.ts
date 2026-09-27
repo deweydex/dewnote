@@ -11,6 +11,7 @@
 // carries it; the other stays empty.
 
 import { shortcut } from "./keys.ts";
+import { BRAND_MARK } from "./brand.ts";
 
 export interface SpineHost {
   /** The open document's own headings. They come from the editor's tree
@@ -95,6 +96,14 @@ export function mountSpine(host: SpineHost): Spine {
   spine.setAttribute("aria-label", "This document");
   spine.hidden = true;
 
+  // The application's name at the head of the margin, small: in a tab
+  // the favicon says it, but in an app window or a screenshot nothing
+  // else did.
+  const brand = document.createElement("div");
+  brand.className = "dn-brand dn-spine-brand";
+  brand.setAttribute("aria-hidden", "true");
+  brand.innerHTML = `${BRAND_MARK}<span class="dn-brand-name">dewnote</span>`;
+
   const identity = document.createElement("div");
   identity.className = "dn-spine-identity";
 
@@ -159,7 +168,7 @@ export function mountSpine(host: SpineHost): Spine {
   commands.append(commandsLabel, commandsKey);
   foot.append(health, state, commands);
 
-  spine.append(identity, rule, problemBox, outline, foot);
+  spine.append(brand, identity, rule, problemBox, outline, foot);
   document.body.appendChild(spine);
 
   function renderIdentity(): void {
@@ -200,7 +209,9 @@ export function mountSpine(host: SpineHost): Spine {
       item.type = "button";
       item.className = "dn-spine-heading";
       item.dataset["level"] = String(heading.level);
-      item.style.paddingInlineStart = `${(heading.level - top) * 14}px`;
+      // On top of the 5px every row has, so the top level lines up with
+      // the file name above it and the hover wash still has an edge.
+      item.style.paddingInlineStart = `${5 + (heading.level - top) * 14}px`;
       item.textContent = heading.text;
       item.addEventListener("click", () => {
         // The nth heading element in the editor, counted the same way
@@ -251,6 +262,12 @@ export function mountSpine(host: SpineHost): Spine {
       "--dn-spine-width",
       folded ? "auto" : `${Math.min(SPINE_MAXIMUM, Math.round(gutter) - SPINE_GAP)}px`,
     );
+    // Folded, the bar is fixed over the top of the page, and its height
+    // is whatever its lines come to: a long breadcrumb or a refused
+    // save makes it taller. The page starts below it.
+    if (folded && !spine.hidden) {
+      document.documentElement.style.setProperty("--dn-spine-height", `${Math.ceil(spine.getBoundingClientRect().height)}px`);
+    }
   }
 
   nameButton.addEventListener("click", host.openPalette);
@@ -265,6 +282,7 @@ export function mountSpine(host: SpineHost): Spine {
   const observer = new ResizeObserver(onResize);
   const page = document.querySelector<HTMLElement>("#dn-page");
   if (page) observer.observe(page);
+  observer.observe(spine);
 
   render();
   measureLayout();
@@ -298,6 +316,7 @@ export function mountSpine(host: SpineHost): Spine {
       observer.disconnect();
       document.documentElement.removeAttribute("data-spine");
       document.documentElement.style.removeProperty("--dn-spine-width");
+      document.documentElement.style.removeProperty("--dn-spine-height");
       spine.remove();
     },
   };

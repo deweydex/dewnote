@@ -4,7 +4,7 @@
 // built app, the same split outline-panel.ts and settings-panel.ts use.
 
 import { describe, expect, test } from "bun:test";
-import { rankRows } from "./workspace-palette.ts";
+import { isTutorialPath, rankRows } from "./workspace-palette.ts";
 
 type Row = Parameters<typeof rankRows>[0][number];
 
@@ -125,5 +125,44 @@ describe("keywords against labels", () => {
   test("a keyword still finds a row nothing visible would have found", () => {
     const { rows } = rankRows(CORPUS, "computational");
     expect(rows.map((item) => item.label)).toEqual(["Matrices"]);
+  });
+});
+
+describe("a section longer than its cap", () => {
+  const notes: Row[] = Array.from({ length: 12 }, (_, at) => ({ kind: "document" as const, label: `${at + 1}-draft`, run() {} }));
+  const more = (kind: Row["kind"], total: number): Row => ({ kind: "more", label: `Show all ${total} ${kind}`, run() {} });
+
+  test("ends with a row saying how many there are, so eight names do not read as the whole folder", () => {
+    const { rows } = rankRows(notes, "", { more });
+    expect(rows).toHaveLength(9);
+    expect(rows.at(-1)!.label).toBe("Show all 12 document");
+  });
+
+  test("shows every row once expanded, with nothing after them", () => {
+    const { rows } = rankRows(notes, "", { more, expanded: new Set(["document"]) });
+    expect(rows.map((item) => item.label)).toEqual(notes.map((item) => item.label));
+  });
+
+  test("Enter never lands on the show-all row by itself", () => {
+    const { rows, best } = rankRows(notes, "draft", { more });
+    expect(rows[best]!.kind).toBe("document");
+  });
+
+  test("a section within its cap has no such row", () => {
+    expect(rankRows(notes.slice(0, 3), "", { more }).rows.some((item) => item.kind === "more")).toBe(false);
+  });
+});
+
+describe("isTutorialPath", () => {
+  test("is dewlab's tutorials folder, wherever the workspace starts", () => {
+    expect(isTutorialPath("tutorials/grid/grid.md")).toBe(true);
+    expect(isTutorialPath("site/tutorials/grid/grid.md")).toBe(true);
+  });
+
+  test("is not a note, a README or a site page", () => {
+    expect(isTutorialPath("22-for-josh.md")).toBe(false);
+    expect(isTutorialPath("README.md")).toBe(false);
+    expect(isTutorialPath("pages/about.md")).toBe(false);
+    expect(isTutorialPath("my-tutorials-notes/a.md")).toBe(false);
   });
 });
